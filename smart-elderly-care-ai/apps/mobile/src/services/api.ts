@@ -76,7 +76,7 @@ export const getCustomServerUrl = async (): Promise<string> => {
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
-  timeout: 45000,
+  timeout: 12000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -289,6 +289,8 @@ export const vitalsApi = {
   getLatest: (deviceId: string) => api.get(`/vitals/${deviceId}/latest`),
   getHistory: (deviceId: string = 'BLE_BAND_001', limit = 100, target_date?: string) =>
     api.get('/vitals/history', { params: { device_id: deviceId, limit, target_date } }),
+  getDailySummary: (days = 30, deviceId?: string) =>
+    api.get('/vitals/daily-summary', { params: { days, device_id: deviceId } }),
   getStats: (deviceId: string, hours = 24) =>
     api.get(`/vitals/${deviceId}/stats`, { params: { hours } }),
   createVital: (data: {
@@ -344,6 +346,8 @@ export const incidentsApi = {
   get: (id: string) => api.get(`/incidents/${id}`),
   acknowledge: (id: string, notes?: string) =>
     api.post(`/incidents/${id}/acknowledge`, null, { params: { note: notes } }),
+  escalate: (id: string, notes?: string) =>
+    api.post(`/incidents/${id}/escalate`, null, { params: { note: notes } }),
   reopen: (id: string, notes?: string) =>
     api.post(`/incidents/${id}/reopen`, null, { params: { note: notes } }),
   acknowledgeAll: () =>

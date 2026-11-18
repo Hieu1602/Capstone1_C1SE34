@@ -105,14 +105,31 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   const loadDateVitals = async (dateStr: string) => {
     setIsLoadingVitals(true);
     try {
-      const res = await patientApi.getVitals(1, dateStr);
-      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-        setDayVitals(res.data);
+      const devId = currentVitals?.device_id || 'BLE_BAND_001';
+      let vitals: any[] = [];
+      try {
+        const res = await vitalsApi.getHistory(devId, 300, dateStr);
+        if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+          vitals = res.data;
+        }
+      } catch (err) {
+        console.warn('Lỗi vitalsApi.getHistory, fallback patientApi:', err);
+      }
+
+      if (vitals.length === 0) {
+        const fbRes = await patientApi.getVitals(1, dateStr).catch(() => ({ data: [] }));
+        if (fbRes.data && Array.isArray(fbRes.data) && fbRes.data.length > 0) {
+          vitals = fbRes.data;
+        }
+      }
+
+      setDayVitals(vitals);
+      if (vitals.length > 0) {
         if (dateStr === getTodayStr()) {
           const now = new Date();
           setScrubberMinutes(now.getHours() * 60 + now.getMinutes());
         } else {
-          const last = res.data[res.data.length - 1];
+          const last = vitals[vitals.length - 1];
           const rawDate = last?.recorded_at || last?.time || last?.created_at;
           if (rawDate) {
             const d = new Date(rawDate);
@@ -121,25 +138,10 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             }
           }
         }
-      } else {
-        setDayVitals([]);
       }
     } catch (e) {
-      console.warn('Lỗi tải dữ liệu sinh hiệu qua patientApi, thử fallback vitalsApi:', e);
-      try {
-        const fallbackRes = await vitalsApi.getHistory('BLE_BAND_001', 100, dateStr);
-        if (fallbackRes.data && Array.isArray(fallbackRes.data)) {
-          setDayVitals(fallbackRes.data);
-          if (dateStr === getTodayStr()) {
-            const now = new Date();
-            setScrubberMinutes(now.getHours() * 60 + now.getMinutes());
-          }
-        } else {
-          setDayVitals([]);
-        }
-      } catch {
-        setDayVitals([]);
-      }
+      console.warn('Lỗi tải dữ liệu sinh hiệu ngày:', e);
+      setDayVitals([]);
     } finally {
       setIsLoadingVitals(false);
     }
@@ -179,15 +181,17 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     }
   }, [currentVitals?.heart_rate, currentVitals?.spo2, currentVitals?.timestamp, selectedDate]);
 
-  // Tải dữ liệu lịch sử cho Tuần / Tháng từ Backend
-  const loadRangeVitals = async (limit: number) => {
+  // Tải dữ liệu lịch sử cho Tuần / Tháng từ Backend sử dụng Daily Summary
+  const loadRangeVitals = async (days: number) => {
     setIsLoadingVitals(true);
     try {
-      const res = await vitalsApi.getHistory('BLE_BAND_001', limit);
-      if (res.data && Array.isArray(res.data)) {
+      const devId = currentVitals?.device_id || 'BLE_BAND_001';
+      const res = await vitalsApi.getDailySummary(days, devId).catch(() => ({ data: [] }));
+      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
         setRangeVitals(res.data);
       } else {
-        setRangeVitals([]);
+        const fb = await vitalsApi.getHistory(devId, days * 20).catch(() => ({ data: [] }));
+        setRangeVitals(fb.data && Array.isArray(fb.data) ? fb.data : []);
       }
     } catch (e) {
       console.warn('Lỗi tải dữ liệu lịch sử tuần/tháng:', e);
@@ -205,7 +209,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     if (selectedRange === 'DAY') {
       loadDateVitals(selectedDate);
     } else {
-      loadRangeVitals(selectedRange === 'WEEK' ? 50 : 100);
+      loadRangeVitals(selectedRange === 'WEEK' ? 7 : 30);
     }
   }, [selectedDate, selectedRange]);
 
@@ -283,11 +287,15 @@ export default function HealthDetailScreen({ navigation, route }: any) {
         if (isToday && vMinutes > nowMinutes) continue;
 
         const diff = Math.abs(vMinutes - scrubberMinutes);
-        // Gắn kết nếu bản ghi nằm trong khoảng +-90 phút quanh giờ tua
-        if (diff < minDiff && diff <= 90) {
+        // Gắn kết nếu bản ghi nằm trong khoảng +-180 phút (3 tiếng) quanh giờ tua
+        if (diff < minDiff && diff <= 180) {
           minDiff = diff;
           best = v;
         }
+      }
+      // Nếu là ngày trong quá khứ có dữ liệu mà chưa khớp nấc tua thì chọn bản ghi gần nhất trong ngày
+      if (!best && !isToday && parsedDayVitals.length > 0) {
+        best = parsedDayVitals[parsedDayVitals.length - 1];
       }
     }
 
@@ -322,10 +330,21 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     return best;
   }, [parsedDayVitals, scrubberMinutes, selectedDate, currentVitals]);
 
-  // Dữ liệu biểu đồ động theo ngày được chọn (sử dụng cache tiền xử lý)
+  // Dữ liệu biểu đồ động theo ngày được chọn (sử dụng cache tiền xử lý và giới hạn tối đa 30 điểm để 60fps mượt mà)
   const chartDataForDay = useMemo(() => {
     if (!parsedDayVitals || parsedDayVitals.length === 0) return [];
-    return parsedDayVitals.map((v) => ({
+
+    const step = Math.max(1, Math.ceil(parsedDayVitals.length / 30));
+    const sampled: any[] = [];
+    for (let i = 0; i < parsedDayVitals.length; i += step) {
+      sampled.push(parsedDayVitals[i]);
+    }
+    const lastItem = parsedDayVitals[parsedDayVitals.length - 1];
+    if (sampled[sampled.length - 1]?.id !== lastItem?.id) {
+      sampled.push(lastItem);
+    }
+
+    return sampled.map((v) => ({
       id: v.id,
       label: v._label,
       hr: v.heart_rate,
@@ -345,23 +364,30 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     return `${Math.round(sum / valid.length)} bpm`;
   }, [dayVitals]);
 
-  // Dữ liệu biểu đồ và tính toán trung bình cho Tuần / Tháng
+  // Dữ liệu biểu đồ và tính toán trung bình cho Tuần / Tháng (hỗ trợ cả getDailySummary và raw vitals)
   const weekData = useMemo(() => {
     const list = rangeVitals && Array.isArray(rangeVitals) && rangeVitals.length > 0 ? rangeVitals : [];
-    const validHR = list.filter((v) => typeof v.heart_rate === 'number');
-    const validSpO2 = list.filter((v) => typeof v.spo2 === 'number');
-    const validTemp = list.filter((v) => typeof (v.body_temp ?? v.skin_temp_max) === 'number');
+    const validHR = list.map((v) => v.heartRate ?? v.heart_rate).filter((h) => typeof h === 'number' && h > 0);
+    const validSpO2 = list.map((v) => v.spo2).filter((s) => typeof s === 'number' && s > 0);
+    const validTemp = list.map((v) => v.temperature ?? v.body_temp ?? v.skin_temp_max).filter((t) => typeof t === 'number' && t > 0);
 
-    const avgHR = validHR.length > 0 ? (validHR.reduce((a, b) => a + b.heart_rate, 0) / validHR.length).toFixed(1) : '--';
-    const avgSpO2 = validSpO2.length > 0 ? Math.round(validSpO2.reduce((a, b) => a + b.spo2, 0) / validSpO2.length).toString() : '--';
-    const avgTemp = validTemp.length > 0 ? (validTemp.reduce((a, b) => a + (b.body_temp ?? b.skin_temp_max), 0) / validTemp.length).toFixed(1) : '--';
+    const avgHR = validHR.length > 0 ? (validHR.reduce((a, b) => a + b, 0) / validHR.length).toFixed(1) : '--';
+    const avgSpO2 = validSpO2.length > 0 ? Math.round(validSpO2.reduce((a, b) => a + b, 0) / validSpO2.length).toString() : '--';
+    const avgTemp = validTemp.length > 0 ? (validTemp.reduce((a, b) => a + b, 0) / validTemp.length).toFixed(1) : '--';
 
-    const chart = list.length === 0 ? [] : list.slice(0, 7).reverse().map((v) => {
-      const rawDate = v.recorded_at || v.time || v.created_at;
-      const d = rawDate ? new Date(rawDate) : new Date();
+    const chart = list.map((v) => {
+      let label = '';
+      if (v.date) {
+        const parts = String(v.date).split('-');
+        label = parts.length === 3 ? `${parts[2]}/${parts[1]}` : String(v.date);
+      } else {
+        const rawDate = v.recorded_at || v.time || v.created_at;
+        const d = rawDate ? new Date(rawDate) : new Date();
+        label = `${d.getDate()}/${d.getMonth() + 1}`;
+      }
       return {
-        label: `${d.getDate()}/${d.getMonth() + 1}`,
-        hr: v.heart_rate ?? 0,
+        label,
+        hr: v.heartRate ?? v.heart_rate ?? 0,
       };
     });
 

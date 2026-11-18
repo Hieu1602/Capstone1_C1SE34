@@ -103,13 +103,30 @@ export const ViewAvatarModal: React.FC<ViewAvatarModalProps> = ({
                   resizeMode="cover"
                 />
               ) : (
-                <View style={styles.placeholderContainer}>
-                  <Ionicons
-                    name="person"
-                    size={AVATAR_SIZE * 0.5}
-                    color={isDarkMode ? '#4B5563' : '#CBD5E1'}
-                  />
-                  <Text style={styles.placeholderText}>Chưa có ảnh đại diện</Text>
+                <View
+                  style={[
+                    styles.placeholderContainer,
+                    {
+                      width: AVATAR_SIZE,
+                      height: AVATAR_SIZE,
+                      borderRadius: AVATAR_SIZE / 2,
+                      backgroundColor: '#2563EB',
+                    },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      color: '#FFFFFF',
+                      fontSize: AVATAR_SIZE * 0.42,
+                      fontWeight: '800',
+                    }}
+                  >
+                    {(() => {
+                      const clean = (displayName || 'M').replace(/^(bs\.|bác sĩ|dr\.)\s+/i, '').trim();
+                      const parts = clean.split(/\s+/);
+                      return parts[parts.length - 1]?.[0]?.toUpperCase() || 'M';
+                    })()}
+                  </Text>
                 </View>
               )}
             </View>
@@ -135,7 +152,7 @@ export const ViewAvatarModal: React.FC<ViewAvatarModalProps> = ({
               activeOpacity={0.85}
             >
               <Ionicons name="camera" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-              <Text style={styles.editButtonText}>Chỉnh sửa ảnh đại diện</Text>
+              <Text style={styles.editButtonText}>Thay đổi ảnh đại diện</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -165,7 +182,7 @@ export const ViewAvatarModal: React.FC<ViewAvatarModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(15, 23, 42, 0.88)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,

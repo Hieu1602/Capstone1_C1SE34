@@ -23,9 +23,12 @@ class CameraDriver:
         if not self.source and os.getenv("CAMERA_SOURCE"):
             src = os.getenv("CAMERA_SOURCE", "").strip()
             self.source = int(src) if src.isdigit() else src
-        elif not self.source and os.getenv("TAPO_HOST"):
-            from .tapo import rtsp_url
-            self.source = rtsp_url()
+        elif not self.source and (os.getenv("TAPO_HOST") or os.getenv("TAPO_USERNAME")):
+            try:
+                from .tapo import rtsp_url
+                self.source = rtsp_url()
+            except Exception:
+                pass
         if self.source is None:
             self.source = 0
         self.fps = max(1, int(config.get("fps", 15)))
@@ -114,6 +117,7 @@ class CameraDriver:
         is_rtsp = isinstance(self.source, str) and self.source.startswith("rtsp://")
         # TCP tránh rơi gói qua Docker bridge. Không log URL chứa mật khẩu.
         os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp")
+        fail_count = 0
         try:
             while not self._stop.is_set():
                 try:
@@ -144,6 +148,7 @@ class CameraDriver:
                         ok, frame = self._cap.read()
                         if not ok:
                             break
+                        fail_count = 0
                         with self._lock:
                             self._frame = frame
                             self._frame_id += 1
@@ -162,7 +167,19 @@ class CameraDriver:
                     with self._lock:
                         self._frame = None
                 if not self._stop.is_set():
-                    logger.warning("Camera disconnected; check LAN, Camera Account and privacy mode")
+                    fail_count += 1
+                    logger.warning("Camera disconnected (lần %d); check LAN, Camera Account and privacy mode", fail_count)
+                    if is_rtsp and fail_count >= 2:
+                        try:
+                            from .tapo import discover_tapo_host, rtsp_url
+                            logger.info("Đang tự động quét mạng LAN tìm IP camera mới...")
+                            new_host = discover_tapo_host()
+                            if new_host:
+                                self.source = rtsp_url(new_host)
+                                logger.info("Đã cập nhật nguồn camera sang IP mới: %s", new_host)
+                                fail_count = 0
+                        except Exception as e:
+                            logger.debug("Auto-discovery error: %s", e)
                     self._stop.wait(self.reconnect_interval)
         finally:
             logger.info("Camera stopped")

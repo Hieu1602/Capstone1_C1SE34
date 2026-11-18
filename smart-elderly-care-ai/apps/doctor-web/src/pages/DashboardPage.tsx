@@ -16,6 +16,7 @@ import { DoctorKpiCards } from '../components/dashboard/DoctorKpiCards';
 import { DoctorMiniCalendar, MiniCalendarCell } from '../components/dashboard/DoctorMiniCalendar';
 import { DoctorAlertsAreaChart, AlertDayStat } from '../components/dashboard/DoctorAlertsAreaChart';
 import { DoctorPatientTable } from '../components/dashboard/DoctorPatientTable';
+import { EscalationStatusBanner } from '../components/dashboard/EscalationStatusBanner';
 import { Sparkles } from 'lucide-react';
 
 const DEFAULT_ALERT_STATS_7D: AlertDayStat[] = [
@@ -186,6 +187,10 @@ export const DashboardPage: React.FC = () => {
       if (
         data?.type === 'ALERT_NEW' ||
         data?.type === 'INITIAL_ALERTS' ||
+        data?.type === 'DEVICE_STATUS' ||
+        data?.type === 'INCIDENT_RESOLVED' ||
+        data?.type === 'INCIDENT_ESCALATED' ||
+        data?.type === 'vitals_update' ||
         data?.alert_type
       ) {
         fetchAllData(true);
@@ -201,6 +206,7 @@ export const DashboardPage: React.FC = () => {
               idx === 0
                 ? {
                     ...p,
+                    is_online: true,
                     heart_rate: liveHr ?? p.heart_rate,
                     spo2: liveSpo2 ?? p.spo2,
                     last_updated: 'Vừa xong (Trực tuyến)',
@@ -211,7 +217,16 @@ export const DashboardPage: React.FC = () => {
         }
       }
     });
-    return () => unsub();
+
+    // Đồng bộ trạng thái Smartband mỗi 15s (phát hiện offline sau 45s không cần reload)
+    const statusTicker = setInterval(() => {
+      fetchAllData(true);
+    }, 15000);
+
+    return () => {
+      unsub();
+      clearInterval(statusTicker);
+    };
   }, [fetchAllData, patients, setPatients]);
 
   const handleRespondInvite = async (inviteId: string, action: 'accept' | 'reject') => {
@@ -335,6 +350,14 @@ export const DashboardPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* =========================================================
+          TẦNG 1.5: TRẠNG THÁI LEO THANG KHẨN CẤP TỰ ĐỘNG (45s SOS)
+         ========================================================= */}
+      <EscalationStatusBanner
+        incidents={incidents}
+        onOpenNotifications={() => navigate('/notifications')}
+      />
 
       {/* =========================================================
           TẦNG 2: HÀNG 4 THẺ CHỈ SỐ KPI

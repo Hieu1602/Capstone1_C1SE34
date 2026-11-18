@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Union
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.device import Device, DeviceType
@@ -187,7 +187,7 @@ class CRUDVital:
                 battery = None
 
         data.pop("raw_payload", None)
-        data.pop("bracelet_connected", None)
+        bracelet_connected_flag = data.pop("bracelet_connected", None)
         data.pop("edge_hub_connected", None)
 
         # Lọc chỉ truyền các cột thực tế của bảng vital_signs vào model
@@ -214,13 +214,36 @@ class CRUDVital:
 
                 dev = await db.get(Device, uuid_val)
                 if dev:
-                    if battery is not None:
+                    prev_online = bool(dev.is_online)
+                    if bracelet_connected_flag is False:
+                        dev.is_online = False
+                    elif battery is not None:
                         dev.battery_level = battery
                         dev.is_online = (battery > 0)
                     else:
                         dev.is_online = True
                     dev.last_heartbeat = datetime.now(timezone.utc)
                     await db.flush()
+
+                    # Nếu trạng thái thiết bị thay đổi (đặc biệt khi ngắt kết nối BLE) -> phát ngay WS DEVICE_STATUS cho cả Gia đình & Bác sĩ
+                    if prev_online != bool(dev.is_online):
+                        try:
+                            import json as _json
+                            status_payload = _json.dumps({
+                                "type": "DEVICE_STATUS",
+                                "device_id": str(dev.id),
+                                "is_online": bool(dev.is_online),
+                                "bracelet_connected": bool(dev.is_online),
+                                "elderly_id": str(dev.elderly_id) if dev.elderly_id else None,
+                            }, ensure_ascii=False)
+                            for c_ws in list(alert_clients):
+                                try:
+                                    await c_ws.send_text(status_payload)
+                                except Exception:
+                                    if c_ws in alert_clients:
+                                        alert_clients.remove(c_ws)
+                        except Exception:
+                            pass
 
                 dev_name = dev.name if dev else str(raw_dev)
                 alerts_to_create = []
@@ -483,6 +506,15 @@ class CRUDVital:
                             "created_at": datetime.now(timezone.utc).isoformat(),
                         }
 
+                        # Kích hoạt bộ đếm ngược Leo thang Khẩn cấp Tự động (45s) cho sự cố té ngã / nguy kịch
+                        if alert_type in ("FALL_DETECTED", "AI_FALL_DETECTED", "CRITICAL_TRIAD", "CARDIO_COLLAPSE"):
+                            try:
+                                from app.services.escalation_service import schedule_auto_escalation, DEFAULT_ESCALATION_DELAY_SECONDS
+                                schedule_auto_escalation(new_incident.id, DEFAULT_ESCALATION_DELAY_SECONDS)
+                                alert_payload_dict["escalation_seconds"] = DEFAULT_ESCALATION_DELAY_SECONDS
+                            except Exception:
+                                pass
+
                         # Lưu vào hàng đợi RAM Redis cho Doctor Web & Mobile tải tức thời
                         try:
                             from app.services.redis import redis_service
@@ -688,6 +720,67 @@ class CRUDVital:
             fall_count=row.fall_count or 0,
         )
 
+    async def get_daily_summary(
+        self,
+        db: AsyncSession,
+        days: int = 30,
+        device_id: Optional[Union[str, UUID]] = None,
+    ) -> List[dict]:
+        """
+        Tổng hợp chỉ số sinh hiệu trung bình theo từng ngày (dành cho biểu đồ 7 ngày / 30 ngày).
+        Sử dụng trực tiếp aggregation trong database để tối ưu hiệu năng và bao quát trọn vẹn toàn bộ dữ liệu.
+        """
+        uuid_val = None
+        if device_id:
+            uuid_val = await self.resolve_device_uuid(db, device_id)
+        if not uuid_val:
+            res_band = await db.execute(
+                select(Device.id)
+                .where(Device.device_type == DeviceType.SMARTBAND)
+                .order_by(Device.created_at.desc())
+                .limit(1)
+            )
+            uuid_val = res_band.scalar_one_or_none()
+
+        safe_days = max(1, min(int(days), 90))
+        where_clauses = [f"time >= NOW() - INTERVAL '{safe_days} days'"]
+        params: dict = {}
+        if uuid_val:
+            where_clauses.append("device_id = :device_id")
+            params["device_id"] = uuid_val
+
+        where_sql = " AND ".join(where_clauses)
+        sql = f"""
+        SELECT 
+            TO_CHAR(time AT TIME ZONE 'Asia/Ho_Chi_Minh', 'YYYY-MM-DD') as day_str,
+            ROUND(AVG(heart_rate)) as avg_hr,
+            ROUND(AVG(spo2)) as avg_spo2,
+            ROUND(AVG(bp_systolic)) as avg_bp,
+            ROUND(AVG(skin_temp_max)::numeric, 1) as avg_temp,
+            MAX(CASE WHEN fall_detected = true THEN 95 ELSE 0 END) as max_fall_risk,
+            COUNT(CASE WHEN fall_detected = true THEN 1 END) as alert_count,
+            COUNT(*) as record_count
+        FROM vital_signs
+        WHERE {where_sql}
+        GROUP BY day_str
+        ORDER BY day_str ASC;
+        """
+        result = await db.execute(text(sql), params)
+        summary = []
+        for row in result.fetchall():
+            summary.append({
+                "date": row.day_str,
+                "heartRate": int(row.avg_hr) if row.avg_hr is not None else None,
+                "spo2": int(row.avg_spo2) if row.avg_spo2 is not None else None,
+                "bloodPressure": int(row.avg_bp) if row.avg_bp is not None else None,
+                "temperature": float(row.avg_temp) if row.avg_temp is not None else None,
+                "fallRisk": int(row.max_fall_risk) if row.max_fall_risk is not None else 0,
+                "fallMax": int(row.max_fall_risk) if row.max_fall_risk is not None else 0,
+                "alerts": int(row.alert_count) if row.alert_count is not None else 0,
+                "recordCount": int(row.record_count) if row.record_count is not None else 0,
+            })
+        return summary
+
     async def get_current_for_user(
         self, db: AsyncSession, user_id: UUID
     ) -> dict:
@@ -787,13 +880,31 @@ class CRUDVital:
             # Chuẩn hóa timezone nếu cần
             v_time_tz = v_time if v_time.tzinfo else v_time.replace(tzinfo=timezone.utc)
             diff_seconds = abs((now_utc - v_time_tz).total_seconds())
-            if diff_seconds <= 90:
+            if diff_seconds <= 45:
                 is_fresh = True
 
-        # Nếu quá 90s không có dữ liệu mới, cập nhật thiết bị sang offline
+        # Nếu quá 45s không có dữ liệu mới, cập nhật thiết bị sang offline và báo WS cho Bác sĩ & Gia đình
         if not is_fresh and smartband_device and smartband_device.is_online:
             smartband_device.is_online = False
             await db.commit()
+            try:
+                import json as _json
+                from app.api.websockets.vitals_ws import alert_clients
+                status_payload = _json.dumps({
+                    "type": "DEVICE_STATUS",
+                    "device_id": str(smartband_device.id),
+                    "is_online": False,
+                    "bracelet_connected": False,
+                    "elderly_id": str(smartband_device.elderly_id) if smartband_device.elderly_id else None,
+                }, ensure_ascii=False)
+                for c_ws in list(alert_clients):
+                    try:
+                        await c_ws.send_text(status_payload)
+                    except Exception:
+                        if c_ws in alert_clients:
+                            alert_clients.remove(c_ws)
+            except Exception:
+                pass
 
         is_band_connected = bool(smartband_device and smartband_device.is_online and is_fresh)
         band_battery = (

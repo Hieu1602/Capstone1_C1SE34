@@ -149,6 +149,7 @@ export const DashboardPage: React.FC = () => {
   const [clinicalIncidents, setClinicalIncidents] = useState<any[]>([]);
   const [services, setServices] = useState<ServiceHealth[]>([]);
   const [rawVitals, setRawVitals] = useState<any[]>([]);
+  const [dailySummary, setDailySummary] = useState<any[]>([]);
   const [timeRange, setTimeRange] = useState<'live' | 'week' | 'month'>('live');
   const [activeMetrics, setActiveMetrics] = useState<{
     heartRate: boolean;
@@ -181,8 +182,9 @@ export const DashboardPage: React.FC = () => {
       systemApi.getIncidents().catch(() => []),
       systemApi.getServicesHealth().catch(() => []),
       vitalsApi.getHistory(500).catch(() => []),
+      vitalsApi.getDailySummary(35).catch(() => []),
       incidentsApi.list(100).catch(() => []),
-    ]).then(([devs, usrs, rds, incs, srvs, vits, clIncs]) => {
+    ]).then(([devs, usrs, rds, incs, srvs, vits, summaries, clIncs]) => {
       setDevices(devs);
       setUsers(usrs);
       setRedis(rds);
@@ -193,6 +195,9 @@ export const DashboardPage: React.FC = () => {
       }
       if (Array.isArray(vits)) {
         setRawVitals(vits);
+      }
+      if (Array.isArray(summaries)) {
+        setDailySummary(summaries);
       }
       setLoading(false);
     });
@@ -222,6 +227,18 @@ export const DashboardPage: React.FC = () => {
       }).catch(() => {});
     }, 3000);
     return () => clearInterval(interval);
+  }, [timeRange]);
+
+  // Làm mới dữ liệu tổng hợp ngày khi chọn xem theo Tuần (7 ngày) hoặc Tháng (30 ngày)
+  useEffect(() => {
+    if (timeRange === 'week' || timeRange === 'month') {
+      const days = timeRange === 'week' ? 10 : 35;
+      vitalsApi.getDailySummary(days).then((summaries) => {
+        if (Array.isArray(summaries) && summaries.length > 0) {
+          setDailySummary(summaries);
+        }
+      }).catch(() => {});
+    }
   }, [timeRange]);
 
   // Tổng hợp dữ liệu biểu đồ đa chỉ số sinh hiệu: Nhịp tim, SpO2, Huyết áp, Nguy cơ ngã & Thân nhiệt
@@ -309,42 +326,60 @@ export const DashboardPage: React.FC = () => {
         fallMax: number; alerts: number;
       }>();
 
+      // 1. Tải dữ liệu tổng hợp hàng ngày chính xác từ DB
+      for (const s of dailySummary) {
+        if (!s.date) continue;
+        dayMap.set(s.date, {
+          hrSum: s.heartRate ?? 0, hrCnt: s.heartRate != null ? 1 : 0,
+          spo2Sum: s.spo2 ?? 0, spo2Cnt: s.spo2 != null ? 1 : 0,
+          bpSum: s.bloodPressure ?? 0, bpCnt: s.bloodPressure != null ? 1 : 0,
+          tempSum: s.temperature ?? 0, tempCnt: s.temperature != null ? 1 : 0,
+          fallSum: s.fallRisk ?? 0, fallCnt: s.fallRisk != null ? 1 : 0,
+          fallMax: s.fallMax ?? 0,
+          alerts: s.alerts ?? 0,
+        });
+      }
+
+      // 2. Dự phòng hoặc bù đắp từ rawVitals nếu ngày chưa có trong dailySummary
       for (const v of rawVitals) {
         if (!v.time) continue;
-        const dKey = new Date(v.time).toISOString().slice(5, 10);
-        const cur = dayMap.get(dKey) || {
-          hrSum: 0, hrCnt: 0,
-          spo2Sum: 0, spo2Cnt: 0,
-          bpSum: 0, bpCnt: 0,
-          tempSum: 0, tempCnt: 0,
-          fallSum: 0, fallCnt: 0,
-          fallMax: 0, alerts: 0,
-        };
-        if (typeof v.heart_rate === 'number' && v.heart_rate > 35) {
-          cur.hrSum += v.heart_rate; cur.hrCnt++;
+        const vDate = new Date(v.time);
+        const dKey = `${vDate.getFullYear()}-${String(vDate.getMonth() + 1).padStart(2, '0')}-${String(vDate.getDate()).padStart(2, '0')}`;
+        if (!dayMap.has(dKey)) {
+          const cur = dayMap.get(dKey) || {
+            hrSum: 0, hrCnt: 0,
+            spo2Sum: 0, spo2Cnt: 0,
+            bpSum: 0, bpCnt: 0,
+            tempSum: 0, tempCnt: 0,
+            fallSum: 0, fallCnt: 0,
+            fallMax: 0, alerts: 0,
+          };
+          if (typeof v.heart_rate === 'number' && v.heart_rate > 35) {
+            cur.hrSum += v.heart_rate; cur.hrCnt++;
+          }
+          if (typeof v.spo2 === 'number' && v.spo2 > 70) {
+            cur.spo2Sum += v.spo2; cur.spo2Cnt++;
+          }
+          if (typeof v.bp_systolic === 'number' && v.bp_systolic > 60) {
+            cur.bpSum += v.bp_systolic; cur.bpCnt++;
+          }
+          if (typeof v.skin_temp_max === 'number' && v.skin_temp_max > 30) {
+            cur.tempSum += v.skin_temp_max; cur.tempCnt++;
+          }
+          const fScore = evaluateVitalFallRisk(v);
+          cur.fallSum += fScore; cur.fallCnt++;
+          cur.fallMax = Math.max(cur.fallMax, fScore);
+          if (v.alert_triggered) cur.alerts++;
+          dayMap.set(dKey, cur);
         }
-        if (typeof v.spo2 === 'number' && v.spo2 > 70) {
-          cur.spo2Sum += v.spo2; cur.spo2Cnt++;
-        }
-        if (typeof v.bp_systolic === 'number' && v.bp_systolic > 60) {
-          cur.bpSum += v.bp_systolic; cur.bpCnt++;
-        }
-        if (typeof v.skin_temp_max === 'number' && v.skin_temp_max > 30) {
-          cur.tempSum += v.skin_temp_max; cur.tempCnt++;
-        }
-        const fScore = evaluateVitalFallRisk(v);
-        cur.fallSum += fScore; cur.fallCnt++;
-        cur.fallMax = Math.max(cur.fallMax, fScore);
-        if (v.alert_triggered) cur.alerts++;
-        dayMap.set(dKey, cur);
       }
 
       const points = [];
       for (let i = 6; i >= 0; i--) {
-        const d = new Date(now.getTime() - i * 86400 * 1000);
+        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
         const dateLabel = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-        const dKey = d.toISOString().slice(5, 10);
-        const rec = dayMap.get(dKey);
+        const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const rec = dayMap.get(dayKey);
 
         const hasHr = Boolean(rec && rec.hrCnt > 0);
         const hasSpo2 = Boolean(rec && rec.spo2Cnt > 0);
@@ -377,42 +412,60 @@ export const DashboardPage: React.FC = () => {
       fallMax: number; alerts: number;
     }>();
 
+    // 1. Tải dữ liệu tổng hợp hàng ngày chính xác từ DB
+    for (const s of dailySummary) {
+      if (!s.date) continue;
+      dayMap.set(s.date, {
+        hrSum: s.heartRate ?? 0, hrCnt: s.heartRate != null ? 1 : 0,
+        spo2Sum: s.spo2 ?? 0, spo2Cnt: s.spo2 != null ? 1 : 0,
+        bpSum: s.bloodPressure ?? 0, bpCnt: s.bloodPressure != null ? 1 : 0,
+        tempSum: s.temperature ?? 0, tempCnt: s.temperature != null ? 1 : 0,
+        fallSum: s.fallRisk ?? 0, fallCnt: s.fallRisk != null ? 1 : 0,
+        fallMax: s.fallMax ?? 0,
+        alerts: s.alerts ?? 0,
+      });
+    }
+
+    // 2. Dự phòng hoặc bù đắp từ rawVitals nếu ngày chưa có trong dailySummary
     for (const v of rawVitals) {
       if (!v.time) continue;
-      const dKey = new Date(v.time).toISOString().slice(5, 10);
-      const cur = dayMap.get(dKey) || {
-        hrSum: 0, hrCnt: 0,
-        spo2Sum: 0, spo2Cnt: 0,
-        bpSum: 0, bpCnt: 0,
-        tempSum: 0, tempCnt: 0,
-        fallSum: 0, fallCnt: 0,
-        fallMax: 0, alerts: 0,
-      };
-      if (typeof v.heart_rate === 'number' && v.heart_rate > 35) {
-        cur.hrSum += v.heart_rate; cur.hrCnt++;
+      const vDate = new Date(v.time);
+      const dKey = `${vDate.getFullYear()}-${String(vDate.getMonth() + 1).padStart(2, '0')}-${String(vDate.getDate()).padStart(2, '0')}`;
+      if (!dayMap.has(dKey)) {
+        const cur = dayMap.get(dKey) || {
+          hrSum: 0, hrCnt: 0,
+          spo2Sum: 0, spo2Cnt: 0,
+          bpSum: 0, bpCnt: 0,
+          tempSum: 0, tempCnt: 0,
+          fallSum: 0, fallCnt: 0,
+          fallMax: 0, alerts: 0,
+        };
+        if (typeof v.heart_rate === 'number' && v.heart_rate > 35) {
+          cur.hrSum += v.heart_rate; cur.hrCnt++;
+        }
+        if (typeof v.spo2 === 'number' && v.spo2 > 70) {
+          cur.spo2Sum += v.spo2; cur.spo2Cnt++;
+        }
+        if (typeof v.bp_systolic === 'number' && v.bp_systolic > 60) {
+          cur.bpSum += v.bp_systolic; cur.bpCnt++;
+        }
+        if (typeof v.skin_temp_max === 'number' && v.skin_temp_max > 30) {
+          cur.tempSum += v.skin_temp_max; cur.tempCnt++;
+        }
+        const fScore = evaluateVitalFallRisk(v);
+        cur.fallSum += fScore; cur.fallCnt++;
+        cur.fallMax = Math.max(cur.fallMax, fScore);
+        if (v.alert_triggered) cur.alerts++;
+        dayMap.set(dKey, cur);
       }
-      if (typeof v.spo2 === 'number' && v.spo2 > 70) {
-        cur.spo2Sum += v.spo2; cur.spo2Cnt++;
-      }
-      if (typeof v.bp_systolic === 'number' && v.bp_systolic > 60) {
-        cur.bpSum += v.bp_systolic; cur.bpCnt++;
-      }
-      if (typeof v.skin_temp_max === 'number' && v.skin_temp_max > 30) {
-        cur.tempSum += v.skin_temp_max; cur.tempCnt++;
-      }
-      const fScore = evaluateVitalFallRisk(v);
-      cur.fallSum += fScore; cur.fallCnt++;
-      cur.fallMax = Math.max(cur.fallMax, fScore);
-      if (v.alert_triggered) cur.alerts++;
-      dayMap.set(dKey, cur);
     }
 
     const points = [];
     for (let i = 29; i >= 0; i--) {
-      const d = new Date(now.getTime() - i * 86400 * 1000);
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
       const dateLabel = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const dKey = d.toISOString().slice(5, 10);
-      const rec = dayMap.get(dKey);
+      const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const rec = dayMap.get(dayKey);
 
       const hasHr = Boolean(rec && rec.hrCnt > 0);
       const hasSpo2 = Boolean(rec && rec.spo2Cnt > 0);
@@ -433,7 +486,7 @@ export const DashboardPage: React.FC = () => {
       });
     }
     return points;
-  }, [rawVitals, timeRange]);
+  }, [rawVitals, dailySummary, timeRange]);
 
   const stats = useMemo(() => {
     const onlineDevs = devices.filter((d) => d.is_online).length;

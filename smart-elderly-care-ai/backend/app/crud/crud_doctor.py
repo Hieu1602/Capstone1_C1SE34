@@ -3,8 +3,33 @@ crud_doctor.py – CRUD & nghiệp vụ y khoa dành cho Bác sĩ gia đình.
 Vị trí: backend/app/crud/crud_doctor.py
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any
+
+SMARTBAND_STALE_SECONDS = 45
+
+
+def _parse_utc_dt(val: Any) -> Optional[datetime]:
+    if not val:
+        return None
+    if isinstance(val, datetime):
+        return val if val.tzinfo else val.replace(tzinfo=timezone.utc)
+    if isinstance(val, str):
+        try:
+            dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
+            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            return None
+    return None
+
+
+def _is_smartband_fresh(band_device: Any, ts_val: Any, now_utc: datetime) -> tuple[bool, Optional[datetime]]:
+    dt = _parse_utc_dt(ts_val) or _parse_utc_dt(getattr(band_device, "last_heartbeat", None))
+    if not dt:
+        return False, None
+    diff_sec = abs((now_utc - dt).total_seconds())
+    return diff_sec <= SMARTBAND_STALE_SECONDS, dt
+
 import uuid
 from uuid import UUID
 
@@ -213,6 +238,8 @@ class CRUDDoctor:
             bp_str = None
             health_status = "NORMAL"
             last_updated_str = None
+            is_smartband_online = False
+            now_utc = datetime.now(timezone.utc)
 
             if band_device:
                 # Ưu tiên lấy nhanh từ Redis Cache nếu có
@@ -225,13 +252,15 @@ class CRUDDoctor:
                 except Exception:
                     pass
 
+                ts_candidate = None
                 if cached_vitals:
                     hr = cached_vitals.get("heart_rate")
                     spo2 = cached_vitals.get("spo2")
                     temp = cached_vitals.get("skin_temp_max") or cached_vitals.get("temperature")
                     if cached_vitals.get("bp_systolic") is not None and cached_vitals.get("bp_diastolic") is not None:
                         bp_str = f"{cached_vitals['bp_systolic']}/{cached_vitals['bp_diastolic']} mmHg"
-                    last_updated_str = "Vừa xong (Trực tuyến)"
+                    ts_candidate = cached_vitals.get("time") or cached_vitals.get("cached_at_iso")
+                    last_updated_str = ts_candidate or "Vừa xong (Trực tuyến)"
                 else:
                     # Sử dụng dữ liệu sinh hiệu đã tải lô (Zero SQL query chạy trong vòng lặp)
                     latest_vs = latest_vitals_map.get(band_device.id)
@@ -242,7 +271,8 @@ class CRUDDoctor:
                         if latest_vs.bp_systolic is not None and latest_vs.bp_diastolic is not None:
                             bp_str = f"{latest_vs.bp_systolic}/{latest_vs.bp_diastolic} mmHg"
                         if latest_vs.time:
-                            last_updated_str = latest_vs.time.strftime("%d/%m/%Y %H:%M")
+                            ts_candidate = latest_vs.time
+                            last_updated_str = latest_vs.time.isoformat()
                         # Cập nhật ngầm vào Redis Cache cho các lần gọi sau
                         try:
                             await redis_service.set_latest_vitals(str(band_device.id), {
@@ -256,13 +286,27 @@ class CRUDDoctor:
                         except Exception:
                             pass
 
+                # Single Source of Truth: Smartband chỉ Online khi thiết bị không bị ngắt kết nối BLE VÀ dữ liệu mới <= 45 giây
+                is_fresh, latest_dt = _is_smartband_fresh(band_device, ts_candidate, now_utc)
+                cache_connected_ok = True
+                if cached_vitals and cached_vitals.get("bracelet_connected") is False:
+                    cache_connected_ok = False
+                is_smartband_online = bool(band_device.is_online and is_fresh and cache_connected_ok)
+
+                if not is_smartband_online:
+                    hr = None
+                    spo2 = None
+                    temp = None
+                    if latest_dt:
+                        last_updated_str = latest_dt.isoformat()
+
                 # Kiểm tra cảnh báo / sự cố đang xảy ra
                 active_inc = active_incidents_map.get(band_device.id)
                 if active_inc and (active_inc.alert_level == "CRITICAL" or "FALL" in str(active_inc.alert_type).upper()):
                     health_status = "DANGER"
 
-            # Đánh giá ngưỡng an toàn y khoa
-            if health_status != "DANGER":
+            # Đánh giá ngưỡng an toàn y khoa (chỉ đánh giá khi Smartband đang online và có số liệu thực)
+            if health_status != "DANGER" and is_smartband_online:
                 if (spo2 is not None and spo2 < 90) or (hr is not None and (hr > 120 or hr < 50)):
                     health_status = "DANGER"
                 elif (spo2 is not None and spo2 < 95) or (hr is not None and (hr > 100 or hr < 55)):
@@ -291,8 +335,8 @@ class CRUDDoctor:
                     avatar_url=ep.avatar_url,
                     has_face_enrolled=bool(ep.face_embedding),
                     device_id=band_device.device_id if band_device else "",
-                    is_online=band_device.is_online if band_device else False,
-                    battery_level=getattr(band_device, 'battery_level', 92) if band_device else None,
+                    is_online=is_smartband_online,
+                    battery_level=getattr(band_device, 'battery_level', 92) if (band_device and is_smartband_online) else None,
                     heart_rate=hr,
                     spo2=spo2,
                     skin_temp_max=temp,
@@ -304,11 +348,11 @@ class CRUDDoctor:
                 )
             )
 
-        # Lưu danh sách bệnh nhân vào Redis Cache (TTL = 180 giây)
+        # Lưu danh sách bệnh nhân vào Redis Cache ngắn hạn (TTL = 5 giây) để đảm bảo trạng thái Online/Offline luôn real-time
         try:
             from app.services.redis import redis_service
             serialized_cards = [c.model_dump() for c in cards]
-            await redis_service.set_cached_doctor_patients(str(doctor_user.id), serialized_cards, ttl=180)
+            await redis_service.set_cached_doctor_patients(str(doctor_user.id), serialized_cards, ttl=5)
         except Exception:
             pass
 
@@ -373,6 +417,8 @@ class CRUDDoctor:
         health_status = "NORMAL"
         last_updated_str = None
 
+        is_smartband_online = False
+        now_utc = datetime.now(timezone.utc)
         if band_device:
             from app.services.redis import redis_service
             cached_vs = None
@@ -384,13 +430,15 @@ class CRUDDoctor:
             except Exception:
                 pass
 
+            ts_candidate = None
             if cached_vs:
                 hr = cached_vs.get("heart_rate")
                 spo2 = cached_vs.get("spo2")
                 temp = cached_vs.get("skin_temp_max") or cached_vs.get("temperature")
                 if cached_vs.get("bp_systolic") is not None and cached_vs.get("bp_diastolic") is not None:
                     bp_str = f"{cached_vs['bp_systolic']}/{cached_vs['bp_diastolic']} mmHg"
-                last_updated_str = "Vừa xong (Trực tuyến)"
+                ts_candidate = cached_vs.get("time") or cached_vs.get("cached_at_iso")
+                last_updated_str = ts_candidate or "Vừa xong (Trực tuyến)"
             else:
                 vs_res = await db.execute(
                     select(VitalSign)
@@ -406,12 +454,27 @@ class CRUDDoctor:
                     if latest_vs.bp_systolic is not None and latest_vs.bp_diastolic is not None:
                         bp_str = f"{latest_vs.bp_systolic}/{latest_vs.bp_diastolic} mmHg"
                     if latest_vs.time:
-                        last_updated_str = latest_vs.time.strftime("%d/%m/%Y %H:%M")
+                        ts_candidate = latest_vs.time
+                        last_updated_str = latest_vs.time.isoformat()
 
-        if (spo2 is not None and spo2 < 90) or (hr is not None and (hr > 120 or hr < 50)):
-            health_status = "DANGER"
-        elif (spo2 is not None and spo2 < 95) or (hr is not None and (hr > 100 or hr < 55)):
-            health_status = "WARNING"
+            is_fresh, latest_dt = _is_smartband_fresh(band_device, ts_candidate, now_utc)
+            cache_connected_ok = True
+            if cached_vs and cached_vs.get("bracelet_connected") is False:
+                cache_connected_ok = False
+            is_smartband_online = bool(band_device.is_online and is_fresh and cache_connected_ok)
+
+            if not is_smartband_online:
+                hr = None
+                spo2 = None
+                temp = None
+                if latest_dt:
+                    last_updated_str = latest_dt.isoformat()
+
+        if is_smartband_online:
+            if (spo2 is not None and spo2 < 90) or (hr is not None and (hr > 120 or hr < 50)):
+                health_status = "DANGER"
+            elif (spo2 is not None and spo2 < 95) or (hr is not None and (hr > 100 or hr < 55)):
+                health_status = "WARNING"
 
         height = (
             elderly.height_cm
@@ -484,8 +547,8 @@ class CRUDDoctor:
             avatar_url=med_record.avatar_url or (elderly.avatar_url if elderly else None),
             has_face_enrolled=bool(elderly.face_embedding if elderly else med_record.has_face_enrolled),
             device_id=band_device.device_id if band_device else "",
-            is_online=band_device.is_online if band_device else False,
-            battery_level=band_device.battery_level if band_device else None,
+            is_online=is_smartband_online,
+            battery_level=band_device.battery_level if (band_device and is_smartband_online) else None,
             heart_rate=hr,
             spo2=spo2,
             skin_temp_max=temp,

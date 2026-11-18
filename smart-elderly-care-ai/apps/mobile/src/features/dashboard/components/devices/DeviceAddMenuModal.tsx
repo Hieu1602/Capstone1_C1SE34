@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, TouchableWithoutFeedback } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Shadows } from '../../../../theme/colors';
+import { Colors, Shadows } from '../../../../theme/colors';
 import { LocalizedText } from '../../../../i18n/LocalizedComponents';
 
 interface DeviceAddMenuModalProps {
@@ -91,8 +91,8 @@ export const DeviceAddMenuModal: React.FC<DeviceAddMenuModalProps> = ({
               onPress={onSelectGroup}
               activeOpacity={0.7}
             >
-              <View style={[styles.menuItemIconBox, { backgroundColor: '#F5F3FF' }]}>
-                <Ionicons name="layers-outline" size={20} color="#7C3AED" />
+              <View style={[styles.menuItemIconBox, { backgroundColor: '#FFF7ED' }]}>
+                <Ionicons name="layers-outline" size={20} color={Colors.primary} />
               </View>
               <View style={styles.menuItemContent}>
                 <LocalizedText style={[styles.menuItemTitle, isDarkMode && { color: colors.textPrimary }]}>

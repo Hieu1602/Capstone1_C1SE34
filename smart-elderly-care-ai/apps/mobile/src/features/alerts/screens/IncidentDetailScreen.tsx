@@ -7,7 +7,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Alert, ActivityIndicator, Image, Platform, Vibration,
+  ActivityIndicator, Image, Platform, Vibration, Modal, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -78,8 +78,8 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
 
   const handlerDisplayName = getHandlerDisplayName(incident, userName, userId);
   const [loading, setLoading] = useState(true);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<'ACK' | 'REOPEN' | null>(null);
+  const [feedbackBanner, setFeedbackBanner] = useState<'ACKED' | 'REOPENED' | 'ERROR' | null>(null);
   const [imgError, setImgError] = useState(false);
   const [viewMode, setViewMode] = useState<'ai_box' | 'video'>('ai_box');
 
@@ -137,139 +137,82 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
     } finally { setLoading(false); }
   };
 
+  // Optimistic UI (0ms): Đóng modal & cập nhật trạng thái tức thì, gọi API đồng bộ ngầm ở nền
   const performAcknowledge = async () => {
-    if (!incident || incident.is_acknowledged || isProcessing) return;
-    setIsProcessing(true);
+    if (!incident || incident.is_acknowledged) return;
+    const prevSnapshot = { ...incident };
+    setConfirmModal(null);
+
+    try { if (Platform.OS !== 'web') Vibration.cancel(); } catch {}
+    setSirenActive(false);
     try {
-      try { if (Platform.OS !== 'web') Vibration.cancel(); } catch (e) {}
-      setSirenActive(false);
+      useVitalStore.getState().setVitals({ fall_detected: false, acoustic_status: 'Bình thường' });
+    } catch {}
 
-      // Tắt cờ té ngã trong vital store
-      try {
-        useVitalStore.getState().setVitals({ fall_detected: false, acoustic_status: 'Bình thường' });
-      } catch (e) {}
+    const nowIso = new Date().toISOString();
+    setIncident((prev) => prev ? {
+      ...prev,
+      is_acknowledged: true,
+      acknowledged_by: operatorName,
+      acknowledged_by_name: operatorName,
+      acknowledged_at: nowIso,
+    } : null);
+    setFeedbackBanner('ACKED');
+    acknowledgeIncident(incident.id, 'Đã kiểm tra an toàn', operatorName);
 
-      try { await incidentsApi.acknowledge(incident.id, 'Đã kiểm tra an toàn'); }
-      catch (apiErr) { console.warn('Backend API acknowledge fallback:', apiErr); }
-
-      acknowledgeIncident(incident.id, 'Đã kiểm tra an toàn', operatorName);
-      try { fetchNotifications(); } catch (e) {}
-
-      setIncident((prev) => prev ? {
-        ...prev,
-        is_acknowledged: true,
-        acknowledged_by: operatorName,
-        acknowledged_by_name: operatorName,
-        acknowledged_at: new Date().toISOString(),
-      } : null);
-
-      setShowSuccessToast(true);
-      const alertTitle = '✅ ĐÃ ĐÁNH DẤU XỬ LÝ SỰ KIỆN THÀNH CÔNG!';
-      const alertMsg = `• Trạng thái: Đã xử lý (is_resolved = True)\n• Còi hú báo động: Đã tắt ngay lập tức\n• Cơ sở dữ liệu: Đã lưu vào PostgreSQL\n• Người xử lý: ${operatorName}`;
-
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        window.alert(`${alertTitle}\n\n${alertMsg}`);
-      } else {
-        Alert.alert(alertTitle, alertMsg, [{ text: 'Đồng ý' }]);
-      }
-    } catch (error) {
-      console.error('Lỗi khi xác nhận xử lý sự cố:', error);
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        window.alert('Thông báo: Đã lưu trạng thái xử lý an toàn.');
-      } else { Alert.alert('Thông báo', 'Đã lưu trạng thái xử lý an toàn.'); }
-    } finally { setIsProcessing(false); }
-  };
-
-  const handleAcknowledge = () => {
-    if (!incident || incident.is_acknowledged || isProcessing) return;
-
-    const confirmTitle = 'Xác nhận an toàn';
-    const confirmMsg = 'Bạn xác nhận người cao tuổi đã an toàn và muốn tắt cảnh báo này?';
-
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      if (window.confirm(`${confirmTitle}\n\n${confirmMsg}`)) {
-        performAcknowledge();
-      }
-    } else {
-      Alert.alert(
-        confirmTitle,
-        confirmMsg,
-        [
-          { text: 'Hủy', style: 'cancel' },
-          { text: 'Đồng ý', onPress: performAcknowledge },
-        ]
-      );
+    try {
+      await incidentsApi.acknowledge(incident.id, 'Đã kiểm tra an toàn');
+      try { fetchNotifications(); } catch {}
+    } catch (apiErr) {
+      console.warn('Backend API acknowledge failed, rolling back:', apiErr);
+      setIncident(prevSnapshot);
+      setFeedbackBanner('ERROR');
     }
   };
 
+  const handleAcknowledge = () => {
+    if (!incident || incident.is_acknowledged) return;
+    setConfirmModal('ACK');
+  };
+
+  // Optimistic UI (0ms): Đóng modal & kích hoạt lại cảnh báo tức thì, đồng bộ API ngầm ở nền
   const performReopen = async () => {
-    if (!incident || !incident.is_acknowledged || isReopening) return;
-    setIsReopening(true);
-    try {
+    if (!incident || !incident.is_acknowledged) return;
+    const prevSnapshot = { ...incident };
+    setConfirmModal(null);
+
+    setIncident((prev) => prev ? {
+      ...prev,
+      is_acknowledged: false,
+      acknowledged_by: undefined,
+      acknowledged_by_name: undefined,
+      acknowledged_at: undefined,
+    } : null);
+    setFeedbackBanner('REOPENED');
+    reopenIncident(incident.id, 'Chưa an toàn - Người nhà đã mở lại cảnh báo khẩn cấp');
+
+    if (incident.alert_level === 'CRITICAL' || incident.alert_type === 'FALL_DETECTED') {
+      setSirenActive(true);
       try {
-        await incidentsApi.reopen(incident.id, 'Chưa an toàn - Người nhà đã mở lại cảnh báo khẩn cấp');
-      } catch (apiErr) {
-        console.warn('Backend API reopen fallback:', apiErr);
-      }
+        useVitalStore.getState().setVitals({
+          fall_detected: incident.alert_type === 'FALL_DETECTED',
+        });
+      } catch {}
+    }
 
-      reopenIncident(incident.id, 'Chưa an toàn - Người nhà đã mở lại cảnh báo khẩn cấp');
-
-      // Kích hoạt lại trạng thái báo động khẩn cấp
-      if (incident.alert_level === 'CRITICAL' || incident.alert_type === 'FALL_DETECTED') {
-        setSirenActive(true);
-        try {
-          useVitalStore.getState().setVitals({
-            fall_detected: incident.alert_type === 'FALL_DETECTED',
-          });
-        } catch (e) {}
-      }
-
-      try { fetchNotifications(); } catch (e) {}
-
-      setIncident((prev) => prev ? {
-        ...prev,
-        is_acknowledged: false,
-        acknowledged_by: undefined,
-        acknowledged_by_name: undefined,
-        acknowledged_at: undefined,
-      } : null);
-
-      setShowSuccessToast(false);
-
-      const title = '🚨 ĐÃ MỞ LẠI CẢNH BÁO KHẨN CẤP!';
-      const msg = '• Trạng thái: Chưa xử lý (PENDING)\n• Còi hú & Banner cảnh báo khẩn cấp ngoài màn hình chính đã được kích hoạt lại để gia đình tiếp tục ứng cứu.';
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        window.alert(`${title}\n\n${msg}`);
-      } else {
-        Alert.alert(title, msg, [{ text: 'Đã hiểu' }]);
-      }
-    } catch (err) {
-      console.error('Lỗi khi mở lại cảnh báo:', err);
-    } finally {
-      setIsReopening(false);
+    try {
+      await incidentsApi.reopen(incident.id, 'Chưa an toàn - Người nhà đã mở lại cảnh báo khẩn cấp');
+      try { fetchNotifications(); } catch {}
+    } catch (apiErr) {
+      console.warn('Backend API reopen failed, rolling back:', apiErr);
+      setIncident(prevSnapshot);
+      setFeedbackBanner('ERROR');
     }
   };
 
   const handleReopen = () => {
-    if (!incident || !incident.is_acknowledged || isReopening) return;
-
-    const confirmTitle = 'Mở lại cảnh báo khẩn cấp';
-    const confirmMsg = 'Bạn muốn kích hoạt lại cảnh báo này vì người cao tuổi vẫn chưa an toàn? Còi hú và thông báo sẽ được bật lại.';
-
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      if (window.confirm(`${confirmTitle}\n\n${confirmMsg}`)) {
-        performReopen();
-      }
-    } else {
-      Alert.alert(
-        confirmTitle,
-        confirmMsg,
-        [
-          { text: 'Hủy', style: 'cancel' },
-          { text: 'Mở lại cảnh báo', style: 'destructive', onPress: performReopen },
-        ]
-      );
-    }
+    if (!incident || !incident.is_acknowledged) return;
+    setConfirmModal('REOPEN');
   };
 
   if (loading) {
@@ -321,21 +264,23 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Badges */}
+        {/* Badge trạng thái duy nhất (Không trùng lặp) */}
         <View style={styles.badgeRow}>
           {!incident.is_acknowledged ? (
             <View style={[styles.statusBadge, { backgroundColor: isDarkMode ? '#450A0A' : '#FEE2E2', borderColor: '#EF4444' }]}>
-              <View style={styles.liveRedDot} /><Text style={[styles.statusBadgeText, { color: isDarkMode ? '#FCA5A5' : '#DC2626' }]}>CRITICAL / CHƯA XỬ LÝ</Text>
+              <View style={styles.liveRedDot} />
+              <Text style={[styles.statusBadgeText, { color: isDarkMode ? '#FCA5A5' : '#DC2626' }]}>
+                Khẩn cấp • Chưa xử lý
+              </Text>
             </View>
           ) : (
             <View style={[styles.statusBadge, { backgroundColor: isDarkMode ? 'rgba(34, 197, 94, 0.15)' : '#ECFDF5', borderColor: '#22C55E' }]}>
               <Ionicons name="checkmark-circle" size={14} color="#16A34A" />
-              <Text style={[styles.statusBadgeText, { color: isDarkMode ? '#86EFAC' : '#16A34A' }]}>ĐÃ XỬ LÝ (Bởi {handlerDisplayName})</Text>
+              <Text style={[styles.statusBadgeText, { color: isDarkMode ? '#86EFAC' : '#16A34A' }]}>
+                Đã xử lý an toàn ({handlerDisplayName})
+              </Text>
             </View>
           )}
-          <View style={[styles.levelBadge, { backgroundColor: `${levelColor}20`, borderColor: levelColor }]}>
-            <Text style={[styles.levelText, { color: levelColor }]}>{incident.alert_level}</Text>
-          </View>
         </View>
 
         <Text style={[styles.typeLabel, { color: colors.textPrimary }]}>{typeLabel}</Text>
@@ -473,61 +418,170 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
           )}
         </View>
 
-        {/* Success Toast */}
-        {(showSuccessToast || incident.is_acknowledged) && (
+        {/* Inline Feedback Banner */}
+        {(feedbackBanner === 'ACKED' || (incident.is_acknowledged && feedbackBanner !== 'ERROR')) && (
           <View style={[styles.successToast, { backgroundColor: isDarkMode ? '#064E3B25' : '#F0FDF4', borderColor: '#16A34A' }]}>
             <Ionicons name="checkmark-circle" size={24} color="#16A34A" />
             <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={[styles.successToastTitle, { color: isDarkMode ? '#86EFAC' : '#15803D' }]}>Đã đánh dấu xử lý sự kiện thành công!</Text>
-              <Text style={[styles.successToastSubtitle, { color: isDarkMode ? '#A7F3D0' : '#166534' }]}>Còi hú đã tắt ngay lập tức và trạng thái an toàn đã được cập nhật vào PostgreSQL.</Text>
+              <Text style={[styles.successToastTitle, { color: isDarkMode ? '#86EFAC' : '#15803D' }]}>
+                Đã xác nhận xử lý sự cố
+              </Text>
+              <Text style={[styles.successToastSubtitle, { color: isDarkMode ? '#A7F3D0' : '#166534' }]}>
+                Còi báo động đã tắt và trạng thái an toàn đã được lưu trên hệ thống.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {feedbackBanner === 'REOPENED' && !incident.is_acknowledged && (
+          <View style={[styles.successToast, { backgroundColor: isDarkMode ? '#450A0A35' : '#FEF2F2', borderColor: '#EF4444' }]}>
+            <Ionicons name="alert-circle" size={24} color="#EF4444" />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={[styles.successToastTitle, { color: isDarkMode ? '#FCA5A5' : '#B91C1C' }]}>
+                Đã kích hoạt lại cảnh báo
+              </Text>
+              <Text style={[styles.successToastSubtitle, { color: isDarkMode ? '#FECACA' : '#991B1B' }]}>
+                Còi báo động tại nhà và thông báo khẩn cấp đã được bật lại.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {feedbackBanner === 'ERROR' && (
+          <View style={[styles.successToast, { backgroundColor: isDarkMode ? '#451A0335' : '#FFFBEB', borderColor: '#F59E0B' }]}>
+            <Ionicons name="warning" size={24} color="#D97706" />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={[styles.successToastTitle, { color: isDarkMode ? '#FCD34D' : '#B45309' }]}>
+                Không thể đồng bộ với máy chủ
+              </Text>
+              <Text style={[styles.successToastSubtitle, { color: isDarkMode ? '#FDE68A' : '#92400E' }]}>
+                Vui lòng kiểm tra kết nối mạng và thử lại.
+              </Text>
             </View>
           </View>
         )}
 
         {/* Action Button */}
         {!incident.is_acknowledged ? (
-          <TouchableOpacity style={[styles.ackBtn, isProcessing && { opacity: 0.8, backgroundColor: '#2563EB' }]} onPress={handleAcknowledge} disabled={isProcessing} activeOpacity={0.8}>
-            {isProcessing ? (
-              <><ActivityIndicator size="small" color="#FFF" /><Text style={styles.ackBtnText}>Đang cập nhật PostgreSQL...</Text></>
-            ) : (
-              <><Ionicons name="checkmark-circle" size={20} color="#FFF" /><Text style={styles.ackBtnText}>Đánh dấu đã xử lý</Text></>
-            )}
+          <TouchableOpacity style={styles.ackBtn} onPress={handleAcknowledge} activeOpacity={0.8}>
+            <Ionicons name="checkmark-circle" size={20} color="#FFF" />
+            <Text style={styles.ackBtnText}>Đánh dấu đã xử lý</Text>
           </TouchableOpacity>
         ) : (
           <View style={{ gap: 10, marginTop: 8 }}>
             <View style={[styles.ackBtnDisabled, { backgroundColor: isDarkMode ? '#1E293B' : '#ECFDF5', borderColor: isDarkMode ? '#059669' : '#22C55E' }]}>
               <Ionicons name="checkmark-circle" size={22} color="#16A34A" />
-              <Text style={[styles.ackBtnDisabledText, { color: isDarkMode ? '#86EFAC' : '#15803D' }]}>Đã xử lý thành công (Bởi {handlerDisplayName})</Text>
+              <Text style={[styles.ackBtnDisabledText, { color: isDarkMode ? '#86EFAC' : '#15803D' }]}>
+                Đã xử lý an toàn (Bởi {handlerDisplayName})
+              </Text>
             </View>
 
-            {/* Nút Mở lại cảnh báo (Chưa an toàn) khi bấm nhầm đã xử lý */}
+            {/* Nút Mở lại cảnh báo (Chưa an toàn) */}
             <TouchableOpacity
               style={[
                 styles.reopenBtn,
                 isDarkMode && { backgroundColor: '#450A0A25', borderColor: '#DC2626' },
-                isReopening && { opacity: 0.7 },
               ]}
               onPress={handleReopen}
-              disabled={isReopening}
               activeOpacity={0.8}
             >
-              {isReopening ? (
-                <ActivityIndicator size="small" color="#DC2626" />
-              ) : (
-                <Ionicons name="alert-circle" size={20} color="#DC2626" />
-              )}
-              <Text style={styles.reopenBtnText}>
-                {isReopening ? 'Đang mở lại...' : 'Mở lại cảnh báo (Chưa an toàn)'}
-              </Text>
+              <Ionicons name="alert-circle" size={20} color="#DC2626" />
+              <Text style={styles.reopenBtnText}>Mở lại cảnh báo (Chưa an toàn)</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={[styles.returnBtn, { backgroundColor: isDarkMode ? colors.card : '#F1F5F9', borderColor: colors.border }]} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={[styles.returnBtn, { backgroundColor: isDarkMode ? colors.card : '#F1F5F9', borderColor: colors.border }]}
+              onPress={() => navigation.goBack()}
+              activeOpacity={0.7}
+            >
               <Ionicons name="arrow-back" size={18} color={colors.textPrimary} />
               <Text style={[styles.returnBtnText, { color: colors.textPrimary }]}>Quay lại màn hình chính</Text>
             </TouchableOpacity>
           </View>
         )}
       </ScrollView>
+
+      {/* Custom Confirm Modal (replaces window.confirm / Alert.alert) */}
+      <Modal
+        transparent
+        visible={confirmModal !== null}
+        animationType="fade"
+        onRequestClose={() => setConfirmModal(null)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setConfirmModal(null)}>
+          <Pressable
+            style={[
+              styles.modalCard,
+              { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' },
+            ]}
+            onPress={() => {}}
+          >
+            <View
+              style={[
+                styles.modalIconWrap,
+                {
+                  backgroundColor:
+                    confirmModal === 'REOPEN'
+                      ? isDarkMode ? '#7C2D1240' : '#FFF7ED'
+                      : isDarkMode ? '#064E3B40' : '#ECFDF5',
+                },
+              ]}
+            >
+              <Ionicons
+                name={confirmModal === 'REOPEN' ? 'warning' : 'shield-checkmark'}
+                size={30}
+                color={confirmModal === 'REOPEN' ? '#EA580C' : '#16A34A'}
+              />
+            </View>
+
+            <Text style={[styles.modalTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
+              {confirmModal === 'REOPEN' ? 'Mở lại cảnh báo khẩn cấp?' : 'Xác nhận an toàn?'}
+            </Text>
+
+            <Text style={[styles.modalBody, { color: isDarkMode ? '#94A3B8' : '#475569' }]}>
+              {confirmModal === 'REOPEN'
+                ? 'Hệ thống sẽ kích hoạt lại còi báo động tại nhà và gửi thông báo ứng cứu cho gia đình.'
+                : 'Xác nhận người cao tuổi đã an toàn, tắt còi báo động và lưu trạng thái xử lý.'}
+            </Text>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[
+                  styles.modalCancelBtn,
+                  { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' },
+                ]}
+                onPress={() => setConfirmModal(null)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.modalCancelText, { color: isDarkMode ? '#E2E8F0' : '#475569' }]}>
+                  Hủy
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.modalConfirmBtn,
+                  { backgroundColor: confirmModal === 'REOPEN' ? '#DC2626' : '#16A34A' },
+                ]}
+                onPress={() => {
+                  const action = confirmModal;
+                  setConfirmModal(null);
+                  if (action === 'REOPEN') {
+                    performReopen();
+                  } else if (action === 'ACK') {
+                    performAcknowledge();
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalConfirmText}>
+                  {confirmModal === 'REOPEN' ? 'Xác nhận mở lại' : 'Xác nhận an toàn'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -603,5 +657,72 @@ const styles = StyleSheet.create({
     color: '#DC2626',
     fontWeight: '700',
     fontSize: 15,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 380,
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  modalBody: {
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 22,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  modalConfirmBtn: {
+    flex: 1.2,
+    paddingVertical: 13,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalConfirmText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

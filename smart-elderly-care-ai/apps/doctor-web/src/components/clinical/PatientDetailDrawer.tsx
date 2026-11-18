@@ -42,6 +42,11 @@ export interface PatientDetailDrawerProps {
   prescriptions: PrescriptionItem[];
   patientAppointments: AppointmentItem[];
   analytics: AnalyticsData | null;
+  isLoadingDetail?: boolean;
+  isLoadingAnalytics?: boolean;
+  isLoadingPrescriptions?: boolean;
+  isLoadingAppointments?: boolean;
+  onTabChange?: (tab: DrawerTabKey) => void;
   onClose: () => void;
   onOpenRecordModal: () => void;
   onOpenPrescriptionModal: () => void;
@@ -55,6 +60,11 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
   prescriptions,
   patientAppointments,
   analytics,
+  isLoadingDetail = false,
+  isLoadingAnalytics = false,
+  isLoadingPrescriptions = false,
+  isLoadingAppointments = false,
+  onTabChange,
   onClose,
   onOpenRecordModal,
   onOpenPrescriptionModal,
@@ -233,7 +243,10 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                 <button
                   key={t.key}
                   type="button"
-                  onClick={() => setActiveTab(t.key)}
+                  onClick={() => {
+                    setActiveTab(t.key);
+                    onTabChange?.(t.key);
+                  }}
                   className={`flex items-center justify-center gap-1.5 rounded-xl py-2 px-2 text-xs font-bold transition-all cursor-pointer ${
                     isActive
                       ? 'bg-white dark:bg-blue-600 text-blue-600 dark:text-white shadow-xs'
@@ -548,7 +561,14 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
           )}
 
           {activeTab === 'VITALS' && (
-            <VitalsTrendChart data={analytics?.daily_trends || []} days={7} />
+            isLoadingAnalytics && !analytics ? (
+              <div className="space-y-4 animate-pulse">
+                <div className="h-6 w-48 rounded-lg bg-slate-200 dark:bg-slate-800" />
+                <div className="h-64 w-full rounded-2xl bg-slate-100 dark:bg-[#0F172A] border border-slate-200/70 dark:border-slate-800" />
+              </div>
+            ) : (
+              <VitalsTrendChart data={analytics?.daily_trends || []} days={7} />
+            )
           )}
 
           {activeTab === 'PRESCRIPTIONS' && (
@@ -572,7 +592,13 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                 </button>
               </div>
 
-              {prescriptions.length === 0 ? (
+              {isLoadingPrescriptions && prescriptions.length === 0 ? (
+                <div className="space-y-2.5 animate-pulse">
+                  {[1, 2].map((i) => (
+                    <div key={i} className="h-24 rounded-2xl bg-slate-100 dark:bg-[#0F172A] border border-slate-200/70 dark:border-slate-800" />
+                  ))}
+                </div>
+              ) : prescriptions.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700/80 p-8 text-center text-xs text-slate-400 bg-slate-50/50 dark:bg-[#0F172A]/50">
                   Chưa có đơn thuốc nào. Bấm nút Kê đơn thuốc mới ở trên để thêm.
                 </div>
@@ -625,7 +651,13 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                 </button>
               </div>
 
-              {patientAppointments.length === 0 ? (
+              {isLoadingAppointments && patientAppointments.length === 0 ? (
+                <div className="space-y-2.5 animate-pulse">
+                  {[1, 2].map((i) => (
+                    <div key={i} className="h-20 rounded-2xl bg-slate-100 dark:bg-[#0F172A] border border-slate-200/70 dark:border-slate-800" />
+                  ))}
+                </div>
+              ) : patientAppointments.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700/80 p-8 text-center text-xs text-slate-400 bg-slate-50/50 dark:bg-[#0F172A]/50">
                   Chưa có lịch khám nào với bệnh nhân này.
                 </div>

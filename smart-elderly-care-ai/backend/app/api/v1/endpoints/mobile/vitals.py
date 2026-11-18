@@ -60,6 +60,16 @@ async def get_current_vitals(
     return data
 
 
+@router.get("/daily-summary")
+async def get_daily_vital_summary(
+    days: int = Query(default=30, ge=1, le=90, description="Số ngày cần thống kê"),
+    device_id: Optional[str] = Query(default=None, description="Mã thiết bị hoặc UUID"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lấy dữ liệu tổng hợp chỉ số sinh hiệu trung bình từng ngày (cho biểu đồ 7 ngày / 30 ngày)."""
+    return await crud_vital.get_daily_summary(db, days=days, device_id=device_id)
+
+
 @router.get("/{device_identifier}/latest", response_model=VitalOut)
 async def get_latest_vitals(
     device_identifier: str = Path(..., description="Mã phần cứng (VD: BLE_BAND_001) hoặc UUID thiết bị"),
@@ -78,7 +88,7 @@ async def get_latest_vitals(
 @router.get("/history", response_model=List[VitalOut])
 async def get_vital_history_query(
     device_id: Optional[str] = Query(default=None, description="Mã phần cứng (VD: BLE_BAND_001) hoặc UUID"),
-    limit: int = Query(default=100, le=1000),
+    limit: int = Query(default=100, le=5000),
     offset: int = Query(default=0),
     target_date: Optional[str] = Query(default=None, description="Ngày cần lấy (YYYY-MM-DD)"),
     db: AsyncSession = Depends(get_db),
