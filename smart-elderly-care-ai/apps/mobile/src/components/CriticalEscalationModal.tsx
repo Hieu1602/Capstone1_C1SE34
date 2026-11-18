@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  Linking,
   Animated,
   ScrollView,
   SafeAreaView,
@@ -17,7 +16,7 @@ import { useAlertStore } from '../store/useAlertStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useVitalStore } from '../store/useVitalStore';
 import { BASE_URL, incidentsApi } from '../services/api';
-import { EMERGENCY_TEST_PHONE } from '../services/emergency';
+import { dialEmergencyNumber, EMERGENCY_TEST_PHONE, requestEmergencyCallPermission } from '../services/emergency';
 
 const resolveMediaUrl = (raw?: string | null): string | null => {
   if (!raw || !raw.trim()) return null;
@@ -58,6 +57,13 @@ export const CriticalEscalationModal: React.FC = () => {
     return () => loop.stop();
   }, [activeEscalation, pulseAnim]);
 
+  // Xin quyền CALL_PHONE sớm khi modal mở trên Android để không bị popup chặn lúc t = 0
+  useEffect(() => {
+    if (activeEscalation && autoCallEnabled) {
+      void requestEmergencyCallPermission();
+    }
+  }, [activeEscalation, autoCallEnabled]);
+
   // Bộ đếm ngược an toàn mỗi 1 giây
   useEffect(() => {
     if (!activeEscalation || !autoCallEnabled) return;
@@ -89,8 +95,8 @@ export const CriticalEscalationModal: React.FC = () => {
           'Hệ thống đã tự động kích hoạt gọi cấp cứu 115 sau khi hết thời gian chờ'
         )
         .catch(() => {});
-      // Mở trình gọi điện tới số test (UI hiển thị 115)
-      Linking.openURL(`tel:${EMERGENCY_TEST_PHONE}`).catch(() => {});
+      // Tự động gọi qua Native ACTION_CALL trên Android APK (fallback tel: trên Web/iOS)
+      void dialEmergencyNumber(EMERGENCY_TEST_PHONE).catch(() => {});
     }
   }, [secondsLeft, activeEscalation, autoCallEnabled, hasAutoCalled, markEscalated]);
 
@@ -107,7 +113,7 @@ export const CriticalEscalationModal: React.FC = () => {
       .escalate(activeEscalation.incidentId, 'Người dùng đã nhấn Gọi ngay 115')
       .catch(() => {});
     try {
-      await Linking.openURL(`tel:${EMERGENCY_TEST_PHONE}`);
+      await dialEmergencyNumber(EMERGENCY_TEST_PHONE);
     } catch {}
   };
 

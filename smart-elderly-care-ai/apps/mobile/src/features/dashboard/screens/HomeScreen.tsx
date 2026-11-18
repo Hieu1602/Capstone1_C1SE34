@@ -15,12 +15,14 @@ import { useAuthStore } from '../../../store/useAuthStore';
 import { useTheme } from '../../../store/useThemeStore';
 import { systemApi } from '../../../services/api';
 import { alertsWS } from '../../../services/websocket';
-import { HomeCameraCard } from '../components/HomeCameraCard';
 import { MedicationReminderWidget } from '../components/MedicationReminderWidget';
 import { VitalsSummaryCard } from '../components/VitalsSummaryCard';
 import { HealthTrendsCard } from '../components/HealthTrendsCard';
 import { AlarmSnoozeModal } from '../components/AlarmSnoozeModal';
 import { FamilyAppointmentsModal } from '../components/FamilyAppointmentsModal';
+import { HomeAppointmentBanner, HomeStatusBanner, HomeSosCard } from '../components/home/HomeBanners';
+import { HomeCameraSection } from '../components/home/HomeCameraSection';
+import { HomeEmptyState } from '../components/home/HomeEmptyState';
 import { usePatientStore } from '../../../store/usePatientStore';
 import AdminMarqueeBanner from '../../../components/AdminMarqueeBanner';
 
@@ -31,16 +33,12 @@ export default function HomeScreen({ navigation }: any) {
     currentVitals, incidents, activeDevice, alarmSnooze, setAlarmSnooze,
     cancelAlarmSnooze, todayReminders, markMedicationTaken, fetchVitals,
     fetchSystemMode, fetchReminders, fetchNotifications, syncAllWithBackend,
-    fetchHouseFromBackend, fetchDevicesFromBackend, iotDevices,
+    iotDevices,
   } = useVitalStore();
 
   const {
     userRole,
     role,
-    full_name,
-    userName,
-    phone_number,
-    userPhone,
     permissions,
     fetchMyPermissions,
     has_house,
@@ -49,7 +47,6 @@ export default function HomeScreen({ navigation }: any) {
     has_devices,
     device_count,
   } = useAuthStore();
-  const displayName = full_name || userName || 'Thành viên';
 
   // Xác định rõ ràng: Tài khoản không thuộc ngôi nhà nào (tài khoản mới hoặc vừa bị kick/rời khỏi nhà)
   const isExplicitlyNoHouse =
@@ -76,26 +73,18 @@ export default function HomeScreen({ navigation }: any) {
   );
 
   // Phân biệt 3 loại tài khoản chính xác:
-  // 1. Tài khoản mới / đã rời nhà (chưa có nhà)
   const isNewAccount = !hasLinkedHouse;
-  // 2. Tài khoản thành viên đã được thêm vào một ngôi nhà (không phải chủ nhà)
   const isMemberInLinkedHouse = hasLinkedHouse && !isOwnerOrAdmin;
-  // 3. Tài khoản chủ hộ
   const isHouseOwner = hasLinkedHouse && isOwnerOrAdmin;
 
-  // Quyền thêm / quản lý thiết bị:
-  // - Tài khoản vừa mới tạo chưa liên kết nhà nào: ĐƯỢC PHÉP dùng chức năng thêm thiết bị
-  // - Chủ hộ / Admin: ĐƯỢC PHÉP thêm thiết bị
-  // - Tài khoản thành viên khi được thêm vào nhà khác: KHÔNG ĐƯỢC PHÉP (trừ khi được Chủ hộ cấp quyền can_manage_devices)
+  // Quyền thêm / quản lý thiết bị
   const canManageDevices = isNewAccount || isHouseOwner || Boolean(permissions?.can_manage_devices);
 
-  // Nhận diện thiết bị tức thì: kiểm tra cả thiết bị trong Zustand store và cờ backend đã trả về khi đăng nhập
+  // Nhận diện thiết bị tức thì
   const hasLinkedDevices = (iotDevices || []).length > 0 || has_devices === true || (typeof device_count === 'number' && device_count > 0);
   const isUserEmptyMember = isNewAccount || (!hasLinkedDevices && !isHouseOwner && !permissions?.can_manage_devices);
 
   // Kiểm tra quyền xem camera và chỉ số sinh hiệu của tài khoản thành viên
-  // Nguyên tắc: Thành viên khi vào nhà ĐƯỢC XEM TẤT CẢ (camera, sinh hiệu, dữ liệu)
-  // Chỉ bị khóa camera nếu Chủ hộ cố ý tắt quyền rõ ràng (permissions?.can_view_camera === false)
   const isCameraExplicitlyBlocked = !isOwnerOrAdmin && permissions?.can_view_camera === false;
   const canViewCamera = isOwnerOrAdmin || (!isCameraExplicitlyBlocked && hasLinkedHouse);
   const canViewHealth = isOwnerOrAdmin || (hasLinkedHouse && permissions?.can_view_health !== false);
@@ -107,12 +96,8 @@ export default function HomeScreen({ navigation }: any) {
 
   const loadDashboardData = React.useCallback(async (force = false) => {
     const now = Date.now();
-    if (!force && now - lastFetchRef.current < 8000) {
-      return;
-    }
-    if (isLoadingRef.current) {
-      return;
-    }
+    if (!force && now - lastFetchRef.current < 8000) return;
+    if (isLoadingRef.current) return;
     isLoadingRef.current = true;
     lastFetchRef.current = now;
 
@@ -154,7 +139,7 @@ export default function HomeScreen({ navigation }: any) {
   const unreadCount = unreadIncidentsCount + pendingMedCount;
 
   const [familyAppointmentsModalVisible, setFamilyAppointmentsModalVisible] = useState(false);
-  const [isMicSpeaking, setIsMicSpeaking] = useState(false);
+  const [isMicSpeaking] = useState(false);
   const [nextMedTaken, setNextMedTaken] = useState(false);
 
   useEffect(() => {
@@ -188,13 +173,17 @@ export default function HomeScreen({ navigation }: any) {
 
   useEffect(() => {
     const updateCountdown = () => {
-      if (alarmSnooze?.active) {
-        if (alarmSnooze.until) {
-          const diff = alarmSnooze.until - Date.now();
-          if (diff <= 0) { cancelAlarmSnooze(); setRemainingMinutes(0); }
-          else { setRemainingMinutes(Math.max(1, Math.ceil(diff / (60 * 1000)))); }
-        } else { setRemainingMinutes(0); }
-      } else { setRemainingMinutes(0); }
+      if (alarmSnooze?.active && alarmSnooze.until) {
+        const diff = alarmSnooze.until - Date.now();
+        if (diff <= 0) {
+          cancelAlarmSnooze();
+          setRemainingMinutes(0);
+        } else {
+          setRemainingMinutes(Math.max(1, Math.ceil(diff / (60 * 1000))));
+        }
+      } else {
+        setRemainingMinutes(0);
+      }
     };
     updateCountdown();
     const timer = setInterval(updateCountdown, 10000);
@@ -212,6 +201,7 @@ export default function HomeScreen({ navigation }: any) {
       useVitalStore.getState().setVitals({ fall_detected: false });
     }
   }, [criticalIncidents.length, currentVitals.fall_detected]);
+
   const pendingAppointmentNotice = incidents.find(
     (i) =>
       !i.is_acknowledged &&
@@ -244,7 +234,8 @@ export default function HomeScreen({ navigation }: any) {
       Alert.alert('Quyền truy cập bị giới hạn', 'Tài khoản Thành viên chỉ có quyền xem dữ liệu, không thể thay đổi cài đặt chuông báo động.');
       return;
     }
-    cancelAlarmSnooze(); setSnoozeModalVisible(false);
+    cancelAlarmSnooze();
+    setSnoozeModalVisible(false);
     try { await systemApi.updateMode({ is_mute_alarm: false }); }
     catch (e) { console.warn('API updateMode cancel snooze error:', e); }
     Alert.alert('🔔 Đã bật lại chuông báo động', 'Chuông báo động và còi hú Loa Hub đã được kích hoạt lại ở mức bình thường.');
@@ -275,8 +266,6 @@ export default function HomeScreen({ navigation }: any) {
       navigation.navigate('Alerts');
     }
   };
-
-  const handleSOS115 = () => { navigation.navigate('EmergencySOS'); };
 
   const handleMicPress = () => {
     navigation.navigate('CameraDetail', {
@@ -310,13 +299,12 @@ export default function HomeScreen({ navigation }: any) {
     try { await systemApi.updateMode({ mode, is_camera_privacy: isPrivacy }); }
     catch (e) { console.warn('API updateMode house mode error:', e); }
 
-    if (mode === 'AWAY') {
-      Alert.alert('🚶 Chế độ Xa (Away) đã kích hoạt', 'Đã kích hoạt chế độ an ninh cao nhất: Camera phòng ngủ đã mở giám sát 24/7 và sẵn sàng phát hiện té ngã. Đã lưu vào PostgreSQL.');
-    } else if (mode === 'HOME') {
-      Alert.alert('🏠 Chế độ Ở nhà (Home) đã kích hoạt', 'Đã kích hoạt chế độ riêng tư: Ống kính camera phòng ngủ đã tạm cụp/che lại, vẫn duy trì theo dõi nhịp tim và té ngã 24/7. Đã lưu vào PostgreSQL.');
-    } else if (mode === 'DISARM') {
-      Alert.alert('🛡️ Chế độ Tắt báo động (Disarm) đã kích hoạt', 'Đã tắt hoàn toàn còi hú và các thông báo báo động. Đã lưu vào PostgreSQL.');
-    }
+    const modeAlerts: Record<'AWAY' | 'HOME' | 'DISARM', [string, string]> = {
+      AWAY: ['🚶 Chế độ Xa (Away) đã kích hoạt', 'Đã kích hoạt chế độ an ninh cao nhất: Camera phòng ngủ đã mở giám sát 24/7 và sẵn sàng phát hiện té ngã. Đã lưu vào PostgreSQL.'],
+      HOME: ['🏠 Chế độ Ở nhà (Home) đã kích hoạt', 'Đã kích hoạt chế độ riêng tư: Ống kính camera phòng ngủ đã tạm cụp/che lại, vẫn duy trì theo dõi nhịp tim và té ngã 24/7. Đã lưu vào PostgreSQL.'],
+      DISARM: ['🛡️ Chế độ Tắt báo động (Disarm) đã kích hoạt', 'Đã tắt hoàn toàn còi hú và các thông báo báo động. Đã lưu vào PostgreSQL.'],
+    };
+    Alert.alert(...modeAlerts[mode]);
   };
 
   const handleTogglePrivacyMode = () => {
@@ -360,10 +348,8 @@ export default function HomeScreen({ navigation }: any) {
       ? [{ ...camera, id: camera.id, name: (camera.name || 'Camera an ninh AI').replace(/^Camera\s+Camera\s+/i, 'Camera '), room: camera.room || 'Phòng khách', streamUrl: camera.streamUrl }]
       : [];
   const hasValidCamera = effectiveCameraList.length > 0;
-  const firstCamera = effectiveCameraList[0] || null;
-  const effectiveCamera = firstCamera || camera;
-  const rawDisplayName = effectiveCamera?.name || 'Camera an ninh AI';
-  const cameraDisplayName = rawDisplayName.replace(/^Camera\s+Camera\s+/i, 'Camera ');
+  const effectiveCamera = effectiveCameraList[0] || camera;
+  const cameraDisplayName = (effectiveCamera?.name || 'Camera an ninh AI').replace(/^Camera\s+Camera\s+/i, 'Camera ');
   const isEdgeHubOnline = activeDevice?.is_online ?? true;
   const braceletBattery = currentVitals.bracelet_battery ?? null;
   const acousticStatus = currentVitals.acoustic_status ?? 'Bình thường';
@@ -425,7 +411,7 @@ export default function HomeScreen({ navigation }: any) {
           />
         }
       >
-        {/* 2. Chế độ an ninh (Ẩn đối với tài khoản mới chưa liên kết nhà/thiết bị) */}
+        {/* 2. Chế độ an ninh */}
         {hasLinkedHouse && !isUserEmptyMember && (
           <View style={styles.modesRow}>
             {[
@@ -448,305 +434,84 @@ export default function HomeScreen({ navigation }: any) {
           </View>
         )}
 
-        {/* 2.4. Banner Lịch khám Bác sĩ mới chờ Gia đình xác nhận */}
+        {/* 2.4. Banner Lịch khám Bác sĩ mới */}
         {hasLinkedHouse && pendingAppointmentNotice && (
-          <TouchableOpacity
-            style={[styles.appointmentBanner, isDarkMode && { backgroundColor: 'rgba(217, 119, 6, 0.12)', borderColor: '#D97706' }]}
-            activeOpacity={0.88}
+          <HomeAppointmentBanner
+            notice={pendingAppointmentNotice}
+            isDarkMode={isDarkMode}
+            colors={colors}
             onPress={() => setFamilyAppointmentsModalVisible(true)}
-          >
-            <View style={styles.appointmentBannerLeft}>
-              <View style={[styles.appointmentIconCircle, isDarkMode && { backgroundColor: 'rgba(217, 119, 6, 0.25)' }]}>
-                <Ionicons name="calendar" size={20} color="#D97706" />
-              </View>
-              <View style={{ flex: 1, marginLeft: 10, minWidth: 0 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 2 }}>
-                  <Text style={[styles.appointmentBannerTitle, isDarkMode && { color: '#FBBF24' }]}>
-                    {pendingAppointmentNotice.notes?.includes('APPOINTMENT_REQUESTED') ||
-                    pendingAppointmentNotice.note?.includes('APPOINTMENT_REQUESTED') ||
-                    pendingAppointmentNotice.message?.includes('đã đặt lịch khám')
-                      ? '🗓️ YÊU CẦU LỊCH KHÁM TỪ GIA ĐÌNH'
-                      : '🗓️ LỊCH KHÁM MỚI TỪ BÁC SĨ'}
-                  </Text>
-                  <View style={styles.appointmentBadge}>
-                    <Text style={styles.appointmentBadgeText}>
-                      {pendingAppointmentNotice.notes?.includes('APPOINTMENT_REQUESTED') ||
-                      pendingAppointmentNotice.note?.includes('APPOINTMENT_REQUESTED') ||
-                      pendingAppointmentNotice.message?.includes('đã đặt lịch khám')
-                        ? 'Chờ Bác sĩ xác nhận'
-                        : 'Chờ xác nhận'}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={[styles.appointmentBannerSubtitle, isDarkMode && { color: colors.textSecondary }]} numberOfLines={2}>
-                  {pendingAppointmentNotice.message}
-                </Text>
-              </View>
-            </View>
-            <View style={[styles.appointmentActionBtn, isDarkMode && { backgroundColor: 'rgba(217, 119, 6, 0.25)' }]}>
-              <Text style={[styles.appointmentActionBtnText, isDarkMode && { color: '#FBBF24' }]}>Xác nhận</Text>
-              <Ionicons name="chevron-forward" size={14} color="#D97706" />
-            </View>
-          </TouchableOpacity>
-        )}
-
-        {/* 2.5. Banner Cảnh báo Khẩn cấp / Trạng thái ổn định */}
-        {hasEmergency ? (
-          <TouchableOpacity
-            style={styles.emergencyBanner}
-            activeOpacity={0.9}
-            onPress={handleNavigateToEmergency}
-          >
-            <View style={styles.emergencyBannerHeader}>
-              <View style={styles.emergencySirenPulse}><Ionicons name="warning" size={20} color="#FFF" /></View>
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.emergencyBannerTitle}>🚨 CẢNH BÁO KHẨN CẤP ĐANG KÍCH HOẠT</Text>
-                <Text style={styles.emergencyBannerMessage} numberOfLines={2}>
-                  {activeEmergency?.message || 'Phát hiện sự cố té ngã (YOLO-Pose AI). Cần kiểm tra video và xác nhận xử lý ngay!'}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.emergencyActionBtn}
-                onPress={handleNavigateToEmergency}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.emergencyActionBtnText}>Xem & Xử lý</Text>
-                <Ionicons name="chevron-forward" size={14} color="#DC2626" />
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        ) : hasLinkedHouse && !isUserEmptyMember ? (
-          <View style={[styles.stableHealthCard, { backgroundColor: isDarkMode ? '#064E3B18' : '#F0FDF4', borderColor: isDarkMode ? '#065F46' : '#BBF7D0' }]}>
-            <View style={styles.stablePulseDot} />
-            <Ionicons name="shield-checkmark" size={18} color="#16A34A" />
-            <Text style={[styles.stableHealthText, { color: isDarkMode ? '#86EFAC' : '#15803D' }]}>
-              Sức khoẻ ổn định • Hệ thống giám sát AI đang bảo vệ 24/7
-            </Text>
-          </View>
-        ) : null}
-
-        {isUserEmptyMember ? (
-          <View style={styles.emptyContainer}>
-            {/* 1. Empty Illustration */}
-            <View style={[styles.emptyIconCircle, isDarkMode && { backgroundColor: 'rgba(255,255,255,0.06)' }]}>
-              <Ionicons name="home-outline" size={54} color={isDarkMode ? '#64748B' : '#94A3B8'} />
-            </View>
-
-            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-              Chưa có dữ liệu theo dõi
-            </Text>
-
-            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-              {isNewAccount
-                ? 'Tài khoản của bạn hiện chưa tham gia ngôi nhà nào. Bạn có thể nhập mã mời để tham gia nhà của người thân hoặc bấm thêm thiết bị mới.'
-                : isMemberInLinkedHouse
-                ? `Tài khoản thành viên chưa có thiết bị theo dõi trong ngôi nhà này. Sau khi Chủ hộ thêm camera hoặc vòng đeo tay thông minh, hệ thống sẽ tự động hiển thị dữ liệu tại đây.`
-                : 'Ngôi nhà của bạn chưa có thiết bị theo dõi nào. Hãy thêm camera an ninh hoặc vòng đeo tay thông minh để bắt đầu giám sát.'}
-            </Text>
-
-            {isNewAccount && (
-              <TouchableOpacity
-                style={[styles.addDevicePrimaryBtn, { backgroundColor: '#4F46E5', marginBottom: 10 }]}
-                onPress={() => navigation.navigate('Profile')}
-                activeOpacity={0.88}
-              >
-                <Ionicons name="link-outline" size={20} color="#FFF" style={{ marginRight: 6 }} />
-                <Text style={styles.addDevicePrimaryBtnText}>Nhập mã tham gia nhà</Text>
-              </TouchableOpacity>
-            )}
-
-            {canManageDevices ? (
-              <TouchableOpacity
-                style={styles.addDevicePrimaryBtn}
-                onPress={() => navigation.navigate('Devices')}
-                activeOpacity={0.88}
-              >
-                <Ionicons name="add-circle" size={20} color="#FFF" style={{ marginRight: 6 }} />
-                <Text style={styles.addDevicePrimaryBtnText}>Thêm thiết bị mới</Text>
-              </TouchableOpacity>
-            ) : null}
-
-            <TouchableOpacity
-              style={styles.refreshMemberBtn}
-              onPress={handleRefreshData}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="refresh-outline" size={18} color="#FFF" style={{ marginRight: 6 }} />
-              <Text style={styles.refreshMemberBtnText}>Kiểm tra & Làm mới</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <>
-            {/* 3. NÚT KHẨN CẤP: ONE-TOUCH SOS 115 */}
-        <TouchableOpacity style={styles.sosCard} onPress={handleSOS115} activeOpacity={0.9}>
-          <View style={styles.sosLeftContent}>
-            <View style={styles.sosIconCircle}><Ionicons name="call" size={24} color="#FFF" /></View>
-            <View style={styles.sosTextContainer}>
-              <View style={styles.sosTitleRow}>
-                <Text style={styles.sosTitleText}>ONE-TOUCH SOS 115</Text>
-                <View style={styles.sosTag}><Text style={styles.sosTagText}>KHẨN CẤP</Text></View>
-              </View>
-              <Text style={styles.sosSubtitleText} numberOfLines={1}>Báo người thân &amp; gọi cấp cứu 115</Text>
-            </View>
-          </View>
-          <View style={styles.sosActionCircle}><Ionicons name="arrow-forward" size={18} color={Colors.danger} /></View>
-        </TouchableOpacity>
-
-        {/* 4. Banner Nhiều chế độ xem (Multi-view) & 5. Main Camera Device Card */}
-        {isCameraExplicitlyBlocked && hasLinkedHouse ? (
-          <View style={[styles.cameraBlockedCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
-            <View style={styles.cameraBlockedIconBox}>
-              <Ionicons name="videocam-off" size={32} color="#EF4444" />
-            </View>
-            <Text style={[styles.cameraBlockedTitle, { color: colors.textPrimary }]}>
-              Camera an ninh đã bị khóa
-            </Text>
-            <Text style={[styles.cameraBlockedDesc, { color: colors.textSecondary }]}>
-              Chủ hộ đã tắt quyền giám sát camera an ninh đối với tài khoản này. Vui lòng liên hệ Chủ hộ để được cấp quyền theo dõi.
-            </Text>
-            <View style={[styles.cameraBlockedBadge, isDarkMode && { backgroundColor: '#334155' }]}>
-              <Ionicons name="lock-closed" size={13} color="#94A3B8" />
-              <Text style={[styles.cameraBlockedBadgeText, isDarkMode && { color: '#94A3B8' }]}>Chưa được cấp quyền xem camera</Text>
-            </View>
-          </View>
-        ) : canViewCamera && hasValidCamera ? (
-          <>
-            <TouchableOpacity style={[styles.multiViewCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]} onPress={handleMultiView} activeOpacity={0.9}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={[styles.multiViewText, isDarkMode && { color: colors.textPrimary }]}>Nhiều chế độ xem</Text>
-                {effectiveCameraList.length > 1 && (
-                  <View style={styles.camCountBadge}>
-                    <Text style={styles.camCountBadgeText}>{effectiveCameraList.length} camera</Text>
-                  </View>
-                )}
-              </View>
-              <View style={styles.playCircleBtn}><Ionicons name="play" size={14} color={Colors.primary} style={{ marginLeft: 2 }} /></View>
-            </TouchableOpacity>
-
-            {effectiveCameraList.length === 1 ? (
-              <HomeCameraCard
-                cameraDisplayName={effectiveCameraList[0].name}
-                camera={effectiveCameraList[0]}
-                house={house}
-                isDarkMode={isDarkMode}
-                colors={colors}
-                navigation={navigation}
-                handleTogglePrivacyMode={handleTogglePrivacyMode}
-                handleMicPress={handleMicPress}
-                isMicSpeaking={isMicSpeaking}
-                handleToggleAIProtect={handleToggleAIProtect}
-              />
-            ) : (
-              <View style={{ marginBottom: 16 }}>
-                <ScrollView
-                  horizontal
-                  pagingEnabled
-                  showsHorizontalScrollIndicator={false}
-                  decelerationRate="fast"
-                  snapToInterval={cardWidth + 12}
-                  snapToAlignment="center"
-                  contentContainerStyle={{ gap: 12 }}
-                  onScroll={(e) => {
-                    const x = e.nativeEvent.contentOffset.x;
-                    const idx = Math.round(x / (cardWidth + 12));
-                    if (idx !== activeCamIndex && idx >= 0 && idx < effectiveCameraList.length) {
-                      setActiveCamIndex(idx);
-                    }
-                  }}
-                  scrollEventThrottle={16}
-                >
-                  {effectiveCameraList.map((cam, idx) => (
-                    <View key={cam.id || `cam-${idx}`} style={{ width: cardWidth }}>
-                      <HomeCameraCard
-                        cameraDisplayName={cam.name}
-                        camera={cam}
-                        house={house}
-                        isDarkMode={isDarkMode}
-                        colors={colors}
-                        navigation={navigation}
-                        handleTogglePrivacyMode={handleTogglePrivacyMode}
-                        handleMicPress={() => {
-                          navigation.navigate('CameraDetail', {
-                            cameraId: cam.id,
-                            cameraName: cam.name,
-                            room: cam.room || 'Phòng khách',
-                            streamUrl: cam.streamUrl,
-                          });
-                        }}
-                        isMicSpeaking={isMicSpeaking}
-                        handleToggleAIProtect={handleToggleAIProtect}
-                      />
-                    </View>
-                  ))}
-                </ScrollView>
-
-                {/* Hàng chấm tròn vị trí camera đang xem */}
-                <View style={styles.carouselDotsRow}>
-                  {effectiveCameraList.map((_, idx) => (
-                    <View
-                      key={`dot-${idx}`}
-                      style={[
-                        styles.carouselDot,
-                        idx === activeCamIndex
-                          ? [styles.carouselDotActive, { backgroundColor: Colors.primary }]
-                          : [styles.carouselDotInactive, { backgroundColor: isDarkMode ? '#475569' : '#CBD5E1' }],
-                      ]}
-                    />
-                  ))}
-                </View>
-              </View>
-            )}
-          </>
-        ) : canViewCamera && hasLinkedHouse ? (
-          <View style={[styles.cameraBlockedCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
-            <View style={[styles.cameraBlockedIconBox, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]}>
-              <Ionicons name="videocam-outline" size={32} color="#64748B" />
-            </View>
-            <Text style={[styles.cameraBlockedTitle, { color: colors.textPrimary }]}>
-              Chưa kết nối Camera an ninh
-            </Text>
-            <Text style={[styles.cameraBlockedDesc, { color: colors.textSecondary }]}>
-              {isOwnerOrAdmin
-                ? 'Ngôi nhà chưa có camera an ninh. Vui lòng thêm camera để bắt đầu theo dõi bảo vệ.'
-                : 'Ngôi nhà hiện chưa kết nối camera an ninh. Khi Chủ hộ kết nối camera, bạn sẽ có thể theo dõi trực tiếp tại đây.'}
-            </Text>
-            {isOwnerOrAdmin && canManageDevices && (
-              <TouchableOpacity
-                style={[styles.cameraBlockedBadge, { backgroundColor: Colors.primary, marginTop: 8 }]}
-                onPress={() => navigation.navigate('Devices')}
-              >
-                <Ionicons name="add" size={14} color="#FFFFFF" />
-                <Text style={[styles.cameraBlockedBadgeText, { color: '#FFFFFF', fontWeight: '700' }]}>Thêm Camera an ninh</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        ) : null}
-
-        {/* 6. Widget Nhắc nhở uống thuốc */}
-        {Boolean(nextMedication?.name) && (
-          <MedicationReminderWidget
-            nextMedication={nextMedication!} isMedDone={isMedDone} setNextMedTaken={setNextMedTaken}
-            onConfirmTaken={(medId, timeStr) => { markMedicationTaken(medId, true, timeStr); setNextMedTaken(true); }}
-            isDarkMode={isDarkMode} colors={colors} navigation={navigation}
           />
         )}
 
-        {/* 7. Khối hiển thị Chỉ số sinh hiệu & 8. Khối Xu hướng sinh hiệu hôm nay */}
-        {canViewHealth && (
+        {/* 2.5. Banner Cảnh báo Khẩn cấp / Trạng thái ổn định */}
+        <HomeStatusBanner
+          hasEmergency={hasEmergency}
+          activeEmergency={activeEmergency}
+          hasLinkedHouse={hasLinkedHouse}
+          isUserEmptyMember={isUserEmptyMember}
+          isDarkMode={isDarkMode}
+          onNavigateToEmergency={handleNavigateToEmergency}
+        />
+
+        {isUserEmptyMember ? (
+          <HomeEmptyState
+            isNewAccount={isNewAccount}
+            isMemberInLinkedHouse={isMemberInLinkedHouse}
+            canManageDevices={canManageDevices}
+            isDarkMode={isDarkMode}
+            colors={colors}
+            onJoinHouse={() => navigation.navigate('Profile')}
+            onAddDevice={() => navigation.navigate('Devices')}
+            onRefresh={handleRefreshData}
+          />
+        ) : (
           <>
-            <VitalsSummaryCard
-              currentVitals={currentVitals} isEdgeHubOnline={isEdgeHubOnline} braceletBattery={braceletBattery}
-              isAcousticAlarm={isAcousticAlarm} isDarkMode={isDarkMode} colors={colors} navigation={navigation}
+            <HomeSosCard onPress={() => navigation.navigate('EmergencySOS')} />
+
+            <HomeCameraSection
+              isCameraExplicitlyBlocked={isCameraExplicitlyBlocked}
+              hasLinkedHouse={hasLinkedHouse}
+              canViewCamera={canViewCamera}
+              hasValidCamera={hasValidCamera}
+              effectiveCameraList={effectiveCameraList}
+              cardWidth={cardWidth}
+              activeCamIndex={activeCamIndex}
+              setActiveCamIndex={setActiveCamIndex}
+              house={house}
+              isDarkMode={isDarkMode}
+              colors={colors}
+              navigation={navigation}
+              isOwnerOrAdmin={isOwnerOrAdmin}
+              canManageDevices={canManageDevices}
+              isMicSpeaking={isMicSpeaking}
+              onMultiView={handleMultiView}
+              onTogglePrivacyMode={handleTogglePrivacyMode}
+              onMicPress={handleMicPress}
+              onToggleAIProtect={handleToggleAIProtect}
             />
 
-            <HealthTrendsCard currentVitals={currentVitals} isDarkMode={isDarkMode} colors={colors} navigation={navigation} />
-          </>
-        )}
+            {Boolean(nextMedication?.name) && (
+              <MedicationReminderWidget
+                nextMedication={nextMedication!} isMedDone={isMedDone} setNextMedTaken={setNextMedTaken}
+                onConfirmTaken={(medId, timeStr) => { markMedicationTaken(medId, true, timeStr); setNextMedTaken(true); }}
+                isDarkMode={isDarkMode} colors={colors} navigation={navigation}
+              />
+            )}
+
+            {canViewHealth && (
+              <>
+                <VitalsSummaryCard
+                  currentVitals={currentVitals} isEdgeHubOnline={isEdgeHubOnline} braceletBattery={braceletBattery}
+                  isAcousticAlarm={isAcousticAlarm} isDarkMode={isDarkMode} colors={colors} navigation={navigation}
+                />
+                <HealthTrendsCard currentVitals={currentVitals} isDarkMode={isDarkMode} colors={colors} navigation={navigation} />
+              </>
+            )}
           </>
         )}
       </ScrollView>
 
-      {/* Modal Tạm dừng chuông báo động */}
       <AlarmSnoozeModal
         visible={snoozeModalVisible} onClose={() => setSnoozeModalVisible(false)} alarmSnooze={alarmSnooze}
         selectedDuration={selectedDuration} setSelectedDuration={setSelectedDuration} selectedMode={selectedMode}
@@ -755,7 +520,6 @@ export default function HomeScreen({ navigation }: any) {
         onCancel={handleCancelSnooze} isSnoozeActive={isSnoozeActive}
       />
 
-      {/* Modal Lịch khám Bác sĩ */}
       <FamilyAppointmentsModal
         visible={familyAppointmentsModalVisible}
         patientId={pendingAppointmentNotice?.device_id && !isNaN(Number(pendingAppointmentNotice.device_id)) ? pendingAppointmentNotice.device_id : (patientRecord?.patient_id || 1)}
@@ -784,185 +548,4 @@ const styles = StyleSheet.create({
   modePillActiveSnooze: { backgroundColor: '#FFFBEB', borderColor: '#F59E0B', opacity: 1, ...Shadows.soft },
   modeIconCircle: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 6 },
   modePillText: { fontSize: 13, fontWeight: '700' },
-  emergencyBanner: { backgroundColor: '#FEF2F2', borderWidth: 1.5, borderColor: '#EF4444', borderRadius: 16, padding: 14, marginBottom: 16, ...Shadows.card },
-  emergencyBannerHeader: { flexDirection: 'row', alignItems: 'center' },
-  emergencySirenPulse: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#DC2626', alignItems: 'center', justifyContent: 'center' },
-  emergencyBannerTitle: { fontSize: 13, fontWeight: '800', color: '#DC2626', marginBottom: 2 },
-  emergencyBannerMessage: { fontSize: 12, color: '#475569', lineHeight: 16, fontWeight: '500' },
-  emergencyActionBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEE2E2', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, marginLeft: 8, gap: 2 },
-  emergencyActionBtnText: { fontSize: 12, fontWeight: '700', color: '#DC2626' },
-  stableHealthCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, marginBottom: 16, gap: 8 },
-  stablePulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' },
-  stableHealthText: { fontSize: 12, fontWeight: '600', flex: 1, lineHeight: 17 },
-  sosCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#DC2626', borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 18, borderWidth: 1.5, borderColor: '#EF4444', ...Shadows.card },
-  sosLeftContent: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  sosIconCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255, 255, 255, 0.22)', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  sosTextContainer: { flex: 1 },
-  sosTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  sosTitleText: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 0.5 },
-  sosTag: { backgroundColor: '#FFF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  sosTagText: { color: '#DC2626', fontSize: 9, fontWeight: '900' },
-  sosSubtitleText: { color: 'rgba(255, 255, 255, 0.92)', fontSize: 12, marginTop: 2, fontWeight: '500' },
-  sosActionCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
-  multiViewCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, borderRadius: 18, paddingHorizontal: 18, paddingVertical: 14, marginBottom: 16, ...Shadows.card },
-  multiViewText: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
-  camCountBadge: {
-    backgroundColor: '#FFF7ED',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    borderWidth: 0.8,
-    borderColor: '#FED7AA',
-  },
-  camCountBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  carouselDotsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginTop: -4,
-    marginBottom: 8,
-  },
-  carouselDot: {
-    height: 6,
-    borderRadius: 3,
-  },
-  carouselDotActive: {
-    width: 20,
-  },
-  carouselDotInactive: {
-    width: 6,
-  },
-  playCircleBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#FFF7ED', alignItems: 'center', justifyContent: 'center' },
-  appointmentBanner: { backgroundColor: '#FFFBEB', borderRadius: 16, borderWidth: 1.5, borderColor: '#FDE68A', padding: 14, marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', ...Shadows.soft },
-  appointmentBannerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, marginRight: 8 },
-  appointmentIconCircle: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' },
-  appointmentBannerTitle: { fontSize: 12, fontWeight: '800', color: '#B45309', letterSpacing: 0.3 },
-  appointmentBadge: { backgroundColor: '#F59E0B', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
-  appointmentBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
-  appointmentBannerSubtitle: { fontSize: 12, color: '#475569', marginTop: 2, lineHeight: 16 },
-  appointmentActionBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, gap: 2, flexShrink: 0 },
-  appointmentActionBtnText: { fontSize: 11, fontWeight: '700', color: '#B45309' },
-  emptyContainer: {
-    paddingTop: 32,
-    paddingBottom: 40,
-    alignItems: 'center',
-    paddingHorizontal: 8,
-  },
-  emptyIconCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-    ...Shadows.soft,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 13.5,
-    textAlign: 'center',
-    lineHeight: 20,
-    paddingHorizontal: 16,
-    marginBottom: 24,
-  },
-  userAvatarCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  cameraBlockedCard: {
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  cameraBlockedIconBox: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#FEE2E2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  cameraBlockedTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  cameraBlockedDesc: {
-    fontSize: 13,
-    lineHeight: 18,
-    textAlign: 'center',
-    paddingHorizontal: 12,
-    marginBottom: 14,
-  },
-  cameraBlockedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#F1F5F9',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-  },
-  cameraBlockedBadgeText: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  addDevicePrimaryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#EA580C',
-    paddingVertical: 13,
-    paddingHorizontal: 26,
-    borderRadius: 24,
-    marginBottom: 12,
-    ...Shadows.card,
-  },
-  addDevicePrimaryBtnText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  refreshMemberBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 24,
-    ...Shadows.card,
-  },
-  refreshMemberBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
 });

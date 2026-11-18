@@ -12,81 +12,19 @@ import {
   AlertCircle,
   FileText,
   UserCheck,
-  Search,
-  Filter,
-  Check,
-  Ban,
   Fingerprint,
 } from 'lucide-react';
 import { SecurityPolicy, ActiveSession, SecurityAuditLog } from '../types';
 import { securityApi } from '../services/api';
-
-const INITIAL_POLICIES: SecurityPolicy[] = [
-  {
-    id: 'pol-1',
-    name: 'Xác thực đa yếu tố (2FA / OTP & WebAuthn)',
-    description: 'Bắt buộc xác thực TOTP/WebAuthn khi đăng nhập tài khoản Bác sĩ và Quản trị viên.',
-    category: 'authentication',
-    enabled: true,
-    is_immutable: true,
-  },
-  {
-    id: 'pol-2',
-    name: 'Mật khẩu độ phức tạp cao',
-    description: 'Yêu cầu mật khẩu tối thiểu 8 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt.',
-    category: 'authentication',
-    enabled: true,
-  },
-  {
-    id: 'pol-3',
-    name: 'Thời gian hết hạn phiên làm việc (JWT Access Token)',
-    description: 'Tự động thu hồi phiên làm việc sau thời gian không hoạt động để bảo vệ dữ liệu y tế.',
-    category: 'session',
-    enabled: true,
-    value: '24 giờ',
-  },
-  {
-    id: 'pol-4',
-    name: 'Khóa tài khoản sau 5 lần đăng nhập sai',
-    description: 'Tự động tạm khóa tài khoản trong 15 phút nếu phát hiện tấn công Brute-force.',
-    category: 'access_control',
-    enabled: true,
-    value: '5 lần',
-  },
-  {
-    id: 'pol-5',
-    name: 'Mã hóa dữ liệu nhạy cảm (At-Rest & In-Transit)',
-    description: 'Toàn bộ sinh hiệu, hình ảnh khuôn mặt được mã hóa bằng AES-256 và TLS 1.3.',
-    category: 'data_protection',
-    enabled: true,
-    is_immutable: true,
-  },
-  {
-    id: 'pol-6',
-    name: 'Giới hạn IP Whitelist cho cổng Admin',
-    description: 'Chỉ cho phép truy cập trang quản trị từ các dải IP nội bộ hoặc VPN y tế đã xác thực.',
-    category: 'access_control',
-    enabled: false,
-    value: '192.168.1.0/24',
-  },
-];
-
-const RBAC_ROWS = [
-  { name: 'Quản lý tài khoản, thêm/sửa/khóa user', permissions: [true, false, false, false] },
-  { name: 'Cấu hình bảo mật hệ thống & xem Audit Logs', permissions: [true, false, false, false] },
-  { name: 'Vận hành hạ tầng Redis, EMQX, CSDL', permissions: [true, false, false, false] },
-  { name: 'Xem hồ sơ sức khỏe & lịch sử sinh hiệu', permissions: [true, true, true, true] },
-  { name: 'Điều chỉnh ngưỡng y tế (SpO2, Nhịp tim, Huyết áp)', permissions: [true, true, false, true] },
-  { name: 'Xem trực tiếp camera AI & đàm thoại 2 chiều', permissions: [true, true, true, true] },
-  { name: 'Khởi động lại thiết bị IoT từ xa qua MQTT', permissions: [true, false, false, true] },
-];
-
-const ROLE_COLORS = [
-  'text-sky-600 dark:text-[#FF6B35]',
-  'text-emerald-600 dark:text-emerald-400',
-  'text-indigo-600 dark:text-indigo-400',
-  'text-amber-600 dark:text-amber-400',
-];
+import {
+  INITIAL_POLICIES,
+  isAdminAuditLog,
+  isDoctorAuditLog,
+} from '../components/security/securityConfig';
+import { PoliciesTab } from '../components/security/PoliciesTab';
+import { SessionsTab } from '../components/security/SessionsTab';
+import { AuditLogsTab } from '../components/security/AuditLogsTab';
+import { RbacMatrixTab } from '../components/security/RbacMatrixTab';
 
 export const SecurityManagementPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'policies' | 'sessions' | 'audit' | 'rbac'>('policies');
@@ -181,27 +119,18 @@ export const SecurityManagementPage: React.FC = () => {
     }
   };
 
-  const doctorLogsCount = auditLogs.filter(
-    (l) =>
-      l.user.toLowerCase().includes('doctor') ||
-      l.user.toLowerCase().includes('bác sĩ') ||
-      l.details.toLowerCase().includes('bác sĩ')
-  ).length;
+  const doctorLogsCount = auditLogs.filter(isDoctorAuditLog).length;
 
   const filteredLogs = auditLogs.filter((log) => {
+    const q = searchAudit.toLowerCase();
     const matchSearch =
-      log.event.toLowerCase().includes(searchAudit.toLowerCase()) ||
-      log.user.toLowerCase().includes(searchAudit.toLowerCase()) ||
-      log.details.toLowerCase().includes(searchAudit.toLowerCase()) ||
+      log.event.toLowerCase().includes(q) ||
+      log.user.toLowerCase().includes(q) ||
+      log.details.toLowerCase().includes(q) ||
       log.ip.includes(searchAudit);
     const matchSeverity = severityFilter === 'ALL' || log.severity === severityFilter;
-    const isDoctor =
-      log.user.toLowerCase().includes('doctor') ||
-      log.user.toLowerCase().includes('bác sĩ') ||
-      log.details.toLowerCase().includes('bác sĩ');
-    const isAdmin =
-      log.user.toLowerCase().includes('admin') ||
-      log.details.toLowerCase().includes('admin');
+    const isDoctor = isDoctorAuditLog(log);
+    const isAdmin = isAdminAuditLog(log);
     const matchRole =
       roleFilter === 'ALL' ||
       (roleFilter === 'doctor' && isDoctor) ||
@@ -342,16 +271,20 @@ export const SecurityManagementPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-3 flex items-baseline space-x-2 px-1 relative z-10">
-            <span className={`font-mono text-2xl font-black ${
-              warningSessionsCount > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'
-            }`}>
+            <span
+              className={`font-mono text-2xl font-black ${
+                warningSessionsCount > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'
+              }`}
+            >
               {warningSessionsCount}
             </span>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-              warningSessionsCount > 0
-                ? 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900'
-                : 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800'
-            }`}>
+            <span
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                warningSessionsCount > 0
+                  ? 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900'
+                  : 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800'
+              }`}
+            >
               {warningSessionsCount > 0 ? 'Phiên bất thường' : 'An toàn'}
             </span>
           </div>
@@ -395,414 +328,38 @@ export const SecurityManagementPage: React.FC = () => {
         })}
       </div>
 
-      {/* TAB 1: POLICIES */}
       {activeTab === 'policies' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {policies.map((p) => (
-            <div
-              key={p.id}
-              className="glass-card p-5 flex flex-col justify-between hover:border-sky-200 dark:hover:border-[#FF6B35]/40 transition-all"
-            >
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-900 dark:text-[#F5F6F8]">
-                    {p.name}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {p.is_immutable && (
-                      <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                        BẮT BUỘC HỆ THỐNG
-                      </span>
-                    )}
-                    <button
-                      disabled={p.is_immutable}
-                      onClick={() => handleTogglePolicy(p.id)}
-                      className={`relative inline-flex h-5 w-10 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                        p.is_immutable
-                          ? 'opacity-60 cursor-not-allowed bg-emerald-600'
-                          : p.enabled
-                          ? 'cursor-pointer bg-sky-500 dark:bg-[#FF6B35]'
-                          : 'cursor-pointer bg-slate-300 dark:bg-[#202329] dark:border dark:border-[#454A53]'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
-                          p.enabled ? 'translate-x-5' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
-                <p className="mt-2 text-xs text-slate-500 dark:text-[#A1A7B1] leading-relaxed font-sans">
-                  {p.description}
-                </p>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-sky-100 dark:border-[#454A53] flex items-center justify-between">
-                <span className="text-[10px] font-mono uppercase text-slate-400 dark:text-[#727984]">
-                  {p.category}
-                </span>
-                {p.value && (
-                  <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-sky-50 dark:bg-[#202329] text-sky-700 dark:text-[#F5F6F8] border border-sky-200 dark:border-[#454A53]">
-                    Giá trị: {p.value}
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+        <PoliciesTab policies={policies} onTogglePolicy={handleTogglePolicy} />
       )}
 
-      {/* TAB 2: ACTIVE SESSIONS */}
       {activeTab === 'sessions' && (
-        <div className="space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-white dark:bg-[#1A1D24] border border-sky-100 dark:border-[#454A53]">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setSessionFilter('ALL')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  sessionFilter === 'ALL'
-                    ? 'bg-sky-500 text-white shadow-xs'
-                    : 'bg-slate-100 dark:bg-[#202329] text-slate-600 dark:text-[#A1A7B1] hover:bg-slate-200'
-                }`}
-              >
-                Tất cả phiên ({sessions.length})
-              </button>
-
-              <button
-                onClick={() => setSessionFilter('WARNING')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  sessionFilter === 'WARNING'
-                    ? 'bg-amber-500 text-white shadow-xs'
-                    : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
-                }`}
-              >
-                <AlertTriangle className="w-3.5 h-3.5" />
-                <span>Phiên cảnh báo quá 10h ({warningSessionsCount})</span>
-              </button>
-            </div>
-
-            <span className="text-xs text-slate-500 dark:text-[#A1A7B1]">
-              Mỗi phiên được cấp mã ký JWT HS256 riêng biệt
-            </span>
-          </div>
-
-          {sessionFilter === 'WARNING' && (
-            <div className="p-3.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2.5 animate-slide-up">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
-              <div>
-                <p className="font-bold">Quy trình rà soát phiên bất thường:</p>
-                <p className="mt-0.5 text-[11px] leading-relaxed">
-                  Kiểm tra kỹ <b>Địa chỉ IP</b>, <b>Thiết bị đăng nhập</b> và <b>Thời gian hoạt động gần nhất</b>. Nếu phát hiện IP lạ hoặc phiên không còn sử dụng, hãy bấm nút <b>[Hủy phiên]</b> ở cột bên phải để lập tức vô hiệu hóa mã truy cập JWT của tài khoản đó.
-                </p>
-              </div>
-            </div>
-          )}
-
-          <div className="glass-card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-sky-100 dark:border-[#454A53] bg-sky-50/50 dark:bg-[#202329] text-[11px] font-semibold text-slate-600 dark:text-[#A1A7B1]">
-                    <th className="py-3 px-4">Tài khoản & Vai trò</th>
-                    <th className="py-3 px-4">Địa chỉ IP</th>
-                    <th className="py-3 px-4">Thiết bị / Ứng dụng</th>
-                    <th className="py-3 px-4">Đăng nhập lúc</th>
-                    <th className="py-3 px-4">Hoạt động gần nhất</th>
-                    <th className="py-3 px-4 text-right">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-sky-100 dark:divide-[#454A53] text-xs">
-                  {displaySessions.length > 0 ? (
-                    displaySessions.map((s, idx) => {
-                      const isWarning = s.status === 'warning';
-                      return (
-                        <tr
-                          key={`${s.id}-${idx}`}
-                          className={`transition-colors ${
-                            isWarning
-                              ? 'bg-amber-50/40 dark:bg-amber-950/20 hover:bg-amber-100/50 dark:hover:bg-amber-950/40'
-                              : 'hover:bg-sky-50/40 dark:hover:bg-[#202329]'
-                          }`}
-                        >
-                          <td className="py-3 px-4">
-                            <div className="font-semibold text-slate-900 dark:text-[#F5F6F8] flex items-center gap-1.5">
-                              <span>{s.user_name}</span>
-                              {isWarning && (
-                                <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200">
-                                  &gt;10 GIỜ
-                                </span>
-                              )}
-                            </div>
-                            <span className="inline-block mt-0.5 text-[10px] font-medium px-2 py-0.5 rounded bg-sky-100 dark:bg-[#FF6B35]/15 text-sky-700 dark:text-[#FF8A50]">
-                              {s.role}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 font-mono text-slate-700 dark:text-[#F5F6F8]">
-                            {s.ip_address}
-                          </td>
-                          <td className="py-3 px-4 text-slate-600 dark:text-[#A1A7B1]">
-                            {s.device}
-                          </td>
-                          <td className="py-3 px-4 font-mono text-slate-500 dark:text-[#727984]">
-                            {s.login_time}
-                          </td>
-                          <td className="py-3 px-4">
-                            <span
-                              className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                                s.status === 'active'
-                                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-                                  : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
-                              }`}
-                            >
-                              <span className={`w-1.5 h-1.5 rounded-full ${s.status === 'active' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                              {s.last_active}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <button
-                              onClick={() => handleRevokeSession(s.id, s.user_name)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-xs font-semibold transition-colors cursor-pointer"
-                              title="Thu hồi phiên đăng nhập ngay lập tức"
-                            >
-                              <Ban className="w-3.5 h-3.5" />
-                              <span>Hủy phiên</span>
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan={6} className="py-8 text-center text-slate-500 dark:text-slate-400">
-                        {sessionFilter === 'WARNING'
-                          ? 'Tuyệt vời! Không có phiên làm việc nào quá 10 giờ hoặc có dấu hiệu bất thường.'
-                          : 'Chưa có phiên làm việc nào đang hoạt động trong CSDL / Redis.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        <SessionsTab
+          sessions={sessions}
+          displaySessions={displaySessions}
+          sessionFilter={sessionFilter}
+          warningSessionsCount={warningSessionsCount}
+          onFilterChange={setSessionFilter}
+          onRevokeSession={handleRevokeSession}
+        />
       )}
 
-      {/* TAB 3: AUDIT LOGS */}
       {activeTab === 'audit' && (
-        <div className="space-y-4">
-          <div className="flex flex-col lg:flex-row gap-3 justify-between items-start lg:items-center">
-            <div className="relative w-full lg:w-80">
-              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Tìm sự kiện, IP, người dùng..."
-                value={searchAudit}
-                onChange={(e) => setSearchAudit(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-sky-200 dark:border-[#454A53] bg-white dark:bg-[#202329] text-slate-900 dark:text-[#F5F6F8] placeholder:text-slate-400 dark:placeholder:text-[#727984] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/40"
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
-              <Filter className="w-4 h-4 text-slate-400" />
-              <select
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value as any)}
-                className="text-xs py-1.5 px-3 rounded-xl border border-sky-200 dark:border-[#454A53] bg-white dark:bg-[#202329] text-slate-900 dark:text-[#F5F6F8]"
-              >
-                <option value="ALL">Mọi đối tượng</option>
-                <option value="doctor">🩺 Bác sĩ (Doctor Web)</option>
-                <option value="admin">🛡️ Quản trị viên (Admin)</option>
-                <option value="user">👤 Người dùng / Gia đình</option>
-              </select>
-
-              <select
-                value={actionFilter}
-                onChange={(e) => setActionFilter(e.target.value as any)}
-                className="text-xs py-1.5 px-3 rounded-xl border border-sky-200 dark:border-[#454A53] bg-white dark:bg-[#202329] text-slate-900 dark:text-[#F5F6F8]"
-              >
-                <option value="ALL">Mọi hành động</option>
-                <option value="LOGIN">Đăng nhập</option>
-                <option value="LOGOUT">Đăng xuất</option>
-              </select>
-
-              <select
-                value={severityFilter}
-                onChange={(e) => setSeverityFilter(e.target.value)}
-                className="text-xs py-1.5 px-3 rounded-xl border border-sky-200 dark:border-[#454A53] bg-white dark:bg-[#202329] text-slate-900 dark:text-[#F5F6F8]"
-              >
-                <option value="ALL">Mọi mức độ</option>
-                <option value="low">Thấp (Low)</option>
-                <option value="medium">Trung bình (Medium)</option>
-                <option value="high">Cao (High)</option>
-                <option value="critical">Nghiêm trọng (Critical)</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Quick filter pills */}
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-[11px] font-semibold text-slate-400">Lọc nhanh:</span>
-            <button
-              type="button"
-              onClick={() => { setRoleFilter('ALL'); setActionFilter('ALL'); setSeverityFilter('ALL'); }}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-                roleFilter === 'ALL' && actionFilter === 'ALL' && severityFilter === 'ALL'
-                  ? 'bg-sky-600 text-white shadow-xs'
-                  : 'bg-slate-100 dark:bg-[#202329] text-slate-600 dark:text-[#A1A7B1] hover:bg-slate-200'
-              }`}
-            >
-              Tất cả ({auditLogs.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setRoleFilter(roleFilter === 'doctor' ? 'ALL' : 'doctor')}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                roleFilter === 'doctor'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100'
-              }`}
-            >
-              <span>🩺 Bác sĩ ({doctorLogsCount})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActionFilter(actionFilter === 'LOGIN' ? 'ALL' : 'LOGIN')}
-              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-                actionFilter === 'LOGIN'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
-              }`}
-            >
-              <span>Đăng nhập</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActionFilter(actionFilter === 'LOGOUT' ? 'ALL' : 'LOGOUT')}
-              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-                actionFilter === 'LOGOUT'
-                  ? 'bg-purple-600 text-white shadow-xs'
-                  : 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-100'
-              }`}
-            >
-              <span>Đăng xuất</span>
-            </button>
-          </div>
-
-          <div className="glass-card divide-y divide-sky-100 dark:divide-[#454A53]">
-            {filteredLogs.length > 0 ? (
-              filteredLogs.map((log, idx) => {
-                const isDoctorLog =
-                  log.user.toLowerCase().includes('doctor') ||
-                  log.user.toLowerCase().includes('bác sĩ') ||
-                  log.details.toLowerCase().includes('bác sĩ');
-                const isLogout = log.event.toLowerCase().includes('đăng xuất');
-                const isLogin = log.event.toLowerCase().includes('đăng nhập');
-
-                return (
-                  <div key={`${log.id}-${idx}`} className="p-4 hover:bg-sky-50/40 dark:hover:bg-[#202329] transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase font-mono ${
-                            log.severity === 'critical'
-                              ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
-                              : log.severity === 'high'
-                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                              : log.severity === 'medium'
-                              ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300'
-                              : 'bg-slate-100 text-slate-800 dark:bg-[#202329] dark:text-[#A1A7B1]'
-                          }`}
-                        >
-                          {log.severity}
-                        </span>
-                        <span className="font-semibold text-xs text-slate-900 dark:text-[#F5F6F8]">
-                          {log.event}
-                        </span>
-                        {isDoctorLog && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                            🩺 Bác sĩ
-                          </span>
-                        )}
-                        {isLogout && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                            Đăng xuất
-                          </span>
-                        )}
-                        {isLogin && !isLogout && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                            Đăng nhập
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[11px] font-mono text-slate-400 dark:text-[#727984]">
-                        {log.timestamp}
-                      </span>
-                    </div>
-
-                    <p className="mt-2 text-xs text-slate-600 dark:text-[#A1A7B1] font-sans">
-                      {log.details}
-                    </p>
-
-                    <div className="mt-2.5 flex items-center gap-4 text-[11px] text-slate-500 dark:text-[#727984] font-mono">
-                      <span>Người thực hiện: <b className="text-slate-700 dark:text-[#F5F6F8]">{log.user}</b></span>
-                      <span>IP nguồn: <b className="text-slate-700 dark:text-[#F5F6F8]">{log.ip}</b></span>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="p-8 text-center text-xs text-slate-500 dark:text-[#A1A7B1]">
-                Chưa có nhật ký kiểm toán nào được ghi nhận trong cơ sở dữ liệu.
-              </div>
-            )}
-          </div>
-        </div>
+        <AuditLogsTab
+          auditLogs={auditLogs}
+          filteredLogs={filteredLogs}
+          doctorLogsCount={doctorLogsCount}
+          searchAudit={searchAudit}
+          onSearchAuditChange={setSearchAudit}
+          roleFilter={roleFilter}
+          onRoleFilterChange={setRoleFilter}
+          actionFilter={actionFilter}
+          onActionFilterChange={setActionFilter}
+          severityFilter={severityFilter}
+          onSeverityFilterChange={setSeverityFilter}
+        />
       )}
 
-      {/* TAB 4: RBAC MATRIX */}
-      {activeTab === 'rbac' && (
-        <div className="glass-card overflow-hidden">
-          <div className="p-4 border-b border-sky-100 dark:border-[#454A53]">
-            <h3 className="text-xs font-bold text-slate-900 dark:text-[#F5F6F8]">
-              Ma trận phân quyền kiểm soát truy cập (Role-Based Access Control)
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-[#A1A7B1] mt-0.5">
-              Quy định quyền xem, sửa, điều khiển thiết bị IoT và quản lý hạ tầng cho từng nhóm tài khoản
-            </p>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-sky-100 dark:border-[#454A53] bg-sky-50/50 dark:bg-[#202329] font-semibold text-slate-700 dark:text-[#A1A7B1]">
-                  <th className="py-3 px-4">Quyền hạn / Chức năng</th>
-                  <th className="py-3 px-4 text-center">Quản Trị Viên (Admin)</th>
-                  <th className="py-3 px-4 text-center">Bác sĩ (Doctor)</th>
-                  <th className="py-3 px-4 text-center">Người chăm sóc (Caregiver)</th>
-                  <th className="py-3 px-4 text-center">Chủ nhà (Owner/User)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-sky-100 dark:divide-[#454A53]">
-                {RBAC_ROWS.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-sky-50/40 dark:hover:bg-[#202329] transition-colors">
-                    <td className="py-3 px-4 font-medium text-slate-800 dark:text-[#F5F6F8]">{row.name}</td>
-                    {row.permissions.map((hasPerm, pIdx) => (
-                      <td key={pIdx} className="py-3 px-4 text-center">
-                        {hasPerm ? (
-                          <Check className={`w-4 h-4 ${ROLE_COLORS[pIdx]} mx-auto`} />
-                        ) : (
-                          <span className="text-slate-300 dark:text-slate-700">—</span>
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {activeTab === 'rbac' && <RbacMatrixTab />}
     </div>
   );
 };

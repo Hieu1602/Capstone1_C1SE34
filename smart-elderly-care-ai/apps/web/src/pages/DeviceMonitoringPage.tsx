@@ -11,85 +11,16 @@ import {
   Video,
   Activity,
   Server,
-  BatteryCharging,
-  RotateCw,
-  Sliders,
-  SlidersHorizontal,
   AlertCircle,
   CheckCircle2,
   Heart,
-  Droplets,
-  Zap,
-  EyeOff,
   RefreshCw,
-  X,
-  Clock,
-  Info,
 } from 'lucide-react';
 import { Device, DeviceConfig } from '../types';
 import { devicesApi } from '../services/api';
-
-/** Cấu hình form hiệu chuẩn ngưỡng hoạt động của thiết bị */
-interface DeviceFormConfig {
-  hrHigh: number;
-  hrLow: number;
-  spo2Low: number;
-  fallImpact: number;
-  immobilitySec: number;
-  rtspUrl: string;
-  aiProtect: boolean;
-  privacyShutter: boolean;
-  resolution: string;
-  assignedElderly: string;
-  doctorApprovedBy: string;
-  clinicalReason: string;
-}
-
-const DEFAULT_CONFIG: DeviceFormConfig = {
-  hrHigh: 120,
-  hrLow: 50,
-  spo2Low: 90,
-  fallImpact: 2.5,
-  immobilitySec: 10,
-  rtspUrl: '',
-  aiProtect: true,
-  privacyShutter: false,
-  resolution: '2K Super HD',
-  assignedElderly: '',
-  doctorApprovedBy: '',
-  clinicalReason: '',
-};
-
-/** Metadata ánh xạ hiển thị cho từng loại thiết bị theo kiến trúc phần cứng */
-const DEVICE_TYPE_META: Record<
-  string,
-  {
-    label: string;
-    icon: React.ComponentType<{ className?: string }>;
-    style: string;
-  }
-> = {
-  CAMERA: {
-    label: 'Camera AI',
-    icon: Video,
-    style: 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-800',
-  },
-  SMARTBAND: {
-    label: 'Smartband BLE',
-    icon: Activity,
-    style: 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border-rose-100 dark:border-rose-800',
-  },
-  EDGE_HUB: {
-    label: 'Edge Hub AI',
-    icon: Cpu,
-    style: 'bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-800',
-  },
-  SENSOR: {
-    label: 'Cảm biến',
-    icon: Zap,
-    style: 'bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 border-teal-100 dark:border-teal-800',
-  },
-};
+import { DEFAULT_CONFIG, DeviceFormConfig } from '../components/device-monitoring/deviceMeta';
+import { DeviceCard } from '../components/device-monitoring/DeviceCard';
+import { DeviceConfigModal } from '../components/device-monitoring/DeviceConfigModal';
 
 export const DeviceMonitoringPage: React.FC = () => {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -242,16 +173,17 @@ export const DeviceMonitoringPage: React.FC = () => {
     });
   }, [devices, filterType, filterStatus]);
 
-  const stats = useMemo(() => {
-    return {
+  const stats = useMemo(
+    () => ({
       total: devices.length,
       online: devices.filter((d) => d.is_online).length,
       cameras: devices.filter((d) => d.device_type === 'CAMERA').length,
       smartbands: devices.filter((d) => d.device_type === 'SMARTBAND').length,
       edgehubs: devices.filter((d) => d.device_type === 'EDGE_HUB').length,
       sensors: devices.filter((d) => d.device_type === 'SENSOR').length,
-    };
-  }, [devices]);
+    }),
+    [devices]
+  );
 
   const summaryCards = [
     {
@@ -425,448 +357,27 @@ export const DeviceMonitoringPage: React.FC = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredDevices.map((device) => {
-            const meta = DEVICE_TYPE_META[device.device_type] || DEVICE_TYPE_META.SENSOR;
-            const DeviceIcon = meta.icon;
-            const isCam = device.device_type === 'CAMERA';
-            const isBand = device.device_type === 'SMARTBAND';
-            const isHub = device.device_type === 'EDGE_HUB';
-
-            return (
-              <div
-                key={device.id}
-                className="glass-card overflow-hidden flex flex-col justify-between hover:border-sky-400 dark:hover:border-[#FF6B35]/40 transition-all duration-200"
-              >
-                {/* Card Header */}
-                <div className="p-5 pb-4 border-b border-slate-100 dark:border-[#454A53]">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${meta.style}`}>
-                        <DeviceIcon className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <span className="font-heading font-bold text-sm text-slate-900 dark:text-[#F5F6F8]">
-                          {device.name}
-                        </span>
-                        <p className="text-[11px] font-mono text-slate-500 dark:text-[#A1A7B1] mt-0.5">
-                          {device.device_id} • {device.location || 'Toàn nhà'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <span
-                      className={`inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
-                        device.is_online ? 'badge-live' : 'badge-danger'
-                      }`}
-                    >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full ${
-                          device.is_online ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'
-                        }`}
-                      />
-                      <span>{device.is_online ? 'Trực tuyến' : 'Ngoại tuyến'}</span>
-                    </span>
-                  </div>
-
-                  <p className="text-xs text-slate-600 dark:text-slate-300 mt-3 font-medium">
-                    {device.status_text}
-                  </p>
-                </div>
-
-                {/* Card Body Details */}
-                <div className="p-5 py-4 space-y-3 bg-slate-50/60 dark:bg-[#101216]/60 flex-1">
-                  {/* Smartband Vitals Info */}
-                  {isBand && (
-                    <div className="space-y-2.5">
-                      <div className="flex items-center justify-between text-xs font-mono">
-                        <span className="text-slate-500 dark:text-slate-400 flex items-center space-x-1.5">
-                          <BatteryCharging className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
-                          <span>Dung lượng pin:</span>
-                        </span>
-                        <span className="font-bold text-sky-600 dark:text-sky-400">
-                          {device.battery_level}% (Đang ổn định)
-                        </span>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-white dark:bg-[#202329] border border-sky-100 dark:border-[#454A53] space-y-2 font-mono shadow-xs">
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                          Ngưỡng cảnh báo y tế đang kích hoạt:
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-[11px]">
-                          <div className="flex items-center space-x-1.5 text-slate-700 dark:text-slate-300">
-                            <Heart className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                            <span>HR: {device.config?.hr_threshold_low || 50}-{device.config?.hr_threshold_high || 120}</span>
-                          </div>
-                          <div className="flex items-center space-x-1.5 text-slate-700 dark:text-slate-300">
-                            <Droplets className="w-3.5 h-3.5 text-sky-500 shrink-0" />
-                            <span>SpO2: &lt;{device.config?.spo2_threshold_low || 90}%</span>
-                          </div>
-                          <div className="flex items-center space-x-1.5 text-slate-700 dark:text-slate-300">
-                            <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                            <span>Va đập: &gt;{device.config?.fall_impact_threshold || 2.5}g</span>
-                          </div>
-                          <div className="flex items-center space-x-1.5 text-slate-700 dark:text-slate-300">
-                            <Clock className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                            <span>Bất động: &gt;{device.config?.immobility_seconds || 10}s</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Camera AI Stream Preview */}
-                  {isCam && (
-                    <div className="space-y-2.5">
-                      <div className="relative aspect-video rounded-xl bg-slate-900 overflow-hidden border border-slate-200 dark:border-[#454A53] flex items-center justify-center group shadow-xs">
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40 z-10" />
-                        {device.config?.is_sleep ? (
-                          <div className="z-20 text-center">
-                            <EyeOff className="w-8 h-8 text-amber-400 mx-auto mb-1 opacity-80" />
-                            <span className="text-xs font-semibold text-white">Chế độ riêng tư (Tắt ghi hình)</span>
-                          </div>
-                        ) : (
-                          <div className="z-20 text-center">
-                            <Video className="w-8 h-8 text-sky-400 mx-auto mb-1 animate-pulse" />
-                            <span className="text-[11px] font-mono font-medium text-sky-400 flex items-center justify-center space-x-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-ping" />
-                              <span>LIVE RTSP • 30 FPS</span>
-                            </span>
-                          </div>
-                        )}
-                        <div className="absolute top-2 left-2 z-20 flex items-center space-x-1 px-2 py-0.5 rounded bg-black/60 text-[10px] font-mono text-white">
-                          <span>{device.config?.resolution || '2K Super HD'}</span>
-                        </div>
-                        <div className="absolute bottom-2 left-2 z-20 text-[10px] text-white/90 font-medium">
-                          Phòng khách • Góc quan sát 135°
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between text-xs px-1">
-                        <span className="text-slate-500 dark:text-slate-400">Bảo vệ AI Pose:</span>
-                        <span className="font-bold text-sky-600 dark:text-sky-400 font-mono">
-                          {device.config?.is_ai_protect ? 'Đang bật (YOLOv8-Pose)' : 'Đã tắt'}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Edge Hub Telemetry */}
-                  {isHub && (
-                    <div className="space-y-2">
-                      <div className="p-3 rounded-xl bg-white dark:bg-[#202329] border border-sky-100 dark:border-[#454A53] space-y-2 font-mono text-xs shadow-xs">
-                        {[
-                          { label: 'SoC:', value: 'RK3588 (Orange Pi 5)', color: 'text-slate-800 dark:text-white' },
-                          { label: 'Tải NPU:', value: '38% (6.0 TOPS)', color: 'text-sky-600 dark:text-sky-400' },
-                          { label: 'Nhiệt độ:', value: '48°C (Active Fan)', color: 'text-slate-800 dark:text-white' },
-                          { label: 'Broker:', value: 'EMQX :1883', color: 'text-indigo-600 dark:text-indigo-400' },
-                        ].map((hubStat, i) => (
-                          <div key={i} className="flex items-center justify-between">
-                            <span className="text-slate-500 dark:text-slate-400">{hubStat.label}</span>
-                            <span className={`font-bold ${hubStat.color}`}>{hubStat.value}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono flex items-center justify-between pt-1">
-                    <span>Heartbeat:</span>
-                    <span className="text-slate-700 dark:text-slate-300">
-                      {device.last_heartbeat || 'Vừa xong'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Card Footer Actions */}
-                <div className="p-3 px-5 border-t border-slate-100 dark:border-[#454A53] flex items-center justify-between bg-slate-50/80 dark:bg-[#101216]/60">
-                  <button
-                    onClick={() => handleReboot(device)}
-                    disabled={rebootingId === device.id}
-                    className="btn-ghost text-xs py-1.5 px-3"
-                  >
-                    <RotateCw className={`w-3.5 h-3.5 ${rebootingId === device.id ? 'animate-spin' : ''}`} />
-                    <span>{rebootingId === device.id ? 'Rebooting...' : 'Khởi động lại'}</span>
-                  </button>
-
-                  <button onClick={() => handleOpenConfig(device)} className="btn-primary text-xs py-1.5 px-3">
-                    <SlidersHorizontal className="w-3.5 h-3.5" />
-                    <span>Cấu hình & Ngưỡng</span>
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+          {filteredDevices.map((device) => (
+            <DeviceCard
+              key={device.id}
+              device={device}
+              isRebooting={rebootingId === device.id}
+              onReboot={handleReboot}
+              onOpenConfig={handleOpenConfig}
+            />
+          ))}
         </div>
       )}
 
       {/* Configuration & Thresholds Modal */}
-      {configModalOpen && selectedDevice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/75 backdrop-blur-xs animate-fade-in">
-          <div className="glass-card w-full max-w-xl overflow-hidden border border-sky-100 dark:border-[#454A53] dark:bg-[#17191E] shadow-2xl animate-slide-up">
-            <div className="p-5 border-b border-slate-100 dark:border-[#454A53] dark:bg-[#202329] flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-xl bg-sky-50 dark:bg-[#FF6B35]/15 text-sky-600 dark:text-[#FF6B35] border border-sky-100 dark:border-[#FF6B35]/30 flex items-center justify-center">
-                  <Sliders className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-heading font-bold text-slate-900 dark:text-[#F5F6F8] text-base">
-                    Cấu hình tham số & Ngưỡng IoT
-                  </h3>
-                  <p className="text-xs font-mono text-slate-500 dark:text-[#A1A7B1]">
-                    {selectedDevice.name} ({selectedDevice.device_id})
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setConfigModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:text-[#A1A7B1] dark:hover:text-[#F5F6F8] hover:bg-slate-100 dark:hover:bg-[#292D34] transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveConfig} className="p-5 space-y-5 max-h-[80vh] overflow-y-auto">
-              {/* Clinical Profile Binding */}
-              <div className="p-3.5 rounded-xl bg-sky-50/50 dark:bg-[#202329] border border-sky-200/70 dark:border-[#454A53] space-y-3">
-                <div className="flex items-center gap-2 text-xs font-bold text-sky-800 dark:text-[#FF8A50]">
-                  <Activity className="w-4 h-4" />
-                  <span>Gắn thiết bị với Hồ sơ Người cao tuổi & Bác sĩ phụ trách</span>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1">
-                    Người cao tuổi sử dụng:
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formConfig.assignedElderly}
-                    onChange={(e) => setFormConfig((prev) => ({ ...prev, assignedElderly: e.target.value }))}
-                    className="input-glass w-full"
-                    placeholder="Tên Cụ và tuổi"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1">
-                      Bác sĩ / Chuyên gia chỉ định: <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formConfig.doctorApprovedBy}
-                      onChange={(e) => setFormConfig((prev) => ({ ...prev, doctorApprovedBy: e.target.value }))}
-                      className="input-glass w-full"
-                      placeholder="BS. Trần Văn Minh"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1">
-                      Lý do hiệu chuẩn lâm sàng: <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formConfig.clinicalReason}
-                      onChange={(e) => setFormConfig((prev) => ({ ...prev, clinicalReason: e.target.value }))}
-                      className="input-glass w-full"
-                      placeholder="Hiệu chuẩn theo bệnh án"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* SMARTBAND Specific Thresholds */}
-              {selectedDevice.device_type === 'SMARTBAND' && (
-                <div className="space-y-4">
-                  <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-xs text-amber-700 dark:text-amber-300 flex items-start space-x-2">
-                    <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                    <span>
-                      Các ngưỡng này điều khiển thuật toán phát hiện bất thường ngay trên vòng đeo và Edge Hub trước khi gửi cảnh báo cấp cứu đến ứng dụng người nhà.
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1.5">
-                        Nhịp tim tối đa cảnh báo (bpm)
-                      </label>
-                      <input
-                        type="number"
-                        min="80"
-                        max="220"
-                        value={formConfig.hrHigh}
-                        onChange={(e) => setFormConfig((prev) => ({ ...prev, hrHigh: Number(e.target.value) }))}
-                        className="input-glass font-mono"
-                      />
-                      <span className="text-[10px] text-slate-500 font-mono">Mặc định: 120 bpm (Nhịp nhanh)</span>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1.5">
-                        Nhịp tim tối thiểu cảnh báo (bpm)
-                      </label>
-                      <input
-                        type="number"
-                        min="30"
-                        max="70"
-                        value={formConfig.hrLow}
-                        onChange={(e) => setFormConfig((prev) => ({ ...prev, hrLow: Number(e.target.value) }))}
-                        className="input-glass font-mono"
-                      />
-                      <span className="text-[10px] text-slate-500 font-mono">Mặc định: 50 bpm (Nhịp chậm)</span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1.5">
-                        Ngưỡng SpO2 suy hô hấp (%)
-                      </label>
-                      <input
-                        type="number"
-                        min="70"
-                        max="98"
-                        value={formConfig.spo2Low}
-                        onChange={(e) => setFormConfig((prev) => ({ ...prev, spo2Low: Number(e.target.value) }))}
-                        className="input-glass font-mono"
-                      />
-                      <span className="text-[10px] text-slate-500 font-mono">Mặc định: &lt; 90% (Hạ oxy máu)</span>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1.5">
-                        Gia tốc va đập té ngã (g)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        min="1.0"
-                        max="5.0"
-                        value={formConfig.fallImpact}
-                        onChange={(e) => setFormConfig((prev) => ({ ...prev, fallImpact: Number(e.target.value) }))}
-                        className="input-glass font-mono"
-                      />
-                      <span className="text-[10px] text-slate-500 font-mono">Mặc định: 2.5g (MPU6050/ADXL)</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1.5">
-                      Thời gian bất động sau va đập (giây)
-                    </label>
-                    <input
-                      type="number"
-                      min="3"
-                      max="60"
-                      value={formConfig.immobilitySec}
-                      onChange={(e) => setFormConfig((prev) => ({ ...prev, immobilitySec: Number(e.target.value) }))}
-                      className="input-glass font-mono"
-                    />
-                    <span className="text-[10px] text-slate-500 font-mono">
-                      Nếu sau va đập cụ nằm bất động quá thời gian này, hệ thống sẽ kích hoạt còi hú và gửi SOS.
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* CAMERA Specific Configuration */}
-              {selectedDevice.device_type === 'CAMERA' && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1.5">
-                      Đường dẫn luồng RTSP (RTSP Stream URL)
-                    </label>
-                    <input
-                      type="text"
-                      value={formConfig.rtspUrl}
-                      onChange={(e) => setFormConfig((prev) => ({ ...prev, rtspUrl: e.target.value }))}
-                      className="input-glass font-mono"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[11px] font-mono font-bold uppercase text-slate-600 dark:text-[#A1A7B1] mb-1.5">
-                        Độ phân giải luồng video
-                      </label>
-                      <select
-                        value={formConfig.resolution}
-                        onChange={(e) => setFormConfig((prev) => ({ ...prev, resolution: e.target.value }))}
-                        className="input-glass font-mono"
-                      >
-                        <option value="2K Super HD">2K Super HD (2560x1440)</option>
-                        <option value="1080p Full HD">1080p Full HD (1920x1080)</option>
-                        <option value="720p HD">720p HD (1280x720)</option>
-                      </select>
-                    </div>
-
-                    <div className="flex flex-col justify-end">
-                      <div className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 dark:border-[#454A53] bg-slate-50 dark:bg-[#202329]">
-                        <span className="text-xs font-mono font-bold text-slate-700 dark:text-[#F5F6F8]">
-                          AI Pose Detection
-                        </span>
-                        <input
-                          type="checkbox"
-                          checked={formConfig.aiProtect}
-                          onChange={(e) => setFormConfig((prev) => ({ ...prev, aiProtect: e.target.checked }))}
-                          className="w-4 h-4 text-[#FF6B35] rounded focus:ring-[#FF6B35]"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-xl border border-slate-200 dark:border-[#454A53] bg-slate-50 dark:bg-[#202329] flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-slate-800 dark:text-[#F5F6F8]">
-                        Màn trập riêng tư (Privacy Shutter)
-                      </p>
-                      <p className="text-[11px] text-slate-500 dark:text-[#A1A7B1]">
-                        Tắt ống kính vật lý khi người nhà muốn bảo mật không gian riêng
-                      </p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={formConfig.privacyShutter}
-                      onChange={(e) => setFormConfig((prev) => ({ ...prev, privacyShutter: e.target.checked }))}
-                      className="w-5 h-5 text-amber-500 rounded focus:ring-amber-500"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* EDGE HUB Specific Configuration */}
-              {selectedDevice.device_type === 'EDGE_HUB' && (
-                <div className="space-y-3">
-                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#202329] border border-slate-200 dark:border-[#454A53] text-xs space-y-2 font-mono">
-                    <p className="font-bold text-slate-800 dark:text-[#F5F6F8]">
-                      Cấu hình MQTT Broker & Cụm NPU:
-                    </p>
-                    <p className="text-slate-500 dark:text-[#A1A7B1]">
-                      Edge Hub lắng nghe trên topic: <code className="font-mono text-[#FF6B35]">seca/home/vitals/#</code> và phát hiện té ngã qua mô hình YOLOv8 compiled RKNN.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="pt-4 border-t border-slate-100 dark:border-[#454A53] flex items-center justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setConfigModalOpen(false)}
-                  className="btn-ghost text-xs py-2 px-4"
-                >
-                  Đóng
-                </button>
-                <button type="submit" className="btn-primary text-xs py-2 px-5">
-                  Lưu cấu hình qua MQTT
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <DeviceConfigModal
+        isOpen={configModalOpen}
+        device={selectedDevice}
+        formConfig={formConfig}
+        setFormConfig={setFormConfig}
+        onClose={() => setConfigModalOpen(false)}
+        onSubmit={handleSaveConfig}
+      />
     </div>
   );
 };

@@ -4,3 +4,6 @@ export * from './DoctorDevicesModal';
 export * from './DoctorNotificationModal';
 export * from './DoctorComplianceModal';
 export * from './DoctorLogoutModal';
+export * from './DoctorProfileColumn';
+export * from './SettingsPreferencesColumn';
+export * from './AvatarPreviewModal';
