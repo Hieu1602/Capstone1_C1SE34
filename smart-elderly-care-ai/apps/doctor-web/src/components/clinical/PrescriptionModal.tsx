@@ -1,11 +1,25 @@
 // src/components/clinical/PrescriptionModal.tsx
-// Modal Quản lý Đơn thuốc & Cấu hình Loa thông minh nhắc nhở
+// Modal Quản lý Đơn thuốc & Cấu hình Loa thông minh nhắc nhở (đồng bộ 100% với Mobile App)
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { PrescriptionItem } from '../../types';
 import { doctorApi } from '../../services/api';
-import { Pill, Plus, Trash2, Volume2, X, Clock, AlertCircle, Loader2 } from 'lucide-react';
+import {
+  Pill,
+  Plus,
+  Trash2,
+  Volume2,
+  X,
+  Clock,
+  AlertCircle,
+  Loader2,
+  Sun,
+  CloudSun,
+  Sunset,
+  Moon,
+  AlarmClock,
+} from 'lucide-react';
 
 interface PrescriptionModalProps {
   patientId: string;
@@ -15,7 +29,35 @@ interface PrescriptionModalProps {
   onRefresh: () => void;
 }
 
-const inputCls = 'w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-blue-500 focus:outline-hidden bg-white dark:border-slate-700/60 dark:bg-[#0F172A] dark:text-slate-100 dark:placeholder-slate-500';
+interface MedicationDraft {
+  id: string;
+  medication_name: string;
+  quantity: string;
+  dosage: string;
+  frequency: string;
+  schedule_times: string[];
+  instructions: string;
+}
+
+const PRESET_TIMES = [
+  { time: '08:00', label: 'Sáng 08:00', Icon: Sun },
+  { time: '12:00', label: 'Trưa 12:00', Icon: CloudSun },
+  { time: '17:30', label: 'Chiều 17:30', Icon: Sunset },
+  { time: '20:00', label: 'Tối 20:00', Icon: Moon },
+] as const;
+
+const createEmptyMed = (): MedicationDraft => ({
+  id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  medication_name: '',
+  quantity: '30 viên',
+  dosage: '1 viên/lần',
+  frequency: 'Hàng ngày',
+  schedule_times: ['08:00'],
+  instructions: 'Uống sau ăn 15 phút',
+});
+
+const inputCls =
+  'w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-blue-500 focus:outline-hidden bg-white dark:border-slate-700/60 dark:bg-[#0F172A] dark:text-slate-100 dark:placeholder-slate-500';
 
 export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
   patientId,
@@ -24,39 +66,89 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
   onClose,
   onRefresh,
 }) => {
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(prescriptions.length === 0);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const [medName, setMedName] = useState('');
-  const [dosage, setDosage] = useState('');
-  const [frequency, setFrequency] = useState('2 lần/ngày');
-  const [scheduleTimes, setScheduleTimes] = useState('08:00, 18:00');
-  const [instructions, setInstructions] = useState('Uống sau bữa ăn với nước ấm');
+  // Đồng bộ các trường giống Mobile App (Kê Đơn Thuốc Mới)
+  const [diagnosis, setDiagnosis] = useState('Đơn thuốc điều trị');
+  const [generalNotes, setGeneralNotes] = useState('');
+  const [medications, setMedications] = useState<MedicationDraft[]>(() => [createEmptyMed()]);
   const [enableSpeaker, setEnableSpeaker] = useState(true);
+  const [customTimeTargetId, setCustomTimeTargetId] = useState<string | null>(null);
+  const [customTimeInput, setCustomTimeInput] = useState('');
+
+  const updateMed = (id: string, patch: Partial<MedicationDraft>) => {
+    setMedications((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+  };
+
+  const toggleMedTime = (id: string, time: string) => {
+    setMedications((prev) =>
+      prev.map((m) => {
+        if (m.id !== id) return m;
+        const exists = m.schedule_times.includes(time);
+        const nextTimes = exists
+          ? m.schedule_times.filter((t) => t !== time)
+          : [...m.schedule_times, time].sort();
+        return { ...m, schedule_times: nextTimes };
+      })
+    );
+  };
+
+  const handleAddCustomTime = (id: string) => {
+    const clean = customTimeInput.trim();
+    if (!/^\d{1,2}:\d{2}$/.test(clean)) {
+      setErrorMsg('Giờ uống thuốc không hợp lệ. Vui lòng nhập theo định dạng HH:mm (VD: 09:30).');
+      return;
+    }
+    const [h, m] = clean.split(':').map(Number);
+    if (h > 23 || m > 59) {
+      setErrorMsg('Giờ phải từ 00:00 đến 23:59.');
+      return;
+    }
+    const formatted = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    setMedications((prev) =>
+      prev.map((item) =>
+        item.id === id && !item.schedule_times.includes(formatted)
+          ? { ...item, schedule_times: [...item.schedule_times, formatted].sort() }
+          : item
+      )
+    );
+    setErrorMsg(null);
+    setCustomTimeInput('');
+    setCustomTimeTargetId(null);
+  };
 
   const handleAddPrescription = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!medName.trim() || !dosage.trim()) {
-      setErrorMsg('Vui lòng nhập tên thuốc và liều lượng.');
+    const invalid = medications.find(
+      (m) => !m.medication_name.trim() || !m.quantity.trim() || !m.dosage.trim()
+    );
+    if (invalid) {
+      setErrorMsg('Vui lòng nhập đầy đủ Tên thuốc, Số lượng và Liều dùng cho tất cả thuốc.');
       return;
     }
 
     setSaving(true);
     setErrorMsg(null);
     try {
-      const timesArray = scheduleTimes.split(',').map((t) => t.trim()).filter(Boolean);
-      await doctorApi.createPrescription(patientId, {
-        medication_name: medName.trim(),
-        dosage: dosage.trim(),
-        frequency: frequency.trim(),
-        schedule_times: timesArray.length > 0 ? timesArray : ['08:00', '18:00'],
-        instructions: instructions.trim(),
+      await doctorApi.createBatchPrescriptions(patientId, {
+        diagnosis: diagnosis.trim() || 'Đơn thuốc điều trị',
+        general_notes: generalNotes.trim() || undefined,
         enable_speaker_reminder: enableSpeaker,
+        medications: medications.map((m) => ({
+          medication_name: m.medication_name.trim(),
+          quantity: m.quantity.trim(),
+          dosage: m.dosage.trim(),
+          frequency: m.frequency.trim() || 'Hàng ngày',
+          schedule_times: m.schedule_times.length > 0 ? m.schedule_times : ['08:00'],
+          instructions: m.instructions.trim() || undefined,
+        })),
       });
 
-      setMedName('');
-      setDosage('');
+      setDiagnosis('Đơn thuốc điều trị');
+      setGeneralNotes('');
+      setMedications([createEmptyMed()]);
       setShowAddForm(false);
       onRefresh();
     } catch (err: any) {
@@ -192,62 +284,280 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
           </div>
 
           {showAddForm && (
-            <form onSubmit={handleAddPrescription} className="rounded-2xl border border-blue-200 bg-blue-50/40 dark:border-blue-900/60 dark:bg-blue-950/20 p-4 space-y-4 animate-in fade-in duration-150">
-              <div className="flex items-center justify-between border-b border-blue-100 dark:border-blue-900/40 pb-2">
-                <h5 className="text-xs font-bold text-blue-900 dark:text-blue-300">Kê toa thuốc mới</h5>
-                <button type="button" onClick={() => setShowAddForm(false)} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">
+            <form
+              onSubmit={handleAddPrescription}
+              className="rounded-2xl border border-blue-200/90 bg-slate-50/70 dark:border-blue-900/60 dark:bg-[#0F172A]/80 p-5 space-y-4 animate-in fade-in duration-150"
+            >
+              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
+                <h5 className="text-sm font-bold text-slate-900 dark:text-white">Kê Đơn Thuốc Mới</h5>
+                <button
+                  type="button"
+                  onClick={() => setShowAddForm(false)}
+                  className="text-xs font-semibold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                >
                   Hủy
                 </button>
               </div>
 
+              {/* Chẩn đoán & Lời dặn dò chung */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Tên thuốc *</label>
-                  <input type="text" required value={medName} onChange={(e) => setMedName(e.target.value)} placeholder="VD: Amlodipine, Metformin..." className={inputCls} />
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Chẩn đoán / Tên đợt khám
+                  </label>
+                  <input
+                    type="text"
+                    value={diagnosis}
+                    onChange={(e) => setDiagnosis(e.target.value)}
+                    placeholder="Đơn thuốc điều trị"
+                    className={inputCls}
+                  />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Liều lượng *</label>
-                  <input type="text" required value={dosage} onChange={(e) => setDosage(e.target.value)} placeholder="VD: 1 viên 5mg" className={inputCls} />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Tần suất uống</label>
-                  <input type="text" value={frequency} onChange={(e) => setFrequency(e.target.value)} placeholder="VD: 2 lần/ngày" className={inputCls} />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Giờ phát loa nhắc (cách nhau dấu phẩy)</label>
-                  <input type="text" value={scheduleTimes} onChange={(e) => setScheduleTimes(e.target.value)} placeholder="VD: 08:00, 18:00" className={inputCls} />
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Lời dặn dò chung của Bác sĩ
+                  </label>
+                  <input
+                    type="text"
+                    value={generalNotes}
+                    onChange={(e) => setGeneralNotes(e.target.value)}
+                    placeholder="VD: Ăn nhạt, uống nhiều nước, tập thể dục nhẹ..."
+                    className={inputCls}
+                  />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Hướng dẫn dặn dò người cao tuổi</label>
-                <input type="text" value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="VD: Uống sau bữa ăn với nước ấm, không nhai..." className={inputCls} />
+              {/* Danh mục thuốc kê đơn */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    Danh mục thuốc kê đơn ({medications.length})
+                  </span>
+                </div>
+
+                {medications.map((med, idx) => (
+                  <div
+                    key={med.id}
+                    className="rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#131C31] p-4 space-y-3 shadow-2xs"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="inline-flex items-center rounded-lg bg-sky-50 px-2.5 py-0.5 text-[11px] font-bold text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
+                        Thuốc #{idx + 1}
+                      </span>
+                      {medications.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setMedications((prev) => prev.filter((item) => item.id !== med.id))}
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-500 hover:text-rose-600 cursor-pointer"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span>Xóa thuốc</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Tên thuốc (*)
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={med.medication_name}
+                          onChange={(e) => updateMed(med.id, { medication_name: e.target.value })}
+                          placeholder="VD: Amlodipine 5mg"
+                          className={inputCls}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Số lượng (*)
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={med.quantity}
+                          onChange={(e) => updateMed(med.id, { quantity: e.target.value })}
+                          placeholder="VD: 30 viên"
+                          className={inputCls}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Liều dùng (*)
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={med.dosage}
+                          onChange={(e) => updateMed(med.id, { dosage: e.target.value })}
+                          placeholder="VD: 1 viên/lần"
+                          className={inputCls}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Tần suất
+                        </label>
+                        <input
+                          type="text"
+                          value={med.frequency}
+                          onChange={(e) => updateMed(med.id, { frequency: e.target.value })}
+                          placeholder="VD: Hàng ngày"
+                          className={inputCls}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Giờ uống thuốc bằng nút chọn nhanh giống Mobile */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                          Giờ uống thuốc
+                        </label>
+                        <span className="text-[11px] font-bold text-sky-600 dark:text-sky-400">
+                          Đã chọn {med.schedule_times.length} cữ
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {PRESET_TIMES.map(({ time, label, Icon }) => {
+                          const active = med.schedule_times.includes(time);
+                          return (
+                            <button
+                              key={time}
+                              type="button"
+                              onClick={() => toggleMedTime(med.id, time)}
+                              className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+                                active
+                                  ? 'border-sky-600 bg-sky-600 text-white shadow-xs'
+                                  : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                              }`}
+                            >
+                              <Icon className="h-3.5 w-3.5" />
+                              <span>{label}</span>
+                            </button>
+                          );
+                        })}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomTimeTargetId(customTimeTargetId === med.id ? null : med.id);
+                            setCustomTimeInput('');
+                          }}
+                          className="inline-flex items-center gap-1 rounded-xl border border-dashed border-sky-400 bg-sky-50/50 px-3 py-1.5 text-xs font-bold text-sky-600 hover:bg-sky-50 dark:bg-sky-950/30 dark:text-sky-400 cursor-pointer"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          <span>Giờ khác</span>
+                        </button>
+                      </div>
+
+                      {customTimeTargetId === med.id && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <input
+                            type="text"
+                            value={customTimeInput}
+                            onChange={(e) => setCustomTimeInput(e.target.value)}
+                            placeholder="HH:mm (VD: 14:30)"
+                            className="w-40 rounded-xl border border-slate-200 px-3 py-1.5 text-xs dark:border-slate-700 dark:bg-[#0F172A] dark:text-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleAddCustomTime(med.id)}
+                            className="rounded-xl bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700 cursor-pointer"
+                          >
+                            Thêm
+                          </button>
+                        </div>
+                      )}
+
+                      {med.schedule_times.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                          {med.schedule_times.map((t) => (
+                            <span
+                              key={t}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300"
+                            >
+                              <AlarmClock className="h-3.5 w-3.5" />
+                              <span>{t}</span>
+                              <button
+                                type="button"
+                                onClick={() => toggleMedTime(med.id, t)}
+                                className="rounded-full text-rose-500 hover:text-rose-600 cursor-pointer"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Dặn dò cách uống
+                      </label>
+                      <input
+                        type="text"
+                        value={med.instructions}
+                        onChange={(e) => updateMed(med.id, { instructions: e.target.value })}
+                        placeholder="VD: Uống sau ăn 15 phút"
+                        className={inputCls}
+                      />
+                    </div>
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() => setMedications((prev) => [...prev, createEmptyMed()])}
+                  className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-sky-500 bg-white dark:bg-[#131C31] py-2.5 text-xs font-bold text-sky-600 hover:bg-sky-50 dark:text-sky-400 dark:hover:bg-sky-950/30 transition-colors cursor-pointer"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>+ Thêm loại thuốc vào đơn</span>
+                </button>
               </div>
 
-              <div className="flex items-center space-x-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="speakerCheckbox"
-                  checked={enableSpeaker}
-                  onChange={(e) => setEnableSpeaker(e.target.checked)}
-                  className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4"
-                />
-                <label htmlFor="speakerCheckbox" className="text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
-                  Bật tính năng nhắc nhở giọng nói tự động qua loa thông minh Orange Pi
-                </label>
+              {/* Toggle Nhắc nhở qua Loa Hub AI */}
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#131C31] px-4 py-3">
+                <div>
+                  <p className="text-xs font-bold text-slate-900 dark:text-white">Nhắc nhở qua Loa Hub AI</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Tự động phát lời nhắc uống thuốc cho bệnh nhân
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEnableSpeaker((v) => !v)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${
+                    enableSpeaker ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${
+                      enableSpeaker ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
               </div>
 
               <div className="flex justify-end space-x-2 pt-2">
-                <button type="button" onClick={() => setShowAddForm(false)} className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 cursor-pointer">
+                <button
+                  type="button"
+                  onClick={() => setShowAddForm(false)}
+                  className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 cursor-pointer"
+                >
                   Đóng
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex items-center space-x-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
+                  className="flex items-center space-x-1.5 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
                 >
                   {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  <span>Lưu & Đồng bộ đơn thuốc</span>
+                  <span>Lưu Đơn Thuốc ({medications.length} loại)</span>
                 </button>
               </div>
             </form>
