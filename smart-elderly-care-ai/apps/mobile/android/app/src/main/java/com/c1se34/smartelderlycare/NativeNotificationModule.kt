@@ -1,5 +1,6 @@
 package com.c1se34.smartelderlycare
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -9,6 +10,7 @@ import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.Ringtone
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -379,6 +381,40 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
         } catch (e: Exception) {
             Log.e(TAG, "Lỗi mở Zalo: ${e.message}", e)
             promise.resolve(false)
+        }
+    }
+
+    /**
+     * Thực hiện cuộc gọi khẩn cấp trực tiếp qua Intent.ACTION_CALL nếu đã được cấp quyền CALL_PHONE.
+     * Nếu chưa có quyền, fallback sang ACTION_DIAL để mở trình quay số an toàn.
+     */
+    @ReactMethod
+    fun placeEmergencyCall(phone: String, promise: Promise) {
+        try {
+            val sanitized = phone.trim()
+            if (sanitized.isEmpty()) {
+                promise.resolve("INVALID")
+                return
+            }
+            val telUri = Uri.parse("tel:$sanitized")
+            val hasCallPermission = ContextCompat.checkSelfPermission(
+                reactContext,
+                Manifest.permission.CALL_PHONE
+            ) == PackageManager.PERMISSION_GRANTED
+
+            val intent = Intent(
+                if (hasCallPermission) Intent.ACTION_CALL else Intent.ACTION_DIAL,
+                telUri
+            ).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            reactContext.startActivity(intent)
+            val mode = if (hasCallPermission) "CALLED" else "DIALED"
+            Log.d(TAG, "placeEmergencyCall($sanitized) -> $mode")
+            promise.resolve(mode)
+        } catch (e: Exception) {
+            Log.e(TAG, "Lỗi placeEmergencyCall: ${e.message}", e)
+            promise.resolve("ERROR")
         }
     }
 }

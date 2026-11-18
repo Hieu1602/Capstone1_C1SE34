@@ -11,3 +11,4 @@ export * from './UserTerminalsModal';
 export * from './DeleteUserModal';
 export * from './DormantBatchModal';
 export * from './DormantAccountsTab';
+export * from './useUserManagement';
