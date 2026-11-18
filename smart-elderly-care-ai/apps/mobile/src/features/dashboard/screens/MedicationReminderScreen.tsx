@@ -33,14 +33,54 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
   const { isDarkMode } = useTheme();
 
   // Kết nối Store trung tâm usePatientStore để đồng bộ 2 chiều với Trang chủ & Thông báo
-  const { todayReminders, fetchReminders, markMedicationTaken } = usePatientStore();
+  const {
+    todayReminders,
+    fetchReminders,
+    markMedicationTaken,
+    patientsList,
+    fetchPatientsList,
+    activePatientId,
+    setActivePatientId,
+  } = usePatientStore();
   const { userRole, role, permissions, fetchMyPermissions } = useAuthStore();
   const [checkingPerms, setCheckingPerms] = useState(true);
 
+  const initialPatientId =
+    route?.params?.patientId ||
+    activePatientId ||
+    (patientsList && patientsList[0]?.id) ||
+    1;
+  const [selectedPatientId, setSelectedPatientId] = useState<any>(initialPatientId);
+
   useEffect(() => {
-    fetchReminders();
+    fetchPatientsList?.();
     fetchMyPermissions().finally(() => setCheckingPerms(false));
   }, []);
+
+  useEffect(() => {
+    if (route?.params?.patientId && String(route.params.patientId) !== String(selectedPatientId)) {
+      setSelectedPatientId(route.params.patientId);
+    }
+  }, [route?.params?.patientId]);
+
+  useEffect(() => {
+    if (selectedPatientId) {
+      fetchReminders(selectedPatientId);
+    } else {
+      fetchReminders();
+    }
+  }, [selectedPatientId]);
+
+  const currentPatient =
+    (patientsList || []).find(
+      (p: any) => p.id == selectedPatientId || p.elderly_id == selectedPatientId
+    ) || (patientsList && patientsList.length > 0 ? patientsList[0] : null);
+
+  const patientDisplayName =
+    currentPatient?.full_name ||
+    currentPatient?.name ||
+    route?.params?.patientName ||
+    'Người cao tuổi';
 
   const isOwnerOrAdmin =
     userRole === 'admin' ||
@@ -165,6 +205,7 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
         diagnosis: diagTrimmed,
         start_date: startDate,
         end_date: endDate,
+        patient_id: selectedPatientId ? String(selectedPatientId) : undefined,
         medications: medList.map((m) => ({
           name: m.name.trim(),
           dose: m.dose.trim() || '1 viên',
@@ -210,8 +251,12 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
         };
       });
 
-      // Refetch
-      fetchReminders?.();
+      // Refetch for the selected patient
+      if (selectedPatientId) {
+        fetchReminders(selectedPatientId);
+      } else {
+        fetchReminders?.();
+      }
 
       setAddMedModalVisible(false);
       setDiagnosis('');
@@ -225,7 +270,7 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
           instructions: 'Sau khi ăn no',
         },
       ]);
-      const alertMsg = `Đã lưu đơn thuốc "${diagTrimmed}" gồm ${medList.length} loại thuốc.`;
+      const alertMsg = `Đã lưu đơn thuốc "${diagTrimmed}" gồm ${medList.length} loại thuốc cho ${patientDisplayName}.`;
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.alert(`Thành công 🎉\n\n${alertMsg}`);
       } else {
@@ -246,9 +291,9 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
     const nextState = !med.taken;
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    await markMedicationTaken(id, nextState, nextState ? timeStr : undefined);
+    await markMedicationTaken(id, nextState, nextState ? timeStr : undefined, selectedPatientId);
     if (nextState) {
-      LocalizedAlert.alert('Đã xác nhận', `Đã đánh dấu uống thuốc "${med.name}" lúc ${timeStr}.`);
+      LocalizedAlert.alert('Đã xác nhận', `Đã đánh dấu uống thuốc "${med.name}" lúc ${timeStr} cho ${patientDisplayName}.`);
     } else {
       LocalizedAlert.alert('Hoàn tác', `Đã chuyển "${med.name}" về trạng thái chưa uống.`);
     }
@@ -271,8 +316,8 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
       setIsPlayingTestVoice(false);
       const firstMed = medications.find((m) => !m.taken);
       const textNotice = firstMed
-        ? `Đã đến giờ uống thuốc ${firstMed.name} (${firstMed.dose}).`
-        : 'Hiện không có lịch uống thuốc sắp tới.';
+        ? `Đã đến giờ uống thuốc ${firstMed.name} (${firstMed.dose}) của ${patientDisplayName}.`
+        : `Hiện không có lịch uống thuốc sắp tới của ${patientDisplayName}.`;
       LocalizedAlert.alert('Loa Hub đã phát', `📢 "${textNotice}"`);
     }, 1200);
   };
@@ -330,7 +375,176 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
         </TouchableOpacity>
       </View>
 
+      {/* 1.1. Bộ chọn người cao tuổi khi gia đình có từ 2 người trở lên */}
+      {patientsList && patientsList.length > 1 && (
+        <View style={{ backgroundColor: isDarkMode ? '#0B0F19' : '#FFFFFF', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: borderCol }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.patientChipsRow}
+          >
+            {patientsList.map((p: any) => {
+              const pId = p.id || p.elderly_id;
+              const isSelected = pId == selectedPatientId;
+              return (
+                <TouchableOpacity
+                  key={pId}
+                  style={[
+                    styles.patientChip,
+                    isSelected
+                      ? styles.patientChipActive
+                      : [styles.patientChipInactive, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }],
+                  ]}
+                  onPress={() => {
+                    setSelectedPatientId(pId);
+                    setActivePatientId?.(pId);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name="person"
+                    size={13}
+                    color={isSelected ? '#FFFFFF' : (isDarkMode ? '#94A3B8' : '#64748B')}
+                  />
+                  <LocalizedText
+                    style={[
+                      styles.patientChipText,
+                      isSelected
+                        ? styles.patientChipTextActive
+                        : { color: isDarkMode ? '#CBD5E1' : '#475569' },
+                    ]}
+                  >
+                    {p.full_name || p.name || 'Người cao tuổi'}
+                    {p.age ? ` (${p.age}t)` : ''}
+                  </LocalizedText>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {/* 1.2. Thẻ tóm tắt thông tin người cao tuổi đang theo dõi */}
+        <View style={[styles.patientHeroCard, { backgroundColor: bgCard, borderColor: borderCol }]}>
+          <View style={styles.patientHeroRow}>
+            <View style={[styles.patientAvatarCircle, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF' }]}>
+              <Ionicons name="person" size={24} color="#2563EB" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <LocalizedText style={[styles.patientHeroName, { color: textTitle }]}>
+                {patientDisplayName} {currentPatient?.age ? `(${currentPatient.age} tuổi)` : ''}
+              </LocalizedText>
+              <LocalizedText style={[styles.patientHeroMeta, { color: textSub }]}>
+                {currentPatient?.gender ? `Giới tính: ${currentPatient.gender} • ` : ''}
+                {currentPatient?.blood_type ? `Nhóm máu: ${currentPatient.blood_type}` : 'Đang theo dõi cữ thuốc & đơn điều trị'}
+              </LocalizedText>
+            </View>
+          </View>
+
+          {/* Thanh tiến độ cữ thuốc */}
+          <View style={[styles.patientProgressWrap, { borderTopColor: borderCol }]}>
+            <View style={styles.patientProgressRow}>
+              <LocalizedText style={[styles.patientProgressText, { color: textSub }]}>
+                Tiến độ cữ thuốc hôm nay
+              </LocalizedText>
+              <LocalizedText style={[styles.patientProgressPercent, { color: Colors.primary }]}>
+                {medications.length > 0
+                  ? `${medications.filter((m) => m.taken).length}/${medications.length} cữ (${Math.round((medications.filter((m) => m.taken).length / medications.length) * 100)}%)`
+                  : 'Chưa có cữ thuốc'}
+              </LocalizedText>
+            </View>
+            <View style={[styles.progressBarTrack, isDarkMode && { backgroundColor: '#334155' }]}>
+              <View
+                style={[
+                  styles.progressBarFill,
+                  {
+                    width: medications.length > 0
+                      ? `${Math.round((medications.filter((m) => m.taken).length / medications.length) * 100)}%`
+                      : '0%',
+                  },
+                ]}
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* 1.3. Khối Đơn thuốc điều trị từ Bác sĩ (nếu có) */}
+        {todayReminders?.doctor_prescriptions && todayReminders.doctor_prescriptions.length > 0 && (
+          <View style={[styles.sectionCard, { backgroundColor: bgCard, borderColor: borderCol }]}>
+            <View style={styles.sectionHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={[styles.sectionIconBox, { backgroundColor: isDarkMode ? '#064E3B' : '#ECFDF5' }]}>
+                  <Ionicons name="receipt-outline" size={20} color="#059669" />
+                </View>
+                <View>
+                  <LocalizedText style={[styles.sectionTitle, { color: textTitle }]}>
+                    Đơn thuốc điều trị ({todayReminders.doctor_prescriptions.length})
+                  </LocalizedText>
+                  <LocalizedText style={[styles.sectionSubtitle, { color: textSub }]}>
+                    Chỉ định y tế chính thức dành cho {patientDisplayName}
+                  </LocalizedText>
+                </View>
+              </View>
+            </View>
+
+            {todayReminders.doctor_prescriptions.map((rx: any) => (
+              <View
+                key={rx.id}
+                style={[
+                  styles.doctorRxCard,
+                  {
+                    backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                    borderColor: borderCol,
+                  },
+                ]}
+              >
+                <View style={styles.doctorRxHeader}>
+                  <View style={styles.doctorRxBadge}>
+                    <Ionicons name="shield-checkmark" size={11} color="#2563EB" />
+                    <LocalizedText style={styles.doctorRxBadgeText}>
+                      {rx.doctor_name || 'Bác sĩ phụ trách'}
+                    </LocalizedText>
+                  </View>
+                  {rx.created_at ? (
+                    <LocalizedText style={{ fontSize: 10.5, color: textSub }}>
+                      {rx.created_at.split(' ')[0]}
+                    </LocalizedText>
+                  ) : null}
+                </View>
+
+                <LocalizedText style={[styles.doctorRxName, { color: textTitle }]}>
+                  {rx.medication_name}
+                </LocalizedText>
+                <LocalizedText style={styles.doctorRxMeta}>
+                  Liều lượng: {rx.dosage} {rx.quantity ? `• Số lượng: ${rx.quantity}` : ''}
+                </LocalizedText>
+
+                {rx.instructions ? (
+                  <LocalizedText style={[styles.doctorRxInstructions, { color: textSub }]}>
+                    Hướng dẫn: {rx.instructions}
+                  </LocalizedText>
+                ) : null}
+
+                {rx.schedule_times && rx.schedule_times.length > 0 && (
+                  <View style={styles.doctorRxTimesRow}>
+                    <LocalizedText style={{ fontSize: 11, color: textSub, alignSelf: 'center' }}>
+                      Cữ uống:
+                    </LocalizedText>
+                    {rx.schedule_times.map((t: string) => (
+                      <View key={t} style={[styles.doctorRxTimeChip, isDarkMode && { backgroundColor: '#1E293B' }]}>
+                        <Ionicons name="alarm-outline" size={11} color={Colors.primary} />
+                        <LocalizedText style={[styles.doctorRxTimeText, isDarkMode && { color: '#E2E8F0' }]}>
+                          {t}
+                        </LocalizedText>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
         {/* Loa thông minh Hub */}
         <View style={[styles.speakerCard, { backgroundColor: bgCard, borderColor: hubVoiceReminderEnabled ? Colors.primary : borderCol }]}>
           <View style={styles.speakerTopRow}>
@@ -548,6 +762,48 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 520, marginTop: 10 }} contentContainerStyle={{ paddingBottom: 10 }}>
+              {/* Người cao tuổi nhận đơn thuốc */}
+              <View style={[styles.modalPatientBanner, { backgroundColor: isDarkMode ? '#1E293B' : '#EFF6FF', borderColor: isDarkMode ? '#3B82F644' : '#BFDBFE' }]}>
+                <Ionicons name="person-circle" size={24} color="#2563EB" />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <LocalizedText style={[styles.modalPatientBannerTitle, { color: textTitle }]}>
+                    Kê đơn cho: {patientDisplayName} {currentPatient?.age ? `(${currentPatient.age} tuổi)` : ''}
+                  </LocalizedText>
+                  <LocalizedText style={[styles.modalPatientBannerSub, { color: textSub }]}>
+                    Đơn thuốc sẽ tự động đồng bộ vào lịch nhắc nhở của người cao tuổi này.
+                  </LocalizedText>
+                </View>
+              </View>
+              {patientsList && patientsList.length > 1 && (
+                <View style={{ marginBottom: 10 }}>
+                  <LocalizedText style={[styles.inputLabelSmall, { color: textSub, marginBottom: 5 }]}>
+                    Đổi người nhận đơn thuốc:
+                  </LocalizedText>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                    {patientsList.map((p: any) => {
+                      const pId = p.id || p.elderly_id;
+                      const isSelected = pId == selectedPatientId;
+                      return (
+                        <TouchableOpacity
+                          key={`modal-p-${pId}`}
+                          style={[
+                            styles.patientChip,
+                            { paddingVertical: 4, paddingHorizontal: 10 },
+                            isSelected ? styles.patientChipActive : [styles.patientChipInactive, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }],
+                          ]}
+                          onPress={() => setSelectedPatientId(pId)}
+                        >
+                          <Ionicons name="person" size={12} color={isSelected ? '#FFFFFF' : (isDarkMode ? '#94A3B8' : '#64748B')} />
+                          <LocalizedText style={[styles.patientChipText, isSelected ? styles.patientChipTextActive : { color: isDarkMode ? '#CBD5E1' : '#475569' }]}>
+                            {p.full_name || p.name}
+                          </LocalizedText>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
+
               {/* PHẦN 1: THÔNG TIN BỆNH & THỜI GIAN ĐIỀU TRỊ */}
               <View style={[styles.prescriptionSectionBox, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: borderCol }]}>
                 <LocalizedText style={[styles.inputLabel, { color: textTitle }]}>1. Tên bệnh / Chẩn đoán (Diagnosis) *</LocalizedText>
@@ -864,5 +1120,160 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#92400E',
     lineHeight: 16,
+  },
+
+  patientChipsRow: {
+    marginBottom: 4,
+  },
+  patientChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  patientChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  patientChipInactive: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+  },
+  patientChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  patientChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  patientHeroCard: {
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+  },
+  patientHeroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  patientAvatarCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  patientHeroName: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  patientHeroMeta: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  patientProgressWrap: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#CBD5E1',
+  },
+  patientProgressRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  patientProgressText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  patientProgressPercent: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  progressBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: 6,
+    borderRadius: 3,
+  },
+  doctorRxCard: {
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+  },
+  doctorRxHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  doctorRxName: {
+    fontSize: 14,
+    fontWeight: '700',
+    flex: 1,
+    marginRight: 8,
+  },
+  doctorRxMeta: {
+    fontSize: 12,
+    color: '#0284C7',
+    fontWeight: '600',
+    marginTop: 2,
+    marginBottom: 4,
+  },
+  doctorRxBadge: {
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+  },
+  doctorRxBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#4F46E5',
+  },
+  doctorRxInstructions: {
+    fontSize: 12,
+    marginBottom: 6,
+  },
+  doctorRxTimesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  doctorRxTimeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  doctorRxTimeText: {
+    fontSize: 11,
+    color: '#6366F1',
+    fontWeight: '600',
+  },
+  modalPatientBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  modalPatientBannerTitle: {
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  modalPatientBannerSub: {
+    fontSize: 10.5,
+    marginTop: 1,
   },
 });
