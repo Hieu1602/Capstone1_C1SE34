@@ -50,9 +50,11 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
   const [containerWidth, setContainerWidth] = useState(SCREEN_WIDTH - 64);
 
   const chartHeight = 150;
-  const pointSpacing = 48;
+  const pointSpacing = 28;
   const hasData = Boolean(chartData && chartData.length > 0);
-  const svgWidth = hasData ? Math.max(containerWidth, chartData.length * pointSpacing) : containerWidth;
+  const svgWidth = hasData
+    ? Math.max(containerWidth, Math.min(containerWidth * 2.2, chartData.length * pointSpacing))
+    : containerWidth;
 
   const padLeft = 24;
   const padRight = 24;

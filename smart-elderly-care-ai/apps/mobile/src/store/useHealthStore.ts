@@ -27,6 +27,7 @@ export interface VitalData {
   bracelet_battery?: number | null;
   bracelet_connected?: boolean;
   edge_hub_connected?: boolean;
+  device_id?: string;
 }
 
 // Cấu hình ngưỡng an toàn sinh lý dùng để kích hoạt cảnh báo sớm
