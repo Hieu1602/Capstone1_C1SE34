@@ -172,6 +172,11 @@ export const doctorApi = {
     return res.data;
   },
 
+  createBatchPrescriptions: async (elderlyId: string, data: any): Promise<PrescriptionItem[]> => {
+    const res = await api.post(`/doctor/patients/${elderlyId}/prescriptions/batch`, data);
+    return res.data;
+  },
+
   deletePrescription: async (elderlyId: string, rxId: string) => {
     const res = await api.delete(`/doctor/patients/${elderlyId}/prescriptions/${rxId}`);
     return res.data;
