@@ -23,6 +23,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
@@ -46,6 +47,27 @@ import NotificationsBottomSheet from '../components/NotificationsBottomSheet';
 export { STANDARD_PATIENT_NAMES, normalizePatientsList };
 
 const doctorBannerImg = require('../../../../assets/images/doctor-banner.png');
+const DOCTOR_HOME_CACHE_KEY = '@seca_doctor_home_cache_v1';
+const STALE_THRESHOLD_MS = 45 * 1000;
+
+const withTimeout = <T,>(promise: Promise<T>, ms = 5000): Promise<T> =>
+  Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('API Timeout')), ms)),
+  ]);
+
+const isPatientOnline = (p: PatientCardData | null | undefined, nowMs: number): boolean => {
+  if (!p) return false;
+  if (p.is_online === false) return false;
+  const tsRaw = (p as any).last_updated || (p as any).recorded_at || (p as any).last_seen;
+  if (tsRaw) {
+    const ts = new Date(tsRaw).getTime();
+    if (!isNaN(ts) && nowMs - ts > STALE_THRESHOLD_MS) {
+      return false;
+    }
+  }
+  return Boolean(p.is_online);
+};
 
 export default function DoctorHomeScreen() {
   const insets = useSafeAreaInsets();
@@ -69,6 +91,33 @@ export default function DoctorHomeScreen() {
   const [notifModalVisible, setNotifModalVisible] = useState(false);
   const [hasUnreadNotifs, setHasUnreadNotifs] = useState(false);
   const [respondingInviteId, setRespondingInviteId] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
+
+  // 1. Nạp Cache tức thì (0ms) từ AsyncStorage khi mở màn hình (không kẹt Skeleton)
+  useEffect(() => {
+    AsyncStorage.getItem(DOCTOR_HOME_CACHE_KEY)
+      .then((raw) => {
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed.patients) && parsed.patients.length > 0) {
+          setPatients(parsed.patients);
+          setSelectedPatientId((curr) => curr || parsed.selectedPatientId || parsed.patients[0]?.id || null);
+        }
+        if (Array.isArray(parsed.todayAppointments)) setTodayAppointments(parsed.todayAppointments);
+        if (Array.isArray(parsed.upcomingAppointments)) setUpcomingAppointments(parsed.upcomingAppointments);
+        if (parsed.nextAppointment) setNextAppointment(parsed.nextAppointment);
+        setLoading(false);
+      })
+      .catch(() => {});
+  }, []);
+
+  // 2. Bộ đếm 10s kiểm tra độ trễ sinh hiệu (Stale Data Check > 45s -> Chờ tín hiệu)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNowMs(Date.now());
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     setHasUnreadNotifs(incidents.some((inc) => !inc.is_acknowledged));
@@ -77,10 +126,10 @@ export default function DoctorHomeScreen() {
   const fetchData = useCallback(async () => {
     try {
       const [patRes, aptRes, meRes] = await Promise.allSettled([
-        doctorApi.getPatients(),
-        doctorApi.getAppointments(),
-        usersApi.getMe(),
-        fetchIncidents(),
+        withTimeout(doctorApi.getPatients(), 5000),
+        withTimeout(doctorApi.getAppointments(), 5000),
+        withTimeout(usersApi.getMe(), 5000),
+        withTimeout(fetchIncidents(), 5000),
       ]);
 
       if (meRes.status === 'fulfilled' && meRes.value?.data) {
@@ -92,36 +141,65 @@ export default function DoctorHomeScreen() {
         useAuthStore.getState().setAvatar(u.avatar_url || '');
       }
 
-      const normalized = normalizePatientsList(
-        patRes.status === 'fulfilled' && patRes.value.data ? patRes.value.data : []
-      );
-      setPatients(normalized);
+      let nextPatients: PatientCardData[] | null = null;
+      let nextSelId: string | null = null;
+      if (patRes.status === 'fulfilled' && patRes.value.data) {
+        const normalized = normalizePatientsList(patRes.value.data);
+        nextPatients = normalized;
+        setPatients(normalized);
+        setSelectedPatientId((curr) => {
+          if (curr && normalized.some((p) => p.id === curr)) {
+            nextSelId = curr;
+            return curr;
+          }
+          const warn = normalized.find((p) => p.health_status === 'DANGER' || p.health_status === 'WARNING');
+          nextSelId = warn ? warn.id : normalized[0]?.id || null;
+          return nextSelId;
+        });
+      }
 
-      // Mặc định chọn bệnh nhân có cảnh báo hoặc người đầu tiên
-      setSelectedPatientId((curr) => {
-        if (curr && normalized.some((p) => p.id === curr)) return curr;
-        const warn = normalized.find((p) => p.health_status === 'DANGER' || p.health_status === 'WARNING');
-        return warn ? warn.id : normalized[0]?.id || null;
-      });
-
+      let nextTodays: AppointmentItem[] | null = null;
+      let nextUpcoming: AppointmentItem[] | null = null;
+      let nextAptObj: AppointmentItem | null = null;
       if (aptRes.status === 'fulfilled' && Array.isArray(aptRes.value.data)) {
         const allApts: AppointmentItem[] = aptRes.value.data;
         const todayStr = new Date().toISOString().slice(0, 10);
-        const todays = allApts
+        nextTodays = allApts
           .filter((apt) => apt.scheduled_at?.slice(0, 10) === todayStr && apt.status !== 'CANCELLED')
           .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
+        nextUpcoming = allApts.filter((a) => a.status === 'UPCOMING');
+        nextAptObj = nextTodays.find((a) => a.status === 'UPCOMING') || nextTodays[0] || null;
 
-        setTodayAppointments(todays);
-        setUpcomingAppointments(allApts.filter((a) => a.status === 'UPCOMING'));
-        setNextAppointment(todays.find((a) => a.status === 'UPCOMING') || todays[0] || null);
+        setTodayAppointments(nextTodays);
+        setUpcomingAppointments(nextUpcoming);
+        setNextAppointment(nextAptObj);
       }
+
+      setNowMs(Date.now());
+
+      // Lưu snapshot mới vào AsyncStorage cho lần mở sau (0ms)
+      AsyncStorage.getItem(DOCTOR_HOME_CACHE_KEY)
+        .then((prevRaw) => {
+          const prev = prevRaw ? JSON.parse(prevRaw) : {};
+          return AsyncStorage.setItem(
+            DOCTOR_HOME_CACHE_KEY,
+            JSON.stringify({
+              patients: nextPatients ?? prev.patients ?? [],
+              selectedPatientId: nextSelId ?? prev.selectedPatientId ?? null,
+              todayAppointments: nextTodays ?? prev.todayAppointments ?? [],
+              upcomingAppointments: nextUpcoming ?? prev.upcomingAppointments ?? [],
+              nextAppointment: nextAptObj ?? prev.nextAppointment ?? null,
+            })
+          );
+        })
+        .catch(() => {});
     } catch {
-      setPatients(normalizePatientsList([]));
+      // Giữ nguyên dữ liệu cache hiện tại nếu mạng lỗi
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [fetchIncidents]);
 
   const handleRespondHouseInvite = async (incident: any, action: 'accept' | 'reject') => {
     try {
@@ -158,9 +236,15 @@ export default function DoctorHomeScreen() {
     const unsub = alertsWS.subscribe((event: any) => {
       if (
         event?.type === 'ALERT_NEW' ||
+        event?.type === 'INCIDENT_RESOLVED' ||
+        event?.type === 'INCIDENT_ESCALATED' ||
+        event?.type === 'vitals_update' ||
+        event?.type === 'TELEMETRY_UPDATE' ||
+        event?.type === 'DEVICE_STATUS' ||
         event?.alert_type === 'MEDICAL_RECORD_UPDATED' ||
         event?.alert_type === 'APPOINTMENT_SCHEDULED'
       ) {
+        setNowMs(Date.now());
         fetchData();
       }
     });
@@ -502,9 +586,10 @@ export default function DoctorHomeScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.patientAvatarStrip}>
               {patients.map((p) => {
                 const isSelected = p.id === activePatient?.id;
+                const online = isPatientOnline(p, nowMs);
                 const isWarn = p.health_status === 'WARNING';
                 const isDanger = p.health_status === 'DANGER';
-                const ringColor = isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#10B981';
+                const ringColor = !online ? '#CBD5E1' : isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#10B981';
 
                 return (
                   <TouchableOpacity
@@ -554,7 +639,9 @@ export default function DoctorHomeScreen() {
         )}
 
         {/* 5. THẺ TỔNG QUAN SINH HIỆU NỔI BẬT — HERO HEALTH CARD (Đưa xuống dưới) */}
-        {activePatient ? (
+        {activePatient ? (() => {
+          const activeOnline = isPatientOnline(activePatient, nowMs);
+          return (
           <TouchableOpacity
             style={styles.heroHealthCard}
             activeOpacity={0.92}
@@ -573,8 +660,9 @@ export default function DoctorHomeScreen() {
                     style={[
                       styles.heroStatusDot,
                       {
-                        backgroundColor:
-                          activePatient.health_status === 'DANGER'
+                        backgroundColor: !activeOnline
+                          ? '#94A3B8'
+                          : activePatient.health_status === 'DANGER'
                             ? '#EF4444'
                             : activePatient.health_status === 'WARNING'
                               ? '#F59E0B'
@@ -583,11 +671,13 @@ export default function DoctorHomeScreen() {
                     ]}
                   />
                   <Text style={styles.heroStatusText}>
-                    {activePatient.health_status === 'DANGER'
-                      ? 'Nguy cấp'
-                      : activePatient.health_status === 'WARNING'
-                        ? 'Cần chú ý'
-                        : 'Sinh hiệu ổn định'}
+                    {!activeOnline
+                      ? 'Chờ tín hiệu'
+                      : activePatient.health_status === 'DANGER'
+                        ? 'Nguy cấp'
+                        : activePatient.health_status === 'WARNING'
+                          ? 'Cần chú ý'
+                          : 'Sinh hiệu ổn định'}
                   </Text>
                 </View>
 
@@ -605,9 +695,25 @@ export default function DoctorHomeScreen() {
             {/* 3 Ô KÍNH MỜ SINH HIỆU THỜI GIAN THỰC (Glassmorphism Pills - Ảnh 5) */}
             <View style={styles.glassPillsRow}>
               {[
-                { icon: 'heart', color: '#F87171', label: 'Nhịp tim', val: activePatient.heart_rate ? `${activePatient.heart_rate} bpm` : '78 bpm' },
-                { icon: 'water', color: '#67E8F9', label: 'SpO2', val: activePatient.spo2 ? `${activePatient.spo2}%` : '97%' },
-                { icon: 'watch-outline', color: '#A7F3D0', label: 'Smartband', val: 'CooSpo HW706', isSmall: true },
+                {
+                  icon: 'heart',
+                  color: activeOnline ? '#F87171' : '#CBD5E1',
+                  label: 'Nhịp tim',
+                  val: activeOnline && activePatient.heart_rate ? `${activePatient.heart_rate} bpm` : '-- bpm',
+                },
+                {
+                  icon: 'water',
+                  color: activeOnline ? '#67E8F9' : '#CBD5E1',
+                  label: 'SpO2',
+                  val: activeOnline && activePatient.spo2 ? `${activePatient.spo2}%` : '--%',
+                },
+                {
+                  icon: 'watch-outline',
+                  color: activeOnline ? '#A7F3D0' : '#CBD5E1',
+                  label: 'Smartband',
+                  val: activeOnline ? 'CooSpo HW706' : 'Chờ tín hiệu',
+                  isSmall: true,
+                },
               ].map((pill) => (
                 <View key={pill.label} style={styles.glassPill}>
                   <View style={styles.pillIconRow}>
@@ -621,7 +727,8 @@ export default function DoctorHomeScreen() {
               ))}
             </View>
           </TouchableOpacity>
-        ) : null}
+          );
+        })() : null}
       </ScrollView>
 
       {/* Bottom Sheet Thông Báo */}

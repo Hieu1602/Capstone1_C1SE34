@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Modal, TouchableWithoutFeedback } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Shadows } from '../../../../theme/colors';
+import { Colors, Shadows } from '../../../../theme/colors';
 import { LocalizedText } from '../../../../i18n/LocalizedComponents';
 
 export interface GroupActionModalProps {
@@ -44,7 +44,7 @@ export const GroupActionModal: React.FC<GroupActionModalProps> = ({
               {/* Header action modal */}
               <View style={styles.actionModalHeader}>
                 <View style={styles.actionModalIconBox}>
-                  <Ionicons name="folder" size={22} color="#7C3AED" />
+                  <Ionicons name="folder" size={22} color={Colors.primary} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <LocalizedText style={styles.actionModalSubtitle}>TÙY CHỌN NHÓM THIẾT BỊ</LocalizedText>
@@ -72,10 +72,10 @@ export const GroupActionModal: React.FC<GroupActionModalProps> = ({
                 <View
                   style={[
                     styles.actionMenuIconCircle,
-                    { backgroundColor: isDarkMode ? 'rgba(124, 58, 237, 0.2)' : '#F5F3FF' },
+                    { backgroundColor: isDarkMode ? 'rgba(255, 107, 0, 0.2)' : '#FFF7ED' },
                   ]}
                 >
-                  <Ionicons name="create-outline" size={20} color="#7C3AED" />
+                  <Ionicons name="create-outline" size={20} color={Colors.primary} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 14 }}>
                   <LocalizedText style={[styles.actionMenuText, isDarkMode && { color: colors.textPrimary }]}>
@@ -167,14 +167,14 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: '#F5F3FF',
+    backgroundColor: '#FFF7ED',
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionModalSubtitle: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#7C3AED',
+    color: Colors.primary,
     letterSpacing: 0.6,
   },
   actionModalTitle: {

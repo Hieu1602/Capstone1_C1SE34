@@ -101,7 +101,7 @@ export const EditGroupModal: React.FC<EditGroupModalProps> = ({
           <View style={[styles.editSectionCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.editSectionHeader}>
               <View style={[styles.editIconBox, { backgroundColor: '#F5F3FF' }]}>
-                <Ionicons name="folder-outline" size={18} color="#7C3AED" />
+                <Ionicons name="folder-outline" size={18} color={Colors.primary} />
               </View>
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <LocalizedText style={[styles.editSectionTitle, isDarkMode && { color: colors.textPrimary }]}>
@@ -159,8 +159,8 @@ export const EditGroupModal: React.FC<EditGroupModalProps> = ({
           {/* Card 2: Thiết bị trong nhóm */}
           <View style={[styles.editSectionCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.editSectionHeader}>
-              <View style={[styles.editIconBox, { backgroundColor: '#EDE9FE' }]}>
-                <Ionicons name="hardware-chip-outline" size={18} color="#7C3AED" />
+              <View style={[styles.editIconBox, { backgroundColor: '#FFEDD5' }]}>
+                <Ionicons name="hardware-chip-outline" size={18} color={Colors.primary} />
               </View>
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <LocalizedText style={[styles.editSectionTitle, isDarkMode && { color: colors.textPrimary }]}>
@@ -239,7 +239,7 @@ export const EditGroupModal: React.FC<EditGroupModalProps> = ({
                       styles.editDeviceCard,
                       isDarkMode && { backgroundColor: colors.background, borderColor: colors.border },
                       isSelected && styles.editDeviceCardSelected,
-                      isSelected && isDarkMode && { backgroundColor: 'rgba(124, 58, 237, 0.15)', borderColor: '#7C3AED' },
+                      isSelected && isDarkMode && { backgroundColor: 'rgba(255, 107, 0, 0.15)', borderColor: Colors.primary },
                     ]}
                     onPress={() => onDeviceToggle?.(dev.id)}
                     activeOpacity={0.7}
@@ -247,7 +247,7 @@ export const EditGroupModal: React.FC<EditGroupModalProps> = ({
                     <Ionicons
                       name={isSelected ? 'checkbox' : 'square-outline'}
                       size={20}
-                      color={isSelected ? '#7C3AED' : '#94A3B8'}
+                      color={isSelected ? Colors.primary : '#94A3B8'}
                       style={{ marginRight: 10 }}
                     />
                     <View
@@ -428,12 +428,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
-    backgroundColor: '#F5F3FF',
+    backgroundColor: '#FFF7ED',
   },
   editSelectAllBtnText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#7C3AED',
+    color: '#EA580C',
   },
   editWarningBanner: {
     flexDirection: 'row',
@@ -466,7 +466,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   editFilterTabActive: {
-    backgroundColor: '#7C3AED',
+    backgroundColor: Colors.primary,
   },
   editFilterTabText: {
     fontSize: 12,
@@ -490,8 +490,8 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   editDeviceCardSelected: {
-    borderColor: '#7C3AED',
-    backgroundColor: '#FAF5FF',
+    borderColor: Colors.primary,
+    backgroundColor: '#FFF7ED',
   },
   iconBoxSmall: {
     width: 36,
@@ -541,7 +541,7 @@ const styles = StyleSheet.create({
     flex: 2,
     height: 48,
     borderRadius: 14,
-    backgroundColor: '#7C3AED',
+    backgroundColor: Colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

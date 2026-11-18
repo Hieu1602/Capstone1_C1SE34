@@ -498,7 +498,7 @@ export const StepCameraRtspConfig: React.FC<StepCameraRtspConfigProps> = ({
                   </View>
                 </View>
                 <LocalizedText style={localStyles.discoveredStatusText}>
-                  Sẵn sàng: Luồng video trực tiếp đang mở
+                  {cam.ip} · Cổng {cam.port || 554} · {cam.status || 'Sẵn sàng'}
                 </LocalizedText>
               </TouchableOpacity>
             );

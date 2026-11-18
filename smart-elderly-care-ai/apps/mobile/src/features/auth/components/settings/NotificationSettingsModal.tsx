@@ -11,6 +11,7 @@ import { LocalizedText as Text } from "../../../../i18n/LocalizedComponents";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../../theme/colors";
 import { SlideRightModal } from "./SlideRightModal";
+import { useEscalationStore } from "../../../../store/useEscalationStore";
 
 interface NotificationSettingsModalProps {
     visible: boolean;
@@ -37,6 +38,7 @@ export const NotificationSettingsModal: React.FC<
     onToggleCriticalAlert,
     onClose,
 }) => {
+    const { autoCallEnabled, autoCallDelaySec, setAutoCallEnabled } = useEscalationStore();
     return (
         <SlideRightModal visible={visible} onClose={onClose} isDarkMode={isDarkMode}>
             <Pressable
@@ -221,6 +223,51 @@ export const NotificationSettingsModal: React.FC<
                                     }}
                                     thumbColor={
                                         criticalAlertEnabled
+                                            ? Colors.primary
+                                            : "#FFFFFF"
+                                    }
+                                />
+                            </View>
+
+                            <View
+                                style={[
+                                    styles.notificationSettingDivider,
+                                    isDarkMode && {
+                                        backgroundColor: "#334155",
+                                    },
+                                ]}
+                            />
+
+                            <View style={styles.notificationSettingRow}>
+                                <View style={styles.notificationSettingText}>
+                                    <Text
+                                        style={[
+                                            styles.notificationSettingTitle,
+                                            isDarkMode && { color: "#F8FAFC" },
+                                        ]}
+                                    >
+                                        Tự động gọi cấp cứu nếu không có phản hồi sau [{autoCallDelaySec} giây]
+                                    </Text>
+                                    <Text
+                                        style={[
+                                            styles.notificationSettingDescription,
+                                            isDarkMode && { color: "#94A3B8" },
+                                        ]}
+                                    >
+                                        Kích hoạt leo thang khẩn cấp SOS khi phát hiện té ngã AI / nguy kịch
+                                    </Text>
+                                </View>
+                                <Switch
+                                    value={autoCallEnabled}
+                                    onValueChange={(v) => setAutoCallEnabled(v)}
+                                    trackColor={{
+                                        false: isDarkMode
+                                            ? "#334155"
+                                            : "#CBD5E1",
+                                        true: "#FDBA74",
+                                    }}
+                                    thumbColor={
+                                        autoCallEnabled
                                             ? Colors.primary
                                             : "#FFFFFF"
                                     }

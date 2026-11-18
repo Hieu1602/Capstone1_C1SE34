@@ -207,6 +207,12 @@ export const vitalsApi = {
     const res = await api.get(`/vitals/history?limit=${limit}`);
     return res.data;
   },
+  getDailySummary: async (days = 30, deviceId?: string) => {
+    const params: Record<string, any> = { days };
+    if (deviceId) params.device_id = deviceId;
+    const res = await api.get('/vitals/daily-summary', { params });
+    return res.data;
+  },
   getCurrent: async () => {
     const res = await api.get('/vitals/current');
     return res.data;

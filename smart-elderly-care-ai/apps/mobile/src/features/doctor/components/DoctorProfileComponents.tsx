@@ -89,7 +89,7 @@ export interface DoctorProfileCardProps extends ThemeProps {
 }
 
 export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
-  info, avatarUri, patientCount, appointmentCount, onPickImage, onResetAvatar, onEditProfile, isDarkMode, colors,
+  info, avatarUri, patientCount, appointmentCount, onPickImage, onViewAvatar, onResetAvatar, onEditProfile, isDarkMode, colors,
 }) => {
   const getDoctorInitial = (name?: string) => {
     if (!name) return 'M';
@@ -146,15 +146,34 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
       <View style={[styles.heroCard, cardSurface]}>
         <View style={styles.heroTopRow}>
           <View style={{ alignItems: 'center' }}>
-            <TouchableOpacity style={styles.heroAvatarContainer} activeOpacity={0.88} onPress={onPickImage}>
-              <View style={styles.heroAvatarBox}>
-                {avatarUri ? <Image source={{ uri: avatarUri }} style={styles.avatarImage} /> : <Text style={styles.heroAvatarLetter}>{doctorInitial}</Text>}
-              </View>
-              <View style={styles.heroOnlineBadge} />
-              <View style={[styles.heroCameraBadge, { backgroundColor: isDarkMode ? '#0F172A' : '#FFFFFF', borderColor: isDarkMode ? '#334155' : '#CBD5E1' }]}>
+            <View style={styles.heroAvatarContainer}>
+              <TouchableOpacity
+                style={styles.heroAvatarBox}
+                activeOpacity={0.88}
+                onPress={onViewAvatar || onPickImage}
+              >
+                {avatarUri ? (
+                  <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+                ) : (
+                  <Text style={styles.heroAvatarLetter}>{doctorInitial}</Text>
+                )}
+              </TouchableOpacity>
+              <View style={styles.heroOnlineBadge} pointerEvents="none" />
+              <TouchableOpacity
+                style={[
+                  styles.heroCameraBadge,
+                  {
+                    backgroundColor: isDarkMode ? '#0F172A' : '#FFFFFF',
+                    borderColor: isDarkMode ? '#334155' : '#CBD5E1',
+                  },
+                ]}
+                activeOpacity={0.8}
+                onPress={onPickImage}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
                 <Ionicons name="camera" size={12} color="#2563EB" />
-              </View>
-            </TouchableOpacity>
+              </TouchableOpacity>
+            </View>
             {Boolean(avatarUri) && Boolean(onResetAvatar) && (
               <TouchableOpacity onPress={onResetAvatar} style={{ marginTop: 6 }} hitSlop={{ top: 6, bottom: 6, left: 10, right: 10 }}>
                 <Text style={{ fontSize: 11, fontWeight: '700', color: '#EF4444' }}>Xóa ảnh</Text>
@@ -1043,7 +1062,7 @@ const styles = StyleSheet.create({
   heroAvatarBox: { width: 76, height: 76, borderRadius: 38, backgroundColor: '#2563EB', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 2.5, borderColor: '#FFFFFF', elevation: 3 },
   heroAvatarLetter: { color: '#FFFFFF', fontSize: 30, fontWeight: '800' },
   heroOnlineBadge: { position: 'absolute', bottom: 1, right: 1, width: 16, height: 16, borderRadius: 8, backgroundColor: '#10B981', borderWidth: 2.5, borderColor: '#FFFFFF' },
-  heroCameraBadge: { position: 'absolute', top: -2, right: -2, width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center', elevation: 2 },
+  heroCameraBadge: { position: 'absolute', top: -2, right: -2, width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center', elevation: 4, zIndex: 10 },
   heroInfoCol: { flex: 1, justifyContent: 'center' },
   verifiedBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ECFDF5', paddingHorizontal: 9, paddingVertical: 3.5, borderRadius: 12, borderWidth: 1, borderColor: '#A7F3D0' },
   verifiedBadgeText: { fontSize: 11, fontWeight: '700', color: '#059669' },

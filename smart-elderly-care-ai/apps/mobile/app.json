@@ -66,12 +66,6 @@
           "locationWhenInUsePermission": "Allow Smart Elderly Care to access your location when sending an emergency alert."
         }
       ],
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "Cho phép Smart Elderly Care dùng camera để quét mã QR thiết bị."
-        }
-      ],
       "expo-audio",
       "expo-status-bar"
     ],

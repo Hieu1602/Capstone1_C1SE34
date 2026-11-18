@@ -94,7 +94,24 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
 
   addIncident: (incident: Incident) =>
     set((state) => {
+      // 1. Chống trùng lặp theo ID
       if (state.incidents.some((i) => i.id === incident.id)) {
+        return state;
+      }
+      // 2. Chống trùng lặp theo nhóm sinh hiệu/thiết bị trong vòng 30 giây
+      const now = Date.now();
+      const isDuplicateRecent = state.incidents.some((i) => {
+        if (i.device_id && incident.device_id && i.device_id !== incident.device_id) return false;
+        const diffMs = Math.abs(now - new Date(i.created_at).getTime());
+        if (diffMs > 30000) return false;
+        const hrGroup = ['HIGH_HEART_RATE', 'LOW_HEART_RATE', 'SUDDEN_HR_SPIKE', 'SUDDEN_HR_DROP'];
+        if (hrGroup.includes(i.alert_type) && hrGroup.includes(incident.alert_type)) {
+          return true;
+        }
+        return i.alert_type === incident.alert_type;
+      });
+
+      if (isDuplicateRecent) {
         return state;
       }
       return {

@@ -7,6 +7,7 @@ import Constants from 'expo-constants';
 import { useVitalStore, Incident } from '../store/useVitalStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useAlertStore } from '../store/useAlertStore';
+import { useEscalationStore } from '../store/useEscalationStore';
 import { notificationService } from './notificationService';
 
 
@@ -402,12 +403,24 @@ class AlertsWebSocket {
           body: newIncident.message,
           data: { incident_id: newIncident.id, alert_type: newIncident.alert_type },
         });
-      } else if (alertType === 'FALL_DETECTED') {
+      } else if (alertType === 'FALL_DETECTED' || alertType === 'AI_FALL_DETECTED') {
         store.setVitals({
           fall_detected: true,
           acoustic_status: 'Phát hiện sự cố té ngã!',
         });
         store.setSirenActive(true);
+
+        // Kích hoạt Modal Đếm ngược Khẩn cấp Tự động (Auto-Escalation 45s)
+        useEscalationStore.getState().triggerEscalation({
+          incidentId: newIncident.id,
+          alertType,
+          patientName: incData.patient_name || incData.elderly_name || 'Cụ Nguyễn Văn A',
+          location: incData.location || incData.house_address || 'Nhà riêng đang giám sát',
+          message: newIncident.message,
+          thumbnailUrl: newIncident.thumbnail_url,
+          delaySeconds: incData.escalation_seconds,
+          createdAt: newIncident.created_at,
+        });
 
         // Bắn thông báo khẩn cấp cục bộ té ngã
         notificationService.triggerEmergencyNotification({
@@ -432,6 +445,16 @@ class AlertsWebSocket {
         } else if (alertType === 'CRITICAL_TRIAD' || alertType === 'CARDIO_COLLAPSE') {
           alertTitle = '🚨 BÁO ĐỘNG ĐỎ: TÌNH TRẠNG NGUY KỊCH';
           store.setSirenActive(true);
+          useEscalationStore.getState().triggerEscalation({
+            incidentId: newIncident.id,
+            alertType,
+            patientName: incData.patient_name || incData.elderly_name || 'Cụ Nguyễn Văn A',
+            location: incData.location || incData.house_address || 'Nhà riêng đang giám sát',
+            message: newIncident.message,
+            thumbnailUrl: newIncident.thumbnail_url,
+            delaySeconds: incData.escalation_seconds,
+            createdAt: newIncident.created_at,
+          });
         } else if (alertType === 'HIGH_FEVER' || alertType === 'FEVER_TACHYCARDIA') {
           alertTitle = '🌡️ CẢNH BÁO THÂN NHIỆT SỐT CAO';
         }
@@ -449,6 +472,7 @@ class AlertsWebSocket {
     else if (event.type === 'INCIDENT_RESOLVED') {
       const incId = event.incident_id || event.data?.id;
       if (incId) {
+        useEscalationStore.getState().clearEscalation(incId);
         const handlerName =
           event.data?.acknowledged_by_name ||
           event.data?.acknowledged_by ||
@@ -466,6 +490,14 @@ class AlertsWebSocket {
       if (!remainingCritical) {
         store.setVitals({ fall_detected: false, acoustic_status: 'Bình thường' });
         store.setSirenActive(false);
+      }
+    }
+
+    // 2b. Sự cố đã tự động leo thang gọi cấp cứu 115 (ESCALATED_AUTO_CALL)
+    else if (event.type === 'INCIDENT_ESCALATED') {
+      const incId = event.incident_id || event.data?.id;
+      if (incId) {
+        useEscalationStore.getState().markEscalated(incId);
       }
     }
 

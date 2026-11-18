@@ -12,6 +12,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import "./src/i18n/config";
 import AppNavigator from "./src/navigation/AppNavigator";
 import { InAppAlertModal } from "./src/components/InAppAlertModal";
+import { CriticalEscalationModal } from "./src/components/CriticalEscalationModal";
+import { useEscalationStore } from "./src/store/useEscalationStore";
 import { LocalizedAlert } from "./src/i18n/LocalizedComponents";
 import { fcmService } from "./src/services/fcm";
 import api, { getCustomServerUrl } from "./src/services/api";
@@ -186,6 +188,7 @@ export default function App() {
 
         // Tự động đồng bộ FCM push token lên máy chủ khi người dùng đăng nhập
         fcmService.syncTokenOnLogin().catch(() => {});
+        useEscalationStore.getState().loadSettings().catch(() => {});
 
         let isActive = true;
         api.get("/users/me")
@@ -206,6 +209,7 @@ export default function App() {
                 <StatusBar barStyle="light-content"  />
                 <AppNavigator />
                 <InAppAlertModal />
+                <CriticalEscalationModal />
             </SafeAreaProvider>
         </GestureHandlerRootView>
     );

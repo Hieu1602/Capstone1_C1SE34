@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Shadows } from '../../../../theme/colors';
+import { Colors, Shadows } from '../../../../theme/colors';
 import { IoTDeviceItem } from '../../../../store/useVitalStore';
 import { LocalizedText } from '../../../../i18n/LocalizedComponents';
 import { DeviceCardItem } from './DeviceCardItem';
@@ -29,6 +29,50 @@ export const DeviceGroupCard: React.FC<DeviceGroupCardProps> = ({
 }) => {
   const onlineCount = devicesInGroup.filter((d) => d.isOnline).length;
 
+  // Icon động theo các thiết bị có trong nhóm
+  const renderGroupIcon = () => {
+    if (devicesInGroup.length === 0) {
+      return (
+        <View style={[styles.groupFolderIconBox, isDarkMode && { backgroundColor: '#334155' }]}>
+          <Ionicons name="folder-open-outline" size={18} color={Colors.primary} />
+        </View>
+      );
+    }
+
+    if (devicesInGroup.length === 1) {
+      const dev = devicesInGroup[0];
+      const iconName = dev.icon || (dev.type === 'camera' ? 'videocam' : 'watch');
+      const iconColor = dev.color || Colors.primary;
+      return (
+        <View style={[styles.groupFolderIconBox, { backgroundColor: `${iconColor}18` }]}>
+          <Ionicons name={iconName as any} size={20} color={iconColor} />
+        </View>
+      );
+    }
+
+    // Nhiều thiết bị: hiển thị cụm icon của các thiết bị trong nhóm
+    return (
+      <View style={styles.groupDynamicIconsCluster}>
+        {devicesInGroup.slice(0, 3).map((dev, idx) => {
+          const iconName = dev.icon || (dev.type === 'camera' ? 'videocam' : 'watch');
+          const iconColor = dev.color || Colors.primary;
+          return (
+            <View
+              key={dev.id || idx}
+              style={[
+                styles.clusterIconBadge,
+                idx > 0 && { marginLeft: -8 },
+                { backgroundColor: `${iconColor}22`, borderColor: isDarkMode ? '#1E293B' : '#FFF' },
+              ]}
+            >
+              <Ionicons name={iconName as any} size={14} color={iconColor} />
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
   return (
     <View
       style={[
@@ -40,18 +84,16 @@ export const DeviceGroupCard: React.FC<DeviceGroupCardProps> = ({
       <View
         style={[
           styles.groupCardHeader,
-          isDarkMode && { backgroundColor: '#1E1B4B', borderBottomColor: '#2E1065' },
+          isDarkMode && { backgroundColor: '#1E293B', borderBottomColor: '#334155' },
         ]}
       >
         <View style={styles.groupCardHeaderLeft}>
-          <View style={styles.groupFolderIconBox}>
-            <Ionicons name="folder" size={18} color="#7C3AED" />
-          </View>
+          {renderGroupIcon()}
           <View style={{ marginLeft: 10 }}>
             <LocalizedText style={[styles.groupCardName, isDarkMode && { color: '#F8FAFC' }]}>
               {groupName}
             </LocalizedText>
-            <LocalizedText style={[styles.groupCardMeta, isDarkMode && { color: '#94A3B8' }]}>
+            <LocalizedText style={[styles.groupCardMeta, isDarkMode && { color: '#FB923C' }]}>
               {devicesInGroup.length} thiết bị • {onlineCount} trực tuyến
             </LocalizedText>
           </View>
@@ -61,13 +103,13 @@ export const DeviceGroupCard: React.FC<DeviceGroupCardProps> = ({
           <View
             style={[
               styles.groupCountBadge,
-              isDarkMode && { backgroundColor: 'rgba(124, 58, 237, 0.25)' },
+              isDarkMode && { backgroundColor: 'rgba(255, 107, 0, 0.2)' },
             ]}
           >
             <LocalizedText
               style={[
                 styles.groupCountBadgeText,
-                isDarkMode && { color: '#DDD6FE' },
+                isDarkMode && { color: '#FB923C' },
               ]}
             >
               {devicesInGroup.length} thiết bị
@@ -110,7 +152,7 @@ export const DeviceGroupCard: React.FC<DeviceGroupCardProps> = ({
                 onPress={() => onAddDeviceToGroup(groupName)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="add-circle-outline" size={15} color="#7C3AED" />
+                <Ionicons name="add-circle-outline" size={15} color={Colors.primary} />
                 <LocalizedText style={styles.groupCardFooterAddText}>
                   + Gán thêm thiết bị vào nhóm
                 </LocalizedText>
@@ -149,7 +191,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#EDE9FE',
+    borderColor: '#FED7AA',
     marginBottom: 16,
     overflow: 'hidden',
     ...Shadows.sm,
@@ -160,9 +202,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: '#FAF5FF',
+    backgroundColor: '#FFF7ED',
     borderBottomWidth: 1,
-    borderBottomColor: '#F3E8FF',
+    borderBottomColor: '#FFEDD5',
   },
   groupCardHeaderLeft: {
     flexDirection: 'row',
@@ -170,21 +212,33 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   groupFolderIconBox: {
-    width: 34,
-    height: 34,
+    width: 36,
+    height: 36,
     borderRadius: 10,
-    backgroundColor: '#EDE9FE',
+    backgroundColor: '#FFEDD5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupDynamicIconsCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  clusterIconBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
   groupCardName: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#2E1065',
+    color: '#0F172A',
   },
   groupCardMeta: {
     fontSize: 11,
-    color: '#7C3AED',
+    color: '#EA580C',
     marginTop: 1,
   },
   groupCardHeaderRight: {
@@ -192,7 +246,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   groupCountBadge: {
-    backgroundColor: '#EDE9FE',
+    backgroundColor: '#FFEDD5',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
@@ -201,7 +255,7 @@ const styles = StyleSheet.create({
   groupCountBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#7C3AED',
+    color: '#EA580C',
   },
   groupMoreBtn: {
     padding: 6,
@@ -224,9 +278,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#F5F3FF',
+    backgroundColor: '#FFF7ED',
     borderWidth: 1,
-    borderColor: '#DDD6FE',
+    borderColor: '#FED7AA',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
@@ -235,11 +289,11 @@ const styles = StyleSheet.create({
   addDeviceToGroupBtnText: {
     fontSize: 12.5,
     fontWeight: '700',
-    color: '#7C3AED',
+    color: '#EA580C',
   },
   groupCardFooter: {
     borderTopWidth: 1,
-    borderTopColor: '#F3E8FF',
+    borderTopColor: '#FFEDD5',
     paddingVertical: 8,
     paddingHorizontal: 14,
     alignItems: 'center',
@@ -253,7 +307,7 @@ const styles = StyleSheet.create({
   groupCardFooterAddText: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#7C3AED',
+    color: '#EA580C',
   },
 });
 

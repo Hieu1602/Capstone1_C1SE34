@@ -275,8 +275,8 @@ export default function CreateGroupScreen({ navigation }: any) {
             {/* Card 1: Nhập tên nhóm mới */}
             <View style={styles.sectionCard}>
               <View style={styles.sectionCardHeader}>
-                <View style={[styles.sectionIconBox, { backgroundColor: '#F5F3FF' }]}>
-                  <Ionicons name="folder-outline" size={20} color="#7C3AED" />
+                <View style={[styles.sectionIconBox, { backgroundColor: '#FFF7ED' }]}>
+                  <Ionicons name="folder-outline" size={20} color={Colors.primary} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 10 }}>
                   <LocalizedText style={styles.sectionTitle}>1. Đặt tên nhóm mới *</LocalizedText>
@@ -340,8 +340,8 @@ export default function CreateGroupScreen({ navigation }: any) {
             {/* Card 2: Chọn thiết bị gom vào nhóm */}
             <View style={styles.sectionCard}>
               <View style={styles.sectionCardHeader}>
-                <View style={[styles.sectionIconBox, { backgroundColor: '#EDE9FE' }]}>
-                  <Ionicons name="hardware-chip-outline" size={20} color="#7C3AED" />
+                <View style={[styles.sectionIconBox, { backgroundColor: '#FFEDD5' }]}>
+                  <Ionicons name="hardware-chip-outline" size={20} color={Colors.primary} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 10 }}>
                   <LocalizedText style={styles.sectionTitle}>2. Chọn thiết bị đưa vào nhóm *</LocalizedText>
@@ -453,7 +453,7 @@ export default function CreateGroupScreen({ navigation }: any) {
                         <Ionicons
                           name={isSelected ? 'checkbox' : 'square-outline'}
                           size={22}
-                          color={isSelected ? '#7C3AED' : '#94A3B8'}
+                          color={isSelected ? Colors.primary : '#94A3B8'}
                           style={{ marginRight: 12 }}
                         />
                         <View
@@ -543,7 +543,7 @@ export default function CreateGroupScreen({ navigation }: any) {
             <View style={styles.overviewHeroCard}>
               <View style={styles.overviewHeaderRow}>
                 <View style={styles.overviewFolderCircle}>
-                  <Ionicons name="folder" size={28} color="#7C3AED" />
+                  <Ionicons name="folder" size={28} color={Colors.primary} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 14 }}>
                   <LocalizedText style={styles.overviewBadge}>NHÓM THIẾT BỊ MỚI</LocalizedText>
@@ -559,7 +559,7 @@ export default function CreateGroupScreen({ navigation }: any) {
               {/* Thống kê phân loại */}
               <View style={styles.overviewStatsGrid}>
                 <View style={styles.overviewStatCol}>
-                  <Ionicons name="videocam" size={18} color="#7C3AED" />
+                  <Ionicons name="videocam" size={18} color={Colors.primary} />
                   <LocalizedText style={styles.overviewStatVal}>{selectedCamCount}</LocalizedText>
                   <LocalizedText style={styles.overviewStatLbl}>Camera AI</LocalizedText>
                 </View>
@@ -581,8 +581,8 @@ export default function CreateGroupScreen({ navigation }: any) {
             {/* Danh sách chi tiết các thiết bị và vị trí mới */}
             <View style={styles.sectionCard}>
               <View style={styles.sectionCardHeader}>
-                <View style={[styles.sectionIconBox, { backgroundColor: '#F5F3FF' }]}>
-                  <Ionicons name="list" size={20} color="#7C3AED" />
+                <View style={[styles.sectionIconBox, { backgroundColor: '#FFF7ED' }]}>
+                  <Ionicons name="list" size={20} color={Colors.primary} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 10 }}>
                   <LocalizedText style={styles.sectionTitle}>
@@ -620,7 +620,7 @@ export default function CreateGroupScreen({ navigation }: any) {
                         <Ionicons
                           name="arrow-forward"
                           size={14}
-                          color="#7C3AED"
+                          color={Colors.primary}
                           style={{ marginHorizontal: 6 }}
                         />
                         <LocalizedText style={styles.reviewLocNew} numberOfLines={1}>
@@ -681,7 +681,7 @@ export default function CreateGroupScreen({ navigation }: any) {
           >
             <View style={styles.confirmCard}>
               <View style={styles.confirmIconRing}>
-                <Ionicons name="help-circle" size={56} color="#7C3AED" />
+                <Ionicons name="help-circle" size={56} color={Colors.primary} />
               </View>
 
               <LocalizedText style={styles.confirmHeading}>Xác Nhận Tạo Nhóm?</LocalizedText>
@@ -691,7 +691,7 @@ export default function CreateGroupScreen({ navigation }: any) {
                   "{groupName.trim()}"
                 </LocalizedText>{' '}
                 và gán{' '}
-                <LocalizedText style={{ fontWeight: '800', color: '#7C3AED' }}>
+                <LocalizedText style={{ fontWeight: '800', color: Colors.primary }}>
                   {selectedDeviceIds.length} thiết bị
                 </LocalizedText>{' '}
                 đã chọn vào nhóm này không?
@@ -789,7 +789,7 @@ export default function CreateGroupScreen({ navigation }: any) {
                 "{createdGroupName}"
               </LocalizedText>{' '}
               đã được tạo với{' '}
-              <LocalizedText style={{ fontWeight: '800', color: '#7C3AED' }}>
+              <LocalizedText style={{ fontWeight: '800', color: Colors.primary }}>
                 {selectedDeviceIds.length} thiết bị
               </LocalizedText>{' '}
               được liên kết thành công.
@@ -798,7 +798,7 @@ export default function CreateGroupScreen({ navigation }: any) {
             {/* Thẻ tóm tắt thành công */}
             <View style={styles.successCard}>
               <View style={styles.successCardRow}>
-                <Ionicons name="folder-open" size={20} color="#7C3AED" />
+                <Ionicons name="folder-open" size={20} color={Colors.primary} />
                 <LocalizedText style={styles.successCardGroupName}>{createdGroupName}</LocalizedText>
               </View>
               <LocalizedText style={styles.successCardMeta}>
@@ -831,7 +831,7 @@ export default function CreateGroupScreen({ navigation }: any) {
               <Ionicons
                 name="add-circle-outline"
                 size={18}
-                color="#7C3AED"
+                color={Colors.primary}
                 style={{ marginRight: 6 }}
               />
               <LocalizedText style={styles.anotherBtnText}>Tạo thêm nhóm khác</LocalizedText>
@@ -1018,12 +1018,12 @@ const baseStyles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: '#F5F3FF',
+    backgroundColor: '#FFF7ED',
   },
   selectAllBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#7C3AED',
+    color: '#EA580C',
   },
 
   // Filter Tabs
@@ -1045,8 +1045,8 @@ const baseStyles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   filterTabActive: {
-    backgroundColor: '#7C3AED',
-    borderColor: '#7C3AED',
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
   },
   filterTabText: {
     fontSize: 12,
@@ -1072,8 +1072,8 @@ const baseStyles = StyleSheet.create({
     borderColor: '#F1F5F9',
   },
   deviceCardSelected: {
-    borderColor: '#DDD6FE',
-    backgroundColor: '#FAF5FF',
+    borderColor: '#FED7AA',
+    backgroundColor: '#FFF7ED',
   },
   deviceIconBox: {
     width: 38,
@@ -1088,7 +1088,7 @@ const baseStyles = StyleSheet.create({
     color: '#1E293B',
   },
   deviceNameSelected: {
-    color: '#6D28D9',
+    color: '#C2410C',
   },
   deviceSub: {
     fontSize: 12,
@@ -1115,10 +1115,10 @@ const baseStyles = StyleSheet.create({
 
   // Step 2: Overview Hero Card
   overviewHeroCard: {
-    backgroundColor: '#FAF5FF',
+    backgroundColor: '#FFF7ED',
     borderRadius: 18,
     borderWidth: 1.5,
-    borderColor: '#DDD6FE',
+    borderColor: '#FED7AA',
     padding: 16,
     ...Shadows.card,
   },
@@ -1131,14 +1131,14 @@ const baseStyles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 14,
-    backgroundColor: '#EDE9FE',
+    backgroundColor: '#FFEDD5',
     alignItems: 'center',
     justifyContent: 'center',
   },
   overviewBadge: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#7C3AED',
+    color: Colors.primary,
     letterSpacing: 0.5,
   },
   overviewGroupName: {
@@ -1148,7 +1148,7 @@ const baseStyles = StyleSheet.create({
     marginTop: 2,
   },
   overviewCountBadge: {
-    backgroundColor: '#7C3AED',
+    backgroundColor: Colors.primary,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 10,
@@ -1220,7 +1220,7 @@ const baseStyles = StyleSheet.create({
   },
   reviewLocNew: {
     fontSize: 12,
-    color: '#7C3AED',
+    color: '#EA580C',
     fontWeight: '700',
     maxWidth: 130,
   },
@@ -1239,12 +1239,12 @@ const baseStyles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#F5F3FF',
+    backgroundColor: '#FFF7ED',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
     borderWidth: 2,
-    borderColor: '#EDE9FE',
+    borderColor: '#FED7AA',
   },
   confirmHeading: {
     fontSize: 19,
@@ -1343,10 +1343,10 @@ const baseStyles = StyleSheet.create({
   },
   successCard: {
     width: '100%',
-    backgroundColor: '#FAF5FF',
+    backgroundColor: '#FFF7ED',
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#DDD6FE',
+    borderColor: '#FED7AA',
     padding: 16,
     alignItems: 'center',
   },
@@ -1363,7 +1363,7 @@ const baseStyles = StyleSheet.create({
   },
   successCardMeta: {
     fontSize: 12,
-    color: '#6D28D9',
+    color: '#C2410C',
     fontWeight: '600',
   },
   successActions: {
@@ -1375,14 +1375,14 @@ const baseStyles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 14,
     borderRadius: 14,
-    backgroundColor: '#F5F3FF',
+    backgroundColor: '#FFF7ED',
     borderWidth: 1,
-    borderColor: '#DDD6FE',
+    borderColor: '#FED7AA',
   },
   anotherBtnText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#7C3AED',
+    color: '#EA580C',
   },
 
   // Footer Actions
@@ -1416,7 +1416,7 @@ const baseStyles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 14,
     borderRadius: 14,
-    backgroundColor: '#7C3AED',
+    backgroundColor: Colors.primary,
     gap: 6,
     ...Shadows.card,
   },
@@ -1432,7 +1432,7 @@ const baseStyles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 14,
     borderRadius: 14,
-    backgroundColor: '#7C3AED',
+    backgroundColor: Colors.primary,
     gap: 6,
     ...Shadows.card,
   },

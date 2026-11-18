@@ -117,8 +117,15 @@ class SmartCareBackgroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
         )
 
+        val iconRes = try {
+            val id = resources.getIdentifier("ic_notification", "drawable", packageName)
+            if (id != 0) id else android.R.drawable.ic_dialog_alert
+        } catch (_: Exception) {
+            android.R.drawable.ic_dialog_alert
+        }
+
         return NotificationCompat.Builder(this, SERVICE_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(iconRes)
             .setContentTitle("SmartCare AI đang bảo vệ người cao tuổi")
             .setContentText("Hệ thống giám sát sinh tồn & sự cố té ngã 24/7 đang hoạt động trong nền")
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -210,6 +217,16 @@ class SmartCareBackgroundService : Service() {
             else -> "🚨 CẢNH BÁO SỨC KHỎE NGƯỜI CAO TUỔI!"
         }
 
+        val iconRes = try {
+            val id = resources.getIdentifier("ic_notification", "drawable", packageName)
+            if (id != 0) id else android.R.drawable.ic_dialog_alert
+        } catch (_: Exception) {
+            android.R.drawable.ic_dialog_alert
+        }
+
+        val notifId = ((System.currentTimeMillis() % 1000000L).toInt() + 2000).let { if (it < 0) -it else it }
+        val reqCode = (System.currentTimeMillis() % 100000L).toInt().let { if (it < 0) -it else it }
+
         val launchIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("OPEN_INCIDENT_ID", incidentId)
@@ -218,7 +235,7 @@ class SmartCareBackgroundService : Service() {
 
         val pendingIntent = PendingIntent.getActivity(
             this,
-            System.currentTimeMillis().toInt(),
+            reqCode,
             launchIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
         )
@@ -229,7 +246,7 @@ class SmartCareBackgroundService : Service() {
         }
         val deletePendingIntent = PendingIntent.getBroadcast(
             this,
-            System.currentTimeMillis().toInt(),
+            reqCode + 1,
             dismissIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
         )
@@ -241,7 +258,7 @@ class SmartCareBackgroundService : Service() {
             ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
 
         val notification = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(iconRes)
             .setContentTitle(title)
             .setContentText(message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
@@ -253,10 +270,14 @@ class SmartCareBackgroundService : Service() {
             .setOngoing(false) // Không ghim thông báo cảnh báo, cho phép xóa
             .setContentIntent(pendingIntent)
             .setDeleteIntent(deletePendingIntent)
-            .setFullScreenIntent(pendingIntent, true)
-            .build()
 
-        notificationManager.notify(System.currentTimeMillis().toInt(), notification)
+        try {
+            notification.setFullScreenIntent(pendingIntent, true)
+            notificationManager.notify(notifId, notification.build())
+        } catch (se: SecurityException) {
+            notification.setFullScreenIntent(null, false)
+            notificationManager.notify(notifId, notification.build())
+        }
 
         // Rung mạnh liên tục điện thoại và phát âm thanh chuông
         triggerAlarmVibration()
