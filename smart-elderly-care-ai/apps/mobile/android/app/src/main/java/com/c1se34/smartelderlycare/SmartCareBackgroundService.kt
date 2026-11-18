@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -301,25 +302,32 @@ class SmartCareBackgroundService : Service() {
                 eSound.printStackTrace()
             }
 
-            // Rung liên tục (repeatIndex = 0)
+            // Rung liên tục (repeatIndex = 0) với VibrationAttributes.USAGE_ALARM cho Android 13+
             val pattern = longArrayOf(0, 1000, 400, 1000, 400, 1000, 800)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val vibratorManager =
                     getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-                vibratorManager?.defaultVibrator?.vibrate(
-                    VibrationEffect.createWaveform(pattern, 0)
-                )
+                vibratorManager?.defaultVibrator
             } else {
                 @Suppress("DEPRECATION")
-                val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val vibAttrs = VibrationAttributes.Builder()
+                    .setUsage(VibrationAttributes.USAGE_ALARM)
+                    .build()
+                vibrator?.vibrate(VibrationEffect.createWaveform(pattern, 0), vibAttrs)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val audioAttrs = android.media.AudioAttributes.Builder()
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(android.media.AudioAttributes.USAGE_ALARM)
+                    .build()
                 @Suppress("DEPRECATION")
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    vibrator?.vibrate(
-                        VibrationEffect.createWaveform(pattern, 0)
-                    )
-                } else {
-                    vibrator?.vibrate(pattern, 0)
-                }
+                vibrator?.vibrate(VibrationEffect.createWaveform(pattern, 0), audioAttrs)
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(pattern, 0)
             }
         } catch (e: Exception) {
             e.printStackTrace()

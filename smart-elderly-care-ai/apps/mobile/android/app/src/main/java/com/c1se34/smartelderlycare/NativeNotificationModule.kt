@@ -14,6 +14,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -292,13 +293,19 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                     val repeatIndex = if (isCritical) 0 else -1
 
                     vibrator?.cancel()
-                    val alarmAudioAttrs = AudioAttributes.Builder()
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .build()
-
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        vibrator?.vibrate(VibrationEffect.createWaveform(pattern, repeatIndex), alarmAudioAttrs)
+                    val effect = VibrationEffect.createWaveform(pattern, repeatIndex)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        val vibAttrs = VibrationAttributes.Builder()
+                            .setUsage(VibrationAttributes.USAGE_ALARM)
+                            .build()
+                        vibrator?.vibrate(effect, vibAttrs)
+                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        val alarmAudioAttrs = AudioAttributes.Builder()
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .setUsage(AudioAttributes.USAGE_ALARM)
+                            .build()
+                        @Suppress("DEPRECATION")
+                        vibrator?.vibrate(effect, alarmAudioAttrs)
                     } else {
                         @Suppress("DEPRECATION")
                         vibrator?.vibrate(pattern, repeatIndex)

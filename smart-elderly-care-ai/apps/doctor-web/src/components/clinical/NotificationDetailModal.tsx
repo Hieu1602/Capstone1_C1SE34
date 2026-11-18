@@ -79,6 +79,14 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    document.body.classList.add('overflow-hidden');
+    return () => {
+      document.body.classList.remove('overflow-hidden');
+    };
+  }, [isOpen]);
+
   if (!isOpen || !notif) return null;
 
   const isCritical =
@@ -163,13 +171,6 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
       (Boolean(notif.spo2 && notif.spo2 > 0)) ||
       isCritical ||
       isWarning);
-
-  useEffect(() => {
-    document.body.classList.add('overflow-hidden');
-    return () => {
-      document.body.classList.remove('overflow-hidden');
-    };
-  }, []);
 
   return createPortal(
     <div
