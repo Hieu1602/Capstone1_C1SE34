@@ -114,7 +114,7 @@ class FCMService:
                     title=title,
                     body=body,
                     sound="default",
-                    channel_id="emergency_alerts",
+                    channel_id="emergency_alerts_v4",
                     priority="max",
                     visibility="PUBLIC",
                     default_sound=True,

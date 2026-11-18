@@ -30,8 +30,8 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
 
     companion object {
         private const val TAG = "NativeNotificationModule"
-        private const val CHANNEL_ID = "smartcare_alert_v2"
-        private const val EMERGENCY_CHANNEL_ID = "emergency_alerts"
+        private const val CHANNEL_ID = "smartcare_alert_v4"
+        private const val EMERGENCY_CHANNEL_ID = "emergency_alerts_v4"
         private const val CHANNEL_NAME = "Thông báo cảnh báo SmartCare AI"
         private const val EMERGENCY_CHANNEL_NAME = "Cảnh báo khẩn cấp SmartCare AI"
 
@@ -102,10 +102,34 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                     lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
                     setSound(soundUri, audioAttributes)
                     setShowBadge(true)
+                    try {
+                        setBypassDnd(true)
+                    } catch (_: Exception) {}
                 }
                 manager.createNotificationChannel(emergencyChannel)
                 Log.d(TAG, "Đã tạo kênh khẩn cấp: $EMERGENCY_CHANNEL_ID")
             }
+        }
+    }
+
+    @ReactMethod
+    fun openNotificationSettings() {
+        try {
+            val intent = Intent().apply {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    action = android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS
+                    putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, reactContext.packageName)
+                } else {
+                    action = "android.settings.APP_NOTIFICATION_SETTINGS"
+                    putExtra("app_package", reactContext.packageName)
+                    putExtra("app_uid", reactContext.applicationInfo.uid)
+                }
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            reactContext.startActivity(intent)
+            Log.d(TAG, "Đã mở trang cài đặt thông báo cho ứng dụng.")
+        } catch (e: Exception) {
+            Log.e(TAG, "Lỗi mở trang cài đặt thông báo: ${e.message}")
         }
     }
 
@@ -266,8 +290,13 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                     val repeatIndex = if (isCritical) 0 else -1
 
                     vibrator?.cancel()
+                    val alarmAudioAttrs = AudioAttributes.Builder()
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .build()
+
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        vibrator?.vibrate(VibrationEffect.createWaveform(pattern, repeatIndex))
+                        vibrator?.vibrate(VibrationEffect.createWaveform(pattern, repeatIndex), alarmAudioAttrs)
                     } else {
                         @Suppress("DEPRECATION")
                         vibrator?.vibrate(pattern, repeatIndex)

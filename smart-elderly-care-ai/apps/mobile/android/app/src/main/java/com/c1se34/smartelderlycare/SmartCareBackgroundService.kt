@@ -29,7 +29,7 @@ class SmartCareBackgroundService : Service() {
     companion object {
         const val SERVICE_CHANNEL_ID = "smartcare_service_monitor_channel"
         const val SERVICE_CHANNEL_NAME = "Dịch vụ bảo vệ người cao tuổi trong nền"
-        const val ALERT_CHANNEL_ID = "smartcare_emergency_alert_channel"
+        const val ALERT_CHANNEL_ID = "emergency_alerts_v4"
         const val ALERT_CHANNEL_NAME = "Cảnh báo khẩn cấp SmartCare AI"
         const val SERVICE_NOTIFICATION_ID = 999
     }
