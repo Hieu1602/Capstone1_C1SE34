@@ -848,7 +848,7 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
                   activeOpacity={0.7}
                 >
                   <Ionicons name="add" size={13} color={Colors.primary} />
-                  <LocalizedText style={[styles.smallActionBtnText, { color: Colors.primary }]}>+ Thêm mốc</LocalizedText>
+                  <LocalizedText style={[styles.smallActionBtnText, { color: Colors.primary }]}>Thêm</LocalizedText>
                 </TouchableOpacity>
               )}
             </View>
