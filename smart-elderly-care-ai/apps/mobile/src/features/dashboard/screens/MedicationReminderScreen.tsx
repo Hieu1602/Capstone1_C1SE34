@@ -58,6 +58,21 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
   }, []);
 
   useEffect(() => {
+    if (patientsList && patientsList.length > 0) {
+      const exists = patientsList.some(
+        (p: any) => String(p.id || p.elderly_id) === String(selectedPatientId)
+      );
+      if (!exists) {
+        const defaultId = route?.params?.patientId || activePatientId || patientsList[0]?.id || patientsList[0]?.elderly_id;
+        if (defaultId) {
+          setSelectedPatientId(defaultId);
+          setActivePatientId?.(defaultId);
+        }
+      }
+    }
+  }, [patientsList, route?.params?.patientId, activePatientId]);
+
+  useEffect(() => {
     if (route?.params?.patientId && String(route.params.patientId) !== String(selectedPatientId)) {
       setSelectedPatientId(route.params.patientId);
     }
@@ -73,7 +88,7 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
 
   const currentPatient =
     (patientsList || []).find(
-      (p: any) => p.id == selectedPatientId || p.elderly_id == selectedPatientId
+      (p: any) => String(p.id) === String(selectedPatientId) || String(p.elderly_id) === String(selectedPatientId)
     ) || (patientsList && patientsList.length > 0 ? patientsList[0] : null);
 
   const patientDisplayName =
@@ -375,20 +390,20 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
         </TouchableOpacity>
       </View>
 
-      {/* 1.1. Bộ chọn người cao tuổi khi gia đình có từ 2 người trở lên */}
-      {patientsList && patientsList.length > 1 && (
+      {/* 1.1. Bộ chọn người cao tuổi (Đồng bộ đa hồ sơ người cao tuổi) */}
+      {patientsList && patientsList.length > 0 && (
         <View style={{ backgroundColor: isDarkMode ? '#0B0F19' : '#FFFFFF', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: borderCol }}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.patientChipsRow}
+            contentContainerStyle={[styles.patientChipsRow, { alignItems: 'center' }]}
           >
             {patientsList.map((p: any) => {
               const pId = p.id || p.elderly_id;
-              const isSelected = pId == selectedPatientId;
+              const isSelected = String(pId) === String(selectedPatientId);
               return (
                 <TouchableOpacity
-                  key={pId}
+                  key={`med-pchip-${pId}`}
                   style={[
                     styles.patientChip,
                     isSelected
@@ -420,6 +435,22 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
                 </TouchableOpacity>
               );
             })}
+
+            <TouchableOpacity
+              style={[
+                styles.patientChip,
+                styles.patientChipInactive,
+                { borderStyle: 'dashed' },
+                isDarkMode && { backgroundColor: '#1E293B', borderColor: '#475569' },
+              ]}
+              onPress={() => navigation.navigate('PatientsList')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="people-outline" size={13} color={Colors.primary} />
+              <LocalizedText style={[styles.patientChipText, { color: Colors.primary }]}>
+                Hồ sơ người cao tuổi
+              </LocalizedText>
+            </TouchableOpacity>
           </ScrollView>
         </View>
       )}

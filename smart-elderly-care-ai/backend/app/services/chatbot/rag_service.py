@@ -183,18 +183,77 @@ class ChatbotRAGService:
             ],
         )
 
-    def _is_ambiguous_vitals_query(self, question: str, context: Dict[str, Any]) -> bool:
+    def _resolve_active_patient(
+        self,
+        question: str,
+        context: Dict[str, Any],
+        chat_history: Optional[List[Dict[str, str]]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Xác định người cao tuổi đang được nói tới (Active Patient):
+        1. Ưu tiên tìm tên trong câu hỏi hiện tại.
+        2. Nếu câu hỏi không nêu tên, dò ngược chat_history để tìm tên người cao tuổi đã được nhắc tới gần nhất.
+        3. Nếu gia đình chỉ có duy nhất 1 người cao tuổi, mặc định là người đó.
+        """
+        patients = context.get("patients") or []
+        if not patients:
+            single_p = context.get("patient")
+            return single_p if (single_p and single_p.get("full_name")) else None
+
+        if len(patients) == 1:
+            return patients[0]
+
+        q_lower = question.lower()
+        # 1. Tìm trong câu hỏi hiện tại
+        for p in patients:
+            p_name = (p.get("full_name") or "").lower()
+            if p_name and (p_name in q_lower or any(part in q_lower for part in p_name.split() if len(part) > 2)):
+                return p
+
+        # 2. Dò ngược trong lịch sử hội thoại gần nhất
+        if chat_history:
+            for msg in reversed(chat_history):
+                text = (msg.get("text") or "").lower()
+                for p in patients:
+                    p_name = (p.get("full_name") or "").lower()
+                    if p_name and (p_name in text or any(part in text for part in p_name.split() if len(part) > 2)):
+                        return p
+
+        return None
+
+    def _is_ambiguous_vitals_query(
+        self,
+        question: str,
+        context: Dict[str, Any],
+        active_patient: Optional[Dict[str, Any]] = None,
+    ) -> bool:
         """
         Nhận diện các câu hỏi phân tích / kiểm tra chỉ số chung chung, mơ hồ:
         - Người dùng chỉ nói chung chung: 'phân tích chỉ số', 'kiểm tra chỉ số', 'xem chỉ số', 'đánh giá sinh hiệu'...
-        - Chưa chỉ định cụ thể người cao tuổi nào (nếu gia đình có nhiều người cao tuổi).
-        - Chưa nêu rõ thời điểm (hiện tại / realtime hay gần nhất / lịch sử).
-        - Chưa nêu rõ loại chỉ số cụ thể (toàn bộ hay chuyên sâu nhịp tim, oxy, huyết áp...).
+        - Chưa chỉ định cụ thể người cao tuổi nào (nếu gia đình có nhiều người cao tuổi và chưa có ngữ cảnh).
+        - Không áp dụng cho câu hỏi hướng dẫn / hành động cụ thể (đo lại sau 15-30p, uống thuốc, v.v.).
         """
         q = question.strip().lower()
         q_clean = re.sub(r'[?!.,;:\-_\(\)]', ' ', q)
         tokens = [t for t in q_clean.split() if t]
         if not tokens:
+            return False
+
+        # Các câu hỏi thao tác / chỉ định chăm sóc cụ thể (KHÔNG phải là câu hỏi mở đầu mơ hồ)
+        follow_up_action_cues = [
+            "sau 15", "sau 30", "15 - 30", "15-30", "đo lại", "uống thuốc đúng",
+            "uống đủ nước", "nghỉ ngơi", "hướng dẫn đo", "làm gì tiếp",
+            "chế độ sinh hoạt", "uống thuốc", "bổ sung nước"
+        ]
+        if any(cue in q for cue in follow_up_action_cues):
+            return False
+
+        # Nếu tài khoản chưa có người cao tuổi nào -> Luôn bắt để trả về thông báo chưa có hồ sơ
+        patients = context.get("patients") or []
+        if not patients:
+            vital_terms = ["phân tích", "chỉ số", "sinh hiệu", "vitals", "chi so", "sinh hieu"]
+            if any(vt in q for vt in vital_terms):
+                return True
             return False
 
         vague_patterns = [
@@ -225,14 +284,22 @@ class ChatbotRAGService:
         if not matched_pattern:
             return False
 
-        # Kiểm tra xem câu hỏi ĐÃ CÓ tên cụ thể của người cao tuổi chưa
-        patients = context.get("patients") or []
-        has_specific_patient = False
-        for p in patients:
-            p_name = (p.get("full_name") or "").lower()
-            if p_name and (p_name in q or any(name_part in q for name_part in p_name.split() if len(name_part) > 2)):
-                has_specific_patient = True
-                break
+        # Kiểm tra xem đã xác định được người cao tuổi chưa (từ câu hỏi hiện tại hoặc từ lịch sử chat)
+        has_specific_patient = active_patient is not None
+        if not has_specific_patient:
+            for p in patients:
+                p_name = (p.get("full_name") or "").lower()
+                if p_name and (p_name in q or any(name_part in q for name_part in p_name.split() if len(name_part) > 2)):
+                    has_specific_patient = True
+                    break
+
+        # Nếu ĐÃ XÁC ĐỊNH ĐƯỢC người cao tuổi cụ thể -> Tiếp tục phân tích cho cụ đó, KHÔNG hỏi lại
+        if has_specific_patient:
+            return False
+
+        # Nếu câu hỏi cực ngắn (dưới 6 từ) và chứa vague pattern -> Chắc chắn là câu hỏi mơ hồ cần hỏi lại
+        if len(tokens) <= 5:
+            return True
 
         time_cues = ["hiện tại", "hien tai", "thời gian thực", "bây giờ", "bay gio", "lúc này", "luc nay", "gần nhất", "gan nhat", "hôm qua", "tuần này", "lịch sử"]
         has_time_cue = any(t in q for t in time_cues)
@@ -240,11 +307,6 @@ class ChatbotRAGService:
         metric_cues = ["nhịp tim", "nhip tim", "spo2", "oxy", "thân nhiệt", "than nhiet", "huyết áp", "huyet ap", "đường huyết", "duong huyet", "nhiệt độ", "té ngã", "te nga"]
         has_metric_cue = any(m in q for m in metric_cues)
 
-        # Nếu câu hỏi cực ngắn (dưới 6 từ) và chứa vague pattern -> Chắc chắn là câu hỏi mơ hồ
-        if len(tokens) <= 5:
-            return True
-
-        # Nếu có từ 2/3 yếu tố (người cao tuổi, thời điểm, loại chỉ số) bị thiếu -> Cần hỏi lại để dò
         missing_count = sum([not has_specific_patient, not has_time_cue, not has_metric_cue])
         if missing_count >= 2:
             return True
@@ -405,6 +467,25 @@ class ChatbotRAGService:
                 return f"Lịch khám sắp tới của cụ là vào lúc **{appt.get('scheduled_at')}** (Hình thức: {appt.get('visit_type')}, Địa điểm: {appt.get('location')})."
             return "Dạ, hiện tại cụ không có lịch khám bệnh nào sắp tới trong hệ thống."
 
+        # 3.1. Hướng dẫn quy trình đo lại sinh hiệu sau 15 - 30 phút
+        if any(term in q_lower for term in ["đo lại", "sau 15", "15 - 30 phút", "15-30 phút", "kiểm tra lại"]):
+            p_name = patient.get("full_name") or "cụ"
+            if is_en:
+                return (
+                    f"⏱️ **Procedure for Re-checking Vital Signs (after 15 - 30 mins) for {p_name}**:\n\n"
+                    "1. **Rest & Preparation**: Ensure the patient rests quietly in a cool, well-ventilated space for at least 15 minutes. Avoid physical exertion, eating, or emotional stress before measuring.\n"
+                    "2. **Posture**: Sit comfortably with back supported and feet flat on the floor, or lie in a comfortable supine position. Place the smartband / sensor snugly at heart level.\n"
+                    "3. **Device Check**: Ensure the wearable device is turned on and connected via Bluetooth / Smart Hub so real-time readings update immediately.\n"
+                    "4. **Warning Signs**: If the patient experiences dizziness, shortness of breath, or chest tightness, contact the family doctor or emergency services immediately without waiting."
+                )
+            return (
+                f"⏱️ **Quy trình kiểm tra và đo lại sinh hiệu (sau 15 - 30 phút) cho cụ {p_name}**:\n\n"
+                f"1. **Nghỉ ngơi tĩnh**: Cho cụ {p_name} ngồi hoặc nằm nghỉ ngơi thư giãn ở nơi thoáng khí, yên tĩnh ít nhất 15 phút. Tránh vận động mạnh, đi lại nhiều hoặc dùng trà/cà phê trước khi đo.\n"
+                "2. **Tư thế chuẩn**: Giữ cổ tay/tay đo ngang tầm tim, ngồi tựa lưng thoải mái, thả lỏng cơ thể và không nói chuyện trong lúc thiết bị ghi nhận chỉ số.\n"
+                "3. **Kiểm tra thiết bị**: Đảm bảo vòng đeo tay thông minh đã bật nguồn, vừa vặn cổ tay và kết nối ổn định với điện thoại hoặc Loa Smart Hub để chỉ số cập nhật ngay lên ứng dụng.\n"
+                "4. **Dấu hiệu cảnh báo đỏ**: Nếu cụ có cảm giác hồi hộp trống ngực, khó thở, đau tức ngực hoặc chóng mặt tăng dần, hãy nhấn nút 'Gọi bác sĩ' hoặc liên hệ cơ sở y tế gần nhất ngay lập tức."
+            )
+
         vital_terms = ["nhịp tim", "spo2", "oxy", "sinh hiệu", "thân nhiệt", "nhiệt độ", "té ngã", "ngã",
                        "heart rate", "oxygen", "vital", "temperature", "fall", "chỉ số", "chi so"]
         if any(term in q_lower for term in vital_terms):
@@ -435,12 +516,12 @@ class ChatbotRAGService:
                 else:
                     clean_lines = [
                         line for line in text.split("\n")
-                        if not line.startswith("# ")
-                        and not line.startswith("## ")
-                        and not line.startswith("### ")
-                        and not line.startswith("Tiêu đề cột")
-                        and not line.startswith("Kiến thức tham khảo")
-                        and not line.startswith("Nội dung bổ sung")
+                        if not line.strip().startswith("#")
+                        and not line.strip().startswith("###")
+                        and not line.strip().startswith("Tiêu đề cột")
+                        and not line.strip().startswith("Kiến thức tham khảo")
+                        and not line.strip().startswith("Nội dung bổ sung")
+                        and not "Sheet:" in line
                         and line.strip()
                     ]
                     clean_text = "\n".join(clean_lines[:6]).strip()
@@ -574,18 +655,14 @@ class ChatbotRAGService:
         incidents = context.get("incidents", [])
         patient = context.get("patient", {})
 
-        # Tự động khớp và gán đúng hồ sơ cụ nếu người dùng chỉ định đích danh tên
-        q_lower = question.lower()
-        patients_list = context.get("patients", [])
-        for p in patients_list:
-            p_name = (p.get("full_name") or "").lower()
-            if p_name and (p_name in q_lower or any(part in q_lower for part in p_name.split() if len(part) > 2)):
-                patient = p
-                context["patient"] = p
-                break
+        # Tự động xác định người cao tuổi (từ câu hỏi hiện tại, lịch sử chat_history hoặc mặc định người duy nhất)
+        active_patient = self._resolve_active_patient(question, context, chat_history)
+        if active_patient:
+            patient = active_patient
+            context["patient"] = active_patient
 
         # 2.1. Nhận diện câu hỏi phân tích / kiểm tra chỉ số chung chung, mơ hồ (Hỏi lại để dò đúng nhu cầu)
-        if self._is_ambiguous_vitals_query(question, context):
+        if self._is_ambiguous_vitals_query(question, context, active_patient=active_patient):
             return self._format_ambiguous_vitals_probing(
                 question=question, context=context, language=language
             )
