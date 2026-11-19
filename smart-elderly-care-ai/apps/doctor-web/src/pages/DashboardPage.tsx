@@ -14,6 +14,7 @@ import { NewAppointmentModal } from '../components/clinical/NewAppointmentModal'
 import { DoctorHeroBanner } from '../components/dashboard/DoctorHeroBanner';
 import { DoctorKpiCards } from '../components/dashboard/DoctorKpiCards';
 import { DoctorMiniCalendar, MiniCalendarCell } from '../components/dashboard/DoctorMiniCalendar';
+import { DayAppointmentsModal } from '../components/dashboard/DayAppointmentsModal';
 import { DoctorAlertsAreaChart, AlertDayStat } from '../components/dashboard/DoctorAlertsAreaChart';
 import { DoctorPatientTable } from '../components/dashboard/DoctorPatientTable';
 import { EscalationStatusBanner } from '../components/dashboard/EscalationStatusBanner';
@@ -246,6 +247,28 @@ export const DashboardPage: React.FC = () => {
 
   // Create Appointment Modal
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createModalAppointment, setCreateModalAppointment] = useState<AppointmentItem | null>(null);
+
+  // Pop-up Modal chi tiết lịch khám theo ngày đã chọn
+  const [showDayScheduleModal, setShowDayScheduleModal] = useState(false);
+
+  // Handler khi click chọn bất kỳ ngày nào trên Mini Calendar
+  const handleSelectCalendarDate = useCallback((dateStr: string) => {
+    setSelectedDate(dateStr);
+    setShowDayScheduleModal(true);
+  }, []);
+
+  // Handler mở tạo lịch khám mới gắn với ngày đang chọn
+  const handleOpenCreateForDate = useCallback((dateStr: string) => {
+    setCreateModalAppointment({
+      id: '',
+      patient_id: '',
+      patient_name: '',
+      scheduled_at: `${dateStr}T09:00:00`,
+      status: 'UPCOMING',
+    });
+    setShowCreateModal(true);
+  }, []);
 
   // Chữ cái viết tắt chuẩn xác: "M" (trong "Minh") thay vì "B" (trong "BS.")
   const doctorInitial = useMemo(() => {
@@ -367,9 +390,21 @@ export const DashboardPage: React.FC = () => {
 
     for (let d = 1; d <= totalDays; d++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const dayApts = appointments.filter((a) => a.scheduled_at?.slice(0, 10) === dateStr);
+      const dayApts = appointments.filter((a) => {
+        if (!a.scheduled_at) return false;
+        if (a.scheduled_at.startsWith(dateStr)) return true;
+        try {
+          const dt = new Date(a.scheduled_at);
+          const y = dt.getFullYear();
+          const m = String(dt.getMonth() + 1).padStart(2, '0');
+          const day = String(dt.getDate()).padStart(2, '0');
+          return `${y}-${m}-${day}` === dateStr;
+        } catch {
+          return false;
+        }
+      });
       let dotStatus: 'COMPLETED' | 'UPCOMING' | 'CRITICAL' | null = null;
-      if (dayApts.some((a) => a.status === 'UPCOMING')) {
+      if (dayApts.some((a) => a.status === 'UPCOMING' || a.status === 'CONFIRMED')) {
         dotStatus = 'UPCOMING';
       } else if (dayApts.some((a) => a.status === 'COMPLETED')) {
         dotStatus = 'COMPLETED';
@@ -388,9 +423,22 @@ export const DashboardPage: React.FC = () => {
     return cells;
   }, [calendarMonth, appointments, selectedDate]);
 
-  // Selected date appointments for preview
+  // Selected date appointments for preview (Khớp chính xác cả UTC và local date)
   const selectedDateApts = useMemo(() => {
-    return appointments.filter((a) => a.scheduled_at?.slice(0, 10) === selectedDate);
+    if (!selectedDate) return [];
+    return appointments.filter((a) => {
+      if (!a.scheduled_at) return false;
+      if (a.scheduled_at.startsWith(selectedDate)) return true;
+      try {
+        const d = new Date(a.scheduled_at);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}` === selectedDate;
+      } catch {
+        return false;
+      }
+    });
   }, [appointments, selectedDate]);
 
   // Filtered patients for Tier 4 Table
@@ -432,7 +480,10 @@ export const DashboardPage: React.FC = () => {
         warningCount={warningPatients.length}
         loading={isLoading && patients.length === 0}
         onRefresh={() => fetchAllData(true)}
-        onOpenCreateAppointment={() => setShowCreateModal(true)}
+        onOpenCreateAppointment={() => {
+          setCreateModalAppointment(null);
+          setShowCreateModal(true);
+        }}
         onNavigateAppointments={() => navigate('/appointments')}
       />
 
@@ -503,30 +554,9 @@ export const DashboardPage: React.FC = () => {
             onMonthChange={setCalendarMonth}
             miniCalendarCells={miniCalendarCells}
             selectedDate={selectedDate}
-            onSelectDate={setSelectedDate}
-            onNavigateAppointments={() => navigate(selectedDate ? `/appointments?date=${selectedDate}` : '/appointments')}
+            onSelectDate={handleSelectCalendarDate}
+            onNavigateAppointments={() => setShowDayScheduleModal(true)}
           />
-          {selectedDateApts.length > 0 && (
-            <div className="mt-2.5 rounded-xl border border-blue-100 bg-blue-50/70 p-2.5 text-xs animate-in fade-in">
-              <div className="flex items-center justify-between font-bold text-blue-900 mb-1">
-                <span>Lịch ngày {selectedDate.split('-').reverse().join('/')}:</span>
-                <span className="text-[10.5px] px-1.5 py-0.5 rounded-full bg-blue-600 text-white font-extrabold">
-                  {selectedDateApts.length} ca
-                </span>
-              </div>
-              <div className="space-y-1 max-h-16 overflow-y-auto">
-                {selectedDateApts.slice(0, 2).map((apt) => (
-                  <div key={apt.id} className="flex items-center justify-between text-[11px] text-slate-700">
-                    <span className="truncate font-semibold max-w-[130px]">{apt.patient_name || 'Bệnh nhân'}</span>
-                    <span className="text-slate-500 font-mono text-[10.5px]">{apt.scheduled_at?.slice(11, 16) || '--:--'}</span>
-                  </div>
-                ))}
-                {selectedDateApts.length > 2 && (
-                  <p className="text-[10px] text-blue-600 font-medium">+{selectedDateApts.length - 2} ca khám khác...</p>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -543,11 +573,34 @@ export const DashboardPage: React.FC = () => {
         loading={isLoading && patients.length === 0}
       />
 
+      {/* Pop-up Modal chi tiết lịch khám theo ngày đã chọn */}
+      {showDayScheduleModal && (
+        <DayAppointmentsModal
+          isOpen={showDayScheduleModal}
+          dateStr={selectedDate}
+          appointments={selectedDateApts}
+          onClose={() => setShowDayScheduleModal(false)}
+          onOpenCreate={handleOpenCreateForDate}
+          onNavigateAppointments={(dateStr) =>
+            navigate(dateStr ? `/appointments?date=${dateStr}` : '/appointments')
+          }
+          onSelectPatient={(patientId) => navigate(`/patients?id=${patientId}`)}
+        />
+      )}
+
+      {/* Modal Tạo lịch khám mới */}
       {showCreateModal && (
         <NewAppointmentModal
           patients={patients}
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={() => fetchAllData(true)}
+          initialAppointment={createModalAppointment}
+          onClose={() => {
+            setShowCreateModal(false);
+            setCreateModalAppointment(null);
+          }}
+          onSuccess={() => {
+            fetchAllData(true);
+            setCreateModalAppointment(null);
+          }}
         />
       )}
     </div>
