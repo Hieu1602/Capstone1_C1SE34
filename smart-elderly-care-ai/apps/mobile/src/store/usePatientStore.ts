@@ -68,6 +68,7 @@ export interface RemindersData {
   hub_voice_reminder_enabled: boolean;
   medications: ReminderItem[];
   meals: Array<{ name: string; time: string; completed: boolean; note: string }>;
+  hydrations?: Array<{ id?: string; time: string; amount: string; note: string; done: boolean }>;
   doctor_prescriptions?: any[];
 }
 

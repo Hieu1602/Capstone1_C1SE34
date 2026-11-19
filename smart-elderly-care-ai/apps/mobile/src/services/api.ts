@@ -317,6 +317,14 @@ export const remindersApi = {
     api.put(`/reminders/${reminderId}/toggle`, null, { params: patientId ? { patient_id: patientId } : undefined }),
   delete: (reminderId: string, patientId?: string | number) =>
     api.delete(`/reminders/${reminderId}`, { params: patientId ? { patient_id: patientId } : undefined }),
+  createHydration: (data: { time: string; amount: string; note: string; patient_id?: string | number }) =>
+    api.post('/reminders/hydration', data),
+  applyHydrationTemplate: (patientId?: string | number) =>
+    api.post('/reminders/hydration/template', null, { params: patientId ? { patient_id: patientId } : undefined }),
+  toggleHydration: (hydrationId: string, patientId?: string | number) =>
+    api.put(`/reminders/hydration/${hydrationId}/toggle`, null, { params: patientId ? { patient_id: patientId } : undefined }),
+  deleteHydration: (hydrationId: string, patientId?: string | number) =>
+    api.delete(`/reminders/hydration/${hydrationId}`, { params: patientId ? { patient_id: patientId } : undefined }),
 };
 
 // 4. Patients & Medical Record API
