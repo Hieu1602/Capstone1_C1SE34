@@ -818,9 +818,14 @@ class CRUDDoctor:
 
 
     async def get_vitals_analytics(
-        self, db: AsyncSession, elderly_id: str, days: int = 7
+        self,
+        db: AsyncSession,
+        elderly_id: str,
+        days: int = 7,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> DoctorVitalsAnalytics:
-        """Phân tích thống kê sinh hiệu dài hạn từ TimescaleDB thực tế."""
+        """Phân tích thống kê sinh hiệu dài hạn từ TimescaleDB thực tế theo số ngày hoặc khoảng ngày cụ thể."""
         elderly = None
         patient_name = "Bệnh nhân"
         try:
@@ -856,10 +861,27 @@ class CRUDDoctor:
         spo2_drops = 0
 
         if band_device:
-            since_time = datetime.now() - timedelta(days=days)
+            conditions = [VitalSign.device_id == band_device.id]
+            if start_date:
+                try:
+                    s_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0)
+                    conditions.append(VitalSign.time >= s_dt)
+                except ValueError:
+                    conditions.append(VitalSign.time >= (datetime.now() - timedelta(days=days)))
+            else:
+                since_time = datetime.now() - timedelta(days=days)
+                conditions.append(VitalSign.time >= since_time)
+
+            if end_date:
+                try:
+                    e_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=999999)
+                    conditions.append(VitalSign.time <= e_dt)
+                except ValueError:
+                    pass
+
             vs_query = await db.execute(
                 select(VitalSign)
-                .where(VitalSign.device_id == band_device.id, VitalSign.time >= since_time)
+                .where(*conditions)
                 .order_by(VitalSign.time.asc())
             )
             records = list(vs_query.scalars().all())
@@ -899,14 +921,30 @@ class CRUDDoctor:
                             bp_val = f"{r.bp_systolic}/{r.bp_diastolic}"
                             break
 
-                    hourly_list = []
+                    # Nhóm theo giờ để hiển thị mượt mà khi xem chi tiết 1 ngày
+                    by_hour: Dict[str, Dict[str, Any]] = {}
+                    use_hourly_bucket = len(day_recs) > 60
                     for r in day_recs:
+                        h_key = r.time.strftime("%H:00") if use_hourly_bucket else r.time.strftime("%H:%M")
+                        if h_key not in by_hour:
+                            by_hour[h_key] = {"hrs": [], "spo2s": [], "temps": [], "bp": None}
+                        if r.heart_rate is not None:
+                            by_hour[h_key]["hrs"].append(r.heart_rate)
+                        if r.spo2 is not None:
+                            by_hour[h_key]["spo2s"].append(r.spo2)
+                        if r.skin_temp_max is not None:
+                            by_hour[h_key]["temps"].append(r.skin_temp_max)
+                        if r.bp_systolic and r.bp_diastolic:
+                            by_hour[h_key]["bp"] = f"{r.bp_systolic}/{r.bp_diastolic}"
+
+                    hourly_list = []
+                    for h_str, h_data in sorted(by_hour.items()):
                         hourly_list.append({
-                            "time": r.time.strftime("%H:%M"),
-                            "heart_rate": r.heart_rate,
-                            "spo2": r.spo2,
-                            "bp": f"{r.bp_systolic}/{r.bp_diastolic}" if (r.bp_systolic and r.bp_diastolic) else None,
-                            "skin_temp": r.skin_temp_max,
+                            "time": h_str,
+                            "heart_rate": round(sum(h_data["hrs"]) / len(h_data["hrs"])) if h_data["hrs"] else None,
+                            "spo2": round(sum(h_data["spo2s"]) / len(h_data["spo2s"]), 1) if h_data["spo2s"] else None,
+                            "bp": h_data["bp"],
+                            "skin_temp": round(sum(h_data["temps"]) / len(h_data["temps"]), 1) if h_data["temps"] else None,
                         })
 
                     daily_trends.append({

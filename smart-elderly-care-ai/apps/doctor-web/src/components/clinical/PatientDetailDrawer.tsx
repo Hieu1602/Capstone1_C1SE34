@@ -22,6 +22,8 @@ import {
   FileText,
   Pill,
   Calendar,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   DoctorPatientDetail,
@@ -31,6 +33,16 @@ import {
   AnalyticsData,
 } from '../../types';
 import { getPatientAvatar } from '../../utils/patientAvatar';
+import {
+  VitalFilterState,
+  VitalRangeMode,
+  computeVitalFilter,
+  getTodayYMD,
+  parseYMD,
+  formatYMD,
+  formatDMY,
+  formatDM,
+} from '../../utils/dateFilter';
 import { VitalsTrendChart } from './VitalsTrendChart';
 
 export type DrawerTabKey = 'RECORD' | 'VITALS' | 'PRESCRIPTIONS' | 'APPOINTMENTS';
@@ -46,8 +58,8 @@ export interface PatientDetailDrawerProps {
   isLoadingAnalytics?: boolean;
   isLoadingPrescriptions?: boolean;
   isLoadingAppointments?: boolean;
-  vitalDays?: 1 | 7 | 30;
-  onVitalRangeChange?: (days: 1 | 7 | 30) => void;
+  vitalFilter?: VitalFilterState;
+  onVitalFilterChange?: (filter: VitalFilterState) => void;
   onTabChange?: (tab: DrawerTabKey) => void;
   onClose: () => void;
   onOpenRecordModal: () => void;
@@ -66,8 +78,8 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
   isLoadingAnalytics = false,
   isLoadingPrescriptions = false,
   isLoadingAppointments = false,
-  vitalDays = 7,
-  onVitalRangeChange,
+  vitalFilter,
+  onVitalFilterChange,
   onTabChange,
   onClose,
   onOpenRecordModal,
@@ -75,6 +87,77 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
   onOpenAppointmentModal,
 }) => {
   const [activeTab, setActiveTab] = useState<DrawerTabKey>('RECORD');
+
+  const currentFilter = vitalFilter || computeVitalFilter('WEEK', getTodayYMD());
+
+  const todayStr = getTodayYMD();
+  const currentMonthStr = todayStr.substring(0, 7);
+  const anchorDate = parseYMD(currentFilter.selectedDate);
+
+  const isNextDisabled =
+    currentFilter.mode === 'DAY'
+      ? currentFilter.selectedDate >= todayStr
+      : currentFilter.mode === 'WEEK'
+        ? (currentFilter.endDate ? currentFilter.endDate >= todayStr : false)
+        : currentFilter.selectedDate.substring(0, 7) >= currentMonthStr;
+
+  const isCurrentPeriod =
+    currentFilter.mode === 'DAY'
+      ? currentFilter.selectedDate === todayStr
+      : currentFilter.mode === 'WEEK'
+        ? (currentFilter.endDate === todayStr)
+        : currentFilter.selectedDate.substring(0, 7) === currentMonthStr;
+
+  const handleModeChange = (newMode: VitalRangeMode) => {
+    const next = computeVitalFilter(newMode, currentFilter.selectedDate);
+    onVitalFilterChange?.(next);
+  };
+
+  const handlePrev = () => {
+    const cur = parseYMD(currentFilter.selectedDate);
+    if (currentFilter.mode === 'DAY') {
+      cur.setDate(cur.getDate() - 1);
+    } else if (currentFilter.mode === 'WEEK') {
+      cur.setDate(cur.getDate() - 7);
+    } else {
+      cur.setMonth(cur.getMonth() - 1);
+    }
+    const next = computeVitalFilter(currentFilter.mode, formatYMD(cur));
+    onVitalFilterChange?.(next);
+  };
+
+  const handleNext = () => {
+    if (isNextDisabled) return;
+    const cur = parseYMD(currentFilter.selectedDate);
+    if (currentFilter.mode === 'DAY') {
+      cur.setDate(cur.getDate() + 1);
+    } else if (currentFilter.mode === 'WEEK') {
+      cur.setDate(cur.getDate() + 7);
+    } else {
+      cur.setMonth(cur.getMonth() + 1);
+    }
+    const next = computeVitalFilter(currentFilter.mode, formatYMD(cur));
+    onVitalFilterChange?.(next);
+  };
+
+  const handleDatePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.value) return;
+    const next = computeVitalFilter(currentFilter.mode, e.target.value);
+    onVitalFilterChange?.(next);
+  };
+
+  const handleMonthPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.value) return;
+    const [y, m] = e.target.value.split('-').map(Number);
+    const target = new Date(y, m - 1, 1);
+    const next = computeVitalFilter('MONTH', formatYMD(target));
+    onVitalFilterChange?.(next);
+  };
+
+  const handleResetCurrent = () => {
+    const next = computeVitalFilter(currentFilter.mode, todayStr);
+    onVitalFilterChange?.(next);
+  };
 
   const activeBloodType =
     patientDetail.blood_type || selectedPatientCard?.blood_type || 'O+';
@@ -572,28 +655,133 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Bộ lọc khoảng thời gian */}
-                <div className="flex items-center gap-2">
-                  {([1, 7, 30] as const).map((d) => {
-                    const label = d === 1 ? 'Ngày' : d === 7 ? 'Tuần' : 'Tháng';
-                    const isActive = vitalDays === d;
-                    return (
+                {/* Thanh điều hướng và lọc thời gian */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-2xl bg-slate-50/90 dark:bg-[#0F172A] p-2.5 border border-slate-200/70 dark:border-slate-800">
+                  {/* Segmented control: Ngày / Tuần / Tháng */}
+                  <div className="flex items-center gap-1 rounded-xl bg-slate-200/70 dark:bg-slate-800/80 p-0.5">
+                    {(['DAY', 'WEEK', 'MONTH'] as const).map((m) => {
+                      const label = m === 'DAY' ? 'Ngày' : m === 'WEEK' ? 'Tuần' : 'Tháng';
+                      const isActive = currentFilter.mode === m;
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => handleModeChange(m)}
+                          className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
+                            isActive
+                              ? 'bg-white dark:bg-blue-600 text-blue-600 dark:text-white shadow-xs'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Bộ điều hướng lùi/tiến & Picker chọn ngày/tuần/tháng */}
+                  <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                    {/* Nút lùi */}
+                    <button
+                      type="button"
+                      onClick={handlePrev}
+                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition cursor-pointer shadow-2xs"
+                      title={
+                        currentFilter.mode === 'DAY'
+                          ? 'Ngày trước'
+                          : currentFilter.mode === 'WEEK'
+                            ? 'Tuần trước'
+                            : 'Tháng trước'
+                      }
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+
+                    {/* Khung hiển thị & Native Picker */}
+                    <div className="relative flex items-center">
+                      {currentFilter.mode === 'MONTH' ? (
+                        <div className="relative flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 shadow-2xs hover:border-blue-400 transition cursor-pointer">
+                          <Calendar className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                          <span>
+                            Tháng {anchorDate.getMonth() + 1}/{anchorDate.getFullYear()}
+                          </span>
+                          <input
+                            type="month"
+                            max={currentMonthStr}
+                            value={`${anchorDate.getFullYear()}-${String(anchorDate.getMonth() + 1).padStart(2, '0')}`}
+                            onChange={handleMonthPick}
+                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                            title="Chọn tháng khác"
+                          />
+                        </div>
+                      ) : (
+                        <div className="relative flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 shadow-2xs hover:border-blue-400 transition cursor-pointer">
+                          <Calendar className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                          <span>
+                            {currentFilter.mode === 'DAY'
+                              ? currentFilter.selectedDate === todayStr
+                                ? `Hôm nay (${formatDM(anchorDate)})`
+                                : formatDMY(anchorDate)
+                              : `${formatDM(parseYMD(currentFilter.startDate!))} - ${formatDM(parseYMD(currentFilter.endDate!))}`}
+                          </span>
+                          <input
+                            type="date"
+                            max={todayStr}
+                            value={currentFilter.selectedDate}
+                            onChange={handleDatePick}
+                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                            title={currentFilter.mode === 'DAY' ? 'Chọn ngày khác' : 'Chọn mốc tuần'}
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Nút tiến */}
+                    <button
+                      type="button"
+                      onClick={handleNext}
+                      disabled={isNextDisabled}
+                      className={`flex h-8 w-8 items-center justify-center rounded-xl border transition ${
+                        isNextDisabled
+                          ? 'border-slate-100 bg-slate-100 text-slate-300 dark:border-slate-800 dark:bg-slate-800/40 dark:text-slate-600 cursor-not-allowed'
+                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 cursor-pointer shadow-2xs'
+                      }`}
+                      title={
+                        currentFilter.mode === 'DAY'
+                          ? 'Ngày tiếp theo'
+                          : currentFilter.mode === 'WEEK'
+                            ? 'Tuần tiếp theo'
+                            : 'Tháng tiếp theo'
+                      }
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+
+                    {/* Nút quay về Hôm nay / Tuần này / Tháng này */}
+                    {!isCurrentPeriod && (
                       <button
-                        key={d}
                         type="button"
-                        onClick={() => onVitalRangeChange?.(d)}
-                        className={`rounded-xl px-3.5 py-1.5 text-xs font-bold border transition-colors cursor-pointer ${
-                          isActive
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800/80 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-700'
-                        }`}
+                        onClick={handleResetCurrent}
+                        className="rounded-xl bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-700 border border-blue-200/80 hover:bg-blue-100 dark:bg-blue-950/50 dark:border-blue-900 dark:text-blue-300 dark:hover:bg-blue-900 transition cursor-pointer shadow-2xs"
+                        title="Quay lại thời điểm hiện tại"
                       >
-                        {label}
+                        {currentFilter.mode === 'DAY'
+                          ? 'Hôm nay'
+                          : currentFilter.mode === 'WEEK'
+                            ? 'Tuần này'
+                            : 'Tháng này'}
                       </button>
-                    );
-                  })}
+                    )}
+                  </div>
                 </div>
-                <VitalsTrendChart data={analytics?.daily_trends || []} days={vitalDays} />
+
+                {/* Vitals Trend Chart */}
+                <VitalsTrendChart
+                  data={analytics?.daily_trends || []}
+                  days={currentFilter.days}
+                  titleOverride={currentFilter.titleOverride}
+                  isSingleDay={currentFilter.mode === 'DAY'}
+                />
               </div>
             )
           )}
