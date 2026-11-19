@@ -109,6 +109,7 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
               fontSize={11}
               tickLine={false}
               axisLine={{ stroke: '#475569' }}
+              interval={isHourlyView ? 1 : 0}
             />
             {/* Trục trái: Nhịp tim (40 - 140) */}
             <YAxis
@@ -140,6 +141,15 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
                 boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
                 fontSize: '12px',
               }}
+              formatter={(value: any, name: string) => {
+                if (value === null || value === undefined) return ['Chưa có dữ liệu', name];
+                if (name.includes('Nhịp tim')) return [`${value} bpm`, name];
+                if (name.includes('SpO2')) return [`${value}%`, name];
+                return [value, name];
+              }}
+              labelFormatter={(label: string) =>
+                isHourlyView ? `Khung giờ: ${label}` : `Ngày: ${label}`
+              }
             />
             <Line
               yAxisId="left"
@@ -148,7 +158,8 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
               name="Nhịp tim trung bình"
               stroke="#3B82F6"
               strokeWidth={2.5}
-              dot={{ r: 3, fill: '#3B82F6', strokeWidth: 0 }}
+              connectNulls={true}
+              dot={{ r: isHourlyView ? 2 : 3, fill: '#3B82F6', strokeWidth: 0 }}
               activeDot={{ r: 5 }}
             />
             <Line
@@ -158,7 +169,8 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
               name="SpO2 trung bình"
               stroke="#10B981"
               strokeWidth={2.5}
-              dot={{ r: 3, fill: '#10B981', strokeWidth: 0 }}
+              connectNulls={true}
+              dot={{ r: isHourlyView ? 2 : 3, fill: '#10B981', strokeWidth: 0 }}
               activeDot={{ r: 5 }}
             />
           </LineChart>
