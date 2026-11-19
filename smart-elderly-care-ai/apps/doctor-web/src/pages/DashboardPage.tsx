@@ -36,24 +36,44 @@ const DEFAULT_ALERT_STATS_30D: AlertDayStat[] = [
   { label: 'Tuần 4', fullLabel: 'Tuần 4 (22 - 30)', fall: 1, heart_alert: 9, spo2_alert: 3, sos_alert: 1, total: 14 },
 ];
 
-function computeAlertStats(incidents: any[], range: '7D' | '30D'): AlertDayStat[] {
-  if (range === '30D') {
-    const weeks: AlertDayStat[] = [
-      { label: 'Tuần 1', fullLabel: 'Tuần 1 (01 - 07)', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-      { label: 'Tuần 2', fullLabel: 'Tuần 2 (08 - 14)', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-      { label: 'Tuần 3', fullLabel: 'Tuần 3 (15 - 21)', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-      { label: 'Tuần 4', fullLabel: 'Tuần 4 (22 - 30)', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-    ];
-    if (!incidents || incidents.length === 0) return DEFAULT_ALERT_STATS_30D;
+function getMonday(d: Date): Date {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + diff);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
 
-    const now = new Date();
+function computeAlertStats(incidents: any[], range: '7D' | '30D', anchorDate: Date): AlertDayStat[] {
+  if (range === '30D') {
+    const y = anchorDate.getFullYear();
+    const m = anchorDate.getMonth();
+    const lastDay = new Date(y, m + 1, 0).getDate();
+
+    const weeks: AlertDayStat[] = [
+      { label: 'Tuần 1', fullLabel: `Tuần 1 (01 - 07/${m + 1})`, fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
+      { label: 'Tuần 2', fullLabel: `Tuần 2 (08 - 14/${m + 1})`, fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
+      { label: 'Tuần 3', fullLabel: `Tuần 3 (15 - 21/${m + 1})`, fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
+      { label: 'Tuần 4', fullLabel: `Tuần 4 (22 - ${lastDay}/${m + 1})`, fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
+    ];
+
+    if (!incidents || incidents.length === 0) {
+      const now = new Date();
+      return (y === now.getFullYear() && m === now.getMonth()) ? DEFAULT_ALERT_STATS_30D : weeks;
+    }
+
     for (const inc of incidents) {
       const d = inc.created_at ? new Date(inc.created_at) : null;
       if (!d || isNaN(d.getTime())) continue;
-      const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-      if (diffDays >= 0 && diffDays < 28) {
-        const wIdx = Math.min(3, Math.floor(diffDays / 7));
-        const targetWeek = 3 - wIdx;
+      if (d.getFullYear() === y && d.getMonth() === m) {
+        const dayNum = d.getDate();
+        let targetWeek = 0;
+        if (dayNum <= 7) targetWeek = 0;
+        else if (dayNum <= 14) targetWeek = 1;
+        else if (dayNum <= 21) targetWeek = 2;
+        else targetWeek = 3;
+
         const type = (inc.alert_type || '').toUpperCase();
         if (type.includes('FALL')) weeks[targetWeek].fall++;
         else if (type.includes('HEART') || type.includes('NHIP_TIM')) weeks[targetWeek].heart_alert++;
@@ -63,30 +83,48 @@ function computeAlertStats(incidents: any[], range: '7D' | '30D'): AlertDayStat[
         weeks[targetWeek].total++;
       }
     }
+
     const hasData = weeks.some((w) => w.total > 0);
-    return hasData ? weeks : DEFAULT_ALERT_STATS_30D;
+    const now = new Date();
+    if (!hasData && y === now.getFullYear() && m === now.getMonth()) {
+      return DEFAULT_ALERT_STATS_30D;
+    }
+    return weeks;
   }
 
-  // 7D: T2 -> CN
-  const days: AlertDayStat[] = [
-    { label: 'T2', fullLabel: 'Thứ Hai', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-    { label: 'T3', fullLabel: 'Thứ Ba', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-    { label: 'T4', fullLabel: 'Thứ Tư', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-    { label: 'T5', fullLabel: 'Thứ Năm', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-    { label: 'T6', fullLabel: 'Thứ Sáu', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-    { label: 'T7', fullLabel: 'Thứ Bảy', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-    { label: 'CN', fullLabel: 'Chủ Nhật', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-  ];
+  // 7D: Tuần cụ thể (Thứ Hai -> Chủ Nhật)
+  const monday = getMonday(anchorDate);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23, 59, 59, 999);
 
-  if (!incidents || incidents.length === 0) return DEFAULT_ALERT_STATS_7D;
+  const dayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+  const fullNames = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ Nhật'];
+  const days: AlertDayStat[] = dayLabels.map((lbl, idx) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + idx);
+    const dateFormatted = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+    return {
+      label: lbl,
+      fullLabel: `${fullNames[idx]} (${dateFormatted})`,
+      fall: 0,
+      heart_alert: 0,
+      spo2_alert: 0,
+      sos_alert: 0,
+      total: 0,
+    };
+  });
 
-  const now = new Date();
+  if (!incidents || incidents.length === 0) {
+    const currentMonday = getMonday(new Date());
+    return monday.getTime() === currentMonday.getTime() ? DEFAULT_ALERT_STATS_7D : days;
+  }
+
   for (const inc of incidents) {
     const d = inc.created_at ? new Date(inc.created_at) : null;
     if (!d || isNaN(d.getTime())) continue;
-    const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays >= 0 && diffDays < 7) {
-      const dayOfWeek = d.getDay(); // 0 is Sunday (CN), 1 is Monday (T2)
+    if (d.getTime() >= monday.getTime() && d.getTime() <= sunday.getTime()) {
+      const dayOfWeek = d.getDay(); // 0 is CN, 1 is T2
       const dayIdx = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
       const type = (inc.alert_type || '').toUpperCase();
       if (type.includes('FALL')) days[dayIdx].fall++;
@@ -99,7 +137,11 @@ function computeAlertStats(incidents: any[], range: '7D' | '30D'): AlertDayStat[
   }
 
   const hasData = days.some((d) => d.total > 0);
-  return hasData ? days : DEFAULT_ALERT_STATS_7D;
+  const currentMonday = getMonday(new Date());
+  if (!hasData && monday.getTime() === currentMonday.getTime()) {
+    return DEFAULT_ALERT_STATS_7D;
+  }
+  return days;
 }
 
 export const DashboardPage: React.FC = () => {
@@ -119,6 +161,66 @@ export const DashboardPage: React.FC = () => {
   } = useDoctorDataStore();
 
   const [chartRange, setChartRange] = useState<'7D' | '30D'>('7D');
+  const [chartAnchorDate, setChartAnchorDate] = useState<Date>(() => new Date());
+
+  const now = new Date();
+  const currentMonday = getMonday(now);
+  const selectedMonday = getMonday(chartAnchorDate);
+  const selectedSunday = new Date(selectedMonday);
+  selectedSunday.setDate(selectedMonday.getDate() + 6);
+
+  const isCurrentWeek = selectedMonday.getTime() >= currentMonday.getTime();
+  const isCurrentMonth =
+    chartAnchorDate.getFullYear() === now.getFullYear() &&
+    chartAnchorDate.getMonth() >= now.getMonth();
+
+  const periodLabel = useMemo(() => {
+    if (chartRange === '7D') {
+      const startStr = `${String(selectedMonday.getDate()).padStart(2, '0')}/${String(selectedMonday.getMonth() + 1).padStart(2, '0')}`;
+      const endStr = `${String(selectedSunday.getDate()).padStart(2, '0')}/${String(selectedSunday.getMonth() + 1).padStart(2, '0')}`;
+      return isCurrentWeek ? `Tuần này (${startStr} - ${endStr})` : `${startStr} - ${endStr}`;
+    }
+    return `Tháng ${chartAnchorDate.getMonth() + 1}/${chartAnchorDate.getFullYear()}`;
+  }, [chartRange, selectedMonday, selectedSunday, isCurrentWeek, chartAnchorDate]);
+
+  const isNextDisabled = chartRange === '7D' ? isCurrentWeek : isCurrentMonth;
+  const isCurrentPeriod = chartRange === '7D' ? isCurrentWeek : isCurrentMonth;
+
+  const handlePrevChart = () => {
+    setChartAnchorDate((prev) => {
+      const d = new Date(prev);
+      if (chartRange === '7D') {
+        d.setDate(d.getDate() - 7);
+      } else {
+        d.setMonth(d.getMonth() - 1);
+      }
+      return d;
+    });
+  };
+
+  const handleNextChart = () => {
+    if (isNextDisabled) return;
+    setChartAnchorDate((prev) => {
+      const d = new Date(prev);
+      if (chartRange === '7D') {
+        d.setDate(d.getDate() + 7);
+      } else {
+        d.setMonth(d.getMonth() + 1);
+      }
+      return d;
+    });
+  };
+
+  const handleResetCurrentChart = () => {
+    setChartAnchorDate(new Date());
+  };
+
+  const handleMonthSelect = (mStr: string) => {
+    const [y, m] = mStr.split('-').map(Number);
+    setChartAnchorDate(new Date(y, m - 1, 1));
+  };
+
+  const selectedMonthStr = `${chartAnchorDate.getFullYear()}-${String(chartAnchorDate.getMonth() + 1).padStart(2, '0')}`;
 
   const nextAppointment = useMemo(() => {
     const upcomingList = appointments
@@ -128,8 +230,8 @@ export const DashboardPage: React.FC = () => {
   }, [appointments]);
 
   const alertStats = useMemo(() => {
-    return computeAlertStats(incidents, chartRange);
-  }, [incidents, chartRange]);
+    return computeAlertStats(incidents, chartRange, chartAnchorDate);
+  }, [incidents, chartRange, chartAnchorDate]);
 
   // Table search & filter
   const [tableSearch, setTableSearch] = useState('');
@@ -383,6 +485,14 @@ export const DashboardPage: React.FC = () => {
             data={alertStats}
             range={chartRange}
             onRangeChange={setChartRange}
+            periodLabel={periodLabel}
+            onPrev={handlePrevChart}
+            onNext={handleNextChart}
+            isNextDisabled={isNextDisabled}
+            onResetCurrent={handleResetCurrentChart}
+            isCurrentPeriod={isCurrentPeriod}
+            selectedMonthStr={selectedMonthStr}
+            onMonthSelect={handleMonthSelect}
           />
         </div>
 
