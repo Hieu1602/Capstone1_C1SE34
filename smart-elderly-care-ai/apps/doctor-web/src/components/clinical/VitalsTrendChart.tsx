@@ -31,6 +31,9 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({ data, days =
     );
   }
 
+  const title =
+    days === 1 ? 'Xu hướng Sinh hiệu Hôm nay' : `Xu hướng Sinh hiệu ${days} ngày gần nhất`;
+
   // Định dạng dữ liệu hiển thị
   const chartData = data.map((item) => {
     let dateLabel = item.date;
@@ -58,7 +61,7 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({ data, days =
         <div className="flex items-center space-x-2">
           <Activity className="h-5 w-5 text-blue-600 dark:text-blue-400" />
           <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-            Xu hướng Sinh hiệu {days} ngày gần nhất
+            {title}
           </h4>
         </div>
 

@@ -46,6 +46,8 @@ export interface PatientDetailDrawerProps {
   isLoadingAnalytics?: boolean;
   isLoadingPrescriptions?: boolean;
   isLoadingAppointments?: boolean;
+  vitalDays?: 1 | 7 | 30;
+  onVitalRangeChange?: (days: 1 | 7 | 30) => void;
   onTabChange?: (tab: DrawerTabKey) => void;
   onClose: () => void;
   onOpenRecordModal: () => void;
@@ -64,6 +66,8 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
   isLoadingAnalytics = false,
   isLoadingPrescriptions = false,
   isLoadingAppointments = false,
+  vitalDays = 7,
+  onVitalRangeChange,
   onTabChange,
   onClose,
   onOpenRecordModal,
@@ -567,7 +571,30 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                 <div className="h-64 w-full rounded-2xl bg-slate-100 dark:bg-[#0F172A] border border-slate-200/70 dark:border-slate-800" />
               </div>
             ) : (
-              <VitalsTrendChart data={analytics?.daily_trends || []} days={7} />
+              <div className="space-y-4">
+                {/* Bộ lọc khoảng thời gian */}
+                <div className="flex items-center gap-2">
+                  {([1, 7, 30] as const).map((d) => {
+                    const label = d === 1 ? 'Ngày' : d === 7 ? 'Tuần' : 'Tháng';
+                    const isActive = vitalDays === d;
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => onVitalRangeChange?.(d)}
+                        className={`rounded-xl px-3.5 py-1.5 text-xs font-bold border transition-colors cursor-pointer ${
+                          isActive
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-800/80 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-700'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <VitalsTrendChart data={analytics?.daily_trends || []} days={vitalDays} />
+              </div>
             )
           )}
 

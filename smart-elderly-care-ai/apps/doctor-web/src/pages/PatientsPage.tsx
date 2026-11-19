@@ -66,6 +66,7 @@ export const PatientsPage: React.FC = () => {
   const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
   const [isLoadingPrescriptions, setIsLoadingPrescriptions] = useState(false);
   const [isLoadingAppointments, setIsLoadingAppointments] = useState(false);
+  const [vitalDays, setVitalDays] = useState<1 | 7 | 30>(7);
 
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
   const [showRecordModal, setShowRecordModal] = useState(false);
@@ -161,7 +162,7 @@ export const PatientsPage: React.FC = () => {
     }
     setIsLoadingAnalytics(true);
     try {
-      const data = await doctorApi.getAnalytics(selectedPatientId, 7);
+      const data = await doctorApi.getAnalytics(selectedPatientId, vitalDays);
       setAnalytics(data);
       const latestCache = patientDrawerCache.get(selectedPatientId);
       if (latestCache) {
@@ -171,6 +172,20 @@ export const PatientsPage: React.FC = () => {
           updatedAt: Date.now(),
         });
       }
+    } catch {
+      // ignore
+    } finally {
+      setIsLoadingAnalytics(false);
+    }
+  };
+
+  const handleVitalRangeChange = async (days: 1 | 7 | 30) => {
+    setVitalDays(days);
+    if (!selectedPatientId) return;
+    setIsLoadingAnalytics(true);
+    try {
+      const data = await doctorApi.getAnalytics(selectedPatientId, days);
+      setAnalytics(data);
     } catch {
       // ignore
     } finally {
@@ -457,6 +472,8 @@ export const PatientsPage: React.FC = () => {
           isLoadingAnalytics={isLoadingAnalytics}
           isLoadingPrescriptions={isLoadingPrescriptions}
           isLoadingAppointments={isLoadingAppointments}
+          vitalDays={vitalDays}
+          onVitalRangeChange={handleVitalRangeChange}
           onTabChange={handleDrawerTabChange}
           onClose={() => setSelectedPatientId(null)}
           onOpenRecordModal={() => setShowRecordModal(true)}
