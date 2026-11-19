@@ -313,28 +313,35 @@ export const buildTelemetryData = (
     const cleanDate = String(s.date).split('T')[0];
     const shortKey = cleanDate.length >= 10 ? cleanDate.slice(5, 10) : cleanDate;
 
+    const hr = s.heartRate ?? s.avg_hr ?? s.heart_rate ?? null;
+    const spo2 = s.spo2 ?? s.avg_spo2 ?? null;
+    const bp = s.bloodPressure ?? s.avg_bp ?? s.bp_systolic ?? null;
+    const temp = s.temperature ?? s.avg_temp ?? s.skin_temp_max ?? null;
+    const fMax = s.fallMax ?? s.max_fall_risk ?? s.fall_max ?? 0;
+    const fRisk = s.fallRisk ?? s.fall_risk ?? 0;
+
     // Đánh giá chỉ số bất ổn sinh hiệu & nguy cơ ngã tổng hợp đồng nhất cho toàn bộ các ngày:
     // Nếu ngày có cảnh báo té ngã (fallMax >= 90) -> 95;
     // Ngược lại, tính toán đồng bộ theo chỉ số sinh hiệu (HR, SpO2, Huyết áp, Thân nhiệt)
-    const evaluatedFall = (s.fallMax ?? 0) >= 90 || (s.fallRisk ?? 0) >= 90
+    const evaluatedFall = fMax >= 90 || fRisk >= 90
       ? 95
       : evaluateVitalFallRisk({
-          heart_rate: s.heartRate,
-          spo2: s.spo2,
-          bp_systolic: s.bloodPressure,
-          skin_temp_max: s.temperature,
+          heart_rate: hr,
+          spo2: spo2,
+          bp_systolic: bp,
+          skin_temp_max: temp,
           fall_detected: false,
           is_worn: true,
         });
 
     const bucket: BucketAccumulator = {
-      hrSum: s.heartRate ?? 0, hrCnt: s.heartRate != null ? 1 : 0,
-      spo2Sum: s.spo2 ?? 0, spo2Cnt: s.spo2 != null ? 1 : 0,
-      bpSum: s.bloodPressure ?? 0, bpCnt: s.bloodPressure != null ? 1 : 0,
-      tempSum: s.temperature ?? 0, tempCnt: s.temperature != null ? 1 : 0,
+      hrSum: hr ?? 0, hrCnt: hr != null ? 1 : 0,
+      spo2Sum: spo2 ?? 0, spo2Cnt: spo2 != null ? 1 : 0,
+      bpSum: bp ?? 0, bpCnt: bp != null ? 1 : 0,
+      tempSum: temp ?? 0, tempCnt: temp != null ? 1 : 0,
       fallSum: evaluatedFall, fallCnt: 1,
-      fallMax: Math.max(s.fallMax ?? 0, evaluatedFall),
-      alerts: s.alerts ?? 0,
+      fallMax: Math.max(fMax, evaluatedFall),
+      alerts: s.alerts ?? s.alert_count ?? 0,
     };
     dayMap.set(cleanDate, bucket);
     dayMap.set(shortKey, bucket);

@@ -113,17 +113,8 @@ class CRUDVital:
         uuid_val = None
         if device_id:
             uuid_val = await self.resolve_device_uuid(db, device_id)
-
-        # Nếu không tìm thấy UUID của device_id truyền vào (vd: 'hub-01' là Hub chứ không phải band),
-        # tự động tìm thiết bị Smartband trong hệ thống
-        if not uuid_val:
-            res_band = await db.execute(
-                select(Device.id)
-                .where(Device.device_type == DeviceType.SMARTBAND)
-                .order_by(Device.created_at.desc())
-                .limit(1)
-            )
-            uuid_val = res_band.scalar_one_or_none()
+            if not uuid_val:
+                return []
 
         query = select(VitalSign)
         if uuid_val:
@@ -824,14 +815,8 @@ class CRUDVital:
         uuid_val = None
         if device_id:
             uuid_val = await self.resolve_device_uuid(db, device_id)
-        if not uuid_val:
-            res_band = await db.execute(
-                select(Device.id)
-                .where(Device.device_type == DeviceType.SMARTBAND)
-                .order_by(Device.created_at.desc())
-                .limit(1)
-            )
-            uuid_val = res_band.scalar_one_or_none()
+            if not uuid_val:
+                return []
 
         safe_days = max(1, min(int(days), 90))
         where_clauses = [f"time >= NOW() - INTERVAL '{safe_days} days'"]
