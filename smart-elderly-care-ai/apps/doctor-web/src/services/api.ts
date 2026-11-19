@@ -156,8 +156,16 @@ export const doctorApi = {
   },
 
   // Lấy dữ liệu phân tích sinh hiệu (TimescaleDB)
-  getAnalytics: async (elderlyId: string, days: number = 7): Promise<AnalyticsData> => {
-    const res = await api.get(`/doctor/patients/${elderlyId}/analytics?days=${days}`);
+  getAnalytics: async (
+    elderlyId: string,
+    days: number = 7,
+    startDate?: string,
+    endDate?: string
+  ): Promise<AnalyticsData> => {
+    let url = `/doctor/patients/${elderlyId}/analytics?days=${days}`;
+    if (startDate) url += `&start_date=${startDate}`;
+    if (endDate) url += `&end_date=${endDate}`;
+    const res = await api.get(url);
     return res.data;
   },
 
