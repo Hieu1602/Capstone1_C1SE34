@@ -840,7 +840,8 @@ async def intercom_offer(request: Request, body: IntercomOffer, context=Depends(
                 logger.error("go2rtc trả về lỗi %s: %s", response.status_code, err_text)
                 if "401" in err_text or "Unauthorized" in err_text:
                     raise HTTPException(502, "Tapo từ chối tài khoản khi đàm thoại; micro yêu cầu tài khoản Cloud TP-Link ID.")
-                raise HTTPException(502, f"Không mở được kênh âm thanh; kiểm tra Tapo và go2rtc ({response.status_code}: {err_text[:200]})")
+                sanitized_err = re.sub(r"://[^@]+@", "://***@", err_text)
+                raise HTTPException(502, f"Không mở được kênh âm thanh; kiểm tra Tapo và go2rtc ({response.status_code}: {sanitized_err[:200]})")
             data = response.json()
             if data.get("type") != "answer" or not isinstance(data.get("sdp"), str):
                 raise HTTPException(502, "Dịch vụ âm thanh trả về SDP không hợp lệ")

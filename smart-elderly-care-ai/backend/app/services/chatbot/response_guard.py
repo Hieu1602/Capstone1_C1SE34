@@ -59,6 +59,16 @@ COMMON_VOCABULARY = {
     "đầu", "mắt", "tai", "họng", "răng", "miệng", "cổ", "vai", "gáy", "lưng", "ngực", "bụng", "hông", "tay", "chân", "gối", "ngón", "bàn",
     # Đời sống & dinh dưỡng
     "nước", "cháo", "cơm", "sữa", "canxi", "vitamin", "rau", "thịt", "cá", "muối", "chăn", "mền", "giường", "nhà", "lịch", "hẹn", "tốt", "xấu", "ổn", "nguy", "hiểm",
+    # Phân tích, sinh hiệu, đo lường & thiết bị
+    "phân", "tích", "sinh", "hiệu", "hiện", "tại", "của", "thuộc", "về", "với", "cho", "sức", "khỏe",
+    "chỉ", "số", "đánh", "giá", "tổng", "quan", "toàn", "diện", "tình", "hình", "trạng", "báo", "cáo", "theo", "dõi",
+    "thiết", "bị", "vòng", "đeo", "tay", "đồng", "hồ", "pin", "sạc", "kết", "nối",
+    # Họ tên thông dụng Việt Nam
+    "nguyễn", "văn", "thị", "trần", "lê", "phạm", "hoàng", "huỳnh", "phan", "vũ", "võ", "đặng", "bùi", "đỗ", "hồ", "ngô", "dương", "lý", "đào", "đoàn",
+    # Thời gian & mốc đo
+    "hôm", "nay", "qua", "kia", "tuần", "tháng", "năm", "ngày", "đêm", "giờ", "phút", "giây", "sáng", "trưa", "chiều", "tối", "gần", "nhất", "lúc", "này", "bây",
+    # Thuộc tính & trạng thái chỉ số
+    "nhịp", "nồng", "đo", "đường", "đoán", "kết", "quả", "định", "bình", "thường", "bất", "cao", "thấp", "tăng", "giảm", "nhanh", "chậm", "vượt", "ngưỡng", "cảnh", "an",
     # Tiếng Anh thông dụng
     "hello", "hi", "help", "please", "doctor", "hospital", "pain", "sick", "fever", "cough", "pressure", "heart", "fall", "emergency", "what", "how", "why", "can", "is", "are", "my", "he", "she", "grandpa", "grandma"
 }
@@ -190,6 +200,19 @@ class ResponseGuard:
         if not q or len(q) < 2:
             return True
 
+        # 0. Kiểm tra nhanh: Nếu câu chứa các cụm từ y tế / sinh hiệu / người cao tuổi quen thuộc -> Tuyệt đối không coi là vô nghĩa
+        HEALTH_CUES = [
+            "sinh hiệu", "sinh hieu", "chỉ số", "chi so", "nhịp tim", "nhip tim",
+            "huyết áp", "huyet ap", "thân nhiệt", "than nhiet", "spo2", "oxy",
+            "té ngã", "te nga", "uống thuốc", "uong thuoc", "đơn thuốc", "don thuoc",
+            "bác sĩ", "bac si", "lịch khám", "lich kham", "phân tích", "phan tich",
+            "sức khỏe", "suc khoe", "kiểm tra", "kiem tra", "đánh giá", "danh gia",
+            "nguyễn", "văn", "thị", "trần", "lê", "phạm"
+        ]
+        q_lower = q.lower()
+        if any(cue in q_lower for cue in HEALTH_CUES):
+            return False
+
         # 1. Dãy số thuần túy (ví dụ: "12314234235324", "9999999")
         if q.isdigit():
             return True
@@ -211,8 +234,14 @@ class ResponseGuard:
             return True
 
         # 5. Kiểm tra tính hợp lệ của từ ngữ (Từ vựng tiếng Việt có dấu, không dấu & y tế)
+        VIETNAMESE_TONE_PATTERN = re.compile(
+            r"[áàảãạắằẳẵặấầẩẫậéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]", re.IGNORECASE
+        )
+
         def _is_valid_word(w: str) -> bool:
             if w in COMMON_VOCABULARY:
+                return True
+            if VIETNAMESE_TONE_PATTERN.search(w):
                 return True
             w_no_acc = "".join(c for c in unicodedata.normalize("NFD", w.replace("đ", "d")) if unicodedata.category(c) != "Mn")
             return w_no_acc in _UNACCENTED_COMMON_VOCAB

@@ -48,6 +48,13 @@ class MedicationItemIn(BaseModel):
     instructions: Optional[str] = Field(default="Sau khi ăn", description="Ghi chú / Hướng dẫn (trước/sau ăn)")
 
 
+class HydrationItemIn(BaseModel):
+    time: str = Field(default="08:00", description="Giờ uống nước (HH:MM)")
+    amount: str = Field(default="250ml", description="Lượng nước (VD: 200ml, 250ml)")
+    note: str = Field(default="Nước ấm", description="Ghi chú")
+    patient_id: Optional[str] = Field(default=None, description="ID người cao tuổi")
+
+
 class PrescriptionCreateIn(BaseModel):
     diagnosis: str = Field(..., description="Tên bệnh / Chẩn đoán (Diagnosis)")
     start_date: str = Field(..., description="Ngày bắt đầu uống (YYYY-MM-DD)")
@@ -79,6 +86,7 @@ async def get_today_reminders(
 
     medications: List[Dict[str, Any]] = []
     meals: List[Dict[str, Any]] = []
+    hydrations: List[Dict[str, Any]] = []
 
     try:
         raw_data = await redis.get(redis_key)
@@ -87,6 +95,7 @@ async def get_today_reminders(
             if isinstance(parsed, dict):
                 medications = parsed.get("medications", [])
                 meals = parsed.get("meals", [])
+                hydrations = parsed.get("hydrations", [])
             elif isinstance(parsed, list):
                 medications = parsed
     except Exception as exc:
@@ -145,6 +154,7 @@ async def get_today_reminders(
         "hub_voice_reminder_enabled": True,
         "medications": medications,
         "meals": meals,
+        "hydrations": hydrations,
         "doctor_prescriptions": doctor_prescriptions,
     }
 
@@ -380,4 +390,148 @@ async def delete_reminder(
         raise
     except Exception as exc:
         logger.error("[Reminders] Lỗi khi xóa nhắc nhở: %s", exc)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Lỗi máy chủ")
+
+
+# ==============================================================================
+# CÁC ENDPOINT QUẢN LÝ BỔ SUNG NƯỚC ĐỊNH KỲ (HYDRATION)
+# ==============================================================================
+
+@router.post("/hydration", summary="Thêm mốc nhắc uống nước mới")
+async def create_hydration_reminder(
+    item_in: HydrationItemIn,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    redis: Redis = Depends(get_redis),
+) -> Dict[str, Any]:
+    """Thêm một mốc nhắc nhở uống nước trong ngày cho người cao tuổi."""
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    user_id_str = str(current_user.id) if current_user else None
+    target_id = item_in.patient_id or user_id_str
+    redis_key = _get_redis_key(target_id, today_str)
+
+    data: Dict[str, Any] = {"medications": [], "meals": [], "hydrations": []}
+    try:
+        raw_data = await redis.get(redis_key)
+        if raw_data:
+            parsed = json.loads(raw_data)
+            if isinstance(parsed, dict):
+                data = parsed
+                data.setdefault("hydrations", [])
+    except Exception:
+        pass
+
+    new_h = {
+        "id": f"hyd-{uuid.uuid4().hex[:8]}",
+        "time": item_in.time,
+        "amount": item_in.amount,
+        "note": item_in.note,
+        "done": False,
+        "created_at": datetime.now().isoformat(),
+    }
+    data["hydrations"].append(new_h)
+    data["hydrations"].sort(key=lambda x: x.get("time", ""))
+    await redis.set(redis_key, json.dumps(data), ex=7 * 86400)
+    return {"status": "success", "message": "Đã thêm mốc uống nước thành công", "data": new_h}
+
+
+@router.post("/hydration/template", summary="Tạo lịch uống nước chuẩn y tế cho người cao tuổi")
+async def create_standard_hydration_template(
+    patient_id: Optional[str] = Query(None, description="Lọc theo ID người cao tuổi"),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    redis: Redis = Depends(get_redis),
+) -> Dict[str, Any]:
+    """Tự động tạo lịch uống nước 4 cữ chuẩn y tế lão khoa (1.5 - 2L/ngày)."""
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    user_id_str = str(current_user.id) if current_user else None
+    target_id = patient_id or user_id_str
+    redis_key = _get_redis_key(target_id, today_str)
+
+    data: Dict[str, Any] = {"medications": [], "meals": [], "hydrations": []}
+    try:
+        raw_data = await redis.get(redis_key)
+        if raw_data:
+            parsed = json.loads(raw_data)
+            if isinstance(parsed, dict):
+                data = parsed
+    except Exception:
+        pass
+
+    standard_slots = [
+        {"id": f"hyd-{uuid.uuid4().hex[:8]}", "time": "07:00", "amount": "250ml", "note": "Ly nước ấm khi thức dậy (kích hoạt tuần hoàn & tiêu hóa)", "done": False},
+        {"id": f"hyd-{uuid.uuid4().hex[:8]}", "time": "10:30", "amount": "200ml", "note": "Giữa buổi sáng (bù nước sau vận động nhẹ)", "done": False},
+        {"id": f"hyd-{uuid.uuid4().hex[:8]}", "time": "15:00", "amount": "250ml", "note": "Giữa buổi chiều (tránh tụt huyết áp tư thế)", "done": False},
+        {"id": f"hyd-{uuid.uuid4().hex[:8]}", "time": "19:30", "amount": "150ml", "note": "Sau bữa tối (uống trước ngủ 1-2h, tránh tiểu đêm)", "done": False},
+    ]
+    data["hydrations"] = standard_slots
+    await redis.set(redis_key, json.dumps(data), ex=7 * 86400)
+    return {"status": "success", "message": "Đã tạo lịch uống nước chuẩn y tế 4 cữ thành công", "data": standard_slots}
+
+
+@router.put("/hydration/{hydration_id}/toggle", summary="Đánh dấu đã uống hoặc chưa uống nước")
+async def toggle_hydration(
+    hydration_id: str,
+    patient_id: Optional[str] = Query(None, description="Lọc theo ID người cao tuổi"),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    redis: Redis = Depends(get_redis),
+) -> Dict[str, Any]:
+    """Cập nhật trạng thái đã bổ sung nước cho một mốc giờ."""
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    user_id_str = str(current_user.id) if current_user else None
+    target_id = patient_id or user_id_str
+    redis_key = _get_redis_key(target_id, today_str)
+
+    try:
+        raw_data = await redis.get(redis_key)
+        if not raw_data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy lịch nhắc nhở")
+        parsed = json.loads(raw_data)
+        hydrations = parsed.get("hydrations", [])
+        found = False
+        new_state = False
+        for h in hydrations:
+            if h.get("id") == hydration_id:
+                h["done"] = not h.get("done", False)
+                new_state = h["done"]
+                found = True
+                break
+        if not found:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy mốc nước tương ứng")
+        await redis.set(redis_key, json.dumps(parsed), ex=7 * 86400)
+        return {"status": "success", "hydration_id": hydration_id, "done": new_state}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("[Reminders] Lỗi khi cập nhật mốc nước: %s", exc)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Lỗi máy chủ")
+
+
+@router.delete("/hydration/{hydration_id}", summary="Xóa một mốc nhắc uống nước")
+async def delete_hydration(
+    hydration_id: str,
+    patient_id: Optional[str] = Query(None, description="Lọc theo ID người cao tuổi"),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    redis: Redis = Depends(get_redis),
+) -> Dict[str, Any]:
+    """Xóa một mốc nhắc nhở uống nước."""
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    user_id_str = str(current_user.id) if current_user else None
+    target_id = patient_id or user_id_str
+    redis_key = _get_redis_key(target_id, today_str)
+
+    try:
+        raw_data = await redis.get(redis_key)
+        if not raw_data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy lịch nhắc nhở")
+        parsed = json.loads(raw_data)
+        hydrations = parsed.get("hydrations", [])
+        initial_len = len(hydrations)
+        parsed["hydrations"] = [h for h in hydrations if h.get("id") != hydration_id]
+        if len(parsed["hydrations"]) == initial_len:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy mốc nước để xóa")
+        await redis.set(redis_key, json.dumps(parsed), ex=7 * 86400)
+        return {"status": "success", "message": "Đã xóa mốc uống nước thành công"}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("[Reminders] Lỗi khi xóa mốc nước: %s", exc)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Lỗi máy chủ")
