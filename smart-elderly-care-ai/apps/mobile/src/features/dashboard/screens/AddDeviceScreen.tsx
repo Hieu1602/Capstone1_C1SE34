@@ -31,8 +31,13 @@ import {
   StepSetupSuccess,
   AddDeviceModals,
 } from '../components/add-device';
+import { DeviceQrScannerModal } from '../components/devices/DeviceQrScannerModal';
+import { ScannedDevice } from '../utils/deviceQr';
 
-export default function AddDeviceScreen({ navigation }: any) {
+export default function AddDeviceScreen({ navigation, route }: any) {
+  const initialStep = route?.params?.initialStep as FlowStep | undefined;
+  const scannedData = route?.params?.scannedData;
+
   const { addIoTDevice, setCameraDefault, syncAllWithBackend, house } = useVitalStore();
   const { userRole, role, permissions } = useAuthStore();
   const hasLinkedHouse = Boolean(house?.id && house?.hasHouse !== false && house?.name && house.name.trim() !== '');
@@ -63,10 +68,30 @@ export default function AddDeviceScreen({ navigation }: any) {
   );
 
   // ---- 1. State Quản lý Luồng & Giao thức ----
-  const [currentStep, setCurrentStep] = useState<FlowStep>('CATEGORY_SELECT');
+  const [currentStep, setCurrentStep] = useState<FlowStep>(initialStep || 'CATEGORY_SELECT');
   const [protocol, setProtocol] = useState<ProtocolType>('RTSP_IP');
   const [selectedDeviceModel, setSelectedDeviceModel] = useState<string>('');
   const [createdCameraDeviceId, setCreatedCameraDeviceId] = useState<string>('');
+  const [showScanModal, setShowScanModal] = useState<boolean>(false);
+  const [activeScannedData, setActiveScannedData] = useState<any>(scannedData);
+
+  const handleScannerResult = (type: 'camera' | 'watch', deviceId: string, metadata?: ScannedDevice) => {
+    setShowScanModal(false);
+    if (type === 'camera') {
+      const data = metadata || {
+        deviceId,
+        brand: 'TP-Link Tapo',
+        suggestedName: 'Camera TP-Link Tapo',
+        username: 'admin123',
+        password: 'admin123',
+      };
+      setActiveScannedData(data);
+      setCurrentStep('CAMERA_RTSP_CONFIG');
+    } else {
+      setCurrentStep('BLE_SCAN');
+      triggerBleScan();
+    }
+  };
 
   // ---- 2. State Nhánh Bluetooth (Smartwatch) ----
   const [hasBlePermission, setHasBlePermission] = useState<boolean>(false);
@@ -152,7 +177,7 @@ export default function AddDeviceScreen({ navigation }: any) {
     isDefault: boolean;
   }) => {
     const newDevice: IoTDeviceItem = {
-      id: 'camera-ip-' + Date.now(),
+      id: activeScannedData?.deviceId || scannedData?.deviceId || ('camera-ip-' + Date.now()),
       name: deviceData.name,
       sub: `${deviceData.brand} • RTSP • IP: ${deviceData.ip}`,
       type: 'camera',
@@ -408,10 +433,10 @@ export default function AddDeviceScreen({ navigation }: any) {
             return prev.map((d) =>
               d.id === device.id
                 ? {
-                    ...d,
-                    rssi: device.rssi ? `${device.rssi} dBm` : d.rssi,
-                    battery: device.batteryLevel ?? d.battery,
-                  }
+                  ...d,
+                  rssi: device.rssi ? `${device.rssi} dBm` : d.rssi,
+                  battery: device.batteryLevel ?? d.battery,
+                }
                 : d
             );
           }
@@ -610,16 +635,16 @@ export default function AddDeviceScreen({ navigation }: any) {
                 currentStep === 'CATEGORY_SELECT'
                   ? '15%'
                   : currentStep === 'WATCH_LIST' || currentStep === 'OTHER_LIST'
-                  ? '35%'
-                  : currentStep === 'CAMERA_RTSP_CONFIG'
-                  ? '60%'
-                  : currentStep === 'BLE_POWER_CHECK'
-                  ? '50%'
-                  : currentStep === 'BLE_PERMISSION'
-                  ? '75%'
-                  : currentStep === 'BLE_SCAN' || currentStep === 'BLE_PAIRING'
-                  ? '88%'
-                  : '100%',
+                    ? '35%'
+                    : currentStep === 'CAMERA_RTSP_CONFIG'
+                      ? '60%'
+                      : currentStep === 'BLE_POWER_CHECK'
+                        ? '50%'
+                        : currentStep === 'BLE_PERMISSION'
+                          ? '75%'
+                          : currentStep === 'BLE_SCAN' || currentStep === 'BLE_PAIRING'
+                            ? '88%'
+                            : '100%',
             },
           ]}
         />
@@ -651,6 +676,8 @@ export default function AddDeviceScreen({ navigation }: any) {
           <StepCameraRtspConfig
             isDarkMode={isDarkMode}
             colors={colors}
+            scannedData={activeScannedData}
+            onOpenScanner={() => setShowScanModal(true)}
             onApplyCamera={handleApplyRtspCamera}
           />
         )}
@@ -739,6 +766,13 @@ export default function AddDeviceScreen({ navigation }: any) {
           }
           setCurrentStep('BLE_SCAN');
         }}
+      />
+
+      {/* Modal Quét Mã Vạch / QR Thiết Bị */}
+      <DeviceQrScannerModal
+        visible={showScanModal}
+        onClose={() => setShowScanModal(false)}
+        onScan={handleScannerResult}
       />
     </SafeAreaView>
   );
