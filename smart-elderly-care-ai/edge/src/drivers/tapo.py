@@ -10,6 +10,18 @@ from urllib.parse import quote
 logger = logging.getLogger(__name__)
 
 
+def is_port_open(host: str, port: int = 443, timeout: float = 0.5) -> bool:
+    """Kiểm tra nhanh cổng mạng có đang mở hay không."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    try:
+        return s.connect_ex((host, port)) == 0
+    except Exception:
+        return False
+    finally:
+        s.close()
+
+
 def discover_tapo_host(timeout: float = 0.35) -> str | None:
     """Tự động quét mạng LAN tìm địa chỉ IP của camera Tapo khi không có hoặc mất kết nối IP cũ."""
     # 1. Kiểm tra nhanh nếu IP hiện tại đang phản hồi cổng 554 RTSP
@@ -195,10 +207,12 @@ class TapoControl:
         """Gọi pytapo dưới khóa; tự động fallback sang ONVIF khi TPAP yêu cầu tài khoản cloud."""
         with self._lock:
             target_host = self.host or os.environ.get("TAPO_HOST", "").strip()
-            if not target_host:
-                target_host = discover_tapo_host() or ""
-            target_user = self.user or os.getenv("TAPO_CONTROL_USERNAME") or os.environ.get("TAPO_USERNAME", "")
-            target_pass = self.password or os.getenv("TAPO_CONTROL_PASSWORD") or os.environ.get("TAPO_PASSWORD", "")
+            if not target_host or not is_port_open(target_host, 443, timeout=0.5):
+                discovered = discover_tapo_host()
+                if discovered:
+                    target_host = discovered
+            target_user = os.getenv("TAPO_CONTROL_USERNAME") or self.user or os.environ.get("TAPO_USERNAME", "")
+            target_pass = os.getenv("TAPO_CONTROL_PASSWORD") or self.password or os.environ.get("TAPO_PASSWORD", "")
             try:
                 if self._client is None:
                     from pytapo import Tapo
