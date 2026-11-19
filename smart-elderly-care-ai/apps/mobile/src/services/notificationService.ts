@@ -2,7 +2,7 @@
 // Quản lý thông báo đẩy cục bộ (Local Notifications), quyền hệ thống và rung thiết bị khi có thông báo bác sĩ / khẩn cấp
 // Hỗ trợ hiển thị trực tiếp trên thanh thông báo (Notification Drawer / Status Bar) của điện thoại Android & iOS
 
-import { Platform, NativeModules, Vibration, PermissionsAndroid } from 'react-native';
+import { Platform, NativeModules, Vibration, PermissionsAndroid, Alert, Linking } from 'react-native';
 
 const { NativeNotificationModule } = NativeModules;
 
@@ -20,6 +20,7 @@ class NotificationService {
 
     if (Platform.OS === 'android') {
       await this.requestNotificationPermission();
+      await this.checkAndPromptNotificationPermission();
     } else if (Platform.OS === 'ios') {
       try {
         const Notifications = require('expo-notifications');
@@ -70,6 +71,42 @@ class NotificationService {
       return true;
     } catch (err) {
       console.warn('[NotificationService] Lỗi khi kiểm tra/xin quyền thông báo Android:', err);
+      return false;
+    }
+  }
+
+  /**
+   * Kiểm tra xem thông báo hệ thống có bị TẮT trong Cài đặt Android không.
+   * Nếu bị tắt, hiển thị hướng dẫn mở cài đặt để bật ngay.
+   */
+  async checkAndPromptNotificationPermission(): Promise<boolean> {
+    if (Platform.OS !== 'android') return true;
+    try {
+      if (NativeNotificationModule?.areNotificationsEnabled) {
+        const enabled = await NativeNotificationModule.areNotificationsEnabled();
+        if (!enabled) {
+          Alert.alert(
+            '⚠️ Bật thông báo khẩn cấp',
+            'Ứng dụng đang bị TẮT quyền thông báo trong Cài đặt hệ thống của điện thoại. Để nhận chuông báo, rung khẩn cấp và thông báo trên thanh kéo xuống khi nhịp tim bất thường hoặc té ngã, vui lòng chọn "Cài đặt ngay" và bật "Cho phép thông báo".',
+            [
+              { text: 'Để sau', style: 'cancel' },
+              {
+                text: 'Cài đặt ngay',
+                onPress: () => {
+                  if (NativeNotificationModule?.openNotificationSettings) {
+                    NativeNotificationModule.openNotificationSettings();
+                  } else {
+                    Linking.openSettings();
+                  }
+                },
+              },
+            ]
+          );
+          return false;
+        }
+      }
+      return true;
+    } catch {
       return false;
     }
   }

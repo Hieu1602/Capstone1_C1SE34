@@ -72,7 +72,13 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = Rea
 
   const trackRef = useRef<any>(null);
   const [trackWidth, setTrackWidth] = useState(0);
-  const trackPageXRef = useRef(0);
+  const trackWidthRef = useRef(0);
+  const setScrubberMinutesRef = useRef(setScrubberMinutes);
+  setScrubberMinutesRef.current = setScrubberMinutes;
+  const maxScrubMinutesRef = useRef(maxScrubMinutes);
+  maxScrubMinutesRef.current = maxScrubMinutes;
+  const onScrubbingChangeRef = useRef(onScrubbingChange);
+  onScrubbingChangeRef.current = onScrubbingChange;
 
   useEffect(() => {
     if (!isDraggingRef.current) {
@@ -113,97 +119,67 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = Rea
     return best ?? closestVital;
   }, [parsedDayVitals, displayMinutes, isToday, nowMinutes, closestVital]);
 
-  const measureTrack = useCallback(() => {
-    trackRef.current?.measureInWindow?.((x: number, _y: number, width: number) => {
-      if (typeof x === 'number' && x > 0) {
-        trackPageXRef.current = x;
-      }
-      if (typeof width === 'number' && width > 0) {
-        setTrackWidth(width);
-      }
-    });
-  }, []);
-
-  const updateScrubberByPageX = useCallback(
-    (pageX: number, isFinal = false) => {
-      if (trackWidth <= 0) return;
-      const originX = trackPageXRef.current > 0 ? trackPageXRef.current : 0;
-      const localX = Math.max(0, Math.min(trackWidth, pageX - originX));
-      const ratio = localX / trackWidth;
-      const rawMins = ratio * 1439;
-      // Tua theo nấc 5 phút
-      const targetMins = Math.round(rawMins / 5) * 5;
-      const clamped = Math.max(0, Math.min(targetMins, maxScrubMinutes));
-
-      if (isFinal) {
-        if (rafIdRef.current) {
-          cancelAnimationFrame(rafIdRef.current);
-          rafIdRef.current = null;
-        }
-        pendingMinutesRef.current = clamped;
-        setDisplayMinutes(clamped);
-        setScrubberMinutes(clamped);
-        return;
-      }
-
-      // Khi đang kéo: kiểm tra nếu giá trị không đổi thì bỏ qua
-      if (clamped === pendingMinutesRef.current) return;
-      pendingMinutesRef.current = clamped;
-
-      // Throttle cập nhật giao diện local ở mức ~25fps (40ms) để không làm nghẽn JS thread
-      const now = Date.now();
-      if (now - lastUpdateRef.current >= 40) {
-        lastUpdateRef.current = now;
-        setDisplayMinutes(clamped);
-      } else if (!rafIdRef.current) {
-        rafIdRef.current = requestAnimationFrame(() => {
-          rafIdRef.current = null;
-          lastUpdateRef.current = Date.now();
-          setDisplayMinutes(pendingMinutesRef.current);
-        });
-      }
-    },
-    [trackWidth, maxScrubMinutes, setScrubberMinutes]
-  );
-
   const panResponder = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onStartShouldSetPanResponderCapture: () => true,
-        onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dx) > 3,
-        onMoveShouldSetPanResponderCapture: (_, gestureState) => Math.abs(gestureState.dx) > 3,
+        onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dx) > 2,
+        onMoveShouldSetPanResponderCapture: (_, gestureState) => Math.abs(gestureState.dx) > 2,
         onPanResponderGrant: (evt) => {
           isDraggingRef.current = true;
-          onScrubbingChange?.(true);
-          measureTrack();
-          if (trackPageXRef.current <= 0) {
-            trackPageXRef.current = Math.max(0, evt.nativeEvent.pageX - evt.nativeEvent.locationX);
-          }
-          updateScrubberByPageX(evt.nativeEvent.pageX, false);
+          onScrubbingChangeRef.current?.(true);
+          const w = trackWidthRef.current || 280;
+          const locX = Math.max(0, Math.min(w, evt.nativeEvent.locationX));
+          const targetMins = Math.round(((locX / w) * 1439) / 5) * 5;
+          const clamped = Math.max(0, Math.min(targetMins, maxScrubMinutesRef.current));
+          pendingMinutesRef.current = clamped;
+          setDisplayMinutes(clamped);
         },
         onPanResponderMove: (evt) => {
-          updateScrubberByPageX(evt.nativeEvent.pageX, false);
+          const w = trackWidthRef.current || 280;
+          const locX = Math.max(0, Math.min(w, evt.nativeEvent.locationX));
+          const targetMins = Math.round(((locX / w) * 1439) / 5) * 5;
+          const clamped = Math.max(0, Math.min(targetMins, maxScrubMinutesRef.current));
+          if (clamped !== pendingMinutesRef.current) {
+            pendingMinutesRef.current = clamped;
+            if (!rafIdRef.current) {
+              rafIdRef.current = requestAnimationFrame(() => {
+                rafIdRef.current = null;
+                setDisplayMinutes(pendingMinutesRef.current);
+              });
+            }
+          }
         },
         onPanResponderRelease: (evt) => {
           isDraggingRef.current = false;
-          onScrubbingChange?.(false);
-          updateScrubberByPageX(evt.nativeEvent.pageX, true);
+          onScrubbingChangeRef.current?.(false);
+          if (rafIdRef.current) {
+            cancelAnimationFrame(rafIdRef.current);
+            rafIdRef.current = null;
+          }
+          const w = trackWidthRef.current || 280;
+          const locX = Math.max(0, Math.min(w, evt.nativeEvent.locationX));
+          const targetMins = Math.round(((locX / w) * 1439) / 5) * 5;
+          const clamped = Math.max(0, Math.min(targetMins, maxScrubMinutesRef.current));
+          pendingMinutesRef.current = clamped;
+          setDisplayMinutes(clamped);
+          setScrubberMinutesRef.current?.(clamped);
         },
         onPanResponderTerminate: () => {
           isDraggingRef.current = false;
-          onScrubbingChange?.(false);
+          onScrubbingChangeRef.current?.(false);
           if (rafIdRef.current) {
             cancelAnimationFrame(rafIdRef.current);
             rafIdRef.current = null;
           }
           setDisplayMinutes(pendingMinutesRef.current);
-          setScrubberMinutes(pendingMinutesRef.current);
+          setScrubberMinutesRef.current?.(pendingMinutesRef.current);
         },
         onPanResponderTerminationRequest: () => false,
         onShouldBlockNativeResponder: () => true,
       }),
-    [measureTrack, updateScrubberByPageX, setScrubberMinutes, onScrubbingChange]
+    []
   );
 
   const currentScrub = Math.min(displayMinutes, maxScrubMinutes);
@@ -261,7 +237,6 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = Rea
             onLayout={(e) => {
               const w = e.nativeEvent.layout.width;
               if (w > 0) setTrackWidth(w);
-              measureTrack();
             }}
             {...panResponder.panHandlers}
           >

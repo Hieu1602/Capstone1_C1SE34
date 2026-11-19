@@ -23,6 +23,19 @@ def _parse_utc_dt(val: Any) -> Optional[datetime]:
     return None
 
 
+def _format_house_display_name(house: Optional[Any], elderly_name: Optional[str] = None) -> str:
+    """Hiển thị tên nhà: ưu tiên tên nhà tùy chỉnh; nếu vẫn là mặc định 'Nhà của tôi' thì lấy theo tên chủ hộ."""
+    if house and getattr(house, "name", None) and house.name != "Nhà của tôi":
+        return house.name
+    owner = getattr(house, "owner", None) if house else None
+    owner_name = getattr(owner, "full_name", None) if owner else None
+    if owner_name and owner_name.strip():
+        return f"Gia đình {owner_name.strip()}"
+    if elderly_name and elderly_name.strip():
+        return f"Gia đình {elderly_name.strip()}"
+    return "Nhà riêng bệnh nhân"
+
+
 def _is_smartband_fresh(band_device: Any, ts_val: Any, now_utc: datetime) -> tuple[bool, Optional[datetime]]:
     dt = _parse_utc_dt(ts_val) or _parse_utc_dt(getattr(band_device, "last_heartbeat", None))
     if not dt:
@@ -162,7 +175,7 @@ class CRUDDoctor:
             select(ElderlyProfile)
             .where(ElderlyProfile.house_id.in_(house_ids))
             .options(
-                joinedload(ElderlyProfile.house),
+                joinedload(ElderlyProfile.house).joinedload(House.owner),
                 selectinload(ElderlyProfile.devices),
             )
             .order_by(ElderlyProfile.created_at.asc())
@@ -316,7 +329,7 @@ class CRUDDoctor:
             age_val = (datetime.now().year - ep.birth_year) if ep.birth_year else 0
             gender_val = "Nam" if (ep.gender or "").upper() == "MALE" else ("Nữ" if (ep.gender or "").upper() == "FEMALE" else "")
 
-            h_name_display = h.name if (h and h.name and h.name != "Nhà của tôi") else (f"Gia đình {ep.full_name}" if ep.full_name else "Nhà riêng bệnh nhân")
+            h_name_display = _format_house_display_name(h, ep.full_name)
             h_address = h.address if h else ""
             h_id_str = str(h.id) if h else ""
 
@@ -376,7 +389,7 @@ class CRUDDoctor:
             val_uuid = UUID(elderly_id_or_serial)
             res = await db.execute(
                 select(ElderlyProfile)
-                .options(joinedload(ElderlyProfile.house), selectinload(ElderlyProfile.devices))
+                .options(joinedload(ElderlyProfile.house).joinedload(House.owner), selectinload(ElderlyProfile.devices))
                 .where(ElderlyProfile.id == val_uuid)
             )
             elderly = res.scalar_one_or_none()
@@ -386,17 +399,15 @@ class CRUDDoctor:
         if not elderly:
             res = await db.execute(
                 select(ElderlyProfile)
-                .options(joinedload(ElderlyProfile.house), selectinload(ElderlyProfile.devices))
+                .options(joinedload(ElderlyProfile.house).joinedload(House.owner), selectinload(ElderlyProfile.devices))
                 .limit(1)
             )
             elderly = res.scalar_one_or_none()
 
         house_id = str(elderly.house_id) if elderly and elderly.house_id else ""
-        raw_house_name = elderly.house.name if elderly and elderly.house else ""
-        house_name = (
-            raw_house_name
-            if raw_house_name and raw_house_name != "Nhà của tôi"
-            else (f"Gia đình {elderly.full_name}" if elderly and elderly.full_name else "Nhà riêng bệnh nhân")
+        house_name = _format_house_display_name(
+            elderly.house if elderly else None,
+            elderly.full_name if elderly else None,
         )
         house_address = elderly.house.address if elderly and elderly.house else ""
 

@@ -44,7 +44,118 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   const { isDarkMode, colors } = useTheme();
   const metric = (route?.params?.focusMetric ?? route?.params?.metric) as 'heartRate' | 'activity' | 'spo2' | undefined;
   const initialTab = route?.params?.initialTab as 'today' | 'week' | 'month' | undefined;
-  const { currentVitals, fetchVitals } = useVitalStore();
+  const {
+    currentVitals,
+    fetchVitals,
+    patientsList,
+    fetchPatientsList,
+    activePatientId,
+    setActivePatientId,
+    iotDevices,
+  } = useVitalStore();
+
+  const initialPatientId =
+    route?.params?.patientId ||
+    activePatientId ||
+    (patientsList && patientsList[0]?.id) ||
+    1;
+  const [selectedPatientId, setSelectedPatientId] = useState<any>(initialPatientId);
+
+  useEffect(() => {
+    if (!patientsList || patientsList.length === 0) {
+      fetchPatientsList?.();
+    }
+  }, [fetchPatientsList, patientsList]);
+
+  const currentPatient =
+    (patientsList || []).find(
+      (p: any) => p.id == selectedPatientId || p.elderly_id == selectedPatientId
+    ) ||
+    (patientsList && patientsList.length > 0 ? patientsList[0] : null);
+
+  const patientDisplayName =
+    currentPatient?.full_name ||
+    currentPatient?.name ||
+    route?.params?.patientName ||
+    'Người cao tuổi';
+
+  // Chuẩn hóa tên (bỏ dấu tiếng Việt, chữ thường)
+  const normalizeStr = (s: any) =>
+    String(s || '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd');
+
+  // Kiểm tra phần cứng Smartband / Watch
+  const isSmartbandDevice = (d: any) => {
+    if (!d) return false;
+    const type = String(d.type || '').toLowerCase();
+    const icon = String(d.icon || '').toLowerCase();
+    const name = String(d.name || '').toLowerCase();
+    const devType = String(d.device_type || '').toLowerCase();
+    return (
+      type === 'watch' ||
+      type === 'smartband' ||
+      type === 'band' ||
+      icon === 'watch' ||
+      devType.includes('band') ||
+      devType.includes('watch') ||
+      name.includes('smartband') ||
+      name.includes('vòng') ||
+      name.includes('đồng hồ')
+    );
+  };
+
+  // Thiết bị vòng tay được gán cho người cao tuổi này (nếu có)
+  // BẮT BUỘC: 1 đồng hồ chỉ kết nối với 1 cụ duy nhất. Cụ chưa gán vòng -> null
+  const assignedBand = useMemo(() => {
+    const pName = normalizeStr(patientDisplayName);
+    const pId = String(selectedPatientId || currentPatient?.id || currentPatient?.elderly_id || '');
+
+    const bands = (iotDevices || []).filter(isSmartbandDevice);
+    if (bands.length === 0) return null;
+
+    // 1. Khớp theo ID người cao tuổi
+    const matchById = bands.find((d: any) => {
+      if (d.elderly_id && pId && String(d.elderly_id).toLowerCase() === pId.toLowerCase()) {
+        return true;
+      }
+      return false;
+    });
+    if (matchById) return matchById;
+
+    // 2. Khớp theo tên người đeo (wearer_name)
+    if (pName) {
+      const matchByName = bands.find((d: any) => {
+        if (d.wearer_name && normalizeStr(d.wearer_name) === pName) {
+          return true;
+        }
+        return false;
+      });
+      if (matchByName) return matchByName;
+    }
+
+    // 3. Fallback cho người cao tuổi đầu tiên (nếu có vòng chưa gán trong nhà)
+    const isFirstPatient =
+      (!patientsList || patientsList.length === 0) ||
+      (patientsList[0]?.id && String(patientsList[0].id) === pId);
+
+    if (isFirstPatient && bands.length > 0) {
+      const candidate = bands.find((d: any) => {
+        if (!d.wearer_name && !d.elderly_id) return true;
+        if (d.wearer_name && pName && normalizeStr(d.wearer_name) === pName) return true;
+        return false;
+      });
+      return candidate || (bands.length === 1 && !bands[0].wearer_name ? bands[0] : null);
+    }
+
+    return null;
+  }, [iotDevices, selectedPatientId, currentPatient, patientDisplayName, patientsList]);
+
+  const effectiveDevId = assignedBand ? (assignedBand.deviceId || assignedBand.id || 'BLE_BAND_001') : null;
+
   const { permissions, userRole, role } = useAuthStore();
   const isOwnerOrAdmin =
     userRole === 'admin' ||
@@ -102,17 +213,43 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   const [isScrubbingTimeline, setIsScrubbingTimeline] = useState(false);
 
   // Tải dữ liệu từ Backend khi chọn ngày
+  // QUY TẮC: 1 đồng hồ chỉ kết nối với 1 cụ. Nếu cụ chưa gán đồng hồ -> dữ liệu rỗng.
   const loadDateVitals = async (dateStr: string) => {
     setIsLoadingVitals(true);
     try {
-      const res = await patientApi.getVitals(1, dateStr);
-      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-        setDayVitals(res.data);
+      let vitals: any[] = [];
+      // Chỉ gọi lấy lịch sử khi cụ này CÓ đồng hồ thông minh gán riêng cho mình
+      if (effectiveDevId) {
+        try {
+          const res = await vitalsApi.getHistory(effectiveDevId, 300, dateStr);
+          if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+            vitals = res.data;
+          }
+        } catch (err) {
+          console.warn('Lỗi vitalsApi.getHistory, fallback patientApi:', err);
+        }
+      }
+
+      // Nếu có đồng hồ nhưng chưa tải được, thử fallback qua API bệnh nhân hoặc BLE_BAND_001
+      if (vitals.length === 0 && selectedPatientId && effectiveDevId) {
+        const fbRes = await patientApi.getVitals(selectedPatientId, dateStr).catch(() => ({ data: [] }));
+        if (fbRes.data && Array.isArray(fbRes.data) && fbRes.data.length > 0) {
+          vitals = fbRes.data;
+        } else if (effectiveDevId !== 'BLE_BAND_001') {
+          const fbBand = await vitalsApi.getHistory('BLE_BAND_001', 300, dateStr).catch(() => ({ data: [] }));
+          if (fbBand.data && Array.isArray(fbBand.data) && fbBand.data.length > 0) {
+            vitals = fbBand.data;
+          }
+        }
+      }
+
+      setDayVitals(vitals);
+      if (vitals.length > 0) {
         if (dateStr === getTodayStr()) {
           const now = new Date();
           setScrubberMinutes(now.getHours() * 60 + now.getMinutes());
         } else {
-          const last = res.data[res.data.length - 1];
+          const last = vitals[vitals.length - 1];
           const rawDate = last?.recorded_at || last?.time || last?.created_at;
           if (rawDate) {
             const d = new Date(rawDate);
@@ -121,25 +258,10 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             }
           }
         }
-      } else {
-        setDayVitals([]);
       }
     } catch (e) {
-      console.warn('Lỗi tải dữ liệu sinh hiệu qua patientApi, thử fallback vitalsApi:', e);
-      try {
-        const fallbackRes = await vitalsApi.getHistory('BLE_BAND_001', 100, dateStr);
-        if (fallbackRes.data && Array.isArray(fallbackRes.data)) {
-          setDayVitals(fallbackRes.data);
-          if (dateStr === getTodayStr()) {
-            const now = new Date();
-            setScrubberMinutes(now.getHours() * 60 + now.getMinutes());
-          }
-        } else {
-          setDayVitals([]);
-        }
-      } catch {
-        setDayVitals([]);
-      }
+      console.warn('Lỗi tải dữ liệu sinh hiệu ngày:', e);
+      setDayVitals([]);
     } finally {
       setIsLoadingVitals(false);
     }
@@ -147,7 +269,14 @@ export default function HealthDetailScreen({ navigation, route }: any) {
 
   // Cập nhật real-time dữ liệu biểu đồ khi có bản tin WebSocket mới đổ về
   useEffect(() => {
+    // 1 đồng hồ chỉ kết nối 1 cụ: Chỉ nhận bản tin WebSocket nếu cụ CÓ vòng tay và gói tin từ đúng vòng tay đó
+    if (!assignedBand) return;
+
     if (selectedDate === getTodayStr() && currentVitals?.heart_rate && Number(currentVitals.heart_rate) > 0) {
+      const vDevId = (currentVitals as any)?.device_id;
+      if (vDevId && vDevId !== assignedBand.deviceId && vDevId !== assignedBand.id) {
+        return; // Gói tin của vòng tay cụ khác -> Bỏ qua
+      }
       const vTime = (currentVitals as any)?.time || (currentVitals as any)?.recorded_at || currentVitals?.timestamp;
       const timeMs = vTime ? (typeof vTime === 'number' ? vTime : new Date(vTime).getTime()) : 0;
       // Chỉ tự động cập nhật biểu đồ hôm nay nếu bản ghi mới nhận trong vòng 2 phút
@@ -177,17 +306,27 @@ export default function HealthDetailScreen({ navigation, route }: any) {
         return [...prev, newRecord].slice(-100);
       });
     }
-  }, [currentVitals?.heart_rate, currentVitals?.spo2, currentVitals?.timestamp, selectedDate]);
+  }, [currentVitals?.heart_rate, currentVitals?.spo2, currentVitals?.timestamp, selectedDate, assignedBand]);
 
-  // Tải dữ liệu lịch sử cho Tuần / Tháng từ Backend
-  const loadRangeVitals = async (limit: number) => {
+  // Tải dữ liệu lịch sử cho Tuần / Tháng từ Backend sử dụng Daily Summary
+  const loadRangeVitals = async (days: number) => {
     setIsLoadingVitals(true);
     try {
-      const res = await vitalsApi.getHistory('BLE_BAND_001', limit);
-      if (res.data && Array.isArray(res.data)) {
+      if (!effectiveDevId) {
+        // Cụ chưa được gán đồng hồ -> dữ liệu tuần/tháng rỗng
+        setRangeVitals([]);
+        return;
+      }
+      const devId = effectiveDevId;
+      const res = await vitalsApi.getDailySummary(days, devId).catch(() => ({ data: [] }));
+      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
         setRangeVitals(res.data);
       } else {
-        setRangeVitals([]);
+        let fb = await vitalsApi.getHistory(devId, days * 20).catch(() => ({ data: [] }));
+        if ((!fb.data || !Array.isArray(fb.data) || fb.data.length === 0) && devId !== 'BLE_BAND_001') {
+          fb = await vitalsApi.getHistory('BLE_BAND_001', days * 20).catch(() => ({ data: [] }));
+        }
+        setRangeVitals(fb.data && Array.isArray(fb.data) ? fb.data : []);
       }
     } catch (e) {
       console.warn('Lỗi tải dữ liệu lịch sử tuần/tháng:', e);
@@ -205,9 +344,9 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     if (selectedRange === 'DAY') {
       loadDateVitals(selectedDate);
     } else {
-      loadRangeVitals(selectedRange === 'WEEK' ? 50 : 100);
+      loadRangeVitals(selectedRange === 'WEEK' ? 7 : 30);
     }
-  }, [selectedDate, selectedRange]);
+  }, [selectedDate, selectedRange, selectedPatientId, effectiveDevId]);
 
   useEffect(() => {
     if (initialTab) {
@@ -229,10 +368,11 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   }, [metric, initialTab]);
 
   const acousticStatus = currentVitals.acoustic_status ?? 'Bình thường';
-  const batteryDisplay =
-    currentVitals.bracelet_battery !== null && currentVitals.bracelet_battery !== undefined
-      ? `${currentVitals.bracelet_battery}%`
-      : 'Đang kết nối';
+  const batteryDisplay = assignedBand
+    ? (currentVitals.bracelet_battery !== null && currentVitals.bracelet_battery !== undefined
+        ? `${currentVitals.bracelet_battery}%`
+        : 'Đang kết nối')
+    : 'Chưa gán vòng';
   const isFallDetected = Boolean(currentVitals.fall_detected);
 
   const handleRefresh = async () => {
@@ -283,11 +423,15 @@ export default function HealthDetailScreen({ navigation, route }: any) {
         if (isToday && vMinutes > nowMinutes) continue;
 
         const diff = Math.abs(vMinutes - scrubberMinutes);
-        // Gắn kết nếu bản ghi nằm trong khoảng +-90 phút quanh giờ tua
-        if (diff < minDiff && diff <= 90) {
+        // Gắn kết nếu bản ghi nằm trong khoảng +-180 phút (3 tiếng) quanh giờ tua
+        if (diff < minDiff && diff <= 180) {
           minDiff = diff;
           best = v;
         }
+      }
+      // Nếu là ngày trong quá khứ có dữ liệu mà chưa khớp nấc tua thì chọn bản ghi gần nhất trong ngày
+      if (!best && !isToday && parsedDayVitals.length > 0) {
+        best = parsedDayVitals[parsedDayVitals.length - 1];
       }
     }
 
@@ -295,6 +439,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     // chỉ dùng giá trị sinh hiệu real-time từ WebSocket nếu bản tin THỰC SỰ MỚI (trong vòng 2 phút)
     // và thiết bị đang kết nối. Tuyệt đối không lấy dữ liệu cũ từ phiên hôm trước gán vào mốc hiện tại!
     const isLiveFresh = (() => {
+      if (!assignedBand) return false; // Cụ chưa gán vòng -> không gán sinh hiệu real-time
       if (!currentVitals?.heart_rate) return false;
       if (currentVitals.bracelet_connected === false) return false;
       const vTime = (currentVitals as any)?.time || (currentVitals as any)?.recorded_at || currentVitals?.timestamp;
@@ -320,12 +465,23 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     }
 
     return best;
-  }, [parsedDayVitals, scrubberMinutes, selectedDate, currentVitals]);
+  }, [parsedDayVitals, scrubberMinutes, selectedDate, currentVitals, assignedBand]);
 
-  // Dữ liệu biểu đồ động theo ngày được chọn (sử dụng cache tiền xử lý)
+  // Dữ liệu biểu đồ động theo ngày được chọn (sử dụng cache tiền xử lý và giới hạn tối đa 30 điểm để 60fps mượt mà)
   const chartDataForDay = useMemo(() => {
     if (!parsedDayVitals || parsedDayVitals.length === 0) return [];
-    return parsedDayVitals.map((v) => ({
+
+    const step = Math.max(1, Math.ceil(parsedDayVitals.length / 30));
+    const sampled: any[] = [];
+    for (let i = 0; i < parsedDayVitals.length; i += step) {
+      sampled.push(parsedDayVitals[i]);
+    }
+    const lastItem = parsedDayVitals[parsedDayVitals.length - 1];
+    if (sampled[sampled.length - 1]?.id !== lastItem?.id) {
+      sampled.push(lastItem);
+    }
+
+    return sampled.map((v) => ({
       id: v.id,
       label: v._label,
       hr: v.heart_rate,
@@ -345,23 +501,30 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     return `${Math.round(sum / valid.length)} bpm`;
   }, [dayVitals]);
 
-  // Dữ liệu biểu đồ và tính toán trung bình cho Tuần / Tháng
+  // Dữ liệu biểu đồ và tính toán trung bình cho Tuần / Tháng (hỗ trợ cả getDailySummary và raw vitals)
   const weekData = useMemo(() => {
     const list = rangeVitals && Array.isArray(rangeVitals) && rangeVitals.length > 0 ? rangeVitals : [];
-    const validHR = list.filter((v) => typeof v.heart_rate === 'number');
-    const validSpO2 = list.filter((v) => typeof v.spo2 === 'number');
-    const validTemp = list.filter((v) => typeof (v.body_temp ?? v.skin_temp_max) === 'number');
+    const validHR = list.map((v) => v.heartRate ?? v.heart_rate).filter((h) => typeof h === 'number' && h > 0);
+    const validSpO2 = list.map((v) => v.spo2).filter((s) => typeof s === 'number' && s > 0);
+    const validTemp = list.map((v) => v.temperature ?? v.body_temp ?? v.skin_temp_max).filter((t) => typeof t === 'number' && t > 0);
 
-    const avgHR = validHR.length > 0 ? (validHR.reduce((a, b) => a + b.heart_rate, 0) / validHR.length).toFixed(1) : '--';
-    const avgSpO2 = validSpO2.length > 0 ? Math.round(validSpO2.reduce((a, b) => a + b.spo2, 0) / validSpO2.length).toString() : '--';
-    const avgTemp = validTemp.length > 0 ? (validTemp.reduce((a, b) => a + (b.body_temp ?? b.skin_temp_max), 0) / validTemp.length).toFixed(1) : '--';
+    const avgHR = validHR.length > 0 ? (validHR.reduce((a, b) => a + b, 0) / validHR.length).toFixed(1) : '--';
+    const avgSpO2 = validSpO2.length > 0 ? Math.round(validSpO2.reduce((a, b) => a + b, 0) / validSpO2.length).toString() : '--';
+    const avgTemp = validTemp.length > 0 ? (validTemp.reduce((a, b) => a + b, 0) / validTemp.length).toFixed(1) : '--';
 
-    const chart = list.length === 0 ? [] : list.slice(0, 7).reverse().map((v) => {
-      const rawDate = v.recorded_at || v.time || v.created_at;
-      const d = rawDate ? new Date(rawDate) : new Date();
+    const chart = list.map((v) => {
+      let label = '';
+      if (v.date) {
+        const parts = String(v.date).split('-');
+        label = parts.length === 3 ? `${parts[2]}/${parts[1]}` : String(v.date);
+      } else {
+        const rawDate = v.recorded_at || v.time || v.created_at;
+        const d = rawDate ? new Date(rawDate) : new Date();
+        label = `${d.getDate()}/${d.getMonth() + 1}`;
+      }
       return {
-        label: `${d.getDate()}/${d.getMonth() + 1}`,
-        hr: v.heart_rate ?? 0,
+        label,
+        hr: v.heartRate ?? v.heart_rate ?? 0,
       };
     });
 
@@ -397,7 +560,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* 1. Header có nút Back, Title & Nút Refresh */}
+      {/* 1. Header có nút Back, Tên người cao tuổi & Nút Refresh */}
       <View style={[styles.headerBar, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <TouchableOpacity
           style={[styles.backBtn, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}
@@ -408,7 +571,14 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           <Ionicons name="chevron-back" size={22} color={isDarkMode ? '#FFFFFF' : '#0F172A'} />
         </TouchableOpacity>
 
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Chỉ số sinh tồn & Bệnh án</Text>
+        <View style={styles.headerTitleContainer}>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+            {patientDisplayName}
+          </Text>
+          <Text style={[styles.headerSubtitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+            Chỉ số sinh tồn & Bệnh án{currentPatient?.age ? ` • ${currentPatient.age} tuổi` : ''}
+          </Text>
+        </View>
 
         <TouchableOpacity
           style={[styles.refreshBtn, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}
@@ -425,6 +595,68 @@ export default function HealthDetailScreen({ navigation, route }: any) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Bộ chọn người cao tuổi khi gia đình có từ 2-3 người trở lên */}
+        {patientsList && patientsList.length > 1 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.patientChipsRow}
+          >
+            {patientsList.map((p: any) => {
+              const pId = p.id || p.elderly_id;
+              const isSelected = pId == selectedPatientId;
+              return (
+                <TouchableOpacity
+                  key={pId}
+                  style={[
+                    styles.patientChip,
+                    isSelected
+                      ? styles.patientChipActive
+                      : [styles.patientChipInactive, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }],
+                  ]}
+                  onPress={() => {
+                    setSelectedPatientId(pId);
+                    setActivePatientId?.(pId);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name="person"
+                    size={13}
+                    color={isSelected ? '#FFFFFF' : (isDarkMode ? '#94A3B8' : '#64748B')}
+                  />
+                  <Text
+                    style={[
+                      styles.patientChipText,
+                      isSelected
+                        ? styles.patientChipTextActive
+                        : { color: isDarkMode ? '#CBD5E1' : '#475569' },
+                    ]}
+                  >
+                    {p.full_name || p.name || 'Người cao tuổi'}
+                    {p.age ? ` (${p.age}t)` : ''}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
+
+        {/* Thông báo nếu người cao tuổi này chưa được gán vòng tay */}
+        {!assignedBand && (
+          <View style={[styles.unassignedBandBanner, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+            <Ionicons name="information-circle" size={20} color="#F59E0B" style={{ marginTop: 1 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.unassignedBandTitle, isDarkMode && { color: '#FBBF24' }]}>
+                Chưa gán vòng đeo tay thông minh
+              </Text>
+              <Text style={[styles.unassignedBandText, isDarkMode && { color: '#CBD5E1' }]}>
+                {patientDisplayName} chưa được liên kết với vòng tay BLE nào. Để theo dõi nhịp tim và SpO₂, hãy gán vòng tay trong mục Quản lý thiết bị hoặc chuyển người đeo ở chi tiết Smartband.
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* 2. Banner Tình trạng Tổng quan */}
         <HealthOverallBanner
           bannerAlert={currentTabConfig.bannerAlert}
@@ -532,7 +764,10 @@ export default function HealthDetailScreen({ navigation, route }: any) {
 
         {/* 8. Link tới Hồ sơ Bệnh án Điện Tử */}
         <HealthMedicalRecordLink
-          onPress={() => navigation.navigate('PatientsList')}
+          onPress={() => navigation.navigate('PatientMedicalRecord', {
+            patientId: selectedPatientId,
+            patientName: patientDisplayName,
+          })}
           isDarkMode={isDarkMode}
           colors={colors}
         />
@@ -595,10 +830,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 8,
+  },
   headerTitle: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
     color: Colors.textPrimary,
+    textAlign: 'center',
+  },
+  headerSubtitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 1,
+  },
+  patientChipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+    paddingHorizontal: 2,
+  },
+  patientChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  patientChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  patientChipInactive: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
+  },
+  patientChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  patientChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   refreshBtn: {
     width: 38,
@@ -638,5 +917,27 @@ const styles = StyleSheet.create({
   rangePillTextActive: {
     fontWeight: '700',
     color: '#0F172A',
+  },
+  unassignedBandBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 12,
+    padding: 12,
+    gap: 10,
+    marginBottom: 14,
+  },
+  unassignedBandTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#B45309',
+    marginBottom: 2,
+  },
+  unassignedBandText: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#78350F',
   },
 });

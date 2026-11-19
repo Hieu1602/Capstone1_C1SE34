@@ -7,7 +7,7 @@ AWS_RDS_DATABASE_URL = "postgresql+asyncpg://postgres:Seca2026@seca.cdeea4mcuj3h
 
 REQUIRED_VARS = {
     "DATABASE_URL": AWS_RDS_DATABASE_URL,
-    "CAMERA_SERVICE_URL": "https://specs-estimate-road-amazing.trycloudflare.com",
+    "CAMERA_SERVICE_URL": "https://reggae-request-yesterday.ngrok-free.dev",
     "CAMERA_HTTP_USERNAME": "viewer",
     "CAMERA_HTTP_PASSWORD": "123456",
     "OTP_MODE": "esms",

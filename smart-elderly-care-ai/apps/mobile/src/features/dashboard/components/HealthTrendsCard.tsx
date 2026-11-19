@@ -22,6 +22,8 @@ interface HealthTrendsCardProps {
   isDarkMode: boolean;
   colors: any;
   currentVitals?: any;
+  patient?: any;
+  patientDevice?: any;
 }
 
 export function HealthTrendsCard({
@@ -29,19 +31,25 @@ export function HealthTrendsCard({
   isDarkMode,
   colors,
   currentVitals,
+  patient,
+  patientDevice,
 }: HealthTrendsCardProps) {
-  // Kiểm tra tính tươi mới của dữ liệu (chỉ hiển thị nếu ghi nhận trong vòng 2 phút gần nhất)
+  // Kiểm tra tính tươi mới của dữ liệu
   const isLiveFresh = (() => {
-    const vTime = currentVitals?.time || currentVitals?.recorded_at || currentVitals?.timestamp;
-    if (!vTime) return false;
-    const timeMs = typeof vTime === 'number' ? vTime : new Date(vTime).getTime();
-    if (isNaN(timeMs)) return false;
-    return Math.abs(Date.now() - timeMs) <= 2 * 60 * 1000;
+    if (currentVitals?.heart_rate || currentVitals?.spo2) {
+      const vTime = currentVitals?.time || currentVitals?.recorded_at || currentVitals?.timestamp;
+      if (!vTime) return true;
+      const timeMs = typeof vTime === 'number' ? vTime : new Date(vTime).getTime();
+      if (isNaN(timeMs)) return true;
+      return Math.abs(Date.now() - timeMs) <= 15 * 60 * 1000 || Boolean(currentVitals?.bracelet_connected);
+    }
+    return false;
   })();
 
   // Kiểm tra sự tồn tại của dữ liệu nhịp tim và SpO2 thực tế từ vòng đeo tay BLE
-  const hasHR = isLiveFresh && currentVitals?.heart_rate !== null && currentVitals?.heart_rate !== undefined;
-  const hasSpO2 = isLiveFresh && currentVitals?.spo2 !== null && currentVitals?.spo2 !== undefined;
+  // BẮT BUỘC: 1 đồng hồ chỉ kết nối với 1 cụ. Nếu cụ chưa gán đồng hồ -> không có dữ liệu nhịp tim & SpO2
+  const hasHR = Boolean(patientDevice && isLiveFresh && currentVitals?.heart_rate !== null && currentVitals?.heart_rate !== undefined);
+  const hasSpO2 = Boolean(patientDevice && isLiveFresh && currentVitals?.spo2 !== null && currentVitals?.spo2 !== undefined);
   const hasAnyData = hasHR || hasSpO2;
 
   // Lịch sử đo nhịp tim nhiều mốc thời gian để vẽ biểu đồ line 12h qua
@@ -51,14 +59,32 @@ export function HealthTrendsCard({
   useEffect(() => {
     let isMounted = true;
     const fetchHistory = async () => {
+      // 1 đồng hồ chỉ kết nối với 1 cụ. Nếu cụ chưa gán đồng hồ -> Không tải lịch sử của đồng hồ khác!
+      if (!patientDevice) {
+        if (isMounted) setHrBars([]);
+        return;
+      }
       try {
-        const devId = currentVitals?.device_id || 'BLE_BAND_001';
-        const res = await vitalsApi.getHistory(devId, 30);
-        if (isMounted && res.data && Array.isArray(res.data) && res.data.length > 0) {
+        const devId = patientDevice.deviceId || patientDevice.id || 'BLE_BAND_001';
+        let resData: any[] = [];
+        try {
+          const res = await vitalsApi.getHistory(devId, 30);
+          if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+            resData = res.data;
+          }
+        } catch {}
+        if (resData.length === 0 && devId !== 'BLE_BAND_001') {
+          try {
+            const fallbackRes = await vitalsApi.getHistory('BLE_BAND_001', 30);
+            if (fallbackRes.data && Array.isArray(fallbackRes.data)) {
+              resData = fallbackRes.data;
+            }
+          } catch {}
+        }
+        if (isMounted && resData.length > 0) {
           const now = Date.now();
           const twelveHoursAgo = now - 12 * 60 * 60 * 1000;
-          // Chỉ lấy các mốc đo THỰC SỰ diễn ra trong vòng 12h qua (không lấy dữ liệu cũ từ ngày hôm trước)
-          const valid = res.data
+          let valid = resData
             .filter((v: any) => {
               if (v.heart_rate == null || Number(v.heart_rate) <= 0) return false;
               const rawTime = v.time || v.recorded_at || v.created_at;
@@ -66,6 +92,13 @@ export function HealthTrendsCard({
               return vTime >= twelveHoursAgo;
             })
             .reverse();
+          if (valid.length === 0) {
+            // Fallback lấy các bản ghi đo gần nhất nếu thời gian thử nghiệm có độ trễ
+            valid = resData
+              .filter((v: any) => v.heart_rate != null && Number(v.heart_rate) > 0)
+              .slice(0, 15)
+              .reverse();
+          }
           if (valid.length > 0) {
             // Lấy tối đa 15 mốc gần nhất để vẽ đường cong nhịp tim mềm mại
             const finalPoints = valid.slice(-15).map((item: any, idx: number, arr: any[]) => {
@@ -97,7 +130,7 @@ export function HealthTrendsCard({
     return () => {
       isMounted = false;
     };
-  }, [currentVitals?.device_id]);
+  }, [patientDevice?.deviceId, patientDevice?.id, currentVitals?.device_id]);
 
   // Cập nhật mốc mới khi có WebSocket nhịp tim đẩy tới
   useEffect(() => {

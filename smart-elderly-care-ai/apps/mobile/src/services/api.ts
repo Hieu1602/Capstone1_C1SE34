@@ -76,7 +76,7 @@ export const getCustomServerUrl = async (): Promise<string> => {
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
-  timeout: 45000,
+  timeout: 12000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -289,6 +289,8 @@ export const vitalsApi = {
   getLatest: (deviceId: string) => api.get(`/vitals/${deviceId}/latest`),
   getHistory: (deviceId: string = 'BLE_BAND_001', limit = 100, target_date?: string) =>
     api.get('/vitals/history', { params: { device_id: deviceId, limit, target_date } }),
+  getDailySummary: (days = 30, deviceId?: string) =>
+    api.get('/vitals/daily-summary', { params: { days, device_id: deviceId } }),
   getStats: (deviceId: string, hours = 24) =>
     api.get(`/vitals/${deviceId}/stats`, { params: { hours } }),
   createVital: (data: {
@@ -307,11 +309,14 @@ export const vitalsApi = {
 
 // 3. Reminders API
 export const remindersApi = {
-  getToday: () => api.get('/reminders/today'),
+  getToday: (patientId?: string | number) =>
+    api.get('/reminders/today', { params: patientId ? { patient_id: patientId } : undefined }),
   create: (data: any) => api.post('/reminders', data),
   createPrescription: (data: any) => api.post('/reminders/prescription', data),
-  toggle: (reminderId: string) => api.put(`/reminders/${reminderId}/toggle`),
-  delete: (reminderId: string) => api.delete(`/reminders/${reminderId}`),
+  toggle: (reminderId: string, patientId?: string | number) =>
+    api.put(`/reminders/${reminderId}/toggle`, null, { params: patientId ? { patient_id: patientId } : undefined }),
+  delete: (reminderId: string, patientId?: string | number) =>
+    api.delete(`/reminders/${reminderId}`, { params: patientId ? { patient_id: patientId } : undefined }),
 };
 
 // 4. Patients & Medical Record API

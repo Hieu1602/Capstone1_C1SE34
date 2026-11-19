@@ -6,7 +6,7 @@ from typing import List, Optional
 from uuid import UUID
 import json
 
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -61,7 +61,6 @@ class CRUDIncident:
             from app.models.user import User
             from app.models.house import House, HouseMember
             from app.models.device import Device
-            from sqlalchemy import and_
 
             user = await db.get(User, current_user_id)
             is_doctor = (target_role == "doctor") or (user is not None and user.role == "doctor")
@@ -122,8 +121,16 @@ class CRUDIncident:
                         )
                     query = query.where(or_(*conditions))
         else:
-            # Khách chưa đăng nhập: Không xem dữ liệu nhạy cảm
-            query = query.where(Incident.notes.is_(None), ~Incident.notes.startswith("USER:"))
+            # Khách chưa đăng nhập: Không xem dữ liệu nhạy cảm USER
+            query = query.where(
+                or_(
+                    Incident.notes.is_(None),
+                    and_(
+                        ~Incident.notes.startswith("USER:"),
+                        ~Incident.notes.contains("USER:"),
+                    ),
+                )
+            )
 
         # Lọc chống Alert Fatigue cho Bác sĩ (Doctor Portal)
         if is_doctor:
@@ -308,7 +315,6 @@ class CRUDIncident:
             from app.models.user import User
             from app.models.house import House, HouseMember
             from app.models.device import Device
-            from sqlalchemy import and_
 
             user = await db.get(User, current_user_id)
             if user and user.role == "admin":

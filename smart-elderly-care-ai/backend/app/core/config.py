@@ -123,10 +123,11 @@ class Settings(BaseSettings):
     # ---- Firebase FCM ----
     FCM_SERVICE_ACCOUNT_PATH: str = "config/firebase-service-account.json"
 
-    # ---- Twilio Verify ----
+    # ---- Twilio Verify & Voice ----
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_VERIFY_SERVICE_SID: str = ""
+    TWILIO_PHONE_NUMBER: str = ""
 
     # ---- eSMS Gateway ----
     ESMS_API_KEY: str = ""

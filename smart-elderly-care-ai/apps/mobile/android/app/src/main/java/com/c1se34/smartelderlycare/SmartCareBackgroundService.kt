@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -29,7 +30,7 @@ class SmartCareBackgroundService : Service() {
     companion object {
         const val SERVICE_CHANNEL_ID = "smartcare_service_monitor_channel"
         const val SERVICE_CHANNEL_NAME = "Dịch vụ bảo vệ người cao tuổi trong nền"
-        const val ALERT_CHANNEL_ID = "smartcare_emergency_alert_channel"
+        const val ALERT_CHANNEL_ID = "emergency_alerts_v4"
         const val ALERT_CHANNEL_NAME = "Cảnh báo khẩn cấp SmartCare AI"
         const val SERVICE_NOTIFICATION_ID = 999
     }
@@ -184,8 +185,11 @@ class SmartCareBackgroundService : Service() {
                     val alertLevel = latest.optString("alert_level", "HIGH")
                     val message = latest.optString("message", "Phát hiện sự cố mới")
 
-                    // Nếu có sự cố mới chưa xử lý và khác sự cố đã báo gần nhất
-                    if (!isAck && id != lastNotifiedIncidentId && id.isNotBlank()) {
+                    // Nếu sự cố đã được xử lý (trên web, app hoặc người dùng bấm Đã xử lý)
+                    // -> Ngay lập tức ngắt chuông, dừng rung và xóa thông báo (0ms)
+                    if (isAck) {
+                        NativeNotificationModule.stopAlarm(this)
+                    } else if (id != lastNotifiedIncidentId && id.isNotBlank()) {
                         lastNotifiedIncidentId = id
                         triggerHighPriorityAlarm(id, alertType, alertLevel, message)
                     }
@@ -226,11 +230,13 @@ class SmartCareBackgroundService : Service() {
 
         val notifId = ((System.currentTimeMillis() % 1000000L).toInt() + 2000).let { if (it < 0) -it else it }
         val reqCode = (System.currentTimeMillis() % 100000L).toInt().let { if (it < 0) -it else it }
+        NativeNotificationModule.registerActiveNotification(notifId)
 
         val launchIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("OPEN_INCIDENT_ID", incidentId)
             putExtra("OPEN_INCIDENT_TYPE", alertType)
+            putExtra("STOP_ALARM", true)
         }
 
         val pendingIntent = PendingIntent.getActivity(
@@ -248,6 +254,19 @@ class SmartCareBackgroundService : Service() {
             this,
             reqCode + 1,
             dismissIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+        )
+
+        // ActionIntent khi người dùng bấm trực tiếp nút "ĐÃ XỬ LÝ (TẮT CHUÔNG)" trên thanh thông báo
+        val ackIntent = Intent(this, AlarmDismissReceiver::class.java).apply {
+            action = "com.c1se34.smartelderlycare.ACTION_ACKNOWLEDGE_ALARM"
+            putExtra("INCIDENT_ID", incidentId)
+            putExtra("NOTIFICATION_ID", notifId)
+        }
+        val ackPendingIntent = PendingIntent.getBroadcast(
+            this,
+            reqCode + 2,
+            ackIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
         )
 
@@ -270,6 +289,11 @@ class SmartCareBackgroundService : Service() {
             .setOngoing(false) // Không ghim thông báo cảnh báo, cho phép xóa
             .setContentIntent(pendingIntent)
             .setDeleteIntent(deletePendingIntent)
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                "ĐÃ XỬ LÝ (TẮT CHUÔNG)",
+                ackPendingIntent
+            )
 
         try {
             notification.setFullScreenIntent(pendingIntent, true)
@@ -279,50 +303,7 @@ class SmartCareBackgroundService : Service() {
             notificationManager.notify(notifId, notification.build())
         }
 
-        // Rung mạnh liên tục điện thoại và phát âm thanh chuông
-        triggerAlarmVibration()
-    }
-
-    private fun triggerAlarmVibration() {
-        try {
-            // Phát âm thanh chuông báo động
-            try {
-                val soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
-                    ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-                val ringtone = android.media.RingtoneManager.getRingtone(this, soundUri)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    ringtone.audioAttributes = android.media.AudioAttributes.Builder()
-                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .setUsage(android.media.AudioAttributes.USAGE_ALARM)
-                        .build()
-                }
-                ringtone.play()
-            } catch (eSound: Exception) {
-                eSound.printStackTrace()
-            }
-
-            // Rung liên tục (repeatIndex = 0)
-            val pattern = longArrayOf(0, 1000, 400, 1000, 400, 1000, 800)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val vibratorManager =
-                    getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-                vibratorManager?.defaultVibrator?.vibrate(
-                    VibrationEffect.createWaveform(pattern, 0)
-                )
-            } else {
-                @Suppress("DEPRECATION")
-                val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-                @Suppress("DEPRECATION")
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    vibrator?.vibrate(
-                        VibrationEffect.createWaveform(pattern, 0)
-                    )
-                } else {
-                    vibrator?.vibrate(pattern, 0)
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        // Kích hoạt chuông báo động và rung phần cứng tập trung qua NativeNotificationModule
+        NativeNotificationModule.triggerAlarm(this, isCritical = true)
     }
 }

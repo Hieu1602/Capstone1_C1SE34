@@ -5,10 +5,7 @@
 // ==============================================================================
 
 import React, { useEffect, useState } from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  ActivityIndicator, Image, Platform, Vibration, Modal, Pressable,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Platform, Vibration } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { incidentsApi, BASE_URL } from '../../../services/api';
@@ -16,15 +13,9 @@ import { useTheme } from '../../../store/useThemeStore';
 import { useAlertStore, useAuthStore } from '../../../store';
 import { useVitalStore } from '../../../store/useVitalStore';
 import type { Incident } from '../../../store/useAlertStore';
-
-let Video: any = null;
-if (Platform.OS !== 'web') {
-  try { Video = require('react-native-video').default; } catch (e) {}
-}
-
-const LEVEL_COLORS: Record<string, string> = {
-  CRITICAL: '#EF4444', HIGH: '#F97316', MEDIUM: '#EAB308', LOW: '#22C55E',
-};
+import { IncidentEvidenceViewer } from '../components/IncidentEvidenceViewer';
+import { IncidentConfirmModal } from '../components/IncidentConfirmModal';
+import { notificationService } from '../../../services/notificationService';
 
 const ALERT_TYPE_LABELS: Record<string, string> = {
   FALL_DETECTED: '🤸 Cảnh báo té ngã khẩn cấp',
@@ -37,6 +28,35 @@ const ALERT_TYPE_LABELS: Record<string, string> = {
   INACTIVITY: '⏱️ Không có hoạt động',
 };
 
+const getHandlerDisplayName = (
+  inc: Incident | null,
+  currentUserName?: string | null,
+  currentUserId?: string | number | null
+): string => {
+  if (!inc) return 'Người phụ trách';
+  if (inc.acknowledged_by_name?.trim()) return inc.acknowledged_by_name;
+  const raw = inc.acknowledged_by;
+  if (!raw || String(raw).trim() === '') return 'Người phụ trách';
+  const rawStr = String(raw).trim();
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawStr);
+  if (isUUID) {
+    if (currentUserId && rawStr.toLowerCase() === String(currentUserId).toLowerCase() && currentUserName) {
+      return currentUserName;
+    }
+    return 'Bác sĩ / Người phụ trách';
+  }
+  return rawStr;
+};
+
+const resolveMediaUrl = (url?: string | null) => {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('file://')) {
+    return url;
+  }
+  const origin = (BASE_URL || '').replace(/\/api\/v1\/?$/, '');
+  return `${origin}${url.startsWith('/') ? '' : '/'}${url}`;
+};
+
 export default function IncidentDetailScreen({ route, navigation }: any) {
   const { isDarkMode, colors } = useTheme();
   const { acknowledgeIncident, reopenIncident, setSirenActive, incidents, fetchNotifications } = useAlertStore();
@@ -46,42 +66,25 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
   const params = route.params ?? {};
   const incidentId = params.incidentId ?? params.id;
   const [incident, setIncident] = useState<Incident | null>(null);
-  const [isReopening, setIsReopening] = useState(false);
-
-  const getHandlerDisplayName = (
-    inc: Incident | null,
-    currentUserName?: string | null,
-    currentUserId?: string | number | null
-  ): string => {
-    if (!inc) return 'Người phụ trách';
-    if (inc.acknowledged_by_name && inc.acknowledged_by_name.trim() !== '') {
-      return inc.acknowledged_by_name;
-    }
-    const raw = inc.acknowledged_by;
-    if (!raw || String(raw).trim() === '') {
-      return 'Người phụ trách';
-    }
-    const rawStr = String(raw).trim();
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawStr);
-    if (isUUID) {
-      if (
-        currentUserId &&
-        rawStr.toLowerCase() === String(currentUserId).toLowerCase() &&
-        currentUserName
-      ) {
-        return currentUserName;
-      }
-      return 'Bác sĩ / Người phụ trách';
-    }
-    return rawStr;
-  };
-
-  const handlerDisplayName = getHandlerDisplayName(incident, userName, userId);
   const [loading, setLoading] = useState(true);
   const [confirmModal, setConfirmModal] = useState<'ACK' | 'REOPEN' | null>(null);
   const [feedbackBanner, setFeedbackBanner] = useState<'ACKED' | 'REOPENED' | 'ERROR' | null>(null);
   const [imgError, setImgError] = useState(false);
   const [viewMode, setViewMode] = useState<'ai_box' | 'video'>('ai_box');
+
+  const handlerDisplayName = getHandlerDisplayName(incident, userName, userId);
+
+  const fetchIncident = async () => {
+    try {
+      const res = await incidentsApi.get(incidentId);
+      setIncident(res.data || null);
+    } catch (err) {
+      console.warn('Lỗi khi tải chi tiết sự cố từ backend API:', err);
+      setIncident(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     setImgError(false);
@@ -116,26 +119,13 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
         created_at: params.created_at ?? params.time ?? new Date().toISOString(),
       });
       setLoading(false);
-
-      if (!mediaThumb || !mediaVideo) {
-        fetchIncident();
-      }
+      if (!mediaThumb || !mediaVideo) fetchIncident();
       return;
     }
 
     if (storeInc) { setIncident(storeInc); setLoading(false); return; }
     fetchIncident();
   }, [incidentId, incidents]);
-
-  const fetchIncident = async () => {
-    try {
-      const res = await incidentsApi.get(incidentId);
-      setIncident(res.data || null);
-    } catch (err) {
-      console.warn('Lỗi khi tải chi tiết sự cố từ backend API:', err);
-      setIncident(null);
-    } finally { setLoading(false); }
-  };
 
   // Optimistic UI (0ms): Đóng modal & cập nhật trạng thái tức thì, gọi API đồng bộ ngầm ở nền
   const performAcknowledge = async () => {
@@ -145,9 +135,7 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
 
     try { if (Platform.OS !== 'web') Vibration.cancel(); } catch {}
     setSirenActive(false);
-    try {
-      useVitalStore.getState().setVitals({ fall_detected: false, acoustic_status: 'Bình thường' });
-    } catch {}
+    try { useVitalStore.getState().setVitals({ fall_detected: false, acoustic_status: 'Bình thường' }); } catch {}
 
     const nowIso = new Date().toISOString();
     setIncident((prev) => prev ? {
@@ -158,6 +146,7 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
       acknowledged_at: nowIso,
     } : null);
     setFeedbackBanner('ACKED');
+    notificationService.stopEmergencyAlarm();
     acknowledgeIncident(incident.id, 'Đã kiểm tra an toàn', operatorName);
 
     try {
@@ -168,11 +157,6 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
       setIncident(prevSnapshot);
       setFeedbackBanner('ERROR');
     }
-  };
-
-  const handleAcknowledge = () => {
-    if (!incident || incident.is_acknowledged) return;
-    setConfirmModal('ACK');
   };
 
   // Optimistic UI (0ms): Đóng modal & kích hoạt lại cảnh báo tức thì, đồng bộ API ngầm ở nền
@@ -193,11 +177,7 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
 
     if (incident.alert_level === 'CRITICAL' || incident.alert_type === 'FALL_DETECTED') {
       setSirenActive(true);
-      try {
-        useVitalStore.getState().setVitals({
-          fall_detected: incident.alert_type === 'FALL_DETECTED',
-        });
-      } catch {}
+      try { useVitalStore.getState().setVitals({ fall_detected: incident.alert_type === 'FALL_DETECTED' }); } catch {}
     }
 
     try {
@@ -208,11 +188,6 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
       setIncident(prevSnapshot);
       setFeedbackBanner('ERROR');
     }
-  };
-
-  const handleReopen = () => {
-    if (!incident || !incident.is_acknowledged) return;
-    setConfirmModal('REOPEN');
   };
 
   if (loading) {
@@ -239,23 +214,56 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
     );
   }
 
-  const levelColor = LEVEL_COLORS[incident.alert_level] ?? '#64748B';
   const typeLabel = ALERT_TYPE_LABELS[incident.alert_type] ?? incident.alert_type;
-  const resolveMediaUrl = (url?: string | null) => {
-    if (!url) return null;
-    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('file://')) {
-      return url;
-    }
-    const origin = (BASE_URL || '').replace(/\/api\/v1\/?$/, '');
-    return `${origin}${url.startsWith('/') ? '' : '/'}${url}`;
-  };
-
   const videoUrl = resolveMediaUrl(incident.video_clip_url);
   const evidenceImg = imgError ? null : resolveMediaUrl(incident.thumbnail_url);
 
+  const activeFeedbackKey: 'ACKED' | 'REOPENED' | 'ERROR' | null =
+    feedbackBanner === 'ERROR'
+      ? 'ERROR'
+      : feedbackBanner === 'ACKED' || incident.is_acknowledged
+      ? 'ACKED'
+      : feedbackBanner === 'REOPENED'
+      ? 'REOPENED'
+      : null;
+
+  const feedbackConfig = activeFeedbackKey
+    ? {
+        ACKED: {
+          bg: isDarkMode ? '#064E3B25' : '#F0FDF4',
+          border: '#16A34A',
+          icon: 'checkmark-circle' as const,
+          iconColor: '#16A34A',
+          titleColor: isDarkMode ? '#86EFAC' : '#15803D',
+          subColor: isDarkMode ? '#A7F3D0' : '#166534',
+          title: 'Đã xác nhận xử lý sự cố',
+          sub: 'Còi báo động đã tắt và trạng thái an toàn đã được lưu trên hệ thống.',
+        },
+        REOPENED: {
+          bg: isDarkMode ? '#450A0A35' : '#FEF2F2',
+          border: '#EF4444',
+          icon: 'alert-circle' as const,
+          iconColor: '#EF4444',
+          titleColor: isDarkMode ? '#FCA5A5' : '#B91C1C',
+          subColor: isDarkMode ? '#FECACA' : '#991B1B',
+          title: 'Đã kích hoạt lại cảnh báo',
+          sub: 'Còi báo động tại nhà và thông báo khẩn cấp đã được bật lại.',
+        },
+        ERROR: {
+          bg: isDarkMode ? '#451A0335' : '#FFFBEB',
+          border: '#F59E0B',
+          icon: 'warning' as const,
+          iconColor: '#D97706',
+          titleColor: isDarkMode ? '#FCD34D' : '#B45309',
+          subColor: isDarkMode ? '#FDE68A' : '#92400E',
+          title: 'Không thể đồng bộ với máy chủ',
+          sub: 'Vui lòng kiểm tra kết nối mạng và thử lại.',
+        },
+      }[activeFeedbackKey]
+    : null;
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.headerBg, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
@@ -264,7 +272,6 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Badge trạng thái duy nhất (Không trùng lặp) */}
         <View style={styles.badgeRow}>
           {!incident.is_acknowledged ? (
             <View style={[styles.statusBadge, { backgroundColor: isDarkMode ? '#450A0A' : '#FEE2E2', borderColor: '#EF4444' }]}>
@@ -329,143 +336,31 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
           )}
         </View>
 
-        {/* Evidence Video & AI Snapshot */}
-        <View style={styles.videoSection}>
-          <View style={styles.evidenceHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Bằng chứng hình ảnh / clip sự cố</Text>
-            {incident.confidence != null && (
-              <View style={styles.confidenceBadge}>
-                <Ionicons name="shield-checkmark" size={13} color="#EF4444" style={{ marginRight: 4 }} />
-                <Text style={styles.confidenceBadgeText}>Độ tin cậy: {(incident.confidence * 100).toFixed(0)}%</Text>
-              </View>
-            )}
-          </View>
+        <IncidentEvidenceViewer
+          incident={incident}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          evidenceImg={evidenceImg}
+          videoUrl={videoUrl}
+          onImageError={() => setImgError(true)}
+          isDarkMode={isDarkMode}
+          colors={colors}
+        />
 
-          {/* Tab selector */}
-          <View style={[styles.tabSelector, { backgroundColor: isDarkMode ? '#1E293B' : '#E2E8F0' }]}>
-            {[
-              { mode: 'ai_box' as const, icon: 'scan-outline' as const, label: 'Ảnh bằng chứng AI' },
-              { mode: 'video' as const, icon: 'videocam-outline' as const, label: 'Video Clip trích xuất' },
-            ].map((tab) => {
-              const active = viewMode === tab.mode;
-              return (
-                <TouchableOpacity key={tab.mode} style={[styles.tabItem, active && styles.tabItemActive]} onPress={() => setViewMode(tab.mode)} activeOpacity={0.8}>
-                  <Ionicons name={tab.icon} size={15} color={active ? '#FFF' : (isDarkMode ? '#94A3B8' : '#64748B')} style={{ marginRight: 6 }} />
-                  <Text style={[styles.tabText, active && styles.tabTextActive]}>{tab.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {viewMode === 'ai_box' ? (
-            evidenceImg ? (
-              <View style={[styles.evidenceCard, { backgroundColor: '#0B0F19', borderColor: colors.border }]}>
-                <Image source={{ uri: evidenceImg }} style={styles.evidenceImage} resizeMode="cover" onError={() => setImgError(true)} />
-                <View style={styles.evidenceOverlayHeader}>
-                  <View style={styles.recDot} /><Text style={styles.evidenceOsdText}>REC ● TRÍCH XUẤT BUFFER</Text>
-                  <Text style={[styles.evidenceOsdText, { marginLeft: 'auto' }]}>{incident.device_id || 'CAM-01'}</Text>
-                </View>
-
-                {incident.alert_type === 'FALL_DETECTED' && (
-                  <View style={styles.aiBoundingBox}>
-                    <View style={styles.boxTag}>
-                      <Ionicons name="warning" size={11} color="#FFF" style={{ marginRight: 3 }} />
-                      <Text style={styles.boxTagText}>FALL DETECTED{incident.confidence != null ? ` (${(incident.confidence * 100).toFixed(1)}%)` : ''}</Text>
-                    </View>
-                    {[
-                      { top: 12, left: '46%' }, { top: 38, left: '32%' }, { top: 38, left: '60%' },
-                      { top: 82, left: '40%' }, { top: 110, left: '26%' }, { top: 125, left: '72%' },
-                    ].map((pos, idx) => (
-                      <View key={idx} style={[styles.skeletonJoint, pos as any]} />
-                    ))}
-                  </View>
-                )}
-
-                <View style={styles.evidenceOverlayFooter}>
-                  <View style={styles.aiTag}>
-                    <Ionicons name="scan-outline" size={13} color="#FFF" style={{ marginRight: 4 }} />
-                    <Text style={styles.aiTagText}>YOLO-Pose AI • Bằng chứng sự cố</Text>
-                  </View>
-                  {incident.confidence != null && (
-                    <Text style={styles.evidenceOsdText}>Độ tin cậy: {(incident.confidence * 100).toFixed(0)}%</Text>
-                  )}
-                </View>
-              </View>
-            ) : (
-              <View style={[styles.evidenceCard, styles.evidenceFallback, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: colors.border }]}>
-                <Ionicons name="image-outline" size={38} color={colors.textMuted} />
-                <Text style={[styles.fallbackText, { color: colors.textSecondary }]}>Không có hình ảnh bằng chứng cho sự cố này</Text>
-              </View>
-            )
-          ) : (
-            videoUrl ? (
-              <View style={[styles.evidenceCard, { backgroundColor: '#000', borderColor: colors.border }]}>
-                {Platform.OS === 'web' || !Video ? (
-                  <video src={videoUrl} style={{ width: '100%', height: 230, borderRadius: 12, backgroundColor: '#000', objectFit: 'contain' }} controls autoPlay loop />
-                ) : (
-                  <Video source={{ uri: videoUrl }} style={styles.video} controls resizeMode="contain" paused={false} />
-                )}
-                <View style={styles.videoOsdBar}>
-                  <View style={styles.recDot} /><Text style={styles.evidenceOsdText}>CLIP ĐÃ LƯU VÀO HỒ SƠ SỰ CỐ</Text>
-                </View>
-              </View>
-            ) : (
-              <View style={[styles.evidenceCard, styles.evidenceFallback, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: colors.border }]}>
-                <Ionicons name="videocam-off-outline" size={38} color={colors.textMuted} />
-                <Text style={[styles.fallbackText, { color: colors.textSecondary }]}>Không có video clip trích xuất cho sự cố này</Text>
-              </View>
-            )
-          )}
-        </View>
-
-        {/* Inline Feedback Banner */}
-        {(feedbackBanner === 'ACKED' || (incident.is_acknowledged && feedbackBanner !== 'ERROR')) && (
-          <View style={[styles.successToast, { backgroundColor: isDarkMode ? '#064E3B25' : '#F0FDF4', borderColor: '#16A34A' }]}>
-            <Ionicons name="checkmark-circle" size={24} color="#16A34A" />
+        {feedbackConfig && (
+          <View style={[styles.successToast, { backgroundColor: feedbackConfig.bg, borderColor: feedbackConfig.border }]}>
+            <Ionicons name={feedbackConfig.icon} size={24} color={feedbackConfig.iconColor} />
             <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={[styles.successToastTitle, { color: isDarkMode ? '#86EFAC' : '#15803D' }]}>
-                Đã xác nhận xử lý sự cố
-              </Text>
-              <Text style={[styles.successToastSubtitle, { color: isDarkMode ? '#A7F3D0' : '#166534' }]}>
-                Còi báo động đã tắt và trạng thái an toàn đã được lưu trên hệ thống.
-              </Text>
+              <Text style={[styles.successToastTitle, { color: feedbackConfig.titleColor }]}>{feedbackConfig.title}</Text>
+              <Text style={[styles.successToastSubtitle, { color: feedbackConfig.subColor }]}>{feedbackConfig.sub}</Text>
             </View>
           </View>
         )}
 
-        {feedbackBanner === 'REOPENED' && !incident.is_acknowledged && (
-          <View style={[styles.successToast, { backgroundColor: isDarkMode ? '#450A0A35' : '#FEF2F2', borderColor: '#EF4444' }]}>
-            <Ionicons name="alert-circle" size={24} color="#EF4444" />
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={[styles.successToastTitle, { color: isDarkMode ? '#FCA5A5' : '#B91C1C' }]}>
-                Đã kích hoạt lại cảnh báo
-              </Text>
-              <Text style={[styles.successToastSubtitle, { color: isDarkMode ? '#FECACA' : '#991B1B' }]}>
-                Còi báo động tại nhà và thông báo khẩn cấp đã được bật lại.
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {feedbackBanner === 'ERROR' && (
-          <View style={[styles.successToast, { backgroundColor: isDarkMode ? '#451A0335' : '#FFFBEB', borderColor: '#F59E0B' }]}>
-            <Ionicons name="warning" size={24} color="#D97706" />
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={[styles.successToastTitle, { color: isDarkMode ? '#FCD34D' : '#B45309' }]}>
-                Không thể đồng bộ với máy chủ
-              </Text>
-              <Text style={[styles.successToastSubtitle, { color: isDarkMode ? '#FDE68A' : '#92400E' }]}>
-                Vui lòng kiểm tra kết nối mạng và thử lại.
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* Action Button */}
         {!incident.is_acknowledged ? (
-          <TouchableOpacity style={styles.ackBtn} onPress={handleAcknowledge} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.ackBtn} onPress={() => setConfirmModal('ACK')} activeOpacity={0.8}>
             <Ionicons name="checkmark-circle" size={20} color="#FFF" />
-            <Text style={styles.ackBtnText}>Đánh dấu đã xử lý</Text>
+            <Text style={styles.ackBtnText}>Xác nhận đã xử lý sự cố</Text>
           </TouchableOpacity>
         ) : (
           <View style={{ gap: 10, marginTop: 8 }}>
@@ -476,13 +371,9 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
               </Text>
             </View>
 
-            {/* Nút Mở lại cảnh báo (Chưa an toàn) */}
             <TouchableOpacity
-              style={[
-                styles.reopenBtn,
-                isDarkMode && { backgroundColor: '#450A0A25', borderColor: '#DC2626' },
-              ]}
-              onPress={handleReopen}
+              style={[styles.reopenBtn, isDarkMode && { backgroundColor: '#450A0A25', borderColor: '#DC2626' }]}
+              onPress={() => setConfirmModal('REOPEN')}
               activeOpacity={0.8}
             >
               <Ionicons name="alert-circle" size={20} color="#DC2626" />
@@ -501,87 +392,13 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
         )}
       </ScrollView>
 
-      {/* Custom Confirm Modal (replaces window.confirm / Alert.alert) */}
-      <Modal
-        transparent
-        visible={confirmModal !== null}
-        animationType="fade"
-        onRequestClose={() => setConfirmModal(null)}
-      >
-        <Pressable style={styles.modalOverlay} onPress={() => setConfirmModal(null)}>
-          <Pressable
-            style={[
-              styles.modalCard,
-              { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' },
-            ]}
-            onPress={() => {}}
-          >
-            <View
-              style={[
-                styles.modalIconWrap,
-                {
-                  backgroundColor:
-                    confirmModal === 'REOPEN'
-                      ? isDarkMode ? '#7C2D1240' : '#FFF7ED'
-                      : isDarkMode ? '#064E3B40' : '#ECFDF5',
-                },
-              ]}
-            >
-              <Ionicons
-                name={confirmModal === 'REOPEN' ? 'warning' : 'shield-checkmark'}
-                size={30}
-                color={confirmModal === 'REOPEN' ? '#EA580C' : '#16A34A'}
-              />
-            </View>
-
-            <Text style={[styles.modalTitle, { color: isDarkMode ? '#F8FAFC' : '#0F172A' }]}>
-              {confirmModal === 'REOPEN' ? 'Mở lại cảnh báo khẩn cấp?' : 'Xác nhận an toàn?'}
-            </Text>
-
-            <Text style={[styles.modalBody, { color: isDarkMode ? '#94A3B8' : '#475569' }]}>
-              {confirmModal === 'REOPEN'
-                ? 'Hệ thống sẽ kích hoạt lại còi báo động tại nhà và gửi thông báo ứng cứu cho gia đình.'
-                : 'Xác nhận người cao tuổi đã an toàn, tắt còi báo động và lưu trạng thái xử lý.'}
-            </Text>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[
-                  styles.modalCancelBtn,
-                  { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' },
-                ]}
-                onPress={() => setConfirmModal(null)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.modalCancelText, { color: isDarkMode ? '#E2E8F0' : '#475569' }]}>
-                  Hủy
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.modalConfirmBtn,
-                  { backgroundColor: confirmModal === 'REOPEN' ? '#DC2626' : '#16A34A' },
-                ]}
-                onPress={() => {
-                  const action = confirmModal;
-                  setConfirmModal(null);
-                  if (action === 'REOPEN') {
-                    performReopen();
-                  } else if (action === 'ACK') {
-                    performAcknowledge();
-                  }
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.modalConfirmText}>
-                  {confirmModal === 'REOPEN' ? 'Xác nhận mở lại' : 'Xác nhận an toàn'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <IncidentConfirmModal
+        confirmModal={confirmModal}
+        isDarkMode={isDarkMode}
+        onClose={() => setConfirmModal(null)}
+        onConfirmAck={performAcknowledge}
+        onConfirmReopen={performReopen}
+      />
     </SafeAreaView>
   );
 }
@@ -598,8 +415,6 @@ const styles = StyleSheet.create({
   statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1.5 },
   statusBadgeText: { fontWeight: '700', fontSize: 13 },
   liveRedDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' },
-  levelBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1.5 },
-  levelText: { fontWeight: '700', fontSize: 13 },
   typeLabel: { color: '#F8FAFC', fontSize: 22, fontWeight: '700' },
   message: { color: '#94A3B8', fontSize: 15, lineHeight: 22 },
   infoCard: { padding: 16, borderRadius: 14 },
@@ -607,32 +422,6 @@ const styles = StyleSheet.create({
   rowLabel: { color: '#64748B', fontSize: 14 },
   rowValue: { color: '#F8FAFC', fontSize: 14, fontWeight: '600' },
   rowDivider: { height: 1, marginVertical: 8 },
-  videoSection: { gap: 10 },
-  evidenceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sectionTitle: { color: '#F8FAFC', fontSize: 16, fontWeight: '600' },
-  confidenceBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EF444420', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#EF4444' },
-  confidenceBadgeText: { fontSize: 12, fontWeight: '700', color: '#EF4444' },
-  tabSelector: { flexDirection: 'row', borderRadius: 8, padding: 3 },
-  tabItem: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: 6 },
-  tabItemActive: { backgroundColor: '#2563EB', shadowColor: '#2563EB', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 3 },
-  tabText: { fontSize: 13, fontWeight: '600', color: '#64748B' },
-  tabTextActive: { color: '#FFF', fontWeight: '700' },
-  evidenceCard: { borderRadius: 12, overflow: 'hidden', borderWidth: 1, position: 'relative', backgroundColor: '#0F172A' },
-  evidenceFallback: { height: 180, justifyContent: 'center', alignItems: 'center' },
-  fallbackText: { marginTop: 8, fontSize: 13, fontWeight: '500' },
-  evidenceImage: { width: '100%', height: 230, backgroundColor: '#1E293B' },
-  video: { width: '100%', height: 230, borderRadius: 12, backgroundColor: '#000' },
-  videoOsdBar: { position: 'absolute', bottom: 8, left: 10, right: 10, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.65)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  evidenceOverlayHeader: { position: 'absolute', top: 8, left: 10, right: 10, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  recDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444', marginRight: 6 },
-  evidenceOsdText: { color: '#FFF', fontSize: 11, fontWeight: '600', textShadowColor: 'rgba(0,0,0,0.9)', textShadowRadius: 4 },
-  aiBoundingBox: { position: 'absolute', top: '32%', left: '24%', width: '54%', height: '52%', borderWidth: 2, borderColor: '#EF4444', borderRadius: 4, backgroundColor: 'rgba(239, 68, 68, 0.12)' },
-  boxTag: { position: 'absolute', top: -18, left: -2, flexDirection: 'row', alignItems: 'center', backgroundColor: '#EF4444', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 3 },
-  boxTagText: { color: '#FFF', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
-  skeletonJoint: { position: 'absolute', width: 8, height: 8, borderRadius: 4, backgroundColor: '#22C55E', borderWidth: 1.5, borderColor: '#FFF' },
-  evidenceOverlayFooter: { position: 'absolute', bottom: 8, left: 10, right: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  aiTag: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(239, 68, 68, 0.9)', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 4 },
-  aiTagText: { color: '#FFF', fontSize: 11, fontWeight: '700' },
   ackBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#3B82F6', borderRadius: 12, padding: 16, gap: 8, marginTop: 8, shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
   ackBtnText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
   ackBtnDisabled: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 12, padding: 16, gap: 8, marginTop: 8, borderWidth: 1.5 },
@@ -642,87 +431,6 @@ const styles = StyleSheet.create({
   successToastSubtitle: { fontSize: 12, marginTop: 2 },
   returnBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 14, borderRadius: 12, borderWidth: 1, gap: 8 },
   returnBtnText: { fontWeight: '600', fontSize: 15 },
-  reopenBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#EF4444',
-    backgroundColor: '#FEF2F2',
-    gap: 8,
-  },
-  reopenBtnText: {
-    color: '#DC2626',
-    fontWeight: '700',
-    fontSize: 15,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 380,
-    borderRadius: 24,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  modalIconWrap: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  modalBody: {
-    fontSize: 14,
-    lineHeight: 20,
-    textAlign: 'center',
-    marginBottom: 22,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 12,
-    width: '100%',
-  },
-  modalCancelBtn: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalCancelText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  modalConfirmBtn: {
-    flex: 1.2,
-    paddingVertical: 13,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalConfirmText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
+  reopenBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 14, borderRadius: 12, borderWidth: 1.5, borderColor: '#EF4444', backgroundColor: '#FEF2F2', gap: 8 },
+  reopenBtnText: { color: '#DC2626', fontWeight: '700', fontSize: 15 },
 });
