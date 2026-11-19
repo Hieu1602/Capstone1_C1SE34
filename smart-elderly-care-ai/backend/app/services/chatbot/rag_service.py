@@ -574,6 +574,16 @@ class ChatbotRAGService:
         incidents = context.get("incidents", [])
         patient = context.get("patient", {})
 
+        # Tự động khớp và gán đúng hồ sơ cụ nếu người dùng chỉ định đích danh tên
+        q_lower = question.lower()
+        patients_list = context.get("patients", [])
+        for p in patients_list:
+            p_name = (p.get("full_name") or "").lower()
+            if p_name and (p_name in q_lower or any(part in q_lower for part in p_name.split() if len(part) > 2)):
+                patient = p
+                context["patient"] = p
+                break
+
         # 2.1. Nhận diện câu hỏi phân tích / kiểm tra chỉ số chung chung, mơ hồ (Hỏi lại để dò đúng nhu cầu)
         if self._is_ambiguous_vitals_query(question, context):
             return self._format_ambiguous_vitals_probing(
