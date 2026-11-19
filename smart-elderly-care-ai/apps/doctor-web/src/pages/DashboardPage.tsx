@@ -178,10 +178,10 @@ export const DashboardPage: React.FC = () => {
     if (chartRange === '7D') {
       const startStr = `${String(selectedMonday.getDate()).padStart(2, '0')}/${String(selectedMonday.getMonth() + 1).padStart(2, '0')}`;
       const endStr = `${String(selectedSunday.getDate()).padStart(2, '0')}/${String(selectedSunday.getMonth() + 1).padStart(2, '0')}`;
-      return isCurrentWeek ? `Tuần này (${startStr} - ${endStr})` : `${startStr} - ${endStr}`;
+      return `${startStr} - ${endStr}`;
     }
     return `Tháng ${chartAnchorDate.getMonth() + 1}/${chartAnchorDate.getFullYear()}`;
-  }, [chartRange, selectedMonday, selectedSunday, isCurrentWeek, chartAnchorDate]);
+  }, [chartRange, selectedMonday, selectedSunday, chartAnchorDate]);
 
   const isNextDisabled = chartRange === '7D' ? isCurrentWeek : isCurrentMonth;
   const isCurrentPeriod = chartRange === '7D' ? isCurrentWeek : isCurrentMonth;

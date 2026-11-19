@@ -657,7 +657,7 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
               <div className="space-y-4">
                 {/* Thanh điều hướng và lọc thời gian */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-2xl bg-slate-50/90 dark:bg-[#0F172A] p-2.5 border border-slate-200/70 dark:border-slate-800">
-                  {/* Segmented control: Ngày / Tuần / Tháng */}
+                  {/* Segmented control: Ngày / Tuần / Tháng - Cố định độ rộng nút */}
                   <div className="flex items-center gap-1 rounded-xl bg-slate-200/70 dark:bg-slate-800/80 p-0.5">
                     {(['DAY', 'WEEK', 'MONTH'] as const).map((m) => {
                       const label = m === 'DAY' ? 'Ngày' : m === 'WEEK' ? 'Tuần' : 'Tháng';
@@ -667,7 +667,7 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                           key={m}
                           type="button"
                           onClick={() => handleModeChange(m)}
-                          className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
+                          className={`w-16 rounded-lg py-1.5 text-xs font-bold transition-all text-center cursor-pointer ${
                             isActive
                               ? 'bg-white dark:bg-blue-600 text-blue-600 dark:text-white shadow-xs'
                               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -679,30 +679,51 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                     })}
                   </div>
 
-                  {/* Bộ điều hướng lùi/tiến & Picker chọn ngày/tuần/tháng */}
+                  {/* Bộ điều hướng: Cụm [<][>] cố định + Ô ngày cố định width + Nút reset cố định vị trí */}
                   <div className="flex items-center gap-1.5 self-end sm:self-auto">
-                    {/* Nút lùi */}
-                    <button
-                      type="button"
-                      onClick={handlePrev}
-                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition cursor-pointer shadow-2xs"
-                      title={
-                        currentFilter.mode === 'DAY'
-                          ? 'Ngày trước'
-                          : currentFilter.mode === 'WEEK'
-                            ? 'Tuần trước'
-                            : 'Tháng trước'
-                      }
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </button>
+                    {/* Cụm 2 nút lùi/tiến ghép đôi cố định vị trí - Bấm liên tiếp không bị nhảy nút */}
+                    <div className="inline-flex items-center rounded-xl border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-800 shadow-2xs">
+                      <button
+                        type="button"
+                        onClick={handlePrev}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700 transition cursor-pointer"
+                        title={
+                          currentFilter.mode === 'DAY'
+                            ? 'Ngày trước'
+                            : currentFilter.mode === 'WEEK'
+                              ? 'Tuần trước'
+                              : 'Tháng trước'
+                        }
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleNext}
+                        disabled={isNextDisabled}
+                        className={`flex h-7 w-7 items-center justify-center rounded-lg transition ${
+                          isNextDisabled
+                            ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700 cursor-pointer'
+                        }`}
+                        title={
+                          currentFilter.mode === 'DAY'
+                            ? 'Ngày tiếp theo'
+                            : currentFilter.mode === 'WEEK'
+                              ? 'Tuần tiếp theo'
+                              : 'Tháng tiếp theo'
+                        }
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
 
-                    {/* Khung hiển thị & Native Picker */}
+                    {/* Khung hiển thị & Native Picker - Khóa cứng chiều rộng w-36 */}
                     <div className="relative flex items-center">
                       {currentFilter.mode === 'MONTH' ? (
-                        <div className="relative flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 shadow-2xs hover:border-blue-400 transition cursor-pointer">
+                        <div className="relative flex w-36 h-8 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 text-xs font-bold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 shadow-2xs hover:border-blue-400 transition cursor-pointer">
                           <Calendar className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                          <span>
+                          <span className="truncate">
                             Tháng {anchorDate.getMonth() + 1}/{anchorDate.getFullYear()}
                           </span>
                           <input
@@ -715,12 +736,12 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                           />
                         </div>
                       ) : (
-                        <div className="relative flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 shadow-2xs hover:border-blue-400 transition cursor-pointer">
+                        <div className="relative flex w-36 h-8 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 text-xs font-bold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 shadow-2xs hover:border-blue-400 transition cursor-pointer">
                           <Calendar className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                          <span>
+                          <span className="truncate">
                             {currentFilter.mode === 'DAY'
                               ? currentFilter.selectedDate === todayStr
-                                ? `Hôm nay (${formatDM(anchorDate)})`
+                                ? formatDMY(anchorDate)
                                 : formatDMY(anchorDate)
                               : `${formatDM(parseYMD(currentFilter.startDate!))} - ${formatDM(parseYMD(currentFilter.endDate!))}`}
                           </span>
@@ -736,33 +757,12 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                       )}
                     </div>
 
-                    {/* Nút tiến */}
-                    <button
-                      type="button"
-                      onClick={handleNext}
-                      disabled={isNextDisabled}
-                      className={`flex h-8 w-8 items-center justify-center rounded-xl border transition ${
-                        isNextDisabled
-                          ? 'border-slate-100 bg-slate-100 text-slate-300 dark:border-slate-800 dark:bg-slate-800/40 dark:text-slate-600 cursor-not-allowed'
-                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 cursor-pointer shadow-2xs'
-                      }`}
-                      title={
-                        currentFilter.mode === 'DAY'
-                          ? 'Ngày tiếp theo'
-                          : currentFilter.mode === 'WEEK'
-                            ? 'Tuần tiếp theo'
-                            : 'Tháng tiếp theo'
-                      }
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
-
-                    {/* Nút quay về Hôm nay / Tuần này / Tháng này */}
-                    {!isCurrentPeriod && (
+                    {/* Nút quay về Hôm nay / Tuần này / Tháng này - Ẩn hiện không làm giật vị trí */}
+                    <div className={`transition-opacity ${isCurrentPeriod ? 'invisible pointer-events-none' : 'visible'}`}>
                       <button
                         type="button"
                         onClick={handleResetCurrent}
-                        className="rounded-xl bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-700 border border-blue-200/80 hover:bg-blue-100 dark:bg-blue-950/50 dark:border-blue-900 dark:text-blue-300 dark:hover:bg-blue-900 transition cursor-pointer shadow-2xs"
+                        className="rounded-xl bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-700 border border-blue-200/80 hover:bg-blue-100 dark:bg-blue-950/50 dark:border-blue-900 dark:text-blue-300 dark:hover:bg-blue-900 transition cursor-pointer shadow-2xs shrink-0"
                         title="Quay lại thời điểm hiện tại"
                       >
                         {currentFilter.mode === 'DAY'
@@ -771,7 +771,7 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                             ? 'Tuần này'
                             : 'Tháng này'}
                       </button>
-                    )}
+                    </div>
                   </div>
                 </div>
 
