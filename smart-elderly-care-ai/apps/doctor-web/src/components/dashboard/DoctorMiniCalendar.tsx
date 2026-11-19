@@ -29,7 +29,7 @@ export const DoctorMiniCalendar: React.FC<DoctorMiniCalendarProps> = ({
   onNavigateAppointments,
 }) => {
   return (
-    <div className="lg:col-span-4 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm flex flex-col justify-between dark:border-slate-800/80 dark:bg-[#131C31]">
+    <div className="w-full h-full rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm flex flex-col justify-between dark:border-slate-800/80 dark:bg-[#131C31]">
       <div>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -90,19 +90,20 @@ export const DoctorMiniCalendar: React.FC<DoctorMiniCalendarProps> = ({
                     onNavigateAppointments();
                   }
                 }}
-                className={`relative flex h-8 flex-col items-center justify-center rounded-lg text-xs font-semibold transition cursor-pointer ${
-                  cell.isToday
-                    ? 'bg-blue-600 text-white font-extrabold shadow-xs'
-                    : cell.isSelected
-                    ? 'bg-blue-50 text-blue-700 font-bold ring-2 ring-blue-500 dark:bg-blue-950/50 dark:text-blue-300'
-                    : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                title={cell.dateStr ? `Xem lịch ngày ${cell.dateStr.split('-').reverse().join('/')}` : undefined}
+                className={`relative flex h-8 flex-col items-center justify-center rounded-lg text-xs transition cursor-pointer ${
+                  cell.isSelected
+                    ? 'bg-blue-600 text-white font-extrabold shadow-sm ring-2 ring-blue-300 dark:ring-blue-600'
+                    : cell.isToday
+                    ? 'border-2 border-blue-600 font-extrabold text-blue-600 dark:text-blue-400 dark:border-blue-500 bg-blue-50/50 dark:bg-blue-950/40'
+                    : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 font-semibold'
                 }`}
               >
                 <span>{cell.day}</span>
                 {cell.dotStatus && (
                   <span
                     className={`absolute bottom-0.5 h-1.5 w-1.5 rounded-full ${
-                      cell.isToday
+                      cell.isSelected
                         ? 'bg-white'
                         : cell.dotStatus === 'COMPLETED'
                         ? 'bg-emerald-500'
@@ -135,10 +136,14 @@ export const DoctorMiniCalendar: React.FC<DoctorMiniCalendarProps> = ({
         </div>
 
         <button
+          type="button"
           onClick={onNavigateAppointments}
-          className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 text-xs font-bold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer"
+          className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 text-xs font-bold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer flex items-center justify-center gap-1.5"
         >
-          Xem chi tiết lịch
+          <CalendarIcon className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+          <span>
+            Xem chi tiết lịch {selectedDate ? `ngày ${selectedDate.split('-').reverse().join('/')}` : ''}
+          </span>
         </button>
       </div>
     </div>

@@ -818,9 +818,14 @@ class CRUDDoctor:
 
 
     async def get_vitals_analytics(
-        self, db: AsyncSession, elderly_id: str, days: int = 7
+        self,
+        db: AsyncSession,
+        elderly_id: str,
+        days: int = 7,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> DoctorVitalsAnalytics:
-        """Phân tích thống kê sinh hiệu dài hạn từ TimescaleDB thực tế."""
+        """Phân tích thống kê sinh hiệu dài hạn từ TimescaleDB thực tế theo số ngày hoặc khoảng ngày cụ thể."""
         elderly = None
         patient_name = "Bệnh nhân"
         try:
@@ -856,10 +861,34 @@ class CRUDDoctor:
         spo2_drops = 0
 
         if band_device:
-            since_time = datetime.now() - timedelta(days=days)
+            conditions = [VitalSign.device_id == band_device.id]
+            vn_tz = timezone(timedelta(hours=7))
+            is_single_day = bool(start_date and end_date and start_date == end_date) or days == 1
+
+            if start_date:
+                try:
+                    s_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(
+                        hour=0, minute=0, second=0, microsecond=0, tzinfo=vn_tz
+                    )
+                    conditions.append(VitalSign.time >= s_dt)
+                except ValueError:
+                    conditions.append(VitalSign.time >= (datetime.now(timezone.utc) - timedelta(days=days)))
+            else:
+                since_time = datetime.now(timezone.utc) - timedelta(days=days)
+                conditions.append(VitalSign.time >= since_time)
+
+            if end_date:
+                try:
+                    e_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(
+                        hour=23, minute=59, second=59, microsecond=999999, tzinfo=vn_tz
+                    )
+                    conditions.append(VitalSign.time <= e_dt)
+                except ValueError:
+                    pass
+
             vs_query = await db.execute(
                 select(VitalSign)
-                .where(VitalSign.device_id == band_device.id, VitalSign.time >= since_time)
+                .where(*conditions)
                 .order_by(VitalSign.time.asc())
             )
             records = list(vs_query.scalars().all())
@@ -883,7 +912,8 @@ class CRUDDoctor:
 
                 by_date: Dict[str, List[VitalSign]] = {}
                 for r in records:
-                    date_key = r.time.strftime("%d/%m")
+                    local_dt = r.time.astimezone(vn_tz) if r.time.tzinfo else r.time.replace(tzinfo=timezone.utc).astimezone(vn_tz)
+                    date_key = local_dt.strftime("%d/%m")
                     if date_key not in by_date:
                         by_date[date_key] = []
                     by_date[date_key].append(r)
@@ -899,14 +929,34 @@ class CRUDDoctor:
                             bp_val = f"{r.bp_systolic}/{r.bp_diastolic}"
                             break
 
-                    hourly_list = []
+                    # Đảm bảo hiển thị đầy đủ 24 giờ trong ngày (00:00 -> 23:00) theo giờ địa phương VN
+                    hours_24 = [f"{h:02d}:00" for h in range(24)]
+                    by_hour: Dict[str, Dict[str, Any]] = {
+                        h_str: {"hrs": [], "spo2s": [], "temps": [], "bp": None}
+                        for h_str in hours_24
+                    }
                     for r in day_recs:
+                        local_dt = r.time.astimezone(vn_tz) if r.time.tzinfo else r.time.replace(tzinfo=timezone.utc).astimezone(vn_tz)
+                        h_key = f"{local_dt.hour:02d}:00"
+                        if h_key in by_hour:
+                            if r.heart_rate is not None:
+                                by_hour[h_key]["hrs"].append(r.heart_rate)
+                            if r.spo2 is not None:
+                                by_hour[h_key]["spo2s"].append(r.spo2)
+                            if r.skin_temp_max is not None:
+                                by_hour[h_key]["temps"].append(r.skin_temp_max)
+                            if r.bp_systolic and r.bp_diastolic:
+                                by_hour[h_key]["bp"] = f"{r.bp_systolic}/{r.bp_diastolic}"
+
+                    hourly_list = []
+                    for h_str in hours_24:
+                        h_data = by_hour[h_str]
                         hourly_list.append({
-                            "time": r.time.strftime("%H:%M"),
-                            "heart_rate": r.heart_rate,
-                            "spo2": r.spo2,
-                            "bp": f"{r.bp_systolic}/{r.bp_diastolic}" if (r.bp_systolic and r.bp_diastolic) else None,
-                            "skin_temp": r.skin_temp_max,
+                            "time": h_str,
+                            "heart_rate": round(sum(h_data["hrs"]) / len(h_data["hrs"])) if h_data["hrs"] else None,
+                            "spo2": round(sum(h_data["spo2s"]) / len(h_data["spo2s"]), 1) if h_data["spo2s"] else None,
+                            "bp": h_data["bp"],
+                            "skin_temp": round(sum(h_data["temps"]) / len(h_data["temps"]), 1) if h_data["temps"] else None,
                         })
 
                     daily_trends.append({
@@ -921,6 +971,36 @@ class CRUDDoctor:
                         "steps": 0,
                         "hourly_records": hourly_list,
                     })
+
+            elif is_single_day and start_date:
+                # Nếu xem ngày cụ thể nhưng chưa có bản ghi: vẫn tạo khung 24 giờ để hiển thị trục thời gian 24h
+                try:
+                    d_target = datetime.strptime(start_date, "%Y-%m-%d")
+                    d_str = d_target.strftime("%d/%m")
+                except ValueError:
+                    d_str = start_date
+                hourly_list = [
+                    {
+                        "time": f"{h:02d}:00",
+                        "heart_rate": None,
+                        "spo2": None,
+                        "bp": None,
+                        "skin_temp": None,
+                    }
+                    for h in range(24)
+                ]
+                daily_trends.append({
+                    "date": d_str,
+                    "avg_heart_rate": None,
+                    "min_heart_rate": None,
+                    "max_heart_rate": None,
+                    "avg_spo2": None,
+                    "min_spo2": None,
+                    "avg_skin_temp": None,
+                    "bp": None,
+                    "steps": 0,
+                    "hourly_records": hourly_list,
+                })
 
         return DoctorVitalsAnalytics(
             patient_id=elderly_id,

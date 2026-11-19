@@ -106,6 +106,14 @@ export interface AppointmentItem {
   updated_at?: string;
 }
 
+export interface TrendHourlyItem {
+  time: string;
+  heart_rate?: number;
+  spo2?: number;
+  bp?: string;
+  skin_temp?: number;
+}
+
 export interface TrendItem {
   date: string;
   avg_heart_rate: number;
@@ -115,6 +123,7 @@ export interface TrendItem {
   max_heart_rate?: number;
   avg_skin_temp?: number;
   steps?: number;
+  hourly_records?: TrendHourlyItem[];
 }
 
 export interface AnalyticsData {

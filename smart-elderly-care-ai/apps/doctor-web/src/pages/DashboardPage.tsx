@@ -14,6 +14,7 @@ import { NewAppointmentModal } from '../components/clinical/NewAppointmentModal'
 import { DoctorHeroBanner } from '../components/dashboard/DoctorHeroBanner';
 import { DoctorKpiCards } from '../components/dashboard/DoctorKpiCards';
 import { DoctorMiniCalendar, MiniCalendarCell } from '../components/dashboard/DoctorMiniCalendar';
+import { DayAppointmentsModal } from '../components/dashboard/DayAppointmentsModal';
 import { DoctorAlertsAreaChart, AlertDayStat } from '../components/dashboard/DoctorAlertsAreaChart';
 import { DoctorPatientTable } from '../components/dashboard/DoctorPatientTable';
 import { EscalationStatusBanner } from '../components/dashboard/EscalationStatusBanner';
@@ -36,24 +37,44 @@ const DEFAULT_ALERT_STATS_30D: AlertDayStat[] = [
   { label: 'Tuần 4', fullLabel: 'Tuần 4 (22 - 30)', fall: 1, heart_alert: 9, spo2_alert: 3, sos_alert: 1, total: 14 },
 ];
 
-function computeAlertStats(incidents: any[], range: '7D' | '30D'): AlertDayStat[] {
-  if (range === '30D') {
-    const weeks: AlertDayStat[] = [
-      { label: 'Tuần 1', fullLabel: 'Tuần 1 (01 - 07)', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-      { label: 'Tuần 2', fullLabel: 'Tuần 2 (08 - 14)', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-      { label: 'Tuần 3', fullLabel: 'Tuần 3 (15 - 21)', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-      { label: 'Tuần 4', fullLabel: 'Tuần 4 (22 - 30)', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-    ];
-    if (!incidents || incidents.length === 0) return DEFAULT_ALERT_STATS_30D;
+function getMonday(d: Date): Date {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + diff);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
 
-    const now = new Date();
+function computeAlertStats(incidents: any[], range: '7D' | '30D', anchorDate: Date): AlertDayStat[] {
+  if (range === '30D') {
+    const y = anchorDate.getFullYear();
+    const m = anchorDate.getMonth();
+    const lastDay = new Date(y, m + 1, 0).getDate();
+
+    const weeks: AlertDayStat[] = [
+      { label: 'Tuần 1', fullLabel: `Tuần 1 (01 - 07/${m + 1})`, fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
+      { label: 'Tuần 2', fullLabel: `Tuần 2 (08 - 14/${m + 1})`, fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
+      { label: 'Tuần 3', fullLabel: `Tuần 3 (15 - 21/${m + 1})`, fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
+      { label: 'Tuần 4', fullLabel: `Tuần 4 (22 - ${lastDay}/${m + 1})`, fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
+    ];
+
+    if (!incidents || incidents.length === 0) {
+      const now = new Date();
+      return (y === now.getFullYear() && m === now.getMonth()) ? DEFAULT_ALERT_STATS_30D : weeks;
+    }
+
     for (const inc of incidents) {
       const d = inc.created_at ? new Date(inc.created_at) : null;
       if (!d || isNaN(d.getTime())) continue;
-      const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-      if (diffDays >= 0 && diffDays < 28) {
-        const wIdx = Math.min(3, Math.floor(diffDays / 7));
-        const targetWeek = 3 - wIdx;
+      if (d.getFullYear() === y && d.getMonth() === m) {
+        const dayNum = d.getDate();
+        let targetWeek = 0;
+        if (dayNum <= 7) targetWeek = 0;
+        else if (dayNum <= 14) targetWeek = 1;
+        else if (dayNum <= 21) targetWeek = 2;
+        else targetWeek = 3;
+
         const type = (inc.alert_type || '').toUpperCase();
         if (type.includes('FALL')) weeks[targetWeek].fall++;
         else if (type.includes('HEART') || type.includes('NHIP_TIM')) weeks[targetWeek].heart_alert++;
@@ -63,30 +84,48 @@ function computeAlertStats(incidents: any[], range: '7D' | '30D'): AlertDayStat[
         weeks[targetWeek].total++;
       }
     }
+
     const hasData = weeks.some((w) => w.total > 0);
-    return hasData ? weeks : DEFAULT_ALERT_STATS_30D;
+    const now = new Date();
+    if (!hasData && y === now.getFullYear() && m === now.getMonth()) {
+      return DEFAULT_ALERT_STATS_30D;
+    }
+    return weeks;
   }
 
-  // 7D: T2 -> CN
-  const days: AlertDayStat[] = [
-    { label: 'T2', fullLabel: 'Thứ Hai', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-    { label: 'T3', fullLabel: 'Thứ Ba', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-    { label: 'T4', fullLabel: 'Thứ Tư', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-    { label: 'T5', fullLabel: 'Thứ Năm', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-    { label: 'T6', fullLabel: 'Thứ Sáu', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-    { label: 'T7', fullLabel: 'Thứ Bảy', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-    { label: 'CN', fullLabel: 'Chủ Nhật', fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-  ];
+  // 7D: Tuần cụ thể (Thứ Hai -> Chủ Nhật)
+  const monday = getMonday(anchorDate);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23, 59, 59, 999);
 
-  if (!incidents || incidents.length === 0) return DEFAULT_ALERT_STATS_7D;
+  const dayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+  const fullNames = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ Nhật'];
+  const days: AlertDayStat[] = dayLabels.map((lbl, idx) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + idx);
+    const dateFormatted = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+    return {
+      label: lbl,
+      fullLabel: `${fullNames[idx]} (${dateFormatted})`,
+      fall: 0,
+      heart_alert: 0,
+      spo2_alert: 0,
+      sos_alert: 0,
+      total: 0,
+    };
+  });
 
-  const now = new Date();
+  if (!incidents || incidents.length === 0) {
+    const currentMonday = getMonday(new Date());
+    return monday.getTime() === currentMonday.getTime() ? DEFAULT_ALERT_STATS_7D : days;
+  }
+
   for (const inc of incidents) {
     const d = inc.created_at ? new Date(inc.created_at) : null;
     if (!d || isNaN(d.getTime())) continue;
-    const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays >= 0 && diffDays < 7) {
-      const dayOfWeek = d.getDay(); // 0 is Sunday (CN), 1 is Monday (T2)
+    if (d.getTime() >= monday.getTime() && d.getTime() <= sunday.getTime()) {
+      const dayOfWeek = d.getDay(); // 0 is CN, 1 is T2
       const dayIdx = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
       const type = (inc.alert_type || '').toUpperCase();
       if (type.includes('FALL')) days[dayIdx].fall++;
@@ -99,7 +138,11 @@ function computeAlertStats(incidents: any[], range: '7D' | '30D'): AlertDayStat[
   }
 
   const hasData = days.some((d) => d.total > 0);
-  return hasData ? days : DEFAULT_ALERT_STATS_7D;
+  const currentMonday = getMonday(new Date());
+  if (!hasData && monday.getTime() === currentMonday.getTime()) {
+    return DEFAULT_ALERT_STATS_7D;
+  }
+  return days;
 }
 
 export const DashboardPage: React.FC = () => {
@@ -119,6 +162,66 @@ export const DashboardPage: React.FC = () => {
   } = useDoctorDataStore();
 
   const [chartRange, setChartRange] = useState<'7D' | '30D'>('7D');
+  const [chartAnchorDate, setChartAnchorDate] = useState<Date>(() => new Date());
+
+  const now = new Date();
+  const currentMonday = getMonday(now);
+  const selectedMonday = getMonday(chartAnchorDate);
+  const selectedSunday = new Date(selectedMonday);
+  selectedSunday.setDate(selectedMonday.getDate() + 6);
+
+  const isCurrentWeek = selectedMonday.getTime() >= currentMonday.getTime();
+  const isCurrentMonth =
+    chartAnchorDate.getFullYear() === now.getFullYear() &&
+    chartAnchorDate.getMonth() >= now.getMonth();
+
+  const periodLabel = useMemo(() => {
+    if (chartRange === '7D') {
+      const startStr = `${String(selectedMonday.getDate()).padStart(2, '0')}/${String(selectedMonday.getMonth() + 1).padStart(2, '0')}`;
+      const endStr = `${String(selectedSunday.getDate()).padStart(2, '0')}/${String(selectedSunday.getMonth() + 1).padStart(2, '0')}`;
+      return `${startStr} - ${endStr}`;
+    }
+    return `Tháng ${chartAnchorDate.getMonth() + 1}/${chartAnchorDate.getFullYear()}`;
+  }, [chartRange, selectedMonday, selectedSunday, chartAnchorDate]);
+
+  const isNextDisabled = chartRange === '7D' ? isCurrentWeek : isCurrentMonth;
+  const isCurrentPeriod = chartRange === '7D' ? isCurrentWeek : isCurrentMonth;
+
+  const handlePrevChart = () => {
+    setChartAnchorDate((prev) => {
+      const d = new Date(prev);
+      if (chartRange === '7D') {
+        d.setDate(d.getDate() - 7);
+      } else {
+        d.setMonth(d.getMonth() - 1);
+      }
+      return d;
+    });
+  };
+
+  const handleNextChart = () => {
+    if (isNextDisabled) return;
+    setChartAnchorDate((prev) => {
+      const d = new Date(prev);
+      if (chartRange === '7D') {
+        d.setDate(d.getDate() + 7);
+      } else {
+        d.setMonth(d.getMonth() + 1);
+      }
+      return d;
+    });
+  };
+
+  const handleResetCurrentChart = () => {
+    setChartAnchorDate(new Date());
+  };
+
+  const handleMonthSelect = (mStr: string) => {
+    const [y, m] = mStr.split('-').map(Number);
+    setChartAnchorDate(new Date(y, m - 1, 1));
+  };
+
+  const selectedMonthStr = `${chartAnchorDate.getFullYear()}-${String(chartAnchorDate.getMonth() + 1).padStart(2, '0')}`;
 
   const nextAppointment = useMemo(() => {
     const upcomingList = appointments
@@ -128,8 +231,8 @@ export const DashboardPage: React.FC = () => {
   }, [appointments]);
 
   const alertStats = useMemo(() => {
-    return computeAlertStats(incidents, chartRange);
-  }, [incidents, chartRange]);
+    return computeAlertStats(incidents, chartRange, chartAnchorDate);
+  }, [incidents, chartRange, chartAnchorDate]);
 
   // Table search & filter
   const [tableSearch, setTableSearch] = useState('');
@@ -144,6 +247,28 @@ export const DashboardPage: React.FC = () => {
 
   // Create Appointment Modal
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createModalAppointment, setCreateModalAppointment] = useState<AppointmentItem | null>(null);
+
+  // Pop-up Modal chi tiết lịch khám theo ngày đã chọn
+  const [showDayScheduleModal, setShowDayScheduleModal] = useState(false);
+
+  // Handler khi click chọn bất kỳ ngày nào trên Mini Calendar
+  const handleSelectCalendarDate = useCallback((dateStr: string) => {
+    setSelectedDate(dateStr);
+    setShowDayScheduleModal(true);
+  }, []);
+
+  // Handler mở tạo lịch khám mới gắn với ngày đang chọn
+  const handleOpenCreateForDate = useCallback((dateStr: string) => {
+    setCreateModalAppointment({
+      id: '',
+      patient_id: '',
+      patient_name: '',
+      scheduled_at: `${dateStr}T09:00:00`,
+      status: 'UPCOMING',
+    });
+    setShowCreateModal(true);
+  }, []);
 
   // Chữ cái viết tắt chuẩn xác: "M" (trong "Minh") thay vì "B" (trong "BS.")
   const doctorInitial = useMemo(() => {
@@ -265,9 +390,21 @@ export const DashboardPage: React.FC = () => {
 
     for (let d = 1; d <= totalDays; d++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const dayApts = appointments.filter((a) => a.scheduled_at?.slice(0, 10) === dateStr);
+      const dayApts = appointments.filter((a) => {
+        if (!a.scheduled_at) return false;
+        if (a.scheduled_at.startsWith(dateStr)) return true;
+        try {
+          const dt = new Date(a.scheduled_at);
+          const y = dt.getFullYear();
+          const m = String(dt.getMonth() + 1).padStart(2, '0');
+          const day = String(dt.getDate()).padStart(2, '0');
+          return `${y}-${m}-${day}` === dateStr;
+        } catch {
+          return false;
+        }
+      });
       let dotStatus: 'COMPLETED' | 'UPCOMING' | 'CRITICAL' | null = null;
-      if (dayApts.some((a) => a.status === 'UPCOMING')) {
+      if (dayApts.some((a) => a.status === 'UPCOMING' || a.status === 'CONFIRMED')) {
         dotStatus = 'UPCOMING';
       } else if (dayApts.some((a) => a.status === 'COMPLETED')) {
         dotStatus = 'COMPLETED';
@@ -286,9 +423,22 @@ export const DashboardPage: React.FC = () => {
     return cells;
   }, [calendarMonth, appointments, selectedDate]);
 
-  // Selected date appointments for preview
+  // Selected date appointments for preview (Khớp chính xác cả UTC và local date)
   const selectedDateApts = useMemo(() => {
-    return appointments.filter((a) => a.scheduled_at?.slice(0, 10) === selectedDate);
+    if (!selectedDate) return [];
+    return appointments.filter((a) => {
+      if (!a.scheduled_at) return false;
+      if (a.scheduled_at.startsWith(selectedDate)) return true;
+      try {
+        const d = new Date(a.scheduled_at);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}` === selectedDate;
+      } catch {
+        return false;
+      }
+    });
   }, [appointments, selectedDate]);
 
   // Filtered patients for Tier 4 Table
@@ -330,7 +480,10 @@ export const DashboardPage: React.FC = () => {
         warningCount={warningPatients.length}
         loading={isLoading && patients.length === 0}
         onRefresh={() => fetchAllData(true)}
-        onOpenCreateAppointment={() => setShowCreateModal(true)}
+        onOpenCreateAppointment={() => {
+          setCreateModalAppointment(null);
+          setShowCreateModal(true);
+        }}
         onNavigateAppointments={() => navigate('/appointments')}
       />
 
@@ -383,6 +536,14 @@ export const DashboardPage: React.FC = () => {
             data={alertStats}
             range={chartRange}
             onRangeChange={setChartRange}
+            periodLabel={periodLabel}
+            onPrev={handlePrevChart}
+            onNext={handleNextChart}
+            isNextDisabled={isNextDisabled}
+            onResetCurrent={handleResetCurrentChart}
+            isCurrentPeriod={isCurrentPeriod}
+            selectedMonthStr={selectedMonthStr}
+            onMonthSelect={handleMonthSelect}
           />
         </div>
 
@@ -393,30 +554,9 @@ export const DashboardPage: React.FC = () => {
             onMonthChange={setCalendarMonth}
             miniCalendarCells={miniCalendarCells}
             selectedDate={selectedDate}
-            onSelectDate={setSelectedDate}
-            onNavigateAppointments={() => navigate(selectedDate ? `/appointments?date=${selectedDate}` : '/appointments')}
+            onSelectDate={handleSelectCalendarDate}
+            onNavigateAppointments={() => setShowDayScheduleModal(true)}
           />
-          {selectedDateApts.length > 0 && (
-            <div className="mt-2.5 rounded-xl border border-blue-100 bg-blue-50/70 p-2.5 text-xs animate-in fade-in">
-              <div className="flex items-center justify-between font-bold text-blue-900 mb-1">
-                <span>Lịch ngày {selectedDate.split('-').reverse().join('/')}:</span>
-                <span className="text-[10.5px] px-1.5 py-0.5 rounded-full bg-blue-600 text-white font-extrabold">
-                  {selectedDateApts.length} ca
-                </span>
-              </div>
-              <div className="space-y-1 max-h-16 overflow-y-auto">
-                {selectedDateApts.slice(0, 2).map((apt) => (
-                  <div key={apt.id} className="flex items-center justify-between text-[11px] text-slate-700">
-                    <span className="truncate font-semibold max-w-[130px]">{apt.patient_name || 'Bệnh nhân'}</span>
-                    <span className="text-slate-500 font-mono text-[10.5px]">{apt.scheduled_at?.slice(11, 16) || '--:--'}</span>
-                  </div>
-                ))}
-                {selectedDateApts.length > 2 && (
-                  <p className="text-[10px] text-blue-600 font-medium">+{selectedDateApts.length - 2} ca khám khác...</p>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -433,11 +573,34 @@ export const DashboardPage: React.FC = () => {
         loading={isLoading && patients.length === 0}
       />
 
+      {/* Pop-up Modal chi tiết lịch khám theo ngày đã chọn */}
+      {showDayScheduleModal && (
+        <DayAppointmentsModal
+          isOpen={showDayScheduleModal}
+          dateStr={selectedDate}
+          appointments={selectedDateApts}
+          onClose={() => setShowDayScheduleModal(false)}
+          onOpenCreate={handleOpenCreateForDate}
+          onNavigateAppointments={(dateStr) =>
+            navigate(dateStr ? `/appointments?date=${dateStr}` : '/appointments')
+          }
+          onSelectPatient={(patientId) => navigate(`/patients?id=${patientId}`)}
+        />
+      )}
+
+      {/* Modal Tạo lịch khám mới */}
       {showCreateModal && (
         <NewAppointmentModal
           patients={patients}
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={() => fetchAllData(true)}
+          initialAppointment={createModalAppointment}
+          onClose={() => {
+            setShowCreateModal(false);
+            setCreateModalAppointment(null);
+          }}
+          onSuccess={() => {
+            fetchAllData(true);
+            setCreateModalAppointment(null);
+          }}
         />
       )}
     </div>

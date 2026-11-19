@@ -208,11 +208,15 @@ async def update_patient_medical_record(
 )
 async def get_vitals_analytics(
     elderly_id: str,
-    days: int = Query(7, ge=1, le=30, description="Số ngày cần phân tích (1 - 30)"),
+    days: int = Query(7, ge=1, le=365, description="Số ngày cần phân tích (1 - 365)"),
+    start_date: Optional[str] = Query(None, description="Ngày bắt đầu (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="Ngày kết thúc (YYYY-MM-DD)"),
     db: AsyncSession = Depends(get_db),
 ):
     """Trích xuất dữ liệu xu hướng nhịp tim, SpO2, độ ổn định sinh hiệu."""
-    return await crud_doctor.get_vitals_analytics(db=db, elderly_id=elderly_id, days=days)
+    return await crud_doctor.get_vitals_analytics(
+        db=db, elderly_id=elderly_id, days=days, start_date=start_date, end_date=end_date
+    )
 
 
 @router.put(

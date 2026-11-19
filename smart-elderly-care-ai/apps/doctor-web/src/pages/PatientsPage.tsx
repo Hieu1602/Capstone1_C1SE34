@@ -17,6 +17,11 @@ import { PrescriptionModal } from '../components/clinical/PrescriptionModal';
 import { MedicalRecordModal } from '../components/clinical/MedicalRecordModal';
 import { NewAppointmentModal } from '../components/clinical/NewAppointmentModal';
 import { PatientCard, PatientDetailDrawer, FamilyContactModal, DrawerTabKey } from '../components/clinical';
+import {
+  VitalFilterState,
+  computeVitalFilter,
+  getTodayYMD,
+} from '../utils/dateFilter';
 import { Search, RefreshCw, X, Users, AlertTriangle, Watch } from 'lucide-react';
 
 interface PatientDrawerCacheEntry {
@@ -66,6 +71,9 @@ export const PatientsPage: React.FC = () => {
   const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
   const [isLoadingPrescriptions, setIsLoadingPrescriptions] = useState(false);
   const [isLoadingAppointments, setIsLoadingAppointments] = useState(false);
+  const [vitalFilter, setVitalFilter] = useState<VitalFilterState>(() =>
+    computeVitalFilter('WEEK', getTodayYMD())
+  );
 
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
   const [showRecordModal, setShowRecordModal] = useState(false);
@@ -154,23 +162,34 @@ export const PatientsPage: React.FC = () => {
   // Lazy-load dữ liệu Đồ thị Sinh hiệu khi người dùng thực sự mở Tab 'VITALS'
   const handleDrawerTabChange = async (tab: DrawerTabKey) => {
     if (tab !== 'VITALS' || !selectedPatientId) return;
-    const cached = patientDrawerCache.get(selectedPatientId);
-    if (cached?.analytics) {
-      setAnalytics(cached.analytics);
-      return;
-    }
     setIsLoadingAnalytics(true);
     try {
-      const data = await doctorApi.getAnalytics(selectedPatientId, 7);
+      const data = await doctorApi.getAnalytics(
+        selectedPatientId,
+        vitalFilter.days,
+        vitalFilter.startDate,
+        vitalFilter.endDate
+      );
       setAnalytics(data);
-      const latestCache = patientDrawerCache.get(selectedPatientId);
-      if (latestCache) {
-        patientDrawerCache.set(selectedPatientId, {
-          ...latestCache,
-          analytics: data,
-          updatedAt: Date.now(),
-        });
-      }
+    } catch {
+      // ignore
+    } finally {
+      setIsLoadingAnalytics(false);
+    }
+  };
+
+  const handleVitalFilterChange = async (newFilter: VitalFilterState) => {
+    setVitalFilter(newFilter);
+    if (!selectedPatientId) return;
+    setIsLoadingAnalytics(true);
+    try {
+      const data = await doctorApi.getAnalytics(
+        selectedPatientId,
+        newFilter.days,
+        newFilter.startDate,
+        newFilter.endDate
+      );
+      setAnalytics(data);
     } catch {
       // ignore
     } finally {
@@ -457,6 +476,8 @@ export const PatientsPage: React.FC = () => {
           isLoadingAnalytics={isLoadingAnalytics}
           isLoadingPrescriptions={isLoadingPrescriptions}
           isLoadingAppointments={isLoadingAppointments}
+          vitalFilter={vitalFilter}
+          onVitalFilterChange={handleVitalFilterChange}
           onTabChange={handleDrawerTabChange}
           onClose={() => setSelectedPatientId(null)}
           onOpenRecordModal={() => setShowRecordModal(true)}

@@ -26,7 +26,96 @@ interface Props {
  */
 export default function CameraControlIcon({ name, size = 32, color }: Props) {
     if (Platform.OS === "web") {
-        return <Ionicons name={name} size={size} color={color} />;
+        let webShape: React.ReactNode;
+        switch (name) {
+            case "camera":
+                webShape = (
+                    <>
+                        <path d="M3 8h6l2.5-3h9L23 8h6v20H3Z" />
+                        <circle cx={16} cy={18} r={7} />
+                        <path d="M12 18a4 4 0 0 1 4-4" />
+                    </>
+                );
+                break;
+            case "videocam":
+                webShape = (
+                    <>
+                        <circle cx={16} cy={16} r={12} />
+                        <circle
+                            cx={16}
+                            cy={16}
+                            r={6.5}
+                            fill={color}
+                            stroke="none"
+                        />
+                    </>
+                );
+                break;
+            case "mic":
+            case "mic-off":
+                webShape = (
+                    <>
+                        <path d="M11 6a5 5 0 0 1 10 0v12a5 5 0 0 1-10 0ZM7 13v5a9 9 0 0 0 18 0v-5M16 27v4M11 31h10" />
+                        {name === "mic-off" && <path d="M3 3 29 31" />}
+                    </>
+                );
+                break;
+            case "volume-mute":
+            case "volume-high-outline":
+                webShape = (
+                    <>
+                        <path d="M3 12h6l9-8v24l-9-8H3Z" />
+                        {name === "volume-mute" ? (
+                            <path d="m23 12 7 8m0-8-7 8" />
+                        ) : (
+                            <path d="M22 9a10 10 0 0 1 0 14M26 5a16 16 0 0 1 0 22" />
+                        )}
+                    </>
+                );
+                break;
+            case "move":
+                webShape = (
+                    <>
+                        <circle cx={16} cy={9} r={7} />
+                        <path d="M16 16v9M8 22l-5 7h26l-5-7" />
+                    </>
+                );
+                break;
+            case "notifications":
+                webShape = (
+                    <>
+                        <path d="M8 25V15a8 8 0 0 1 16 0v6M6 28h12M11 24V15M16 1v2M5 5l2 2M27 5l-2 2" />
+                        <path d="M19 25h10m-4-4 4 4-4 4" />
+                    </>
+                );
+                break;
+            case "play-back-circle-outline":
+                webShape = (
+                    <>
+                        <path d="M5 13a12 12 0 1 1 1 12M3 9l2 5 5-2" />
+                        <path d="m13 10 9 6-9 6Z" fill="#F15B67" stroke="none" />
+                    </>
+                );
+                break;
+            default:
+                return <Ionicons name={name} size={size} color={color} />;
+        }
+
+        return (
+            <svg
+                width={size}
+                height={size}
+                viewBox="0 0 32 34"
+                fill="none"
+                stroke={color}
+                strokeWidth={1.8}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+            >
+                {webShape}
+            </svg>
+        );
     }
 
     let shape: React.ReactNode;
