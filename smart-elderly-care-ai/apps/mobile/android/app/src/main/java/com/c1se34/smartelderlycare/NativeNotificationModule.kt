@@ -42,22 +42,116 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
         private var activeRingtone: Ringtone? = null
         private var stopAlarmRunnable: Runnable? = null
         private val mainHandler = Handler(Looper.getMainLooper())
+        private val activeNotificationIds = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
+
+        @JvmStatic
+        fun registerActiveNotification(id: Int) {
+            activeNotificationIds.add(id)
+        }
 
         /**
-         * Dừng toàn bộ rung liên tục và chuông báo động (gọi khi người dùng chạm, vuốt xóa hoặc bấm Đã hiểu)
+         * Phát chuông báo động và kích hoạt rung liên tục cho thông báo khẩn cấp
+         */
+        @JvmStatic
+        fun triggerAlarm(context: Context, isCritical: Boolean) {
+            mainHandler.post {
+                try {
+                    // Dừng chuông và rung cũ nếu có
+                    activeRingtone?.stop()
+                    activeRingtone = null
+                    activeVibrator?.cancel()
+                    activeVibrator = null
+                    stopAlarmRunnable?.let { mainHandler.removeCallbacks(it) }
+                    stopAlarmRunnable = null
+
+                    // 1. Phát âm thanh chuông báo động
+                    val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                        ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                    val ringtone = RingtoneManager.getRingtone(context.applicationContext, soundUri)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        ringtone.audioAttributes = AudioAttributes.Builder()
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .setUsage(AudioAttributes.USAGE_ALARM)
+                            .build()
+                    }
+                    ringtone.play()
+                    activeRingtone = ringtone
+
+                    // 2. Rung phần cứng điện thoại (Continuous Vibration nếu khẩn cấp)
+                    val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        val vibratorManager =
+                            context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                        vibratorManager?.defaultVibrator
+                    } else {
+                        @Suppress("DEPRECATION")
+                        context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                    }
+
+                    val pattern = longArrayOf(0, 1000, 400, 1000, 400, 1000, 800)
+                    val repeatIndex = if (isCritical) 0 else -1
+
+                    vibrator?.cancel()
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        val effect = VibrationEffect.createWaveform(pattern, repeatIndex)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            val vibAttrs = VibrationAttributes.Builder()
+                                .setUsage(VibrationAttributes.USAGE_ALARM)
+                                .build()
+                            vibrator?.vibrate(effect, vibAttrs)
+                        } else {
+                            val alarmAudioAttrs = AudioAttributes.Builder()
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                                .setUsage(AudioAttributes.USAGE_ALARM)
+                                .build()
+                            @Suppress("DEPRECATION")
+                            vibrator?.vibrate(effect, alarmAudioAttrs)
+                        }
+                    } else {
+                        @Suppress("DEPRECATION")
+                        vibrator?.vibrate(pattern, repeatIndex)
+                    }
+                    activeVibrator = vibrator
+
+                    // Tự động dừng sau 45s bảo vệ pin nếu không có tương tác
+                    stopAlarmRunnable = Runnable {
+                        stopAlarm(context)
+                    }
+                    mainHandler.postDelayed(stopAlarmRunnable!!, 45000)
+                    Log.d(TAG, "Đã kích hoạt chuông và rung liên tục khẩn cấp thành công.")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Lỗi kích hoạt báo động: ${e.message}")
+                }
+            }
+        }
+
+        /**
+         * Dừng toàn bộ rung liên tục, chuông báo động và xóa thông báo cảnh báo khỏi thanh thông báo hệ thống (0ms)
          */
         @JvmStatic
         fun stopAlarm(context: Context) {
-            try {
-                activeVibrator?.cancel()
-                activeVibrator = null
-                activeRingtone?.stop()
-                activeRingtone = null
-                stopAlarmRunnable?.let { mainHandler.removeCallbacks(it) }
-                stopAlarmRunnable = null
-                Log.d(TAG, "Đã tắt rung liên tục và dừng chuông báo động thành công.")
-            } catch (e: Exception) {
-                Log.e(TAG, "Lỗi khi dừng báo động: ${e.message}")
+            mainHandler.post {
+                try {
+                    activeVibrator?.cancel()
+                    activeVibrator = null
+                    activeRingtone?.stop()
+                    activeRingtone = null
+                    stopAlarmRunnable?.let { mainHandler.removeCallbacks(it) }
+                    stopAlarmRunnable = null
+
+                    // Xóa tất cả thông báo cảnh báo khẩn cấp đang hiển thị trên thanh thông báo
+                    val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+                    if (manager != null) {
+                        for (id in activeNotificationIds) {
+                            try {
+                                manager.cancel(id)
+                            } catch (_: Exception) {}
+                        }
+                        activeNotificationIds.clear()
+                    }
+                    Log.d(TAG, "Đã tắt rung liên tục, dừng chuông báo động và dọn sạch thông báo cảnh báo (0ms).")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Lỗi khi dừng báo động: ${e.message}")
+                }
             }
         }
     }
@@ -202,6 +296,7 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
             // ID thông báo và Request Code luôn là số nguyên dương hợp lệ
             val notifId = ((System.currentTimeMillis() % 1000000L).toInt() + 1000).let { if (it < 0) -it else it }
             val reqCode = (System.currentTimeMillis() % 100000L).toInt().let { if (it < 0) -it else it }
+            registerActiveNotification(notifId)
 
             // Intent khi người dùng bấm vào thông báo -> Mở app và dừng chuông/rung
             val intent = Intent(reactContext, MainActivity::class.java).apply {
@@ -226,6 +321,18 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                 PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
             )
 
+            // Nút hành động trực tiếp trên thông báo: "ĐÃ XỬ LÝ (TẮT CHUÔNG)"
+            val ackIntent = Intent(reactContext, AlarmDismissReceiver::class.java).apply {
+                action = "com.c1se34.smartelderlycare.ACTION_ACKNOWLEDGE_ALARM"
+                putExtra("NOTIFICATION_ID", notifId)
+            }
+            val ackPendingIntent = PendingIntent.getBroadcast(
+                reactContext,
+                reqCode + 2,
+                ackIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+            )
+
             val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
                 ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
@@ -242,9 +349,14 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                 .setDefaults(NotificationCompat.DEFAULT_ALL)
                 .setSound(soundUri)
                 .setAutoCancel(true)
-                .setOngoing(false) // CHO PHÉP NGƯỜI DÙNG VUỐT XÓA THÔNG BÁO BẤT KỲ LÚC NÀO
+                .setOngoing(false) // Cho phép vuốt xóa bất kỳ lúc nào
                 .setContentIntent(pendingIntent)
                 .setDeleteIntent(deletePendingIntent)
+                .addAction(
+                    android.R.drawable.ic_menu_close_clear_cancel,
+                    "ĐÃ XỬ LÝ (TẮT CHUÔNG)",
+                    ackPendingIntent
+                )
 
             // Hiển thị trực tiếp lên thanh thông báo hệ thống (Notification Drawer / Status Bar)
             try {
@@ -261,66 +373,7 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
             }
 
             if (isEmergency) {
-                // 1. Phát âm thanh chuông báo động
-                try {
-                    activeRingtone?.stop()
-                    val ringtone = RingtoneManager.getRingtone(reactContext, soundUri)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                        ringtone.audioAttributes = AudioAttributes.Builder()
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                            .setUsage(AudioAttributes.USAGE_ALARM)
-                            .build()
-                    }
-                    ringtone.play()
-                    activeRingtone = ringtone
-                } catch (e: Exception) {
-                    Log.e(TAG, "Lỗi phát âm thanh chuông: ${e.message}")
-                }
-
-                // 2. Rung liên tục (Continuous Vibration) cho đến khi người nhà chạm vào hoặc vuốt xóa
-                try {
-                    val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        val vibratorManager =
-                            reactContext.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-                        vibratorManager?.defaultVibrator
-                    } else {
-                        @Suppress("DEPRECATION")
-                        reactContext.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-                    }
-
-                    val pattern = longArrayOf(0, 1000, 400, 1000, 400, 1000, 800)
-                    // repeatIndex = 0 -> Rung lặp lại liên tục cho người nhà nhận biết ngay lập tức
-                    val repeatIndex = if (isCritical) 0 else -1
-
-                    vibrator?.cancel()
-                    val effect = VibrationEffect.createWaveform(pattern, repeatIndex)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        val vibAttrs = VibrationAttributes.Builder()
-                            .setUsage(VibrationAttributes.USAGE_ALARM)
-                            .build()
-                        vibrator?.vibrate(effect, vibAttrs)
-                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        val alarmAudioAttrs = AudioAttributes.Builder()
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                            .setUsage(AudioAttributes.USAGE_ALARM)
-                            .build()
-                        @Suppress("DEPRECATION")
-                        vibrator?.vibrate(effect, alarmAudioAttrs)
-                    } else {
-                        @Suppress("DEPRECATION")
-                        vibrator?.vibrate(pattern, repeatIndex)
-                    }
-                    activeVibrator = vibrator
-
-                    // Tự động dừng rung sau 45s để bảo vệ pin máy nếu người nhà không có mặt
-                    stopAlarmRunnable?.let { mainHandler.removeCallbacks(it) }
-                    stopAlarmRunnable = Runnable {
-                        stopAlarm(reactContext)
-                    }
-                    mainHandler.postDelayed(stopAlarmRunnable!!, 45000)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Lỗi kích hoạt rung: ${e.message}")
-                }
+                triggerAlarm(reactContext, isCritical = isCritical)
             } else {
                 triggerVibration()
             }

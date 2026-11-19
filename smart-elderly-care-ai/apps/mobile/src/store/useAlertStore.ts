@@ -121,6 +121,12 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
     }),
 
   acknowledgeIncident: async (incidentId: string, note?: string, user: string = 'Demo User') => {
+    // 0. Tắt ngay lập tức chuông báo động và rung điện thoại khi bấm Đã xử lý (0ms)
+    try {
+      const { notificationService } = require('../services/notificationService');
+      notificationService.stopEmergencyAlarm();
+    } catch {}
+
     // 1. Optimistic Update tức thời trong RAM (0ms)
     set((state) => {
       const updatedIncidents = state.incidents.map((inc) =>
@@ -155,6 +161,12 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
   },
 
   acknowledgeAll: async () => {
+    // 0. Tắt ngay lập tức chuông báo động và rung điện thoại khi bấm Đã xử lý tất cả (0ms)
+    try {
+      const { notificationService } = require('../services/notificationService');
+      notificationService.stopEmergencyAlarm();
+    } catch {}
+
     // 1. Optimistic Update tức thời trong RAM (0ms)
     set((state) => ({
       incidents: state.incidents.map((inc) => ({

@@ -304,24 +304,24 @@ async def chat(
 
         is_rejected = bool(res.get("is_rejected_turn", False))
 
-        # Lưu tin nhắn user (đánh dấu is_error=True nếu là câu chửi tục/vô nghĩa để không bị nối ngữ cảnh lần sau)
+        # Lưu tin nhắn user và AI (luôn để is_error=False để giao diện chat không bị viền đỏ gây khó chịu)
         db.add(ChatMessage(
             session_id=session.id,
             sender="user",
             text=request.message,
-            is_error=is_rejected,
+            is_error=False,
         ))
         # Lưu phản hồi AI
         db.add(ChatMessage(
             session_id=session.id,
             sender="ai",
             text=res.get("answer", ""),
-            is_error=is_rejected,
+            is_error=False,
         ))
         session.updated_at = datetime.now(timezone.utc)
         await db.commit()
 
-        suggested = SUGGESTED_QUESTIONS_EN if language == "en" else SUGGESTED_QUESTIONS_VI
+        suggested = res.get("suggested_questions") or (SUGGESTED_QUESTIONS_EN if language == "en" else SUGGESTED_QUESTIONS_VI)
 
         return ChatResponse(
             status="success",

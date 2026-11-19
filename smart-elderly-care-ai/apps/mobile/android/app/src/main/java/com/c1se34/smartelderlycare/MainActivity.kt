@@ -1,5 +1,6 @@
 package com.c1se34.smartelderlycare
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -41,6 +42,14 @@ class MainActivity : ReactActivity() {
   override fun onResume() {
     super.onResume()
     if (intent?.getBooleanExtra("STOP_ALARM", false) == true) {
+      NativeNotificationModule.stopAlarm(this)
+    }
+  }
+
+  override fun onNewIntent(intent: Intent?) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    if (intent?.getBooleanExtra("STOP_ALARM", false) == true || intent?.hasExtra("OPEN_INCIDENT_ID") == true) {
       NativeNotificationModule.stopAlarm(this)
     }
   }

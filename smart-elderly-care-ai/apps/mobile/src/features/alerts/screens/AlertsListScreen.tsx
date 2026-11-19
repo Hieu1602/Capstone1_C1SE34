@@ -33,6 +33,7 @@ import { IncidentAlertCard } from '../components/IncidentAlertCard';
 import { HouseActionModal, HouseModalMode } from '../components/HouseActionModal';
 import { AlertsEmptyState } from '../components/AlertsEmptyState';
 import { handleHeaderBack } from '../../../navigation/navigationHelpers';
+import { notificationService } from '../../../services/notificationService';
 
 type FilterType = 'ALL' | 'CRITICAL' | 'VITAL' | 'MEDICATION' | 'APPOINTMENT';
 
@@ -241,6 +242,7 @@ export default function AlertsListScreen({ navigation, route }: any) {
   };
 
   const handleMarkAllAsRead = async () => {
+    notificationService.stopEmergencyAlarm();
     if (unreadIncidentsCount === 0) {
       Alert.alert('Thông báo', 'Tất cả sự kiện đều đã được đánh dấu đọc.');
       return;
@@ -267,6 +269,9 @@ export default function AlertsListScreen({ navigation, route }: any) {
 
   const handleQuickAcknowledge = async (item: any, e?: any) => {
     e?.stopPropagation?.();
+    // Tắt ngay chuông báo động và ngắt rung tức thời khi người dùng bấm Đã xử lý
+    notificationService.stopEmergencyAlarm();
+
     const handler = userName || 'Người chăm sóc';
     const updated = applyOptimisticAck(item.id, handler);
     acknowledgeIncident(item.id, 'Đã kiểm tra an toàn từ danh sách sự kiện', handler);

@@ -470,6 +470,9 @@ class AlertsWebSocket {
 
     // 2. Sự cố đã được xử lý (Đánh dấu đã xử lý / Resolved)
     else if (event.type === 'INCIDENT_RESOLVED') {
+      // Dừng ngay lập tức chuông báo động & ngắt rung điện thoại (0ms)
+      notificationService.stopEmergencyAlarm();
+
       const incId = event.incident_id || event.data?.id;
       if (incId) {
         useEscalationStore.getState().clearEscalation(incId);

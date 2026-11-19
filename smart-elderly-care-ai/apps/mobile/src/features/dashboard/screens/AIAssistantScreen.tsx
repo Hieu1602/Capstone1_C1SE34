@@ -152,7 +152,6 @@ const ChatMessageRow = memo(
             isUser
               ? styles.userBubble
               : [styles.aiBubble, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }],
-            message.isError && styles.errorBubble,
           ]}
         >
           {isUser ? (
@@ -228,6 +227,7 @@ export default function AIAssistantScreen({ navigation }: any) {
 
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [quickSuggestions, setQuickSuggestions] = useState<string[]>([]);
 
   // Giọng đọc AI (TTS)
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
@@ -443,6 +443,7 @@ export default function AIAssistantScreen({ navigation }: any) {
   const handleOpenHistoryChat = useCallback(
     async (chat: HistoryChat) => {
       setSessionId(chat.id);
+      setQuickSuggestions([]);
       closeSidebar();
 
       // Nếu đã có tin nhắn trong bộ nhớ cache
@@ -483,6 +484,7 @@ export default function AIAssistantScreen({ navigation }: any) {
   const handleNewChat = useCallback(() => {
     setSessionId(null);
     setMessages([]);
+    setQuickSuggestions([]);
     setInputText('');
     setSearchQuery('');
     setIsSearching(false);
@@ -555,8 +557,9 @@ export default function AIAssistantScreen({ navigation }: any) {
         timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, userMsg]);
-      // Luôn xoá nội dung ô input ngay sau khi tin nhắn được đưa vào danh sách gửi
+      // Luôn xoá nội dung ô input và gợi ý cũ ngay sau khi tin nhắn được đưa vào danh sách gửi
       setInputText('');
+      setQuickSuggestions([]);
 
       setIsLoading(true);
       try {
@@ -579,6 +582,17 @@ export default function AIAssistantScreen({ navigation }: any) {
           timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
         };
         setMessages((prev) => [...prev, aiMsg]);
+
+        // Cập nhật các gợi ý lựa chọn nhanh (hỏi lại để dò) từ phản hồi AI
+        const sugs = response.data?.suggested_actions?.length
+          ? response.data.suggested_actions
+          : response.data?.suggested_questions;
+        if (Array.isArray(sugs) && sugs.length > 0) {
+          setQuickSuggestions(sugs);
+        } else {
+          setQuickSuggestions([]);
+        }
+
         fetchSessions();
       } catch (error: any) {
         const isOffline =
@@ -593,7 +607,7 @@ export default function AIAssistantScreen({ navigation }: any) {
             ? '⚠️ Không thể kết nối đến máy chủ Backend. Vui lòng kiểm tra lại mạng hoặc thử lại sau.'
             : `⚠️ Lỗi kết nối AI: ${error?.response?.data?.detail || error?.message}`,
           timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-          isError: true,
+          isError: false,
         };
         setMessages((prev) => [...prev, errorMsg]);
       } finally {
@@ -885,6 +899,37 @@ export default function AIAssistantScreen({ navigation }: any) {
             )}
           </ScrollView>
 
+          {/* Gợi ý lựa chọn nhanh (Hỏi lại để dò đúng nhu cầu người dùng) */}
+          {quickSuggestions.length > 0 && !isRecording && (
+            <View style={[styles.quickSuggestionsRow, isDarkMode && { borderTopColor: '#334155' }]}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.quickSuggestionsContent}
+              >
+                {quickSuggestions.map((sug, sIdx) => (
+                  <TouchableOpacity
+                    key={`quick-sug-${sIdx}`}
+                    style={[
+                      styles.quickSugChip,
+                      isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+                    ]}
+                    onPress={() => {
+                      setQuickSuggestions([]);
+                      handleSend(sug);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="sparkles" size={13} color="#0284C7" style={{ marginRight: 6 }} />
+                    <Text style={[styles.quickSugText, isDarkMode && { color: '#E2E8F0' }]}>
+                      {sug}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
           {/* 3. Floating Pill Input Bar */}
           <View style={styles.bottomBarWrap}>
             {/* Thanh thông báo trạng thái ghi âm */}
@@ -974,7 +1019,7 @@ export default function AIAssistantScreen({ navigation }: any) {
                     <Ionicons
                       name={isRecording ? 'stop' : 'mic-outline'}
                       size={20}
-                      color={isRecording ? '#EF4444' : isDarkMode ? colors.textPrimary : '#0F172A'}
+                      color={isRecording ? '#0284C7' : isDarkMode ? colors.textPrimary : '#0F172A'}
                     />
                   )}
                 </TouchableOpacity>
@@ -1299,8 +1344,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   errorBubble: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FCA5A5',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
   },
   msgText: {
     fontSize: 14,
@@ -1332,6 +1377,30 @@ const styles = StyleSheet.create({
     padding: 3,
     borderRadius: 8,
   },
+  quickSuggestionsRow: {
+    paddingVertical: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E2E8F0',
+  },
+  quickSuggestionsContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  quickSugChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  quickSugText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#0369A1',
+  },
   bottomBarWrap: {
     paddingHorizontal: 16,
     paddingBottom: Platform.OS === 'ios' ? 16 : 14,
@@ -1341,9 +1410,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FEF2F2',
+    backgroundColor: '#F0F9FF',
     borderWidth: 1,
-    borderColor: '#FCA5A5',
+    borderColor: '#BAE6FD',
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -1358,12 +1427,12 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#0284C7',
   },
   recordingText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#991B1B',
+    color: '#0369A1',
   },
   recordingActions: {
     flexDirection: 'row',
@@ -1443,8 +1512,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   micBtnRecording: {
-    borderColor: '#EF4444',
-    backgroundColor: '#FEE2E2',
+    borderColor: '#0284C7',
+    backgroundColor: '#E0F2FE',
   },
   sendBtn: {
     width: 36,
