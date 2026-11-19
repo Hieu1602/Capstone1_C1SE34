@@ -58,6 +58,7 @@
       android:exported="false">
       <intent-filter>
         <action android:name="com.c1se34.smartelderlycare.ACTION_DISMISS_ALARM" />
+        <action android:name="com.c1se34.smartelderlycare.ACTION_ACKNOWLEDGE_ALARM" />
       </intent-filter>
     </receiver>
     <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode|smallestScreenSize|assetsPaths" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="unspecified">
