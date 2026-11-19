@@ -265,9 +265,8 @@ export const buildTelemetryData = (
       minuteMap.set(timeKey, cur);
     }
 
-    // Neo thời gian: nếu có dữ liệu mới trong vòng 2h thì neo theo now, ngược lại neo theo bản ghi gần nhất
-    const latestVitalMs = rawVitals[0]?.time ? new Date(rawVitals[0].time).getTime() : now.getTime();
-    const anchorDate = now.getTime() - latestVitalMs <= 2 * 3600 * 1000 ? now : new Date(latestVitalMs);
+    // Neo thời gian: Luôn luôn bám sát theo mốc thời gian thực tế hiện tại (now)
+    const anchorDate = now;
 
     const points: TelemetryPoint[] = [];
     const windowMinutes = 20;
