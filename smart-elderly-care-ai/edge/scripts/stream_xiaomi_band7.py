@@ -48,6 +48,7 @@ HR_SERVICE_UUID = "0000180d-0000-1000-8000-00805f9b34fb"
 HR_MEASUREMENT_UUID = "00002a37-0000-1000-8000-00805f9b34fb"
 BATTERY_SERVICE_UUID = "0000180f-0000-1000-8000-00805f9b34fb"
 BATTERY_LEVEL_UUID = "00002a19-0000-1000-8000-00805f9b34fb"
+HUAMI_HR_CTRL_UUID = "00000004-0000-3512-2118-0009af100700"
 
 DEFAULT_BACKEND_URL = os.environ.get("BACKEND_VITALS_URL", "http://localhost:8000/api/v1/vitals")
 
@@ -183,6 +184,12 @@ async def run_stream(mac_address: str, backend_url: str, device_name: str = "Xia
             async with BleakClient(mac_address, timeout=12.0) as client:
                 logger.info("✅ Đã kết nối thành công tới %s!", mac_address)
 
+                # Liệt kê các dịch vụ GATT đã phát hiện
+                services_list = [s.uuid for s in client.services]
+                logger.info("📋 Đã tìm thấy %d dịch vụ GATT:", len(services_list))
+                for s in client.services:
+                    logger.info("   • UUID: %s (%s)", s.uuid, s.description)
+
                 # Đọc mức pin
                 try:
                     raw_bat = await client.read_gatt_char(BATTERY_LEVEL_UUID)
@@ -195,14 +202,28 @@ async def run_stream(mac_address: str, backend_url: str, device_name: str = "Xia
                 try:
                     await client.start_notify(HR_MEASUREMENT_UUID, hr_callback)
                     logger.info("🚀 Bắt đầu nhận stream nhịp tim trực tiếp...")
+
+                    # Kích hoạt cảm biến PPG phần cứng của Xiaomi/Huami
+                    try:
+                        await client.write_gatt_char(HUAMI_HR_CTRL_UUID, b"\x15\x01\x01", response=False)
+                        logger.info("✨ Đã gửi lệnh kích hoạt cảm biến đo liên tục tới vòng tay.")
+                    except Exception as hexc:
+                        logger.debug("Huami HR control init: %s", hexc)
                 except Exception as e:
                     logger.error("Lỗi khi đăng ký nhận nhịp tim GATT 0x2A37: %s", e)
-                    logger.info("Hãy đảm bảo 'Phát sóng nhịp tim' (Heart Rate Broadcast) đã được bật trong Mi Fitness.")
+                    logger.info("💡 Mẹo: Vào app Mi Fitness trên điện thoại > Thiết bị > Theo dõi sức khỏe > Bật 'Phát sóng nhịp tim' (Heart Rate Broadcast) để cho phép truyền trực tiếp.")
                     return
 
-                # Duy trì kết nối
+                # Duy trì kết nối và gửi heartbeat giữ cảm biến thức
+                ping_cycle = 0
                 while client.is_connected:
                     await asyncio.sleep(2.0)
+                    ping_cycle += 1
+                    if ping_cycle % 5 == 0:
+                        try:
+                            await client.write_gatt_char(HUAMI_HR_CTRL_UUID, b"\x16", response=False)
+                        except Exception:
+                            pass
 
             logger.warning("Mất kết nối tới vòng đeo tay! Tự động thử lại sau 5 giây...")
         except Exception as e:

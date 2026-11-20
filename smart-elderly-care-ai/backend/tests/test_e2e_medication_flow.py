@@ -698,13 +698,10 @@ async def test_tier2_prescription_end_date_before_start_date(client: AsyncClient
         },
         headers=doctor_headers,
     )
-    # If the endpoint validates date ordering, it returns 400/422; if accepted, it generates 0 doses today
-    if res.status_code in (400, 422):
-        assert True
-    else:
-        assert res.status_code == 201
-        rem = await client.get(f"/api/v1/reminders/today?patient_id={patient_id}")
-        assert len(rem.json()["medications"]) == 0
+    assert res.status_code == 201
+    rem = await client.get(f"/api/v1/reminders/today?patient_id={patient_id}")
+    assert rem.status_code == 200
+    assert len(rem.json()["medications"]) == 0
 
 
 @pytest.mark.anyio
