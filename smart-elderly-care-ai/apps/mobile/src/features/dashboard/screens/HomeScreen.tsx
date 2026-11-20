@@ -4,7 +4,7 @@
 // TÁC GIẢ: Phan Nguyễn Giáng My
 // ==============================================================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, useWindowDimensions } from 'react-native';
 import { LocalizedAlert as Alert, LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -313,7 +313,24 @@ export default function HomeScreen({ navigation }: any) {
     navigation.navigate('MultiView');
   };
 
-  const handleSelectHouseMode = async (mode: 'AWAY' | 'HOME' | 'DISARM') => {
+  const [modeToast, setModeToast] = useState<{ title: string; body: string; tone: 'home' | 'away' | 'error' } | null>(null);
+  const modeToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showModeToast = (toast: { title: string; body: string; tone: 'home' | 'away' | 'error' }) => {
+    if (modeToastTimerRef.current) clearTimeout(modeToastTimerRef.current);
+    setModeToast(toast);
+    modeToastTimerRef.current = setTimeout(() => {
+      setModeToast(null);
+    }, 2200);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (modeToastTimerRef.current) clearTimeout(modeToastTimerRef.current);
+    };
+  }, []);
+
+  const handleSelectHouseMode = (mode: 'AWAY' | 'HOME' | 'DISARM') => {
     if (!isOwnerOrAdmin) {
       Alert.alert(
         'Quyền truy cập bị giới hạn',
@@ -322,18 +339,41 @@ export default function HomeScreen({ navigation }: any) {
       return;
     }
     if (house.currentMode === mode) return;
-    setHouseMode(mode);
-    const isPrivacy = mode === 'HOME';
-    if (camera.isSleep !== isPrivacy) toggleCameraSleep();
-    try { await systemApi.updateMode({ mode, is_camera_privacy: isPrivacy }); }
-    catch (e) { console.warn('API updateMode house mode error:', e); }
 
-    const modeAlerts: Record<'AWAY' | 'HOME' | 'DISARM', [string, string]> = {
-      AWAY: ['🚶 Chế độ Xa (Away) đã kích hoạt', 'Đã kích hoạt chế độ an ninh cao nhất: Camera phòng ngủ đã mở giám sát 24/7 và sẵn sàng phát hiện té ngã. Đã lưu vào PostgreSQL.'],
-      HOME: ['🏠 Chế độ Ở nhà (Home) đã kích hoạt', 'Đã kích hoạt chế độ riêng tư: Ống kính camera phòng ngủ đã tạm cụp/che lại, vẫn duy trì theo dõi nhịp tim và té ngã 24/7. Đã lưu vào PostgreSQL.'],
-      DISARM: ['🛡️ Chế độ Tắt báo động (Disarm) đã kích hoạt', 'Đã tắt hoàn toàn còi hú và các thông báo báo động. Đã lưu vào PostgreSQL.'],
+    const prevMode = house.currentMode;
+
+    // Cập nhật UI và phản hồi Toast ngay lập tức (0ms) - không tự động che ống kính camera
+    setHouseMode(mode);
+
+    const modeMessages: Record<'AWAY' | 'HOME' | 'DISARM', { title: string; body: string; tone: 'home' | 'away' }> = {
+      AWAY: {
+        title: 'Đã bật chế độ Ra ngoài',
+        body: 'Camera giám sát 24/7 và hệ thống cảnh báo an ninh đã được kích hoạt ở mức cao nhất.',
+        tone: 'away',
+      },
+      HOME: {
+        title: 'Đã bật chế độ Ở nhà',
+        body: 'Hệ thống chuyển sang mức giám sát tiêu chuẩn khi có người thân ở nhà, giảm cảnh báo làm phiền nhưng vẫn duy trì theo dõi té ngã & sinh hiệu.',
+        tone: 'home',
+      },
+      DISARM: {
+        title: 'Đã tắt báo động',
+        body: 'Đã tắt hoàn toàn còi hú và các thông báo báo động.',
+        tone: 'home',
+      },
     };
-    Alert.alert(...modeAlerts[mode]);
+    showModeToast(modeMessages[mode]);
+
+    // Lưu cấu hình chạy ngầm; chỉ hoàn tác & báo lỗi nếu API thất bại
+    systemApi.updateMode({ mode, is_camera_privacy: camera.isSleep }).catch((e) => {
+      console.warn('API updateMode house mode error:', e);
+      setHouseMode(prevMode);
+      showModeToast({
+        title: 'Không thể lưu chế độ',
+        body: 'Kết nối máy chủ bị gián đoạn, đã hoàn tác về chế độ trước đó.',
+        tone: 'error',
+      });
+    });
   };
 
   const handleTogglePrivacyMode = () => {
@@ -397,6 +437,61 @@ export default function HomeScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
+      {modeToast && (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 56,
+            left: 16,
+            right: 16,
+            zIndex: 999,
+            borderRadius: 14,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            borderWidth: 1,
+            backgroundColor:
+              modeToast.tone === 'error'
+                ? isDarkMode ? '#450A0A' : '#FEF2F2'
+                : modeToast.tone === 'away'
+                ? isDarkMode ? '#1E293B' : '#FFF7ED'
+                : isDarkMode ? '#064E3B' : '#ECFDF5',
+            borderColor:
+              modeToast.tone === 'error'
+                ? '#EF4444'
+                : modeToast.tone === 'away'
+                ? '#F97316'
+                : '#10B981',
+            ...Shadows.card,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+            <Ionicons
+              name={
+                modeToast.tone === 'error'
+                  ? 'alert-circle'
+                  : modeToast.tone === 'away'
+                  ? 'shield-checkmark'
+                  : 'home'
+              }
+              size={16}
+              color={
+                modeToast.tone === 'error'
+                  ? '#DC2626'
+                  : modeToast.tone === 'away'
+                  ? '#EA580C'
+                  : '#059669'
+              }
+            />
+            <Text style={{ fontSize: 13, fontWeight: '800', color: colors.textPrimary }}>
+              {modeToast.title}
+            </Text>
+          </View>
+          <Text style={{ fontSize: 11.5, lineHeight: 16, color: colors.textSecondary }}>
+            {modeToast.body}
+          </Text>
+        </View>
+      )}
       {/* 1. Header */}
       <View style={styles.topHeader}>
         <TouchableOpacity

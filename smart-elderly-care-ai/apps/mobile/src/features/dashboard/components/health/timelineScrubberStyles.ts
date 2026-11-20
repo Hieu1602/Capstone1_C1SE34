@@ -1,0 +1,196 @@
+import { StyleSheet } from 'react-native';
+import { Shadows } from '../../../../theme/colors';
+
+export const timelineScrubberStyles = StyleSheet.create({
+  timelineCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...Shadows.soft,
+  },
+  timelineHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  timelineTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  timelineIconDot: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  timelineTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  timelineSub: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  timeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  timeBadgeText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#2563EB',
+  },
+  sliderContainer: {
+    marginBottom: 12,
+  },
+  sliderTouchArea: {
+    height: 38,
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  sliderMockTrack: {
+    height: 8,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+    overflow: 'hidden',
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  sliderMockProgress: {
+    height: 8,
+    backgroundColor: '#2563EB',
+    borderRadius: 4,
+  },
+  sliderMockThumb: {
+    position: 'absolute',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#2563EB',
+    borderWidth: 3,
+    borderColor: '#FFF',
+    top: 7,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+  },
+  sliderLabelsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  sliderLabelText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  quickJumpRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 12,
+  },
+  quickJumpBtn: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickJumpBtnActive: {
+    backgroundColor: '#DBEAFE',
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+  },
+  quickJumpBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  quickJumpBtnTextActive: {
+    color: '#1D4ED8',
+    fontWeight: '700',
+  },
+  highlightBox: {
+    borderRadius: 12,
+    borderWidth: 1.5,
+    padding: 12,
+  },
+  highlightHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  highlightTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  highlightBadge: {
+    backgroundColor: 'rgba(37, 99, 235, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  highlightBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
+  highlightStatsGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  highlightStatCol: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  highlightStatLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    marginBottom: 3,
+  },
+  highlightStatVal: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  highlightStatDivider: {
+    width: 1,
+    height: 24,
+  },
+  timelineEmptyBox: {
+    padding: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 8,
+  },
+  timelineEmptyTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  timelineEmptySub: {
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+});

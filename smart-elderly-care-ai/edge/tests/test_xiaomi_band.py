@@ -1,10 +1,16 @@
 """
 test_xiaomi_band.py
-Kiểm thử bộ phân tích dữ liệu GATT Heart Rate và định dạng bản tin sinh hiệu từ Xiaomi Band 7.
+Kiểm thử bộ phân tích dữ liệu GATT Heart Rate, mật mã AES Huami Auth, và định dạng bản tin sinh hiệu từ Xiaomi Band 7.
 """
 
+import os
 import struct
-from edge.scripts.stream_xiaomi_band7 import send_vitals_to_backend
+import pytest
+from edge.scripts.stream_xiaomi_band7 import (
+    encrypt_huami_challenge,
+    send_vitals_to_backend,
+    load_config,
+)
 
 
 def test_parse_hr_measurement_8bit():
@@ -68,3 +74,35 @@ def test_send_vitals_payload_structure(monkeypatch):
     assert captured["data"]["battery_level"] == 94
     assert captured["data"]["spo2"] == 99
     assert captured["data"]["fall_detected"] is False
+
+
+def test_encrypt_huami_challenge():
+    """Kiểm tra thuật toán mã hóa AES-128-ECB challenge của giao thức Huami."""
+    # 16 bytes auth key
+    auth_key_hex = "0x000102030405060708090a0b0c0d0e0f"
+    # 16 bytes challenge
+    challenge = b"\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f"
+
+    encrypted = encrypt_huami_challenge(auth_key_hex, challenge)
+    assert len(encrypted) == 16
+    assert isinstance(encrypted, bytes)
+
+    # Giải mã ngược lại bằng AES để đảm bảo tính đối xứng
+    from Crypto.Cipher import AES
+    clean_key = bytes.fromhex(auth_key_hex.replace("0x", ""))
+    decrypted = AES.new(clean_key, AES.MODE_ECB).decrypt(encrypted)
+    assert decrypted == challenge
+
+
+def test_encrypt_huami_challenge_invalid_key():
+    """Kiểm tra báo lỗi khi Auth Key không đủ 16 bytes."""
+    with pytest.raises(ValueError, match="16 bytes"):
+        encrypt_huami_challenge("0x1234", b"\x00" * 16)
+
+
+def test_load_edge_config():
+    """Kiểm tra đọc file config.yaml của Edge Hub."""
+    config = load_config()
+    assert "ble" in config
+    assert config["ble"]["device_mac"] == "C1:BD:70:58:2D:F5"
+    assert "auth_key" in config["ble"]

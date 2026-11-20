@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Edit3,
@@ -13,6 +13,7 @@ import {
   Briefcase,
   CheckCircle2,
   Check,
+  ChevronDown,
   Loader2,
 } from 'lucide-react';
 import { DoctorProfileInfo } from '../../types';
@@ -74,12 +75,28 @@ export const DoctorEditProfileModal: React.FC<DoctorEditProfileModalProps> = ({
   onSave,
   onTriggerFileInput,
 }) => {
+  const [openSelectKey, setOpenSelectKey] = useState<'degree' | 'specialty' | 'hospital' | 'department' | null>(null);
+  const [customModeKeys, setCustomModeKeys] = useState<Record<string, boolean>>({});
+  const dropdownContainerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     document.body.classList.add('overflow-hidden');
     return () => {
       document.body.classList.remove('overflow-hidden');
     };
   }, []);
+
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (dropdownContainerRef.current && !dropdownContainerRef.current.contains(e.target as Node)) {
+        setOpenSelectKey(null);
+      }
+    };
+    if (openSelectKey) {
+      document.addEventListener('mousedown', handleOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [openSelectKey]);
 
   return createPortal(
     <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen z-[100] !mt-0 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-fade-in">
@@ -168,12 +185,12 @@ export const DoctorEditProfileModal: React.FC<DoctorEditProfileModalProps> = ({
               </div>
             </div>
 
-            {/* Nhóm 1 — Thông tin Định danh & Liên hệ */}
+            {/* Thông tin Định danh & Liên hệ */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-blue-600" />
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                  Nhóm 1 — Thông tin Định danh & Liên hệ
+                  THÔNG TIN ĐỊNH DANH & LIÊN HỆ
                 </h4>
               </div>
 
@@ -269,40 +286,176 @@ export const DoctorEditProfileModal: React.FC<DoctorEditProfileModalProps> = ({
               </div>
             </div>
 
-            {/* Nhóm 2 — Thông tin Chuyên môn & Công tác */}
-            <div className="space-y-3">
+            {/* Thông tin Chuyên môn & Công tác */}
+            <div className="space-y-3" ref={dropdownContainerRef}>
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-indigo-600" />
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                  Nhóm 2 — Thông tin Chuyên môn & Công tác
+                  THÔNG TIN CHUYÊN MÔN & CÔNG TÁC
                 </h4>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 {[
-                  { label: 'Học hàm, học vị', key: 'degree' as const, icon: GraduationCap, ph: 'VD: Bác sĩ CKI, ThS. Y khoa...' },
-                  { label: 'Chuyên khoa', key: 'specialty' as const, icon: Stethoscope, ph: 'VD: Lão khoa, Tim mạch...' },
-                  { label: 'Bệnh viện / Cơ sở y tế', key: 'hospital' as const, icon: Building2, ph: 'VD: Bệnh viện Đa khoa Đà Nẵng' },
-                  { label: 'Khoa / Phòng công tác', key: 'department' as const, icon: Briefcase, ph: 'VD: Khoa Chăm sóc Người cao tuổi' },
+                  {
+                    label: 'Học hàm, học vị',
+                    key: 'degree' as const,
+                    icon: GraduationCap,
+                    ph: 'Chọn học hàm, học vị',
+                    options: [
+                      'Bác sĩ đa khoa',
+                      'Bác sĩ chuyên khoa',
+                      'Bác sĩ chuyên khoa I (CKI)',
+                      'Bác sĩ chuyên khoa II (CKII)',
+                      'Thạc sĩ Y khoa',
+                      'Tiến sĩ Y khoa',
+                    ],
+                  },
+                  {
+                    label: 'Chuyên khoa',
+                    key: 'specialty' as const,
+                    icon: Stethoscope,
+                    ph: 'Chọn chuyên khoa',
+                    options: [
+                      'Y học Gia đình & Lão khoa',
+                      'Nội tổng quát',
+                      'Tim mạch',
+                      'Hô hấp',
+                      'Thần kinh',
+                      'Nội tiết - Đái tháo đường',
+                    ],
+                  },
+                  {
+                    label: 'Bệnh viện / Cơ sở y tế',
+                    key: 'hospital' as const,
+                    icon: Building2,
+                    ph: 'Chọn bệnh viện / cơ sở y tế',
+                    options: [
+                      'Bệnh viện Gia đình SECA',
+                      'Bệnh viện Đa khoa Đà Nẵng',
+                      'Bệnh viện C Đà Nẵng',
+                      'Bệnh viện Hoàn Mỹ Đà Nẵng',
+                      'Phòng khám Bác sĩ Gia đình',
+                    ],
+                  },
+                  {
+                    label: 'Khoa / Phòng công tác',
+                    key: 'department' as const,
+                    icon: Briefcase,
+                    ph: 'Chọn khoa / phòng công tác',
+                    options: [
+                      'Khoa Chăm sóc Người cao tuổi',
+                      'Khoa Nội tổng hợp',
+                      'Khoa Khám bệnh',
+                      'Khoa Tim mạch - Lão học',
+                      'Phòng Quản lý Sức khỏe Từ xa',
+                    ],
+                  },
                 ].map((f) => {
                   const Icon = f.icon;
+                  const currentVal = editForm[f.key] || '';
+                  const isOpen = openSelectKey === f.key;
+                  const isCustom = Boolean(customModeKeys[f.key]);
+
                   return (
-                    <div key={f.key}>
+                    <div key={f.key} className="relative">
                       <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                         {f.label}
                       </label>
-                      <div className="relative">
-                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
-                          <Icon className="h-4 w-4" />
+
+                      {isCustom ? (
+                        <div className="relative flex items-center gap-1.5">
+                          <div className="relative flex-1">
+                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                              <Icon className="h-4 w-4" />
+                            </div>
+                            <input
+                              type="text"
+                              autoFocus
+                              value={currentVal}
+                              onChange={(e) => setEditForm((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                              placeholder={`Nhập ${f.label.toLowerCase()}...`}
+                              className="h-[46px] w-full rounded-xl border border-blue-400 bg-white pl-10 pr-3 text-xs font-medium text-slate-900 ring-4 ring-blue-500/10 focus:outline-none dark:border-blue-600 dark:bg-[#0F172A] dark:text-white"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCustomModeKeys((prev) => ({ ...prev, [f.key]: false }));
+                              setOpenSelectKey(f.key);
+                            }}
+                            title="Chọn từ danh sách"
+                            className="flex h-[46px] shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-[11px] font-bold text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 cursor-pointer"
+                          >
+                            Danh sách
+                          </button>
                         </div>
-                        <input
-                          type="text"
-                          value={editForm[f.key] || ''}
-                          onChange={(e) => setEditForm((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                          placeholder={f.ph}
-                          className="h-[46px] w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-4 text-xs font-medium text-slate-900 transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:outline-none dark:border-slate-700/60 dark:bg-[#0F172A] dark:text-white dark:focus:bg-[#0F172A]"
-                        />
-                      </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setOpenSelectKey((prev) => (prev === f.key ? null : f.key))}
+                          className={`relative flex h-[46px] w-full items-center justify-between rounded-xl border pl-10 pr-3 text-left text-xs transition cursor-pointer ${
+                            isOpen
+                              ? 'border-blue-500 bg-white ring-4 ring-blue-500/10 dark:bg-[#0F172A]'
+                              : 'border-slate-200 bg-slate-50/70 hover:border-blue-300 hover:bg-white dark:border-slate-700/60 dark:bg-[#0F172A] dark:hover:bg-slate-800/80'
+                          }`}
+                        >
+                          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <span
+                            className={`truncate font-medium ${
+                              currentVal ? 'text-slate-900 dark:text-white' : 'text-slate-400'
+                            }`}
+                          >
+                            {currentVal || f.ph}
+                          </span>
+                          <ChevronDown
+                            className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-150 ${
+                              isOpen ? 'rotate-180 text-blue-600' : ''
+                            }`}
+                          />
+                        </button>
+                      )}
+
+                      {isOpen && !isCustom && (
+                        <div className="absolute left-0 right-0 z-30 mt-1.5 max-h-56 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-700 dark:bg-[#1E293B]">
+                          {f.options.map((opt) => {
+                            const selected = currentVal === opt;
+                            return (
+                              <button
+                                key={opt}
+                                type="button"
+                                onClick={() => {
+                                  setEditForm((prev) => ({ ...prev, [f.key]: opt }));
+                                  setOpenSelectKey(null);
+                                }}
+                                className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs transition cursor-pointer ${
+                                  selected
+                                    ? 'bg-blue-50 font-bold text-blue-700 dark:bg-blue-950/60 dark:text-blue-300'
+                                    : 'font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800'
+                                }`}
+                              >
+                                <span className="truncate pr-2">{opt}</span>
+                                {selected && <Check className="h-3.5 w-3.5 shrink-0 text-blue-600" />}
+                              </button>
+                            );
+                          })}
+
+                          <div className="my-1 border-t border-slate-100 dark:border-slate-700/70" />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCustomModeKeys((prev) => ({ ...prev, [f.key]: true }));
+                              setOpenSelectKey(null);
+                            }}
+                            className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold text-blue-600 hover:bg-blue-50/70 dark:text-blue-400 dark:hover:bg-slate-800 cursor-pointer"
+                          >
+                            <span>Khác (Tự nhập)</span>
+                            <Edit3 className="h-3.5 w-3.5 shrink-0" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

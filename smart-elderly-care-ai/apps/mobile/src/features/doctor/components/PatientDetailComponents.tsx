@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
 import { BASE_URL } from '../../../services/api';
 import { ConditionItem, PatientDetail, PrescriptionItem, getPatientAvatarUrl } from './types';
+import { formatGenderVN } from '../../../utils/formatters';
 
 // =============================================================
 // 1. CARD HERO TỔNG QUAN BỆNH NHÂN (PatientHeroCard)
@@ -33,7 +34,7 @@ export const PatientHeroCard: React.FC<PatientHeroCardProps> = ({
 
   const metaParts = [
     detail?.age ? `${detail.age} tuổi` : null,
-    detail?.gender ? detail.gender : null,
+    detail?.gender ? formatGenderVN(detail.gender, '') : null,
     detail?.blood_type ? `Nhóm máu ${detail.blood_type}` : null,
     detail?.bmi ? `BMI: ${detail.bmi}` : null,
   ].filter(Boolean);

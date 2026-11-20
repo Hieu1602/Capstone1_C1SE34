@@ -56,15 +56,16 @@ export const cameraDetailStyles = StyleSheet.create({
     overlay: {
         flex: 1,
         justifyContent: "flex-end",
-        backgroundColor: "rgba(0,0,0,0.35)",
+        backgroundColor: "rgba(0,0,0,0.45)",
     },
     sheet: {
-        maxHeight: "80%",
+        height: "75%",
+        maxHeight: "85%",
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
-        paddingBottom: 20,
+        overflow: "hidden",
     },
-    sheetContent: { padding: 16, gap: 12 },
+    sheetContent: { padding: 16, paddingBottom: 40, gap: 12 },
     row: {
         flexDirection: "row",
         alignItems: "center",

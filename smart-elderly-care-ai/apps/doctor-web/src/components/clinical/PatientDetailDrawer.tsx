@@ -1,30 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  Home,
-  PhoneCall,
-  Printer,
-  X,
-  Watch,
-  Droplet,
-  Activity,
-  HeartPulse,
-  Thermometer,
-  AlertTriangle,
-  CheckCircle2,
-  ShieldAlert,
-  Utensils,
-  Apple,
-  Stethoscope,
-  Clock,
-  Plus,
-  Edit,
-  FileText,
-  Pill,
-  Calendar,
-  ChevronLeft,
-  ChevronRight,
-} from 'lucide-react';
+import { Edit } from 'lucide-react';
 import {
   DoctorPatientDetail,
   DoctorPatientCard,
@@ -32,20 +8,17 @@ import {
   AppointmentItem,
   AnalyticsData,
 } from '../../types';
-import { getPatientAvatar } from '../../utils/patientAvatar';
+import { PatientDrawerHeader } from './PatientDrawerHeader';
+import { PatientDrawerOverviewTab } from './PatientDrawerOverviewTab';
 import {
-  VitalFilterState,
-  VitalRangeMode,
-  computeVitalFilter,
-  getTodayYMD,
-  parseYMD,
-  formatYMD,
-  formatDMY,
-  formatDM,
-} from '../../utils/dateFilter';
-import { VitalsTrendChart } from './VitalsTrendChart';
+  DrawerTabKey,
+  PatientDrawerTabBar,
+  PatientDrawerVitalsTab,
+  PatientDrawerPrescriptionsTab,
+  PatientDrawerAppointmentsTab,
+} from './PatientDrawerTabs';
 
-export type DrawerTabKey = 'RECORD' | 'VITALS' | 'PRESCRIPTIONS' | 'APPOINTMENTS';
+export type { DrawerTabKey };
 
 export interface PatientDetailDrawerProps {
   patientDetail: DoctorPatientDetail;
@@ -58,8 +31,8 @@ export interface PatientDetailDrawerProps {
   isLoadingAnalytics?: boolean;
   isLoadingPrescriptions?: boolean;
   isLoadingAppointments?: boolean;
-  vitalFilter?: VitalFilterState;
-  onVitalFilterChange?: (filter: VitalFilterState) => void;
+  vitalFilter?: any;
+  onVitalFilterChange?: (next: any) => void;
   onTabChange?: (tab: DrawerTabKey) => void;
   onClose: () => void;
   onOpenRecordModal: () => void;
@@ -74,12 +47,10 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
   prescriptions,
   patientAppointments,
   analytics,
-  isLoadingDetail = false,
+  isLoadingDetail: _isLoadingDetail = false,
   isLoadingAnalytics = false,
   isLoadingPrescriptions = false,
   isLoadingAppointments = false,
-  vitalFilter,
-  onVitalFilterChange,
   onTabChange,
   onClose,
   onOpenRecordModal,
@@ -87,77 +58,6 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
   onOpenAppointmentModal,
 }) => {
   const [activeTab, setActiveTab] = useState<DrawerTabKey>('RECORD');
-
-  const currentFilter = vitalFilter || computeVitalFilter('WEEK', getTodayYMD());
-
-  const todayStr = getTodayYMD();
-  const currentMonthStr = todayStr.substring(0, 7);
-  const anchorDate = parseYMD(currentFilter.selectedDate);
-
-  const isNextDisabled =
-    currentFilter.mode === 'DAY'
-      ? currentFilter.selectedDate >= todayStr
-      : currentFilter.mode === 'WEEK'
-        ? (currentFilter.endDate ? currentFilter.endDate >= todayStr : false)
-        : currentFilter.selectedDate.substring(0, 7) >= currentMonthStr;
-
-  const isCurrentPeriod =
-    currentFilter.mode === 'DAY'
-      ? currentFilter.selectedDate === todayStr
-      : currentFilter.mode === 'WEEK'
-        ? (currentFilter.endDate === todayStr)
-        : currentFilter.selectedDate.substring(0, 7) === currentMonthStr;
-
-  const handleModeChange = (newMode: VitalRangeMode) => {
-    const next = computeVitalFilter(newMode, currentFilter.selectedDate);
-    onVitalFilterChange?.(next);
-  };
-
-  const handlePrev = () => {
-    const cur = parseYMD(currentFilter.selectedDate);
-    if (currentFilter.mode === 'DAY') {
-      cur.setDate(cur.getDate() - 1);
-    } else if (currentFilter.mode === 'WEEK') {
-      cur.setDate(cur.getDate() - 7);
-    } else {
-      cur.setMonth(cur.getMonth() - 1);
-    }
-    const next = computeVitalFilter(currentFilter.mode, formatYMD(cur));
-    onVitalFilterChange?.(next);
-  };
-
-  const handleNext = () => {
-    if (isNextDisabled) return;
-    const cur = parseYMD(currentFilter.selectedDate);
-    if (currentFilter.mode === 'DAY') {
-      cur.setDate(cur.getDate() + 1);
-    } else if (currentFilter.mode === 'WEEK') {
-      cur.setDate(cur.getDate() + 7);
-    } else {
-      cur.setMonth(cur.getMonth() + 1);
-    }
-    const next = computeVitalFilter(currentFilter.mode, formatYMD(cur));
-    onVitalFilterChange?.(next);
-  };
-
-  const handleDatePick = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.value) return;
-    const next = computeVitalFilter(currentFilter.mode, e.target.value);
-    onVitalFilterChange?.(next);
-  };
-
-  const handleMonthPick = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.value) return;
-    const [y, m] = e.target.value.split('-').map(Number);
-    const target = new Date(y, m - 1, 1);
-    const next = computeVitalFilter('MONTH', formatYMD(target));
-    onVitalFilterChange?.(next);
-  };
-
-  const handleResetCurrent = () => {
-    const next = computeVitalFilter(currentFilter.mode, todayStr);
-    onVitalFilterChange?.(next);
-  };
 
   const activeBloodType =
     patientDetail.blood_type || selectedPatientCard?.blood_type || 'O+';
@@ -167,27 +67,23 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
   const activeBp = patientDetail.blood_pressure || selectedPatientCard?.blood_pressure || '120/80';
   const activeSkinTemp = patientDetail.skin_temp_max
     ? `${patientDetail.skin_temp_max}°C`
-    : (selectedPatientCard?.skin_temp_max ? `${selectedPatientCard.skin_temp_max}°C` : '36.5°C');
-  const activeEmergencyPhone =
-    selectedPatientCard?.emergency_contact_phone || '';
+    : selectedPatientCard?.skin_temp_max
+      ? `${selectedPatientCard.skin_temp_max}°C`
+      : '36.5°C';
+  const activeEmergencyPhone = selectedPatientCard?.emergency_contact_phone || '';
 
-  const isSelectedDanger =
+  const isSelectedDanger = Boolean(
     (selectedPatientCard?.heart_rate &&
       (selectedPatientCard.heart_rate > 100 || selectedPatientCard.heart_rate < 50)) ||
-    (selectedPatientCard?.spo2 && selectedPatientCard.spo2 < 92);
+      (selectedPatientCard?.spo2 && selectedPatientCard.spo2 < 92)
+  );
 
-  const isSelectedWarning =
+  const isSelectedWarning = Boolean(
     !isSelectedDanger &&
-    ((selectedPatientCard?.heart_rate &&
-      (selectedPatientCard.heart_rate > 90 || selectedPatientCard.heart_rate < 60)) ||
-      (selectedPatientCard?.spo2 && selectedPatientCard.spo2 < 95));
-
-  const drawerTabs: { key: DrawerTabKey; label: string; icon: any; count?: number }[] = [
-    { key: 'RECORD', label: 'Hồ sơ Bệnh án', icon: FileText },
-    { key: 'VITALS', label: 'Đồ thị Sinh hiệu', icon: Activity },
-    { key: 'PRESCRIPTIONS', label: 'Đơn thuốc', icon: Pill, count: prescriptions.length },
-    { key: 'APPOINTMENTS', label: 'Lịch khám', icon: Calendar, count: patientAppointments.length },
-  ];
+      ((selectedPatientCard?.heart_rate &&
+        (selectedPatientCard.heart_rate > 90 || selectedPatientCard.heart_rate < 60)) ||
+        (selectedPatientCard?.spo2 && selectedPatientCard.spo2 < 95))
+  );
 
   useEffect(() => {
     document.body.classList.add('overflow-hidden');
@@ -196,727 +92,66 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
     };
   }, []);
 
+  const handleSelectTab = (tab: DrawerTabKey) => {
+    setActiveTab(tab);
+    onTabChange?.(tab);
+  };
+
   return createPortal(
     <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen z-[100] !mt-0 flex justify-end bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="relative z-[101] flex h-full w-full max-w-2xl flex-col bg-white dark:bg-[#131C31] dark:border-l dark:border-slate-800/80 shadow-2xl overflow-hidden animate-in slide-in-from-right duration-200">
         {/* 1. Rich Clinical Header */}
-        <div className="border-b border-slate-200/80 dark:border-slate-800/80 bg-slate-50/80 dark:bg-[#131C31] px-6 py-4">
-          <div className="flex items-start justify-between gap-4">
-            {/* Thông tin định danh & Avatar Bệnh nhân */}
-            <div className="flex items-start space-x-3.5 min-w-0">
-              {/* Avatar tròn với Status Dot không bị clip */}
-              <div className="relative inline-block shrink-0">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl overflow-hidden bg-gradient-to-br from-blue-600 to-cyan-500 text-lg font-extrabold text-white shadow-md ring-2 ring-white dark:ring-[#131C31]">
-                  {activeAvatar ? (
-                    <img
-                      src={getPatientAvatar(activeAvatar)!}
-                      alt={patientDetail.name}
-                      className="h-full w-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLElement).style.display = 'none';
-                      }}
-                    />
-                  ) : (
-                    patientDetail.name?.charAt(0) || 'P'
-                  )}
-                </div>
-                <span
-                  className={`absolute bottom-0 right-0 h-4 w-4 rounded-full ring-2 ring-white dark:ring-[#131C31] shadow-sm z-10 ${
-                    selectedPatientCard?.is_online ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
-                  }`}
-                  title={selectedPatientCard?.is_online ? 'Smartband đang kết nối' : 'Chờ tín hiệu Smartband'}
-                />
-              </div>
-
-              <div className="min-w-0">
-                {/* Hàng nhãn mã bệnh nhân & trạng thái lâm sàng */}
-                <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <span className="rounded-md bg-blue-50 border border-blue-200/80 px-2 py-0.5 text-[10.5px] font-mono font-extrabold text-blue-700 dark:bg-blue-950/40 dark:border-blue-900/60 dark:text-blue-300">
-                    {selectedMrCode}
-                  </span>
-                  <span
-                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold border ${
-                      isSelectedDanger
-                        ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900/60'
-                        : isSelectedWarning
-                          ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-900/60'
-                          : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-900/60'
-                    }`}
-                  >
-                    {isSelectedDanger ? 'Khẩn cấp' : isSelectedWarning ? 'Cần chú ý' : 'Ổn định'}
-                  </span>
-                  <span
-                    className={`hidden sm:inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
-                      selectedPatientCard?.is_online
-                        ? 'bg-emerald-50/80 text-emerald-700 border-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60'
-                        : 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
-                    }`}
-                  >
-                    <Watch className="h-3 w-3" />
-                    <span>{selectedPatientCard?.is_online ? 'Smartband Online' : 'Chờ tín hiệu'}</span>
-                  </span>
-                </div>
-
-                <h3 className="font-heading font-extrabold text-slate-900 dark:text-white text-lg leading-tight truncate">
-                  {patientDetail.name}
-                </h3>
-                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 truncate">
-                  {patientDetail.age || selectedPatientCard?.age} tuổi • {patientDetail.gender || selectedPatientCard?.gender} • Nhóm máu <span className="font-bold text-slate-800 dark:text-white">{activeBloodType}</span>
-                </p>
-                <div className="mt-1 flex items-center space-x-1.5 text-xs text-slate-500 dark:text-slate-400 truncate">
-                  <Home className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                  <span className="truncate font-medium text-slate-700 dark:text-slate-300">
-                    {patientDetail.house_name || selectedPatientCard?.house_name || 'Nhà riêng'}
-                  </span>
-                  {selectedPatientCard?.house_address && (
-                    <>
-                      <span className="text-slate-300 dark:text-slate-600">•</span>
-                      <span className="truncate text-slate-500 dark:text-slate-400 text-[11px]">
-                        {selectedPatientCard.house_address}
-                      </span>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Nút tác vụ nhanh: Gọi người nhà, In hồ sơ, Đóng */}
-            <div className="flex items-center space-x-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  if (activeEmergencyPhone) {
-                    window.open(`tel:${activeEmergencyPhone}`);
-                  } else {
-                    alert('Chưa có số điện thoại liên hệ khẩn cấp của bệnh nhân.');
-                  }
-                }}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 hover:border-slate-300 transition-colors shadow-2xs cursor-pointer dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700"
-                title={`Gọi người nhà: ${activeEmergencyPhone || 'Chưa cập nhật'}`}
-              >
-                <PhoneCall className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                <span className="hidden sm:inline">Gọi người nhà</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 hover:border-slate-300 transition-colors shadow-2xs cursor-pointer dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700"
-                title="In tóm tắt bệnh án"
-              >
-                <Printer className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
-                <span className="hidden sm:inline">In hồ sơ</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-200/80 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200 transition-colors ml-1 cursor-pointer"
-                title="Đóng hồ sơ"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-          </div>
-        </div>
+        <PatientDrawerHeader
+          patientDetail={patientDetail}
+          selectedPatientCard={selectedPatientCard}
+          selectedMrCode={selectedMrCode}
+          activeAvatar={activeAvatar}
+          activeBloodType={activeBloodType}
+          activeEmergencyPhone={activeEmergencyPhone}
+          isSelectedDanger={isSelectedDanger}
+          isSelectedWarning={isSelectedWarning}
+          onClose={onClose}
+        />
 
         {/* 2. Modern Segmented Tab Bar */}
-        <div className="border-b border-slate-100 dark:border-slate-800/80 bg-white dark:bg-[#131C31] px-6 py-2.5">
-          <div className="grid grid-cols-4 gap-1 rounded-2xl bg-slate-100/80 p-1 border border-slate-200/50 dark:bg-[#0F172A] dark:border-slate-800">
-            {drawerTabs.map((t) => {
-              const Icon = t.icon;
-              const isActive = activeTab === t.key;
-              return (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => {
-                    setActiveTab(t.key);
-                    onTabChange?.(t.key);
-                  }}
-                  className={`flex items-center justify-center gap-1.5 rounded-xl py-2 px-2 text-xs font-bold transition-all cursor-pointer ${
-                    isActive
-                      ? 'bg-white dark:bg-blue-600 text-blue-600 dark:text-white shadow-xs'
-                      : 'text-slate-500 hover:text-slate-800 hover:bg-white/50 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/60'
-                  }`}
-                >
-                  <Icon className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-blue-600 dark:text-white' : 'text-slate-400'}`} />
-                  <span className="truncate">{t.label}</span>
-                  {t.count !== undefined && (
-                    <span
-                      className={`rounded-full px-1.5 py-0.2 text-[10px] font-extrabold ${
-                        isActive
-                          ? 'bg-blue-100 dark:bg-blue-500 text-blue-700 dark:text-white'
-                          : 'bg-slate-200/80 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                      }`}
-                    >
-                      {t.count}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <PatientDrawerTabBar
+          activeTab={activeTab}
+          prescriptionsCount={prescriptions.length}
+          appointmentsCount={patientAppointments.length}
+          onSelectTab={handleSelectTab}
+        />
 
         {/* 3. Thân Drawer Cuộn Mượt (Scrollable Body) */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {activeTab === 'RECORD' && (
-            <div className="space-y-5">
-              {/* Header phân mục Thể trạng & Nút Cập nhật */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
-                    Chỉ số Thể trạng & Nhân trắc học
-                  </h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    Dữ liệu khám lâm sàng định kỳ gần nhất
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={onOpenRecordModal}
-                  className="flex items-center space-x-1.5 rounded-xl bg-blue-50 border border-blue-200/70 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 transition-colors shadow-2xs cursor-pointer dark:bg-blue-950/40 dark:border-blue-900/60 dark:text-blue-300 dark:hover:bg-blue-900/50"
-                >
-                  <Edit className="h-3.5 w-3.5" />
-                  <span>Cập nhật hồ sơ</span>
-                </button>
-              </div>
-
-              {/* Bento-Grid Vitals & Anthropometrics (4-Column Cards) */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {/* Card 1: Nhóm máu */}
-                <div className="rounded-2xl border border-slate-200/70 bg-gradient-to-b from-rose-50/40 to-slate-50/70 dark:from-rose-950/20 dark:to-[#0F172A] dark:border-slate-800/80 p-3.5 shadow-2xs transition hover:border-rose-200 dark:hover:border-rose-900/50">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-100/80 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
-                      <Droplet className="h-4 w-4" />
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Hệ ABO</span>
-                  </div>
-                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block">Nhóm máu</span>
-                  <p className="text-lg font-extrabold text-slate-900 dark:text-white mt-0.5">{activeBloodType}</p>
-                  <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    <span>Đã định nhóm</span>
-                  </div>
-                </div>
-
-                {/* Card 2: Chỉ số BMI */}
-                <div className="rounded-2xl border border-slate-200/70 bg-gradient-to-b from-teal-50/40 to-slate-50/70 dark:from-teal-950/20 dark:to-[#0F172A] dark:border-slate-800/80 p-3.5 shadow-2xs transition hover:border-teal-200 dark:hover:border-teal-900/50">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-100/80 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400">
-                      <Activity className="h-4 w-4" />
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Thể trạng</span>
-                  </div>
-                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block">Chỉ số BMI</span>
-                  <p className="text-lg font-extrabold text-slate-900 dark:text-white mt-0.5">{activeBmi}</p>
-                  <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    <span>Bình thường (18.5 - 22.9)</span>
-                  </div>
-                </div>
-
-                {/* Card 3: Huyết áp chuẩn */}
-                <div className="rounded-2xl border border-slate-200/70 bg-gradient-to-b from-blue-50/40 to-slate-50/70 dark:from-blue-950/20 dark:to-[#0F172A] dark:border-slate-800/80 p-3.5 shadow-2xs transition hover:border-blue-200 dark:hover:border-blue-900/50">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100/80 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
-                      <HeartPulse className="h-4 w-4" />
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Huyết động</span>
-                  </div>
-                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block">Huyết áp chuẩn</span>
-                  <p className="text-lg font-extrabold text-slate-900 dark:text-white mt-0.5">{activeBp}</p>
-                  <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    <span>mmHg (Mục tiêu)</span>
-                  </div>
-                </div>
-
-                {/* Card 4: Nhiệt độ da */}
-                <div className="rounded-2xl border border-slate-200/70 bg-gradient-to-b from-cyan-50/40 to-slate-50/70 dark:from-cyan-950/20 dark:to-[#0F172A] dark:border-slate-800/80 p-3.5 shadow-2xs transition hover:border-cyan-200 dark:hover:border-cyan-900/50">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-100/80 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400">
-                      <Thermometer className="h-4 w-4" />
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cảm biến</span>
-                  </div>
-                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block">Nhiệt độ da</span>
-                  <p className="text-lg font-extrabold text-slate-900 dark:text-white mt-0.5">{activeSkinTemp}</p>
-                  <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    <span>Ổn định (36.2 - 37.2°C)</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 4. Critical Alert Banner: Dị ứng thuốc */}
-              {(() => {
-                const rawDrug = patientDetail.drug_allergies?.trim() || '';
-                const hasDrugAllergy =
-                  rawDrug.length > 0 &&
-                  !rawDrug.toLowerCase().includes('không') &&
-                  !rawDrug.toLowerCase().includes('chưa');
-                const tags = hasDrugAllergy
-                  ? rawDrug.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean)
-                  : [];
-
-                return (
-                  <div
-                    className={`rounded-2xl border p-4 transition-all ${
-                      hasDrugAllergy
-                        ? 'border-rose-200 bg-rose-50/70 dark:border-rose-900/60 dark:bg-rose-950/30 shadow-xs'
-                        : 'border-slate-200/80 bg-slate-50/70 dark:border-slate-800/80 dark:bg-[#0F172A]'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className={`flex h-8 w-8 items-center justify-center rounded-xl ${
-                            hasDrugAllergy
-                              ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 shadow-2xs'
-                              : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400'
-                          }`}
-                        >
-                          {hasDrugAllergy ? (
-                            <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
-                          ) : (
-                            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                          )}
-                        </div>
-                        <div>
-                          <h5
-                            className={`text-xs font-extrabold uppercase tracking-wider ${
-                              hasDrugAllergy ? 'text-rose-900 dark:text-rose-200' : 'text-slate-800 dark:text-slate-200'
-                            }`}
-                          >
-                            Dị ứng thuốc (Chống chỉ định lâm sàng)
-                          </h5>
-                          <p className="text-[10.5px] text-slate-500 dark:text-slate-400">
-                            Cảnh báo y khoa quan trọng trước khi chỉ định phác đồ điều trị
-                          </p>
-                        </div>
-                      </div>
-                      <span
-                        className={`rounded-md px-2 py-0.5 text-[10px] font-extrabold border ${
-                          hasDrugAllergy
-                            ? 'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900/60'
-                            : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-900/60'
-                        }`}
-                      >
-                        {hasDrugAllergy ? 'CẢNH BÁO CAO' : 'AN TOÀN'}
-                      </span>
-                    </div>
-
-                    {hasDrugAllergy ? (
-                      <div className="flex flex-wrap items-center gap-2 mt-3 pt-2 border-t border-rose-200/60 dark:border-rose-900/60">
-                        {tags.map((allergen, idx) => (
-                          <span
-                            key={idx}
-                            className="inline-flex items-center gap-1.5 rounded-xl bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 px-3 py-1.5 text-xs font-bold border border-rose-200/80 dark:border-rose-900/60 shadow-2xs"
-                          >
-                            <ShieldAlert className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
-                            <span>{allergen}</span>
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-800 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                        <span>Không ghi nhận tiền sử dị ứng thuốc nguy hiểm</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {/* 2-Column Grid for Secondary Info: Dị ứng thực phẩm & Chế độ dinh dưỡng */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Cột 1: Dị ứng thực phẩm */}
-                <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-[#0F172A] dark:border-slate-800/80 p-4 shadow-2xs flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
-                        <Utensils className="h-3.5 w-3.5" />
-                      </div>
-                      <span className="text-xs font-extrabold text-slate-900 dark:text-white">
-                        Dị ứng thực phẩm
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 mb-3">
-                      Thực phẩm cần kiêng khem trong bữa ăn
-                    </p>
-                  </div>
-                  <div>
-                    {patientDetail.food_allergies &&
-                    !patientDetail.food_allergies.toLowerCase().includes('không') ? (
-                      <div className="flex flex-wrap gap-1.5">
-                        {patientDetail.food_allergies
-                          .split(/[,;\n]+/)
-                          .map((s) => s.trim())
-                          .filter(Boolean)
-                          .map((food, i) => (
-                            <span
-                              key={i}
-                              className="rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800 border border-amber-200/60 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/60"
-                            >
-                              {food}
-                            </span>
-                          ))}
-                      </div>
-                    ) : (
-                      <span className="text-xs font-semibold text-slate-600 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100 inline-block dark:bg-slate-800/60 dark:text-slate-300 dark:border-slate-700/60">
-                        Không ghi nhận dị ứng thực phẩm
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Cột 2: Chế độ dinh dưỡng khuyến nghị */}
-                <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-[#0F172A] dark:border-slate-800/80 p-4 shadow-2xs flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
-                        <Apple className="h-3.5 w-3.5" />
-                      </div>
-                      <span className="text-xs font-extrabold text-slate-900 dark:text-white">
-                            Chế độ dinh dưỡng
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 mb-3">
-                      Chỉ định dinh dưỡng phòng ngừa tim mạch
-                    </p>
-                  </div>
-                  <div>
-                    {patientDetail.dietary_notes ? (
-                      <div className="flex flex-wrap gap-1.5">
-                        {patientDetail.dietary_notes
-                          .split(/[,;]+/)
-                          .map((s) => s.trim())
-                          .filter(Boolean)
-                          .map((diet, i) => (
-                            <span
-                              key={i}
-                              className="rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 border border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60"
-                            >
-                              {diet}
-                            </span>
-                          ))}
-                      </div>
-                    ) : (
-                      <span className="text-xs font-semibold text-slate-600 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100 inline-block dark:bg-slate-800/60 dark:text-slate-300 dark:border-slate-700/60">
-                        Ăn giảm muối, hạn chế đường, bổ sung chất xơ
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* 5. Highlighted Doctor's Note Card */}
-              <div className="rounded-2xl border-y border-r border-blue-100/90 border-l-4 border-l-blue-600 bg-gradient-to-r from-blue-50/60 via-blue-50/20 to-white dark:border-slate-800/80 dark:border-l-blue-500 dark:from-blue-950/40 dark:via-blue-950/20 dark:to-[#0F172A] p-4.5 shadow-2xs">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
-                      <Stethoscope className="h-4 w-4" />
-                    </div>
-                    <span className="text-xs font-extrabold text-blue-900 dark:text-blue-300 tracking-wide uppercase">
-                      Dặn dò của Bác sĩ gia đình
-                    </span>
-                  </div>
-                  <span className="rounded-md bg-blue-100/70 px-2 py-0.5 text-[10px] font-bold text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
-                    LÂM SÀNG
-                  </span>
-                </div>
-
-                <p className="text-xs font-medium text-slate-700 dark:text-slate-200 leading-relaxed pl-9">
-                  {patientDetail.doctor_notes ||
-                    'Bệnh nhân tuân thủ phác đồ điều trị tốt. Duy trì vận động nhẹ nhàng và tái khám định kỳ theo đúng hẹn.'}
-                </p>
-
-                <div className="mt-3.5 flex items-center justify-between border-t border-blue-100/60 dark:border-slate-800 pt-2.5 pl-9 text-[11px] text-slate-400">
-                  <span className="flex items-center gap-1.5 font-medium text-slate-600 dark:text-slate-300">
-                    <span className="h-1.5 w-1.5 rounded-full bg-blue-600" />
-                    Phụ trách: BS. Trần Văn Minh
-                  </span>
-                  <span className="flex items-center gap-1 text-slate-400">
-                    <Clock className="h-3 w-3" />
-                    Cập nhật hôm nay
-                  </span>
-                </div>
-              </div>
-            </div>
+            <PatientDrawerOverviewTab
+              patientDetail={patientDetail}
+              activeBloodType={activeBloodType}
+              activeBmi={activeBmi}
+              activeBp={activeBp}
+              activeSkinTemp={activeSkinTemp}
+              onOpenRecordModal={onOpenRecordModal}
+            />
           )}
 
           {activeTab === 'VITALS' && (
-            isLoadingAnalytics && !analytics ? (
-              <div className="space-y-4 animate-pulse">
-                <div className="h-6 w-48 rounded-lg bg-slate-200 dark:bg-slate-800" />
-                <div className="h-64 w-full rounded-2xl bg-slate-100 dark:bg-[#0F172A] border border-slate-200/70 dark:border-slate-800" />
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Thanh điều hướng và lọc thời gian */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-2xl bg-slate-50/90 dark:bg-[#0F172A] p-2.5 border border-slate-200/70 dark:border-slate-800">
-                  {/* Segmented control: Ngày / Tuần / Tháng - Cố định độ rộng nút */}
-                  <div className="flex items-center gap-1 rounded-xl bg-slate-200/70 dark:bg-slate-800/80 p-0.5">
-                    {(['DAY', 'WEEK', 'MONTH'] as const).map((m) => {
-                      const label = m === 'DAY' ? 'Ngày' : m === 'WEEK' ? 'Tuần' : 'Tháng';
-                      const isActive = currentFilter.mode === m;
-                      return (
-                        <button
-                          key={m}
-                          type="button"
-                          onClick={() => handleModeChange(m)}
-                          className={`w-16 rounded-lg py-1.5 text-xs font-bold transition-all text-center cursor-pointer ${
-                            isActive
-                              ? 'bg-white dark:bg-blue-600 text-blue-600 dark:text-white shadow-xs'
-                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Bộ điều hướng: Cụm [<][>] cố định + Ô ngày cố định width + Nút reset cố định vị trí */}
-                  <div className="flex items-center gap-1.5 self-end sm:self-auto">
-                    {/* Cụm 2 nút lùi/tiến ghép đôi cố định vị trí - Bấm liên tiếp không bị nhảy nút */}
-                    <div className="inline-flex items-center rounded-xl border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-800 shadow-2xs">
-                      <button
-                        type="button"
-                        onClick={handlePrev}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700 transition cursor-pointer"
-                        title={
-                          currentFilter.mode === 'DAY'
-                            ? 'Ngày trước'
-                            : currentFilter.mode === 'WEEK'
-                              ? 'Tuần trước'
-                              : 'Tháng trước'
-                        }
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleNext}
-                        disabled={isNextDisabled}
-                        className={`flex h-7 w-7 items-center justify-center rounded-lg transition ${
-                          isNextDisabled
-                            ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
-                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700 cursor-pointer'
-                        }`}
-                        title={
-                          currentFilter.mode === 'DAY'
-                            ? 'Ngày tiếp theo'
-                            : currentFilter.mode === 'WEEK'
-                              ? 'Tuần tiếp theo'
-                              : 'Tháng tiếp theo'
-                        }
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </button>
-                    </div>
-
-                    {/* Khung hiển thị & Native Picker - Khóa cứng chiều rộng w-36 */}
-                    <div className="relative flex items-center">
-                      {currentFilter.mode === 'MONTH' ? (
-                        <div className="relative flex w-36 h-8 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 text-xs font-bold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 shadow-2xs hover:border-blue-400 transition cursor-pointer">
-                          <Calendar className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                          <span className="truncate">
-                            Tháng {anchorDate.getMonth() + 1}/{anchorDate.getFullYear()}
-                          </span>
-                          <input
-                            type="month"
-                            max={currentMonthStr}
-                            value={`${anchorDate.getFullYear()}-${String(anchorDate.getMonth() + 1).padStart(2, '0')}`}
-                            onChange={handleMonthPick}
-                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                            title="Chọn tháng khác"
-                          />
-                        </div>
-                      ) : (
-                        <div className="relative flex w-36 h-8 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 text-xs font-bold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 shadow-2xs hover:border-blue-400 transition cursor-pointer">
-                          <Calendar className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                          <span className="truncate">
-                            {currentFilter.mode === 'DAY'
-                              ? currentFilter.selectedDate === todayStr
-                                ? formatDMY(anchorDate)
-                                : formatDMY(anchorDate)
-                              : `${formatDM(parseYMD(currentFilter.startDate!))} - ${formatDM(parseYMD(currentFilter.endDate!))}`}
-                          </span>
-                          <input
-                            type="date"
-                            max={todayStr}
-                            value={currentFilter.selectedDate}
-                            onChange={handleDatePick}
-                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                            title={currentFilter.mode === 'DAY' ? 'Chọn ngày khác' : 'Chọn mốc tuần'}
-                          />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Nút quay về Hôm nay / Tuần này / Tháng này - Ẩn hiện không làm giật vị trí */}
-                    <div className={`transition-opacity ${isCurrentPeriod ? 'invisible pointer-events-none' : 'visible'}`}>
-                      <button
-                        type="button"
-                        onClick={handleResetCurrent}
-                        className="rounded-xl bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-700 border border-blue-200/80 hover:bg-blue-100 dark:bg-blue-950/50 dark:border-blue-900 dark:text-blue-300 dark:hover:bg-blue-900 transition cursor-pointer shadow-2xs shrink-0"
-                        title="Quay lại thời điểm hiện tại"
-                      >
-                        {currentFilter.mode === 'DAY'
-                          ? 'Hôm nay'
-                          : currentFilter.mode === 'WEEK'
-                            ? 'Tuần này'
-                            : 'Tháng này'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Vitals Trend Chart */}
-                <VitalsTrendChart
-                  data={analytics?.daily_trends || []}
-                  days={currentFilter.days}
-                  titleOverride={currentFilter.titleOverride}
-                  isSingleDay={currentFilter.mode === 'DAY'}
-                />
-              </div>
-            )
+            <PatientDrawerVitalsTab analytics={analytics} isLoading={isLoadingAnalytics} />
           )}
 
           {activeTab === 'PRESCRIPTIONS' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
-                    Thuốc đang sử dụng ({prescriptions.length})
-                  </h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    Phác đồ dùng thuốc đang kích hoạt đồng bộ loa Hub
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={onOpenPrescriptionModal}
-                  className="flex items-center space-x-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition-colors cursor-pointer"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>Kê đơn thuốc mới</span>
-                </button>
-              </div>
-
-              {isLoadingPrescriptions && prescriptions.length === 0 ? (
-                <div className="space-y-2.5 animate-pulse">
-                  {[1, 2].map((i) => (
-                    <div key={i} className="h-24 rounded-2xl bg-slate-100 dark:bg-[#0F172A] border border-slate-200/70 dark:border-slate-800" />
-                  ))}
-                </div>
-              ) : prescriptions.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700/80 p-8 text-center text-xs text-slate-400 bg-slate-50/50 dark:bg-[#0F172A]/50">
-                  Chưa có đơn thuốc nào. Bấm nút Kê đơn thuốc mới ở trên để thêm.
-                </div>
-              ) : (
-                <div className="space-y-2.5">
-                  {prescriptions.map((rx) => (
-                    <div key={rx.id} className="rounded-2xl border border-slate-200/80 bg-white dark:bg-[#0F172A] dark:border-slate-800/80 p-4 shadow-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-slate-900 dark:text-white text-xs">{rx.medication_name}</span>
-                        <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700 border border-blue-100 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-900/60">
-                          {rx.dosage}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        {rx.frequency} • {rx.instructions}
-                      </p>
-                      {(rx.start_date || rx.end_date) && (
-                        <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-                          <Calendar className="h-3 w-3 shrink-0 text-blue-500" />
-                          <span>
-                            Đợt dùng thuốc:{' '}
-                            <strong className="font-semibold text-slate-700 dark:text-slate-200">
-                              {rx.start_date || '...'}
-                            </strong>{' '}
-                            đến{' '}
-                            <strong className="font-semibold text-slate-700 dark:text-slate-200">
-                              {rx.end_date || '...'}
-                            </strong>
-                          </span>
-                        </div>
-                      )}
-                      <div className="mt-2.5 flex items-center justify-between text-[11px] border-t border-slate-100 dark:border-slate-800 pt-2">
-                        <span className="text-slate-400">Giờ uống: {rx.schedule_times?.join(', ')}</span>
-                        {rx.enable_speaker_reminder && (
-                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700 font-bold border border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60">
-                            Loa nhắc: Đang bật
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <PatientDrawerPrescriptionsTab
+              prescriptions={prescriptions}
+              isLoading={isLoadingPrescriptions}
+              onOpenPrescriptionModal={onOpenPrescriptionModal}
+            />
           )}
 
           {activeTab === 'APPOINTMENTS' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
-                    Lịch khám của bệnh nhân
-                  </h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    Lịch thăm khám định kỳ và tái khám tại nhà
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={onOpenAppointmentModal}
-                  className="flex items-center space-x-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition-colors cursor-pointer"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>Hẹn lịch khám mới</span>
-                </button>
-              </div>
-
-              {isLoadingAppointments && patientAppointments.length === 0 ? (
-                <div className="space-y-2.5 animate-pulse">
-                  {[1, 2].map((i) => (
-                    <div key={i} className="h-20 rounded-2xl bg-slate-100 dark:bg-[#0F172A] border border-slate-200/70 dark:border-slate-800" />
-                  ))}
-                </div>
-              ) : patientAppointments.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700/80 p-8 text-center text-xs text-slate-400 bg-slate-50/50 dark:bg-[#0F172A]/50">
-                  Chưa có lịch khám nào với bệnh nhân này.
-                </div>
-              ) : (
-                <div className="space-y-2.5">
-                  {patientAppointments.map((apt) => (
-                    <div key={apt.id} className="rounded-2xl border border-slate-200/80 bg-white dark:bg-[#0F172A] dark:border-slate-800/80 p-4 shadow-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-slate-900 dark:text-white text-xs">{apt.clinical_notes || 'Khám sức khỏe'}</span>
-                        <span
-                          className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold border ${
-                            apt.status === 'COMPLETED'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-900/60'
-                              : apt.status === 'CANCELLED'
-                                ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900/60'
-                                : 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-900/60'
-                          }`}
-                        >
-                          {apt.status === 'COMPLETED' ? 'Đã khám xong' : apt.status === 'CANCELLED' ? 'Đã hủy' : 'Sắp tới'}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        {new Date(apt.scheduled_at).toLocaleString('vi-VN')} • {apt.location}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <PatientDrawerAppointmentsTab
+              appointments={patientAppointments}
+              isLoading={isLoadingAppointments}
+              onOpenAppointmentModal={onOpenAppointmentModal}
+            />
           )}
         </div>
 

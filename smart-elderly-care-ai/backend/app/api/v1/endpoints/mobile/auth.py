@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 from datetime import datetime, timezone, timedelta
@@ -512,6 +513,63 @@ async def _record_login_background(
             await session.rollback()
 
 
+async def _record_failed_login_background(
+    event: str,
+    user_name: str,
+    client_ip: str,
+    details: str,
+    severity: str = "medium",
+):
+    """Ghi nhận audit log đăng nhập thất bại chạy ngầm, hỗ trợ gộp log chống flood DB khi bị brute-force."""
+    async with AsyncSessionFactory() as session:
+        try:
+            # Lớp 3: Giảm lượng log khi bị tấn công - Gộp log nếu cùng IP gửi yêu cầu thất bại liên tiếp trong 3 phút
+            cutoff = datetime.now(timezone.utc) - timedelta(minutes=3)
+            recent = await session.execute(
+                text("""
+                    SELECT id, details FROM audit_logs
+                    WHERE ip_address = :ip AND (event ILIKE '%THẤT BẠI%' OR event ILIKE '%TỰ ĐỘNG KHÓA%')
+                      AND timestamp >= :cutoff
+                    ORDER BY timestamp DESC LIMIT 1
+                """),
+                {"ip": client_ip, "cutoff": cutoff}
+            )
+            row = recent.fetchone()
+            if row and ("thất bại" in row[1].lower() or "sai mật khẩu" in row[1].lower()) and severity != "critical":
+                # Đã có log thất bại gần đây từ IP này -> Cập nhật log gần nhất thay vì spam dòng mới
+                await session.execute(
+                    text("""
+                        UPDATE audit_logs
+                        SET timestamp = CURRENT_TIMESTAMP,
+                            details = :details,
+                            severity = 'high'
+                        WHERE id = :id
+                    """),
+                    {
+                        "id": row[0],
+                        "details": f"{row[1]} | Cảnh báo: Tiếp tục gửi yêu cầu thất bại lúc {datetime.now(timezone.utc).strftime('%H:%M:%S')}.",
+                    }
+                )
+            else:
+                await session.execute(
+                    text("""
+                        INSERT INTO audit_logs (event, user_name, ip_address, severity, details)
+                        VALUES (:event, :user_name, :ip, :severity, :details)
+                    """),
+                    {
+                        "event": event,
+                        "user_name": user_name,
+                        "ip": client_ip,
+                        "severity": severity,
+                        "details": details,
+                    }
+                )
+            await session.commit()
+        except Exception as err:
+            logger.warning("[_record_failed_login_background] Lỗi ghi audit log thất bại: %s", err)
+            await session.rollback()
+
+
 class Login2FAVerifyRequest(BaseModel):
     two_factor_token: str
     otp_code: str
@@ -696,9 +754,18 @@ async def login(
 
     is_admin_alias = clean_phone.lower() in ("admin123", "admin", "root")
 
+    client_ip = get_client_ip(request)
+
     try:
         row = await _fetch_user_and_house_row(db, phone_variants=phone_variants, is_admin_alias=is_admin_alias)
         if not row:
+            asyncio.create_task(_record_failed_login_background(
+                event="ĐĂNG NHẬP THẤT BẠI: Số điện thoại không tồn tại",
+                user_name=clean_phone,
+                client_ip=client_ip,
+                details=f"Đăng nhập thất bại với số điện thoại [{clean_phone}] chưa đăng ký trong hệ thống.",
+                severity="medium",
+            ))
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Số điện thoại chưa tồn tại trong hệ thống. Vui lòng kiểm tra lại hoặc đăng ký tài khoản mới.",
@@ -706,6 +773,13 @@ async def login(
 
         user: User = row[0]
         if not user or not user.hashed_password:
+            asyncio.create_task(_record_failed_login_background(
+                event="ĐĂNG NHẬP THẤT BẠI: Chưa có mật khẩu",
+                user_name=clean_phone,
+                client_ip=client_ip,
+                details=f"Tài khoản [{clean_phone}] chưa thiết lập mật khẩu truy cập.",
+                severity="medium",
+            ))
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Số điện thoại chưa tồn tại trong hệ thống. Vui lòng kiểm tra lại hoặc đăng ký tài khoản mới.",
@@ -717,6 +791,13 @@ async def login(
         if getattr(user, "status", "active") == "locked_auto":
             if user.lock_until and user.lock_until > now:
                 mins_left = max(1, int((user.lock_until - now).total_seconds() // 60))
+                asyncio.create_task(_record_failed_login_background(
+                    event="TỪ CHỐI ĐĂNG NHẬP: Tài khoản đang bị khóa tạm thời",
+                    user_name=f"{user.full_name or user.phone} ({user.role})",
+                    client_ip=client_ip,
+                    details=f"Tài khoản đang bị tạm khóa (còn {mins_left} phút) do nhập sai mật khẩu nhiều lần.",
+                    severity="high",
+                ))
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Tài khoản bị tạm khóa tự động còn {mins_left} phút do nhập sai mật khẩu quá 5 lần.",
@@ -731,6 +812,13 @@ async def login(
                 await db.commit()
 
         if not user.is_active:
+            asyncio.create_task(_record_failed_login_background(
+                event="TỪ CHỐI ĐĂNG NHẬP: Tài khoản bị khóa an ninh",
+                user_name=f"{user.full_name or user.phone} ({user.role})",
+                client_ip=client_ip,
+                details=f"Đăng nhập bị từ chối. Lý do: {user.lock_reason or 'Vi phạm chính sách'}.",
+                severity="high",
+            ))
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Tài khoản đã bị khóa. Lý do: {user.lock_reason or 'Vi phạm chính sách'}.",
@@ -749,11 +837,25 @@ async def login(
                 user.lock_reason = f"Tự động khóa {settings.AUTO_LOCK_MINUTES} phút do nhập sai mật khẩu {fail_count} lần liên tiếp"
                 db.add(user)
                 await db.commit()
+                asyncio.create_task(_record_failed_login_background(
+                    event="TỰ ĐỘNG KHÓA TÀI KHOẢN (BRUTE-FORCE)",
+                    user_name=f"{user.full_name or user.phone} ({user.role})",
+                    client_ip=client_ip,
+                    details=f"Đã tạm khóa tài khoản {settings.AUTO_LOCK_MINUTES} phút do nhập sai mật khẩu {fail_count} lần liên tiếp.",
+                    severity="critical",
+                ))
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Tài khoản đã bị tạm khóa tự động {settings.AUTO_LOCK_MINUTES} phút do nhập sai mật khẩu quá 5 lần.",
                 )
 
+            asyncio.create_task(_record_failed_login_background(
+                event="ĐĂNG NHẬP THẤT BẠI: Sai mật khẩu",
+                user_name=f"{user.full_name or user.phone} ({user.role})",
+                client_ip=client_ip,
+                details=f"Nhập sai mật khẩu (Lần {fail_count}/{settings.AUTO_LOCK_MAX_FAILED_ATTEMPTS}).",
+                severity="medium",
+            ))
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Mật khẩu không chính xác. Vui lòng kiểm tra lại.",

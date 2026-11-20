@@ -470,6 +470,76 @@ export const DoctorEditProfileModal: React.FC<DoctorEditProfileModalProps> = ({
   };
   const docInitial = getDoctorInitial(editName);
 
+  const [activeSelectKey, setActiveSelectKey] = useState<'degree' | 'specialty' | 'hospital' | 'department' | null>(null);
+  const [customSelectText, setCustomSelectText] = useState('');
+  const [isCustomMode, setIsCustomMode] = useState(false);
+
+  const GROUP2_FIELDS = [
+    {
+      key: 'degree' as const,
+      label: 'Học hàm, học vị',
+      icon: 'school-outline' as const,
+      val: editDegree,
+      setVal: onChangeDegree,
+      ph: 'Chọn học hàm, học vị',
+      options: [
+        'Bác sĩ đa khoa',
+        'Bác sĩ chuyên khoa',
+        'Bác sĩ chuyên khoa I (CKI)',
+        'Bác sĩ chuyên khoa II (CKII)',
+        'Thạc sĩ Y khoa',
+        'Tiến sĩ Y khoa',
+      ],
+    },
+    {
+      key: 'specialty' as const,
+      label: 'Chuyên khoa',
+      icon: 'medkit-outline' as const,
+      val: editSpecialty,
+      setVal: onChangeSpecialty,
+      ph: 'Chọn chuyên khoa',
+      options: [
+        'Y học Gia đình & Lão khoa',
+        'Nội tổng quát',
+        'Tim mạch',
+        'Hô hấp',
+        'Thần kinh',
+        'Nội tiết - Đái tháo đường',
+      ],
+    },
+    {
+      key: 'hospital' as const,
+      label: 'Bệnh viện / Cơ sở y tế',
+      icon: 'business-outline' as const,
+      val: editHospital,
+      setVal: onChangeHospital,
+      ph: 'Chọn bệnh viện / cơ sở y tế',
+      options: [
+        'Bệnh viện Gia đình SECA',
+        'Bệnh viện Đa khoa Đà Nẵng',
+        'Bệnh viện C Đà Nẵng',
+        'Bệnh viện Hoàn Mỹ Đà Nẵng',
+        'Phòng khám Bác sĩ Gia đình',
+      ],
+    },
+    {
+      key: 'department' as const,
+      label: 'Khoa / Phòng công tác',
+      icon: 'briefcase-outline' as const,
+      val: editDepartment,
+      setVal: onChangeDepartment,
+      ph: 'Chọn khoa / phòng công tác',
+      options: [
+        'Khoa Chăm sóc Người cao tuổi',
+        'Khoa Nội tổng hợp',
+        'Khoa Khám bệnh',
+        'Khoa Tim mạch - Lão học',
+        'Phòng Quản lý Sức khỏe Từ xa',
+      ],
+    },
+  ];
+  const activeField = GROUP2_FIELDS.find((f) => f.key === activeSelectKey) || null;
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
@@ -833,41 +903,177 @@ export const DoctorEditProfileModal: React.FC<DoctorEditProfileModalProps> = ({
               </View>
 
               {/* Danh sách trường chuyên môn & công tác */}
-              {[
-                { label: 'Học hàm, học vị', icon: 'school-outline' as const, val: editDegree, setVal: onChangeDegree, ph: 'VD: Bác sĩ CKI, Thạc sĩ Y khoa...' },
-                { label: 'Chuyên khoa', icon: 'medkit-outline' as const, val: editSpecialty, setVal: onChangeSpecialty, ph: 'VD: Lão khoa, Tim mạch...' },
-                { label: 'Bệnh viện / Cơ sở y tế', icon: 'business-outline' as const, val: editHospital, setVal: onChangeHospital, ph: 'VD: Bệnh viện Đa khoa Đà Nẵng' },
-                { label: 'Khoa / Phòng công tác', icon: 'briefcase-outline' as const, val: editDepartment, setVal: onChangeDepartment, ph: 'VD: Khoa Chăm sóc Người cao tuổi' },
-              ].map((f, idx, arr) => (
-                <View key={f.label} style={{ marginBottom: idx === arr.length - 1 ? 0 : 12 }}>
+              {GROUP2_FIELDS.map((f, idx, arr) => (
+                <View key={f.key} style={{ marginBottom: idx === arr.length - 1 ? 0 : 12 }}>
                   <Text style={{ fontSize: 12, fontWeight: '600', color: isDarkMode ? '#CBD5E1' : '#475569', marginBottom: 6 }}>
                     {f.label}
                   </Text>
-                  <View style={{ position: 'relative', justifyContent: 'center' }}>
-                    <View style={{ position: 'absolute', left: 12, zIndex: 1 }}>
-                      <Ionicons name={f.icon} size={18} color="#94A3B8" />
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      const inPreset = f.options.includes(f.val);
+                      setIsCustomMode(Boolean(f.val && !inPreset));
+                      setCustomSelectText(f.val && !inPreset ? f.val : '');
+                      setActiveSelectKey(f.key);
+                    }}
+                    style={{
+                      height: 46,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                      paddingHorizontal: 12,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }}>
+                      <Ionicons name={f.icon} size={18} color="#64748B" />
+                      <Text
+                        numberOfLines={1}
+                        style={{
+                          flex: 1,
+                          fontSize: 13,
+                          fontWeight: f.val ? '500' : '400',
+                          color: f.val ? colors.textPrimary : '#94A3B8',
+                        }}
+                      >
+                        {f.val || f.ph}
+                      </Text>
                     </View>
-                    <TextInput
-                      style={{
-                        height: 46,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
-                        paddingLeft: 38,
-                        paddingRight: 12,
-                        fontSize: 13,
-                        fontWeight: '500',
-                        color: colors.textPrimary,
-                      }}
-                      value={f.val}
-                      onChangeText={f.setVal}
-                      placeholder={f.ph}
-                      placeholderTextColor="#94A3B8"
-                    />
-                  </View>
+                    <Ionicons name="chevron-down" size={18} color="#94A3B8" />
+                  </TouchableOpacity>
                 </View>
               ))}
+
+              {/* Bottom Sheet / Modal chọn nhanh cho Nhóm 2 */}
+              <Modal visible={Boolean(activeField)} transparent animationType="fade" onRequestClose={() => setActiveSelectKey(null)}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.5)', justifyContent: 'flex-end' }}
+                  activeOpacity={1}
+                  onPress={() => setActiveSelectKey(null)}
+                >
+                  <View
+                    style={{
+                      backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                      borderTopLeftRadius: 24,
+                      borderTopRightRadius: 24,
+                      paddingHorizontal: 20,
+                      paddingTop: 16,
+                      paddingBottom: 24,
+                      maxHeight: '72%',
+                    }}
+                    onStartShouldSetResponder={() => true}
+                  >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '800', color: colors.textPrimary }}>
+                        Chọn {activeField?.label}
+                      </Text>
+                      <TouchableOpacity onPress={() => setActiveSelectKey(null)} hitSlop={8}>
+                        <Ionicons name="close" size={22} color="#94A3B8" />
+                      </TouchableOpacity>
+                    </View>
+
+                    <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 320 }}>
+                      {activeField?.options.map((opt) => {
+                        const selected = activeField.val === opt;
+                        return (
+                          <TouchableOpacity
+                            key={opt}
+                            onPress={() => {
+                              activeField.setVal(opt);
+                              setIsCustomMode(false);
+                              setActiveSelectKey(null);
+                            }}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              paddingVertical: 12,
+                              paddingHorizontal: 14,
+                              borderRadius: 12,
+                              marginBottom: 6,
+                              backgroundColor: selected
+                                ? (isDarkMode ? '#1E3A8A' : '#EFF6FF')
+                                : (isDarkMode ? '#0F172A' : '#F8FAFC'),
+                              borderWidth: 1,
+                              borderColor: selected ? '#2563EB' : colors.border,
+                            }}
+                          >
+                            <Text style={{ fontSize: 13.5, fontWeight: selected ? '700' : '500', color: selected ? '#2563EB' : colors.textPrimary, flex: 1 }}>
+                              {opt}
+                            </Text>
+                            {selected && <Ionicons name="checkmark-circle" size={18} color="#2563EB" />}
+                          </TouchableOpacity>
+                        );
+                      })}
+
+                      <TouchableOpacity
+                        onPress={() => setIsCustomMode(true)}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          paddingVertical: 12,
+                          paddingHorizontal: 14,
+                          borderRadius: 12,
+                          marginBottom: 8,
+                          backgroundColor: isCustomMode
+                            ? (isDarkMode ? '#1E3A8A' : '#EFF6FF')
+                            : (isDarkMode ? '#0F172A' : '#F8FAFC'),
+                          borderWidth: 1,
+                          borderColor: isCustomMode ? '#2563EB' : colors.border,
+                        }}
+                      >
+                        <Text style={{ fontSize: 13.5, fontWeight: '600', color: isCustomMode ? '#2563EB' : colors.textPrimary }}>
+                          Khác (Tự nhập)
+                        </Text>
+                        <Ionicons name="create-outline" size={18} color={isCustomMode ? '#2563EB' : '#64748B'} />
+                      </TouchableOpacity>
+
+                      {isCustomMode && activeField && (
+                        <View style={{ marginTop: 4, gap: 8 }}>
+                          <TextInput
+                            style={{
+                              height: 44,
+                              borderRadius: 10,
+                              borderWidth: 1,
+                              borderColor: '#2563EB',
+                              backgroundColor: isDarkMode ? '#0F172A' : '#FFFFFF',
+                              paddingHorizontal: 12,
+                              fontSize: 13,
+                              color: colors.textPrimary,
+                            }}
+                            placeholder={`Nhập ${activeField.label.toLowerCase()}...`}
+                            placeholderTextColor="#94A3B8"
+                            value={customSelectText}
+                            onChangeText={setCustomSelectText}
+                            autoFocus
+                          />
+                          <TouchableOpacity
+                            onPress={() => {
+                              if (customSelectText.trim()) {
+                                activeField.setVal(customSelectText.trim());
+                              }
+                              setActiveSelectKey(null);
+                            }}
+                            style={{
+                              height: 42,
+                              borderRadius: 10,
+                              backgroundColor: '#2563EB',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>Xác nhận</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </ScrollView>
+                  </View>
+                </TouchableOpacity>
+              </Modal>
             </View>
           </ScrollView>
 

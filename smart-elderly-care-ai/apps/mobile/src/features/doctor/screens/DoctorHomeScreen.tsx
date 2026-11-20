@@ -356,7 +356,6 @@ export default function DoctorHomeScreen() {
           onSeeAll={() => navigation.navigate('DoctorPatients')}
           onSelectPatient={(patientId) => {
             setSelectedPatientId(patientId);
-            navigation.navigate('DoctorPatientDetail', { patientId });
           }}
         />
 

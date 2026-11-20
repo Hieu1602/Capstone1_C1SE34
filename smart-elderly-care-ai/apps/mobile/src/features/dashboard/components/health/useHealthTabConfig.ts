@@ -427,9 +427,7 @@ export function computeHealthTabConfig({
           iconBg: '#F3E8FF',
         },
         chartTitle: `Dao động nhịp tim ngày ${formatDisplayDateVN(selectedDate)}`,
-        chartSubtitle: hasData
-          ? `Dữ liệu từ PostgreSQL (${chartDataForDay.length} mốc đo thực tế)`
-          : 'Chưa có dữ liệu đo cho ngày này',
+        chartSubtitle: hasData ? '' : 'Chưa có dữ liệu đo cho ngày này',
         chartAvg: hasData ? `Trung bình: ${dailyAvgHR}` : 'N/A',
         chartData: chartDataForDay,
         aiAdvice,

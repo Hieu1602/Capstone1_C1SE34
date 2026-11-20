@@ -20,6 +20,8 @@ import {
   INITIAL_POLICIES,
   isAdminAuditLog,
   isDoctorAuditLog,
+  isFailedAuditLog,
+  isRevokeAuditLog,
 } from '../components/security/securityConfig';
 import { PoliciesTab } from '../components/security/PoliciesTab';
 import { SessionsTab } from '../components/security/SessionsTab';
@@ -35,7 +37,7 @@ export const SecurityManagementPage: React.FC = () => {
   const [searchAudit, setSearchAudit] = useState('');
   const [severityFilter, setSeverityFilter] = useState('ALL');
   const [roleFilter, setRoleFilter] = useState<'ALL' | 'doctor' | 'admin' | 'user'>('ALL');
-  const [actionFilter, setActionFilter] = useState<'ALL' | 'LOGIN' | 'LOGOUT'>('ALL');
+  const [actionFilter, setActionFilter] = useState<'ALL' | 'LOGIN' | 'LOGOUT' | 'FAILED' | 'REVOKE'>('ALL');
   const [sessionFilter, setSessionFilter] = useState<'ALL' | 'WARNING'>('ALL');
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -57,8 +59,9 @@ export const SecurityManagementPage: React.FC = () => {
         setSessions(Array.from(sMap.values()));
       }
       if (logsData) {
+        const rawList: SecurityAuditLog[] = Array.isArray(logsData) ? logsData : ((logsData as any)?.items || []);
         const lMap = new Map<string, SecurityAuditLog>();
-        logsData.forEach((l) => lMap.set(l.id, l));
+        rawList.forEach((l) => lMap.set(l.id, l));
         setAuditLogs(Array.from(lMap.values()));
       }
     } finally {
@@ -131,6 +134,8 @@ export const SecurityManagementPage: React.FC = () => {
     const matchSeverity = severityFilter === 'ALL' || log.severity === severityFilter;
     const isDoctor = isDoctorAuditLog(log);
     const isAdmin = isAdminAuditLog(log);
+    const isFailed = isFailedAuditLog(log);
+    const isRevoke = isRevokeAuditLog(log);
     const matchRole =
       roleFilter === 'ALL' ||
       (roleFilter === 'doctor' && isDoctor) ||
@@ -138,8 +143,10 @@ export const SecurityManagementPage: React.FC = () => {
       (roleFilter === 'user' && !isDoctor && !isAdmin);
     const matchAction =
       actionFilter === 'ALL' ||
-      (actionFilter === 'LOGIN' && log.event.toLowerCase().includes('đăng nhập')) ||
-      (actionFilter === 'LOGOUT' && log.event.toLowerCase().includes('đăng xuất'));
+      (actionFilter === 'LOGIN' && log.event.toLowerCase().includes('đăng nhập') && !isFailed) ||
+      (actionFilter === 'LOGOUT' && log.event.toLowerCase().includes('đăng xuất')) ||
+      (actionFilter === 'FAILED' && isFailed) ||
+      (actionFilter === 'REVOKE' && isRevoke);
     return matchSearch && matchSeverity && matchRole && matchAction;
   });
 

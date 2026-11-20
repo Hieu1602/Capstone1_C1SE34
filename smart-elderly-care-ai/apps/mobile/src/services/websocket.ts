@@ -349,6 +349,33 @@ class AlertsWebSocket {
       ((event.type === 'ALERT_NEW' && event.alert_type !== 'APPOINTMENT_SCHEDULED' && event.alert_type !== 'MEDICAL_RECORD_UPDATED') || event.alert_type === 'FALL_DETECTED')
     ) {
       const incData = event.data || {};
+      const incDevId = String(incData.device_id || event.device_id || '').toLowerCase();
+      const incHouseId = String(incData.house_id || event.house_id || '').toLowerCase();
+      const vitalState = useVitalStore.getState();
+      const currentHouseId = String(vitalState.house?.id || '').toLowerCase();
+      const userDevices = vitalState.iotDevices || [];
+      const userPatients = vitalState.patientsList || [];
+
+      const myDeviceIds = new Set<string>();
+      userDevices.forEach((d: any) => {
+        if (d.id) myDeviceIds.add(String(d.id).toLowerCase());
+        if (d.device_id) myDeviceIds.add(String(d.device_id).toLowerCase());
+      });
+      userPatients.forEach((p: any) => {
+        (p.devices || []).forEach((d: any) => {
+          if (d.id) myDeviceIds.add(String(d.id).toLowerCase());
+          if (d.device_id) myDeviceIds.add(String(d.device_id).toLowerCase());
+        });
+      });
+
+      // Bỏ qua cảnh báo nếu không thuộc ngôi nhà hoặc thiết bị của gia đình người dùng
+      if (incHouseId && currentHouseId && incHouseId !== currentHouseId) {
+        return;
+      }
+      if (myDeviceIds.size > 0 && incDevId && !myDeviceIds.has(incDevId)) {
+        return;
+      }
+
       const alertType = incData.type || event.alert_type || 'FALL_DETECTED';
       const isBatteryAlert = alertType === 'LOW_BATTERY' || alertType === 'DEVICE_BATTERY_DEAD';
       const getDefaultAlertMessage = (type: string) => {

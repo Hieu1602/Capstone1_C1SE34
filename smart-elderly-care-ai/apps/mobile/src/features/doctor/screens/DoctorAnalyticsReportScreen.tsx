@@ -3,14 +3,15 @@
 // Hỗ trợ chọn bệnh nhân từ danh sách toàn bộ người cao tuổi phụ trách
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useFocusEffect, useNavigation } from '@react-navigation/native';
 
 import { useTheme } from '../../../store/useThemeStore';
-import { doctorApi } from '../../../services/api';
+import { BASE_URL, doctorApi } from '../../../services/api';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
+import { formatGenderVN } from '../../../utils/formatters';
 
 import {
   PatientOption,
@@ -95,6 +96,7 @@ export default function DoctorAnalyticsReportScreen() {
           spo2: item.spo2,
           healthStatus: item.health_status || 'NORMAL',
           lastUpdated: item.last_updated,
+          avatarUrl: item.avatar_url || item.avatarUrl || null,
         }));
         setPatients(mapped);
       }
@@ -141,6 +143,7 @@ export default function DoctorAnalyticsReportScreen() {
                 spo2: d.spo2,
                 healthStatus: d.health_status || 'NORMAL',
                 lastUpdated: d.last_updated,
+                avatarUrl: d.avatar_url || d.avatarUrl || null,
               });
             }
           })
@@ -289,18 +292,31 @@ export default function DoctorAnalyticsReportScreen() {
             { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: colors.border },
           ]}
         >
-          <View style={styles.activeAvatar}>
-            <LocalizedText style={styles.activeAvatarText}>
-              {selectedPatient.name.trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'A'}
-            </LocalizedText>
-          </View>
+          {(() => {
+            const rawAvatar = selectedPatient.avatarUrl;
+            const resolvedAvatar =
+              rawAvatar && rawAvatar.trim()
+                ? rawAvatar.startsWith('http') || rawAvatar.startsWith('data:')
+                  ? rawAvatar.trim()
+                  : `${BASE_URL.replace(/\/api\/v1\/?$/, '')}${rawAvatar.startsWith('/') ? rawAvatar : `/${rawAvatar}`}`
+                : null;
+            return resolvedAvatar ? (
+              <Image source={{ uri: resolvedAvatar }} style={styles.activeAvatarImg} />
+            ) : (
+              <View style={styles.activeAvatar}>
+                <LocalizedText style={styles.activeAvatarText}>
+                  {selectedPatient.name.trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'A'}
+                </LocalizedText>
+              </View>
+            );
+          })()}
           <View style={{ flex: 1, marginLeft: 10 }}>
             <LocalizedText style={[styles.activeName, { color: colors.textPrimary }]} numberOfLines={1}>
               {selectedPatient.name}
             </LocalizedText>
             <LocalizedText style={[styles.activeSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
               {selectedPatient.age ? `${selectedPatient.age} tuổi` : ''}
-              {selectedPatient.gender ? ` • ${selectedPatient.gender}` : ''}
+              {selectedPatient.gender ? ` • ${formatGenderVN(selectedPatient.gender)}` : ''}
               {selectedPatient.condition ? ` • ${selectedPatient.condition}` : ''}
             </LocalizedText>
           </View>
@@ -590,10 +606,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  activeAvatarImg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#E2E8F0',
+  },
   activeAvatarText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
   activeName: { fontSize: 15, fontWeight: '800' },
   activeSub: { fontSize: 11.5 },
-  daysRow: { flexDirection: 'row', gap: 8, marginTop: 4, marginBottom: 8, paddingVertical: 2 },
+  daysRow: { flexDirection: 'row', gap: 8, marginTop: 4, marginBottom: 8, paddingVertical: 2, paddingRight: 20 },
   dayChip: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 20 },
   dayChipText: { fontSize: 11.5 },
   dayFilterBtn: {
@@ -602,7 +624,7 @@ const styles = StyleSheet.create({
   },
 
   // Bộ lọc sinh hiệu
-  metricFilterRow: { flexDirection: 'row', gap: 6, paddingVertical: 2 },
+  metricFilterRow: { flexDirection: 'row', gap: 6, paddingVertical: 2, paddingRight: 20 },
   metricChip: {
     flexDirection: 'row',
     alignItems: 'center',

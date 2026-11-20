@@ -1,0 +1,53 @@
+steps:
+  lint:
+    image: python:3.11-slim
+    commands:
+      - pip install -e ".[dev]"
+      - ruff check .
+
+  typecheck:
+    image: python:3.11-slim
+    commands:
+      - pip install -e ".[dev]"
+      - mypy huami_token/
+
+  test:
+    image: python:3.11-slim
+    commands:
+      - pip install -e ".[dev]"
+      - pytest -m "not integration"
+
+  build:
+    image: python:3.11-slim
+    commands:
+      - pip install uv
+      - uv build
+
+  publish_release:
+    image: woodpeckerci/plugin-gitea-release
+    settings:
+      api_key:
+        from_secret: api_token
+      base_url: https://codeberg.org
+      files:
+        - "dist/*"
+      target: master
+      checksum: md5
+    when:
+      event: tag
+
+  upload_to_index:
+    image: python:3.11-slim
+    commands:
+      - pip install uv
+      - uv build
+      - pip install twine
+      - twine check dist/*
+      - twine upload dist/*
+    environment:
+      TWINE_USERNAME:
+        from_secret: twine_username
+      TWINE_PASSWORD:
+        from_secret: twine_password
+    when:
+      event: tag

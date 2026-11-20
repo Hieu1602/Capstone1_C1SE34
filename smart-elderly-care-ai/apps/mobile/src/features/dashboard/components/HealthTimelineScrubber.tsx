@@ -3,35 +3,28 @@
 // PHÂN HỆ: Thanh Tua Dòng Thời Gian Tương Tác (Interactive Timeline Scrubber)
 // TÁC GIẢ: Phan Nguyễn Giáng My
 // MÔ TẢ CHỨC NĂNG:
-//   - Cho phép người dùng kéo thanh trượt hoặc bấm chọn nhanh 6 mốc giờ trong ngày
-//     (00:00, 06:00, 09:00, 12:00, 18:00, 22:00).
+//   - Cho phép người dùng kéo thanh trượt hoặc bấm chọn nhanh các mốc giờ trong ngày
+//     (Sáng 07:00, Trưa 12:00, Chiều 17:00, Tối 21:00).
 //   - Hiển thị chi tiết bản ghi sinh hiệu gần nhất với thời điểm đang chọn (Nhịp tim,
-//     SpO2, Nhiệt độ da, Trạng thái té ngã).
+//     SpO2, Nhiệt độ da, Âm thanh).
 // ==============================================================================
 
 import React, { useRef, useState, useMemo, useCallback, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, Platform, PanResponder } from 'react-native';
+import { View, TouchableOpacity, Platform, PanResponder } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LocalizedText as Text } from '../../../i18n/LocalizedComponents';
-import { Shadows } from '../../../theme/colors';
 import { getTodayStr } from './health/useHealthTabConfig';
+import { timelineScrubberStyles as styles } from './health/timelineScrubberStyles';
+import { HealthTimelineVitalCard, formatTimeHM } from './health/HealthTimelineVitalCard';
 
-// Chuyển đổi số phút trong ngày sang chuỗi giờ:phút (HH:MM)
-const formatTimeHM = (minutes: number) => {
-  const h = Math.floor(minutes / 60).toString().padStart(2, '0');
-  const m = (minutes % 60).toString().padStart(2, '0');
-  return `${h}:${m}`;
-};
+const QUICK_JUMP_PRESETS = [
+  { label: 'Sáng', time: '07:00', mins: 420 },
+  { label: 'Trưa', time: '12:00', mins: 720 },
+  { label: 'Chiều', time: '17:00', mins: 1020 },
+  { label: 'Tối', time: '21:00', mins: 1260 },
+] as const;
 
-// Chuyển đổi chuỗi YYYY-MM-DD sang định dạng ngày Việt Nam DD/MM/YYYY
-const formatDisplayDateVN = (ymd: string) => {
-  if (!ymd) return '';
-  const parts = ymd.split('-');
-  if (parts.length === 3) {
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
-  }
-  return ymd;
-};
+const FIXED_AXIS_LABELS = ['00:00', '06:00', '12:00', '18:00'] as const;
 
 interface HealthTimelineScrubberProps {
   scrubberMinutes: number;
@@ -65,10 +58,11 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = Rea
 
   // Local state hiển thị để thumb thanh trượt di chuyển mượt mà
   const [displayMinutes, setDisplayMinutes] = useState(scrubberMinutes);
+  const [isDebouncingSync, setIsDebouncingSync] = useState(false);
   const isDraggingRef = useRef(false);
   const pendingMinutesRef = useRef(scrubberMinutes);
-  const lastUpdateRef = useRef<number>(0);
   const rafIdRef = useRef<number | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const trackRef = useRef<any>(null);
   const [trackWidth, setTrackWidth] = useState(0);
@@ -80,8 +74,21 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = Rea
   const onScrubbingChangeRef = useRef(onScrubbingChange);
   onScrubbingChangeRef.current = onScrubbingChange;
 
+  const commitScrubDebounced = useCallback((mins: number, delayMs = 1000) => {
+    const safeMins = Number.isFinite(mins) ? Math.max(0, Math.min(mins, maxScrubMinutesRef.current)) : 0;
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    setIsDebouncingSync(true);
+    debounceTimerRef.current = setTimeout(() => {
+      debounceTimerRef.current = null;
+      setIsDebouncingSync(false);
+      setScrubberMinutesRef.current?.(safeMins);
+    }, delayMs);
+  }, []);
+
   useEffect(() => {
-    if (!isDraggingRef.current) {
+    if (!isDraggingRef.current && !debounceTimerRef.current) {
       setDisplayMinutes(scrubberMinutes);
       pendingMinutesRef.current = scrubberMinutes;
     }
@@ -91,6 +98,9 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = Rea
     return () => {
       if (rafIdRef.current) {
         cancelAnimationFrame(rafIdRef.current);
+      }
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
       }
     };
   }, []);
@@ -119,78 +129,75 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = Rea
     return best ?? closestVital;
   }, [parsedDayVitals, displayMinutes, isToday, nowMinutes, closestVital]);
 
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onStartShouldSetPanResponderCapture: () => true,
-        onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dx) > 2,
-        onMoveShouldSetPanResponderCapture: (_, gestureState) => Math.abs(gestureState.dx) > 2,
-        onPanResponderGrant: (evt) => {
-          isDraggingRef.current = true;
-          onScrubbingChangeRef.current?.(true);
-          const w = trackWidthRef.current || 280;
-          const locX = Math.max(0, Math.min(w, evt.nativeEvent.locationX));
-          const targetMins = Math.round(((locX / w) * 1439) / 5) * 5;
-          const clamped = Math.max(0, Math.min(targetMins, maxScrubMinutesRef.current));
+  const calcMinutesFromLocationX = (rawLocX: any): number => {
+    const w = trackWidthRef.current > 0 ? trackWidthRef.current : 280;
+    if (typeof rawLocX !== 'number' || !Number.isFinite(rawLocX)) {
+      return pendingMinutesRef.current;
+    }
+    const locX = Math.max(0, Math.min(w, rawLocX));
+    const targetMins = Math.round(((locX / w) * 1439) / 5) * 5;
+    return Math.max(0, Math.min(targetMins, maxScrubMinutesRef.current));
+  };
+
+  const panResponder = useMemo(() => {
+    const finishScrub = (mins: number) => {
+      isDraggingRef.current = false;
+      onScrubbingChangeRef.current?.(false);
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      pendingMinutesRef.current = mins;
+      setDisplayMinutes(mins);
+      // Đợi 1 giây trước khi đồng bộ xuống biểu đồ/toàn trang để tránh giật hoặc crash trên Android
+      commitScrubDebounced(mins, 1000);
+    };
+
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dx) > 2,
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => Math.abs(gestureState.dx) > 2,
+      onPanResponderGrant: (evt) => {
+        isDraggingRef.current = true;
+        onScrubbingChangeRef.current?.(true);
+        const clamped = calcMinutesFromLocationX(evt?.nativeEvent?.locationX);
+        pendingMinutesRef.current = clamped;
+        setDisplayMinutes(clamped);
+      },
+      onPanResponderMove: (evt) => {
+        const clamped = calcMinutesFromLocationX(evt?.nativeEvent?.locationX);
+        if (clamped !== pendingMinutesRef.current) {
           pendingMinutesRef.current = clamped;
-          setDisplayMinutes(clamped);
-        },
-        onPanResponderMove: (evt) => {
-          const w = trackWidthRef.current || 280;
-          const locX = Math.max(0, Math.min(w, evt.nativeEvent.locationX));
-          const targetMins = Math.round(((locX / w) * 1439) / 5) * 5;
-          const clamped = Math.max(0, Math.min(targetMins, maxScrubMinutesRef.current));
-          if (clamped !== pendingMinutesRef.current) {
-            pendingMinutesRef.current = clamped;
-            if (!rafIdRef.current) {
-              rafIdRef.current = requestAnimationFrame(() => {
-                rafIdRef.current = null;
-                setDisplayMinutes(pendingMinutesRef.current);
-              });
-            }
+          if (!rafIdRef.current) {
+            rafIdRef.current = requestAnimationFrame(() => {
+              rafIdRef.current = null;
+              setDisplayMinutes(pendingMinutesRef.current);
+            });
           }
-        },
-        onPanResponderRelease: (evt) => {
-          isDraggingRef.current = false;
-          onScrubbingChangeRef.current?.(false);
-          if (rafIdRef.current) {
-            cancelAnimationFrame(rafIdRef.current);
-            rafIdRef.current = null;
-          }
-          const w = trackWidthRef.current || 280;
-          const locX = Math.max(0, Math.min(w, evt.nativeEvent.locationX));
-          const targetMins = Math.round(((locX / w) * 1439) / 5) * 5;
-          const clamped = Math.max(0, Math.min(targetMins, maxScrubMinutesRef.current));
-          pendingMinutesRef.current = clamped;
-          setDisplayMinutes(clamped);
-          setScrubberMinutesRef.current?.(clamped);
-        },
-        onPanResponderTerminate: () => {
-          isDraggingRef.current = false;
-          onScrubbingChangeRef.current?.(false);
-          if (rafIdRef.current) {
-            cancelAnimationFrame(rafIdRef.current);
-            rafIdRef.current = null;
-          }
-          setDisplayMinutes(pendingMinutesRef.current);
-          setScrubberMinutesRef.current?.(pendingMinutesRef.current);
-        },
-        onPanResponderTerminationRequest: () => false,
-        onShouldBlockNativeResponder: () => true,
-      }),
-    []
-  );
+        }
+      },
+      onPanResponderRelease: (evt) => {
+        finishScrub(calcMinutesFromLocationX(evt?.nativeEvent?.locationX));
+      },
+      onPanResponderTerminate: () => {
+        finishScrub(pendingMinutesRef.current);
+      },
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
+    });
+  }, [commitScrubDebounced]);
 
   const currentScrub = Math.min(displayMinutes, maxScrubMinutes);
   const ratio = Math.max(0, Math.min(1, currentScrub / 1439));
-  const progressPercent = `${ratio * 100}%`;
+  const progressPercent = `${ratio * 100}%` as `${number}%`;
   const thumbLeft = trackWidth > 0 ? Math.max(0, Math.min(trackWidth - 24, ratio * trackWidth - 12)) : 0;
+  const axisLabels = [...FIXED_AXIS_LABELS, isToday ? `Hiện tại ${formatTimeHM(nowMinutes)}` : '23:59'];
 
   return (
     <View style={[styles.timelineCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.timelineHeader}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={styles.timelineTitleRow}>
           <View style={styles.timelineIconDot}>
             <Ionicons name="time" size={15} color="#FFF" />
           </View>
@@ -200,7 +207,9 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = Rea
         </View>
         <View style={styles.timeBadge}>
           <Ionicons name="stopwatch-outline" size={13} color="#2563EB" style={{ marginRight: 4 }} />
-          <Text style={styles.timeBadgeText}>{formatTimeHM(displayMinutes)}</Text>
+          <Text style={styles.timeBadgeText}>
+            {formatTimeHM(displayMinutes)}{isDebouncingSync ? ' • Đang tải...' : ''}
+          </Text>
         </View>
       </View>
 
@@ -236,7 +245,10 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = Rea
             style={styles.sliderTouchArea}
             onLayout={(e) => {
               const w = e.nativeEvent.layout.width;
-              if (w > 0) setTrackWidth(w);
+              if (w > 0) {
+                trackWidthRef.current = w;
+                setTrackWidth(w);
+              }
             }}
             {...panResponder.panHandlers}
           >
@@ -248,34 +260,24 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = Rea
             </View>
             <View
               pointerEvents="none"
-              style={[
-                styles.sliderMockThumb,
-                { left: thumbLeft },
-              ]}
+              style={[styles.sliderMockThumb, { left: thumbLeft }]}
             />
           </View>
         )}
 
         {/* Time Axis Labels */}
         <View style={styles.sliderLabelsRow}>
-          <Text style={[styles.sliderLabelText, { color: colors.textMuted }]}>00:00</Text>
-          <Text style={[styles.sliderLabelText, { color: colors.textMuted }]}>06:00</Text>
-          <Text style={[styles.sliderLabelText, { color: colors.textMuted }]}>12:00</Text>
-          <Text style={[styles.sliderLabelText, { color: colors.textMuted }]}>18:00</Text>
-          <Text style={[styles.sliderLabelText, { color: colors.textMuted }]}>
-            {isToday ? `Hiện tại ${formatTimeHM(nowMinutes)}` : '23:59'}
-          </Text>
+          {axisLabels.map((lbl) => (
+            <Text key={lbl} style={[styles.sliderLabelText, { color: colors.textMuted }]}>
+              {lbl}
+            </Text>
+          ))}
         </View>
       </View>
 
       {/* Quick Jump Buttons */}
       <View style={styles.quickJumpRow}>
-        {[
-          { label: 'Sáng', time: '07:00', mins: 420 },
-          { label: 'Trưa', time: '12:00', mins: 720 },
-          { label: 'Chiều', time: '17:00', mins: 1020 },
-          { label: 'Tối', time: '21:00', mins: 1260 },
-        ].map((btn) => {
+        {QUICK_JUMP_PRESETS.map((btn) => {
           const isFutureBtn = isToday && btn.mins > nowMinutes;
           const isActive = Math.abs(displayMinutes - btn.mins) < 30 && !isFutureBtn;
           return (
@@ -289,8 +291,10 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = Rea
                 isFutureBtn && { opacity: 0.35, backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' },
               ]}
               onPress={() => {
-                setDisplayMinutes(btn.mins);
-                setScrubberMinutes(btn.mins);
+                const safe = Math.max(0, Math.min(btn.mins, maxScrubMinutes));
+                pendingMinutesRef.current = safe;
+                setDisplayMinutes(safe);
+                commitScrubDebounced(safe, 800);
               }}
               activeOpacity={0.7}
             >
@@ -309,276 +313,20 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = Rea
         })}
       </View>
 
-      {/* Highlighted Closest Vital Card */}
-      {localClosestVital ? (
-        <View style={[styles.highlightBox, { backgroundColor: isDarkMode ? '#0F172A' : '#EFF6FF', borderColor: '#3B82F6' }]}>
-          <View style={styles.highlightHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Ionicons name="location" size={15} color="#2563EB" style={{ marginRight: 4 }} />
-              <Text style={[styles.highlightTitle, { color: isDarkMode ? '#93C5FD' : '#1E40AF' }]}>
-                Mốc đo thực tế: {localClosestVital._label || (() => {
-                  const vitalTime = localClosestVital.recorded_at || localClosestVital.time || localClosestVital.created_at;
-                  if (!vitalTime) return formatTimeHM(displayMinutes);
-                  const d = new Date(vitalTime);
-                  return !isNaN(d.getTime()) ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : formatTimeHM(displayMinutes);
-                })()}
-              </Text>
-            </View>
-            <View style={styles.highlightBadge}>
-              <Text style={styles.highlightBadgeText}>
-                {localClosestVital.activity_state || localClosestVital.activity || 'Sinh hoạt'}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.highlightStatsGrid}>
-            <View style={styles.highlightStatCol}>
-              <Text style={[styles.highlightStatLabel, { color: colors.textMuted }]}>Nhịp tim</Text>
-              <Text style={[styles.highlightStatVal, { color: '#EF4444' }]}>{localClosestVital.heart_rate ?? '--'} bpm</Text>
-            </View>
-            <View style={[styles.highlightStatDivider, { backgroundColor: isDarkMode ? '#334155' : '#DBEAFE' }]} />
-            <View style={styles.highlightStatCol}>
-              <Text style={[styles.highlightStatLabel, { color: colors.textMuted }]}>Oxy SpO₂</Text>
-              <Text style={[styles.highlightStatVal, { color: '#0284C7' }]}>{localClosestVital.spo2 ?? '--'}%</Text>
-            </View>
-            <View style={[styles.highlightStatDivider, { backgroundColor: isDarkMode ? '#334155' : '#DBEAFE' }]} />
-            <View style={styles.highlightStatCol}>
-              <Text style={[styles.highlightStatLabel, { color: colors.textMuted }]}>Thân nhiệt</Text>
-              <Text style={[styles.highlightStatVal, { color: '#D97706' }]}>{localClosestVital.body_temp ?? localClosestVital.skin_temp_max ?? '--'}°C</Text>
-            </View>
-            <View style={[styles.highlightStatDivider, { backgroundColor: isDarkMode ? '#334155' : '#DBEAFE' }]} />
-            <View style={styles.highlightStatCol}>
-              <Text style={[styles.highlightStatLabel, { color: colors.textMuted }]}>Âm thanh</Text>
-              <Text style={[styles.highlightStatVal, { color: '#16A34A' }]}>{localClosestVital.sound_state || localClosestVital.sound || localClosestVital.acoustic_status || 'Bình thường'}</Text>
-            </View>
-          </View>
-        </View>
-      ) : isFutureScrubber ? (
-        <View style={[styles.timelineEmptyBox, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: isDarkMode ? '#334155' : '#E2E8F0', paddingVertical: 14 }]}>
-          <Ionicons name="time-outline" size={24} color="#94A3B8" style={{ marginBottom: 4 }} />
-          <Text style={[styles.timelineEmptyTitle, { color: colors.textPrimary, fontSize: 13 }]}>
-            Mốc thời gian chưa diễn ra ({formatTimeHM(displayMinutes)})
-          </Text>
-          <Text style={[styles.timelineEmptySub, { color: colors.textMuted, fontSize: 11 }]}>
-            Thời gian hiện tại là {formatTimeHM(nowMinutes)}. Hệ thống chỉ hiển thị dữ liệu đo thực tế đã lưu trong cơ sở dữ liệu, không dự đoán số đo tương lai.
-          </Text>
-        </View>
-      ) : hasData ? (
-        <View style={[styles.timelineEmptyBox, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: isDarkMode ? '#334155' : '#E2E8F0', paddingVertical: 14 }]}>
-          <Ionicons name="information-circle-outline" size={24} color="#94A3B8" style={{ marginBottom: 4 }} />
-          <Text style={[styles.timelineEmptyTitle, { color: colors.textPrimary, fontSize: 13 }]}>
-            Không có dữ liệu đo quanh mốc {formatTimeHM(displayMinutes)}
-          </Text>
-          <Text style={[styles.timelineEmptySub, { color: colors.textMuted, fontSize: 11 }]}>
-            Không có số đo nào trong khoảng ±45 phút quanh mốc này (thiết bị có thể đang sạc pin hoặc chưa đeo).
-          </Text>
-        </View>
-      ) : (
-        !isLoadingVitals && (
-          <View style={[styles.timelineEmptyBox, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
-            <Ionicons name="calendar-outline" size={30} color="#94A3B8" style={{ marginBottom: 6 }} />
-            <Text style={[styles.timelineEmptyTitle, { color: colors.textPrimary }]}>
-              Chưa có dữ liệu đo cho ngày này
-            </Text>
-            <Text style={[styles.timelineEmptySub, { color: colors.textMuted }]}>
-              Không tìm thấy bản ghi nhịp tim & sinh hiệu nào trong cơ sở dữ liệu cho ngày {formatDisplayDateVN(selectedDate)}. Vui lòng chọn ngày khác trên lịch để tua xem.
-            </Text>
-          </View>
-        )
-      )}
+      {/* Highlighted Closest Vital Card or Empty State */}
+      <HealthTimelineVitalCard
+        vital={localClosestVital}
+        displayMinutes={displayMinutes}
+        nowMinutes={nowMinutes}
+        isFutureScrubber={isFutureScrubber}
+        hasData={hasData}
+        isLoadingVitals={isLoadingVitals}
+        selectedDate={selectedDate}
+        isDarkMode={isDarkMode}
+        colors={colors}
+      />
     </View>
   );
 });
 
-const styles = StyleSheet.create({
-  timelineCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...Shadows.soft,
-  },
-  timelineHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  timelineIconDot: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: '#2563EB',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  timelineTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  timelineSub: {
-    fontSize: 12,
-    lineHeight: 18,
-    marginBottom: 12,
-  },
-  timeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  timeBadgeText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#2563EB',
-  },
-  sliderContainer: {
-    marginBottom: 12,
-  },
-  sliderTouchArea: {
-    height: 38,
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  sliderMockTrack: {
-    height: 8,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 4,
-    overflow: 'hidden',
-    position: 'relative',
-    justifyContent: 'center',
-  },
-  sliderMockProgress: {
-    height: 8,
-    backgroundColor: '#2563EB',
-    borderRadius: 4,
-  },
-  sliderMockThumb: {
-    position: 'absolute',
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#2563EB',
-    borderWidth: 3,
-    borderColor: '#FFF',
-    top: 7,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
-  },
-  sliderLabelsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 6,
-  },
-  sliderLabelText: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  quickJumpRow: {
-    flexDirection: 'row',
-    gap: 6,
-    marginBottom: 12,
-  },
-  quickJumpBtn: {
-    flex: 1,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quickJumpBtnActive: {
-    backgroundColor: '#DBEAFE',
-    borderWidth: 1,
-    borderColor: '#3B82F6',
-  },
-  quickJumpBtnText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  quickJumpBtnTextActive: {
-    color: '#1D4ED8',
-    fontWeight: '700',
-  },
-  highlightBox: {
-    borderRadius: 12,
-    borderWidth: 1.5,
-    padding: 12,
-  },
-  highlightHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  highlightTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  highlightBadge: {
-    backgroundColor: 'rgba(37, 99, 235, 0.12)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  highlightBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#2563EB',
-  },
-  highlightStatsGrid: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  highlightStatCol: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  highlightStatLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    marginBottom: 3,
-  },
-  highlightStatVal: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  highlightStatDivider: {
-    width: 1,
-    height: 24,
-  },
-  timelineEmptyBox: {
-    padding: 20,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 8,
-  },
-  timelineEmptyTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  timelineEmptySub: {
-    fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-});
-
 export default HealthTimelineScrubber;
-

@@ -51,9 +51,16 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
 
   const chartHeight = 150;
   const pointSpacing = 28;
-  const hasData = Boolean(chartData && chartData.length > 0);
+  const safeChartData = useMemo(
+    () =>
+      (chartData || []).filter(
+        (p) => p && typeof p.hr === 'number' && Number.isFinite(p.hr) && p.hr > 0
+      ),
+    [chartData]
+  );
+  const hasData = safeChartData.length > 0;
   const svgWidth = hasData
-    ? Math.max(containerWidth, Math.min(containerWidth * 2.2, chartData.length * pointSpacing))
+    ? Math.max(containerWidth, Math.min(containerWidth * 2.2, safeChartData.length * pointSpacing))
     : containerWidth;
 
   const padLeft = 24;
@@ -69,20 +76,20 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
     if (!hasData) {
       return { coords: [], linePath: '', areaPath: '', y60: 0, y100: 0 };
     }
-    const hrs = chartData.map((p) => p.hr);
+    const hrs = safeChartData.map((p) => p.hr);
     const minVal = Math.max(30, Math.min(...hrs, 55) - 8);
     const maxVal = Math.min(180, Math.max(...hrs, 105) + 8);
     const range = Math.max(20, maxVal - minVal);
 
-    const baseCoords = chartData.map((point, idx) => {
-      const x = padLeft + (chartData.length > 1 ? (idx / (chartData.length - 1)) * usableW : usableW / 2);
+    const baseCoords = safeChartData.map((point, idx) => {
+      const x = padLeft + (safeChartData.length > 1 ? (idx / (safeChartData.length - 1)) * usableW : usableW / 2);
       const normY = (point.hr - minVal) / range;
       const y = padTop + (1 - normY) * usableH;
       return {
-        x,
-        y,
+        x: Number.isFinite(x) ? x : padLeft,
+        y: Number.isFinite(y) ? y : padTop + usableH / 2,
         hr: point.hr,
-        label: point.label,
+        label: point.label || '',
         id: point.id,
         minute: point.minute,
       };
@@ -116,14 +123,16 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
       y60: _y60,
       y100: _y100,
     };
-  }, [chartData, hasData, usableW, usableH, bottomY]);
+  }, [safeChartData, hasData, usableW, usableH, bottomY]);
 
   return (
     <View style={[styles.chartCard, isDarkMode && { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}>
       <View style={styles.chartCardHeader}>
         <View style={{ flex: 1, marginRight: 8 }}>
           <Text style={[styles.chartCardTitle, isDarkMode && { color: colors.textPrimary }]}>{chartTitle}</Text>
-          <Text style={[styles.chartCardSubtitle, isDarkMode && { color: colors.textSecondary }]}>{chartSubtitle}</Text>
+          {chartSubtitle ? (
+            <Text style={[styles.chartCardSubtitle, isDarkMode && { color: colors.textSecondary }]}>{chartSubtitle}</Text>
+          ) : null}
         </View>
         <View style={styles.chartAvgBadge}>
           <Text style={styles.chartAvgText}>{chartAvg}</Text>
@@ -136,12 +145,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.barsScrollContainer}
         >
-          <View
-            onLayout={(e) => {
-              const w = e.nativeEvent.layout.width;
-              if (w > 0) setContainerWidth(w);
-            }}
-          >
+          <View>
             <Svg width={svgWidth} height={chartHeight}>
               <Defs>
                 <LinearGradient id="healthDetailGrad" x1="0" y1="0" x2="0" y2="1">
@@ -229,7 +233,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
                         fontWeight="800"
                         fill={isDarkMode ? '#60A5FA' : '#1D4ED8'}
                       >
-                        📍 {pt.hr}
+                        {pt.hr} bpm
                       </SvgText>
                     ) : (
                     <SvgText

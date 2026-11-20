@@ -121,7 +121,9 @@ class CRUDIncident:
                         )
                     query = query.where(or_(*conditions))
         else:
-            # Khách chưa đăng nhập: Không xem dữ liệu nhạy cảm USER
+            # Khách chưa đăng nhập: Chỉ cho phép truy vấn khi có device_id cụ thể (Edge Hub/Device)
+            if not device_id:
+                return []
             query = query.where(
                 or_(
                     Incident.notes.is_(None),

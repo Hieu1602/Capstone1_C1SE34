@@ -4,8 +4,8 @@
 // 2. WeekCalendarStrip: Dải chọn 7 ngày trong tuần nằm ngang kèm chấm trạng thái ca khám (Ảnh 2 & 3)
 // 3. AppointmentCard: Thẻ hiển thị lịch hẹn theo dòng thời gian (Vertical Timeline - Ảnh 4)
 
-import React, { useMemo } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Image, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
 import { AppointmentItem, getPatientAvatarUrl } from './types';
@@ -138,12 +138,25 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
   isDarkMode,
   colors,
 }) => {
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [monthModalVisible, setMonthModalVisible] = useState(false);
+  const [calendarViewDate, setCalendarViewDate] = useState<Date>(() => new Date());
+
+  const getWeekMonday = (baseDate: Date) => {
+    const d = new Date(baseDate);
+    d.setHours(0, 0, 0, 0);
+    const currentDay = d.getDay();
+    const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
+    d.setDate(d.getDate() + mondayOffset);
+    return d;
+  };
+
   const weekDays = useMemo(() => {
     const today = new Date();
-    const currentDay = today.getDay(); // 0: CN, 1: T2...
-    const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
-    const monday = new Date(today);
-    monday.setDate(today.getDate() + mondayOffset);
+    today.setHours(0, 0, 0, 0);
+    const anchor = new Date(today);
+    anchor.setDate(today.getDate() + weekOffset * 7);
+    const monday = getWeekMonday(anchor);
 
     const days = [];
     const labels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
@@ -154,16 +167,28 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
         date: d,
         label: labels[i],
         dayNum: d.getDate(),
+        monthNum: d.getMonth() + 1,
         dateString: d.toDateString(),
         isToday: d.toDateString() === today.toDateString(),
       });
     }
     return days;
-  }, []);
+  }, [weekOffset]);
+
+  const toLocalDateStr = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
 
   const getDotsForDate = (dateObj: Date) => {
-    const dayStr = dateObj.toISOString().slice(0, 10);
-    const dayApts = appointments.filter((a) => a.scheduled_at && a.scheduled_at.startsWith(dayStr));
+    const dayStr = toLocalDateStr(dateObj);
+    const dayApts = appointments.filter((a) => {
+      if (!a.scheduled_at) return false;
+      const aptDate = new Date(a.scheduled_at);
+      return a.scheduled_at.startsWith(dayStr) || (!isNaN(aptDate.getTime()) && toLocalDateStr(aptDate) === dayStr);
+    });
     const dots: string[] = [];
     if (dayApts.some((a) => a.status === 'UPCOMING')) dots.push('#F59E0B');
     if (dayApts.some((a) => a.status === 'COMPLETED')) dots.push('#10B981');
@@ -171,23 +196,226 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
     return dots;
   };
 
+  const jumpToDateWeek = (targetDate: Date) => {
+    const todayMonday = getWeekMonday(new Date());
+    const targetMonday = getWeekMonday(targetDate);
+    const diffWeeks = Math.round((targetMonday.getTime() - todayMonday.getTime()) / (7 * 24 * 60 * 60 * 1000));
+    setWeekOffset(diffWeeks);
+    onSelectDate(targetDate);
+    setMonthModalVisible(false);
+  };
+
+  const monthCalendarDays = useMemo(() => {
+    const y = calendarViewDate.getFullYear();
+    const m = calendarViewDate.getMonth();
+    const firstDayRaw = new Date(y, m, 1).getDay();
+    const firstDay = firstDayRaw === 0 ? 6 : firstDayRaw - 1; // T2 = 0 ... CN = 6
+    const totalDays = new Date(y, m + 1, 0).getDate();
+    return Array.from({ length: firstDay + totalDays }, (_, idx) => {
+      const dayNum = idx - firstDay + 1;
+      const d = new Date(y, m, dayNum);
+      const isCurrent = idx >= firstDay;
+      const dots = isCurrent ? getDotsForDate(d) : [];
+      return {
+        date: d,
+        current: isCurrent,
+        selected: isCurrent && selectedDate ? d.toDateString() === selectedDate.toDateString() : false,
+        isToday: isCurrent && d.toDateString() === new Date().toDateString(),
+        dots,
+      };
+    });
+  }, [calendarViewDate, selectedDate, appointments]);
+
+  const weekRangeLabel = useMemo(() => {
+    if (weekDays.length < 7) return '';
+    const first = weekDays[0];
+    const last = weekDays[6];
+    return `${String(first.dayNum).padStart(2, '0')}/${String(first.monthNum).padStart(2, '0')} - ${String(last.dayNum).padStart(2, '0')}/${String(last.monthNum).padStart(2, '0')}`;
+  }, [weekDays]);
+
   return (
     <View style={styles.weekStripWrapper}>
-      <View style={styles.weekStripHeader}>
+      <View style={[styles.weekStripHeader, { flexWrap: 'wrap', gap: 6 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Ionicons name="calendar-outline" size={15} color="#2563EB" />
-          <LocalizedText style={[styles.weekStripTitle, { color: colors.textPrimary }]}>
-            Lịch tuần này
-          </LocalizedText>
+          <TouchableOpacity
+            onPress={() => {
+              setCalendarViewDate(selectedDate ? new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1) : new Date());
+              setMonthModalVisible(true);
+            }}
+            hitSlop={8}
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <Ionicons name="calendar-outline" size={16} color="#2563EB" />
+          </TouchableOpacity>
+          <View>
+            <LocalizedText style={[styles.weekStripTitle, { color: colors.textPrimary }]}>
+              {weekOffset === 0 ? 'Lịch tuần này' : weekOffset < 0 ? `Tuần trước (${Math.abs(weekOffset)})` : `Tuần sau (+${weekOffset})`}
+            </LocalizedText>
+            <LocalizedText style={{ fontSize: 10.5, color: isDarkMode ? '#94A3B8' : '#64748B', fontWeight: '600' }}>
+              {weekRangeLabel}
+            </LocalizedText>
+          </View>
         </View>
-        {selectedDate && (
-          <TouchableOpacity onPress={() => onSelectDate(null)} hitSlop={8}>
-            <LocalizedText style={{ fontSize: 12, fontWeight: '700', color: '#2563EB' }}>
-              Xem tất cả
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <TouchableOpacity
+            onPress={() => setWeekOffset((w) => w - 1)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: 7,
+              paddingVertical: 5,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+              backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+            }}
+          >
+            <Ionicons name="chevron-back" size={13} color={colors.textPrimary} />
+            <LocalizedText style={{ fontSize: 11, fontWeight: '600', color: colors.textPrimary }}>Tuần trước</LocalizedText>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => {
+              setWeekOffset(0);
+              onSelectDate(null);
+            }}
+            style={{
+              paddingHorizontal: 8,
+              paddingVertical: 5,
+              borderRadius: 8,
+              backgroundColor: weekOffset === 0 && !selectedDate ? '#2563EB' : (isDarkMode ? '#1E293B' : '#EFF6FF'),
+              borderWidth: 1,
+              borderColor: weekOffset === 0 && !selectedDate ? '#2563EB' : '#BFDBFE',
+            }}
+          >
+            <LocalizedText style={{ fontSize: 11, fontWeight: '700', color: weekOffset === 0 && !selectedDate ? '#FFFFFF' : '#2563EB' }}>
+              Tuần này
             </LocalizedText>
           </TouchableOpacity>
-        )}
+
+          <TouchableOpacity
+            onPress={() => setWeekOffset((w) => w + 1)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: 7,
+              paddingVertical: 5,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: isDarkMode ? '#334155' : '#E2E8F0',
+              backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+            }}
+          >
+            <LocalizedText style={{ fontSize: 11, fontWeight: '600', color: colors.textPrimary }}>Tuần sau</LocalizedText>
+            <Ionicons name="chevron-forward" size={13} color={colors.textPrimary} />
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {selectedDate && (
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 6 }}>
+          <TouchableOpacity onPress={() => onSelectDate(null)} hitSlop={8}>
+            <LocalizedText style={{ fontSize: 11.5, fontWeight: '700', color: '#2563EB' }}>
+              Đang lọc ngày {String(selectedDate.getDate()).padStart(2, '0')}/{String(selectedDate.getMonth() + 1).padStart(2, '0')} • Xem tất cả
+            </LocalizedText>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <Modal visible={monthModalVisible} transparent animationType="fade" onRequestClose={() => setMonthModalVisible(false)}>
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 20 }}
+          activeOpacity={1}
+          onPress={() => setMonthModalVisible(false)}
+        >
+          <View
+            style={{ width: '100%', maxWidth: 360, borderRadius: 16, padding: 16, backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <TouchableOpacity
+                onPress={() => setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() - 1, 1))}
+                style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: isDarkMode ? '#0F172A' : '#EFF6FF', justifyContent: 'center', alignItems: 'center' }}
+              >
+                <Ionicons name="chevron-back" size={18} color="#2563EB" />
+              </TouchableOpacity>
+              <LocalizedText style={{ fontSize: 14.5, fontWeight: '800', color: colors.textPrimary }}>
+                Tháng {calendarViewDate.getMonth() + 1}/{calendarViewDate.getFullYear()}
+              </LocalizedText>
+              <TouchableOpacity
+                onPress={() => setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 1, 1))}
+                style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: isDarkMode ? '#0F172A' : '#EFF6FF', justifyContent: 'center', alignItems: 'center' }}
+              >
+                <Ionicons name="chevron-forward" size={18} color="#2563EB" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 6 }}>
+              {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((d) => (
+                <LocalizedText key={d} style={{ width: 36, textAlign: 'center', fontSize: 11, fontWeight: '700', color: '#64748B' }}>{d}</LocalizedText>
+              ))}
+            </View>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+              {monthCalendarDays.map((dayItem, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  disabled={!dayItem.current}
+                  onPress={() => jumpToDateWeek(dayItem.date)}
+                  style={{
+                    width: '14.28%',
+                    height: 40,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    borderRadius: 8,
+                    backgroundColor: dayItem.selected ? '#2563EB' : dayItem.isToday ? (isDarkMode ? '#1E3A8A' : '#EFF6FF') : 'transparent',
+                  }}
+                >
+                  <LocalizedText
+                    style={{
+                      fontSize: 12.5,
+                      fontWeight: dayItem.selected || dayItem.isToday ? '800' : '600',
+                      color: !dayItem.current ? 'transparent' : dayItem.selected ? '#FFFFFF' : dayItem.isToday ? '#2563EB' : colors.textPrimary,
+                    }}
+                  >
+                    {dayItem.current ? dayItem.date.getDate() : ''}
+                  </LocalizedText>
+                  {dayItem.dots.length > 0 && (
+                    <View style={{ flexDirection: 'row', gap: 2, marginTop: 1 }}>
+                      {dayItem.dots.slice(0, 3).map((dc, di) => (
+                        <View key={di} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: dayItem.selected ? '#FFFFFF' : dc }} />
+                      ))}
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setWeekOffset(0);
+                  onSelectDate(null);
+                  setMonthModalVisible(false);
+                }}
+              >
+                <LocalizedText style={{ color: '#2563EB', fontWeight: '700', fontSize: 12 }}>Về tuần này</LocalizedText>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setMonthModalVisible(false)}>
+                <LocalizedText style={{ color: '#64748B', fontWeight: '700', fontSize: 12 }}>Đóng</LocalizedText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <ScrollView
         horizontal
