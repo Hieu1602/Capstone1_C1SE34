@@ -83,3 +83,14 @@ export const isDoctorAuditLog = (log: SecurityAuditLog): boolean => {
 export const isAdminAuditLog = (log: SecurityAuditLog): boolean => {
   return log.user.toLowerCase().includes('admin') || log.details.toLowerCase().includes('admin');
 };
+
+export const isFailedAuditLog = (log: SecurityAuditLog): boolean => {
+  const ev = log.event.toLowerCase();
+  if (ev.includes('thu hồi')) return false;
+  return ev.includes('thất bại') || ev.includes('tự động khóa') || ev.includes('từ chối') || ev.includes('sai mật khẩu');
+};
+
+export const isRevokeAuditLog = (log: SecurityAuditLog): boolean => {
+  const ev = log.event.toLowerCase();
+  return ev.includes('thu hồi');
+};

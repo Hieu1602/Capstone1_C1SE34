@@ -134,12 +134,23 @@ async def lifespan(app: FastAPI):
                         }
                         await manager.broadcast_to_device(str(incident.device_id), ws_data)
 
+                        inc_house_id = None
+                        try:
+                            from app.models.device import Device
+                            dev_obj = await session.get(Device, incident.device_id) if incident.device_id else None
+                            if dev_obj and dev_obj.house_id:
+                                inc_house_id = str(dev_obj.house_id)
+                        except Exception:
+                            pass
+
                         alert_new_payload = json.dumps({
                             "type": "ALERT_NEW",
                             "alert_type": incident.alert_type,
+                            "house_id": inc_house_id,
                             "data": {
                                 "id": str(incident.id),
                                 "device_id": str(incident.device_id),
+                                "house_id": inc_house_id,
                                 "type": incident.alert_type,
                                 "alert_type": incident.alert_type,
                                 "alert_level": incident.alert_level,

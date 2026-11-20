@@ -259,6 +259,7 @@ async def list_users(
 
         # Map nhanh bằng Hash Table trong bộ nhớ RAM
         houses_by_id = {h.id: h for h in houses_list}
+        users_by_id = {u.id: u for u in users}
         owned_houses_by_owner: dict[Any, list] = {}
         for h in houses_list:
             owned_houses_by_owner.setdefault(h.owner_id, []).append(h)
@@ -350,9 +351,19 @@ async def list_users(
 
                     h = houses_by_id.get(eld.house_id)
                     house_str = f"{h.name} ({h.address})" if (h and h.address) else (h.name if h else "Chưa có địa chỉ")
+                    eld_phone = (eld.emergency_contact_phone or "").strip()
+                    # Người cao tuổi ít dùng điện thoại riêng, ưu tiên lấy số điện thoại của Chủ nhà (người giám hộ chính)
+                    if not eld_phone and h and h.owner_id:
+                        owner = users_by_id.get(h.owner_id)
+                        if owner and owner.phone:
+                            eld_phone = owner.phone
+
+                    if not eld_phone:
+                        eld_phone = "Chưa có SĐT"
+
                     eld_out = UserOut(
                         id=eld.id,
-                        phone=eld.emergency_contact_phone or "", 
+                        phone=eld_phone, 
                         full_name=eld.full_name,
                         role="elderly",
                         role_title="Người cao tuổi",
@@ -372,8 +383,8 @@ async def list_users(
                         can_delete=True,
                     )
                     user_outs.append(eld_out)
-            except Exception:
-                pass
+            except Exception as eld_err:
+                logger.warning("[list_users] Lỗi nạp danh sách người cao tuổi: %s", eld_err)
 
         # Lưu cache cho các lượt truy vấn tiếp theo (phản hồi tức thì)
         _USERS_CACHE["data"] = user_outs

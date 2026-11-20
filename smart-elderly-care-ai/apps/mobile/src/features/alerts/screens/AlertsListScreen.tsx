@@ -50,7 +50,7 @@ export default function AlertsListScreen({ navigation, route }: any) {
   const { incidents, setIncidents, fetchNotifications, acknowledgeIncident, acknowledgeAll } = useAlertStore();
   const { patientRecord, patientsList, fetchPatientsList, todayReminders, markMedicationTaken, snoozeMedication, fetchReminders } = usePatientStore();
   const { userName, userId, userRole, role, permissions, fetchMyPermissions } = useAuthStore();
-  const { house, fetchHouseFromBackend, fetchDevicesFromBackend } = useDeviceStore();
+  const { house, iotDevices, fetchHouseFromBackend, fetchDevicesFromBackend } = useDeviceStore();
 
   const isOwnerOrAdmin =
     userRole === 'admin' ||
@@ -138,6 +138,21 @@ export default function AlertsListScreen({ navigation, route }: any) {
   const pendingMedCount = medications.filter((m) => !m.taken).length;
   const currentUid = (userId || (useAuthStore.getState().user_id ? String(useAuthStore.getState().user_id) : ''))?.toLowerCase();
 
+  const myDeviceIds = useMemo(() => {
+    const ids = new Set<string>();
+    (iotDevices || []).forEach((d: any) => {
+      if (d.id) ids.add(String(d.id).toLowerCase());
+      if (d.device_id) ids.add(String(d.device_id).toLowerCase());
+    });
+    (patientsList || []).forEach((p: any) => {
+      (p.devices || []).forEach((d: any) => {
+        if (d.id) ids.add(String(d.id).toLowerCase());
+        if (d.device_id) ids.add(String(d.device_id).toLowerCase());
+      });
+    });
+    return ids;
+  }, [iotDevices, patientsList]);
+
   const validIncidents = useMemo(() => {
     return incidents.filter((item) => {
       if (isOwnerOrAdmin && item.alert_type === 'HOUSE_INVITE_PENDING') return false;
@@ -158,9 +173,16 @@ export default function AlertsListScreen({ navigation, route }: any) {
         );
       }
 
+      if (myDeviceIds.size > 0 && item.device_id) {
+        const itemDev = String(item.device_id).toLowerCase();
+        if (itemDev !== 'system' && !myDeviceIds.has(itemDev)) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [isUnassignedAccount, isOwnerOrAdmin, currentUid, incidents]);
+  }, [isUnassignedAccount, isOwnerOrAdmin, currentUid, incidents, myDeviceIds]);
 
   const unreadIncidentsCount = validIncidents.filter((item) => !item.is_acknowledged).length;
   const unreadCount = unreadIncidentsCount + pendingMedCount;

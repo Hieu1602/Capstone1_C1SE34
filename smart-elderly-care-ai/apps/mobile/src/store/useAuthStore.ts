@@ -223,6 +223,15 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
         devStore.resetDeviceStore?.();
       } catch {}
     }
+
+    try {
+      const { notificationService } = require('../services/notificationService');
+      notificationService.stopEmergencyAlarm?.();
+      const { getCustomServerUrl } = require('../services/api');
+      getCustomServerUrl().then((serverUrl: string) => {
+        notificationService.startBackgroundMonitor(serverUrl);
+      }).catch(() => {});
+    } catch {}
   },
 
   setTokens: (access: string, refresh: string) =>
@@ -453,6 +462,11 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
       require('./usePatientStore').usePatientStore.getState().resetPatientStore?.();
       require('./useHealthStore').useHealthStore.getState().resetHealthStore?.();
       require('./useAlertStore').useAlertStore.getState().resetAlertStore?.();
+      try {
+        const { notificationService } = require('../services/notificationService');
+        notificationService.stopEmergencyAlarm?.();
+        notificationService.stopBackgroundMonitor?.();
+      } catch {}
       AsyncStorage.multiRemove([
         'auth-storage',
         'device-store',
