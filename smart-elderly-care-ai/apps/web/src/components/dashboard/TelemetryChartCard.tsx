@@ -181,7 +181,7 @@ export const TelemetryChartCard: React.FC<TelemetryChartCardProps> = ({
                       strokeWidth={m.strokeWidth}
                       dot={{ r: 3, strokeWidth: 1.5 }}
                       activeDot={{ r: 5 }}
-                      connectNulls={true}
+                      connectNulls={timeRange !== 'live'}
                       fillOpacity={1}
                       fill={`url(#${m.gradientId})`}
                     />

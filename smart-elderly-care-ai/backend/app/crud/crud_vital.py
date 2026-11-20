@@ -738,10 +738,12 @@ class CRUDVital:
         try:
             from app.api.websockets.vitals_ws import manager
             dev_str = str(data.get("device_id", obj.device_id))
+            serial_str = str(raw_dev) if raw_dev else dev_str
             act_state = data.get("activity_state") or data.get("activity") or "Sinh hoạt"
             ws_data = {
                 "type": "vital_update",
-                "device_id": dev_str,
+                "device_id": serial_str,
+                "device_uuid": str(obj.device_id),
                 "heart_rate": obj.heart_rate,
                 "spo2": obj.spo2,
                 "skin_temp_max": obj.skin_temp_max,
@@ -752,6 +754,8 @@ class CRUDVital:
                 "timestamp": int(obj.time.timestamp() * 1000) if obj.time else int(datetime.now().timestamp() * 1000),
             }
             await manager.broadcast_to_device(dev_str, ws_data)
+            if serial_str != dev_str:
+                await manager.broadcast_to_device(serial_str, ws_data)
             await manager.broadcast_all(ws_data)
         except Exception as exc:
             logger.warning("[CRUDVital] Lỗi broadcast WebSocket: %s", exc)
@@ -887,23 +891,46 @@ class CRUDVital:
         else:
             smartband_cond.append(Device.owner_id == user_id)
 
+        # Lấy danh sách smartband, ưu tiên thiết bị đang online, có gán người đeo
         result = await db.execute(
             select(Device)
             .where(*smartband_cond)
-            .order_by(Device.created_at.desc())
-            .limit(1)
+            .order_by(
+                Device.is_online.desc(),
+                Device.elderly_id.isnot(None).desc(),
+                Device.last_heartbeat.desc().nullslast(),
+                Device.created_at.desc(),
+            )
         )
-        smartband_device = result.scalar_one_or_none()
+        smartband_devices = list(result.scalars().all())
 
-        # Fallback tìm smartband bất kỳ trong hệ thống
+        # Chọn thiết bị có dữ liệu sinh hiệu gần nhất
+        smartband_device = None
+        latest_vital = None
+        for dev in smartband_devices:
+            v = await self.get_latest(db, dev.id)
+            if v:
+                smartband_device = dev
+                latest_vital = v
+                break
+
+        if not smartband_device and smartband_devices:
+            smartband_device = smartband_devices[0]
+            latest_vital = await self.get_latest(db, smartband_device.id)
+
+        # Fallback tìm smartband bất kỳ trong hệ thống nếu user chưa có smartband nào
         if not smartband_device:
             res_any_band = await db.execute(
                 select(Device)
                 .where(Device.device_type == DeviceType.SMARTBAND)
-                .order_by(Device.created_at.desc())
-                .limit(1)
+                .order_by(Device.is_online.desc(), Device.created_at.desc())
             )
-            smartband_device = res_any_band.scalar_one_or_none()
+            for dev in res_any_band.scalars().all():
+                v = await self.get_latest(db, dev.id)
+                if v:
+                    smartband_device = dev
+                    latest_vital = v
+                    break
 
         # Nếu không có smartband, tìm thiết bị bất kỳ
         device = smartband_device
@@ -915,9 +942,7 @@ class CRUDVital:
 
         now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
 
-        # 2. Lấy chỉ số sinh hiệu mới nhất của thiết bị
-        latest_vital = None
-        if device:
+        if not latest_vital and device:
             latest_vital = await self.get_latest(db, device.id)
         if not latest_vital:
             # Fallback lấy bản ghi VitalSign mới nhất trong cơ sở dữ liệu
@@ -942,10 +967,6 @@ class CRUDVital:
                 "device_id": None,
                 "time": None,
             }
-
-        # 2. Lấy chỉ số sinh hiệu mới nhất của thiết bị
-        if device:
-            latest_vital = await self.get_latest(db, device.id)
 
         # Kiểm tra tính tươi mới của dữ liệu: nếu bản ghi cuối cùng đã quá 90 giây
         # hoặc thiết bị không còn online, xem như thiết bị đã ngắt kết nối (offline)

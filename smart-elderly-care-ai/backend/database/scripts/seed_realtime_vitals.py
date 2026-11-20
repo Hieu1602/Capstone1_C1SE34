@@ -72,11 +72,11 @@ async def seed():
     """, vitals_data)
     print(f"✅ Đã nạp thành công {len(vitals_data)} bản ghi dữ liệu sinh hiệu (vital_signs) vào AWS RDS!")
 
-    # 3. Tạo 1 cảnh báo sự cố mẫu
+    # 3. Tạo cảnh báo sự cố mẫu (chỉ khi vượt ngưỡng bệnh lý thực tế lúc nghỉ ngơi)
     incident_id = uuid.uuid4()
     await conn.execute("""
         INSERT INTO incidents (id, device_id, alert_type, alert_level, message, confidence, is_acknowledged, created_at)
-        VALUES ($1, $2, 'HEART_RATE_SPIKE', 'MEDIUM', 'Nhịp tim đo được 105 bpm lúc vận động nhẹ', 0.92, false, now())
+        VALUES ($1, $2, 'HIGH_HEART_RATE', 'HIGH', 'Cảnh báo: Nhịp tim tăng vọt 128 bpm bất thường khi đang nghỉ ngơi (vượt ngưỡng 100 bpm)', 0.95, false, now())
         ON CONFLICT DO NOTHING;
     """, incident_id, band_id)
     print("✅ Đã tạo 1 cảnh báo sự cố mẫu (incidents) thành công!")

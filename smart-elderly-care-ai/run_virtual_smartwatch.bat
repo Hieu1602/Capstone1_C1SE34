@@ -48,6 +48,6 @@ echo.
 echo =========================================================================
 echo Dang khoi dong mo phong che do: %MODE%
 echo =========================================================================
-backend\.venv\Scripts\python.exe backend\database\scripts\virtual_smartwatch.py --mode %MODE%
+backend\.venv\Scripts\python.exe backend\database\scripts\virtual_smartwatch.py --mode %MODE% --profile full
 
 pause
