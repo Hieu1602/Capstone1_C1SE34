@@ -58,6 +58,25 @@ export interface PrescriptionItem {
   doctor_name: string;
   enable_speaker_reminder: boolean;
   created_at?: string;
+  start_date?: string;
+  end_date?: string;
+  diagnosis?: string;
+}
+
+export interface BatchPrescriptionPayload {
+  diagnosis: string;
+  general_notes?: string;
+  enable_speaker_reminder: boolean;
+  start_date?: string;
+  end_date?: string;
+  medications: Array<{
+    medication_name: string;
+    dosage: string;
+    quantity: string;
+    frequency: string;
+    schedule_times: string[];
+    instructions: string;
+  }>;
 }
 
 export interface DoctorPatientDetail {
@@ -106,6 +125,14 @@ export interface AppointmentItem {
   updated_at?: string;
 }
 
+export interface TrendHourlyItem {
+  time: string;
+  heart_rate?: number;
+  spo2?: number;
+  bp?: string;
+  skin_temp?: number;
+}
+
 export interface TrendItem {
   date: string;
   avg_heart_rate: number;
@@ -115,6 +142,7 @@ export interface TrendItem {
   max_heart_rate?: number;
   avg_skin_temp?: number;
   steps?: number;
+  hourly_records?: TrendHourlyItem[];
 }
 
 export interface AnalyticsData {

@@ -140,14 +140,18 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
     };
     setDevice(updated);
 
-    // Update in useDeviceStore
+    // Update in useDeviceStore (Đảm bảo quy tắc 1 cụ chỉ gán 1 đồng hồ)
     try {
       const storeDevices = useDeviceStore.getState().iotDevices;
-      const updatedStoreDevices = storeDevices.map((d) =>
-        d.id === devId || d.deviceId === devId
-          ? { ...d, elderly_id: selectedElderly.id, wearer_name: selectedElderly.full_name || selectedElderly.name }
-          : d
-      );
+      const updatedStoreDevices = storeDevices.map((d) => {
+        if (d.id === devId || d.deviceId === devId) {
+          return { ...d, elderly_id: selectedElderly.id, wearer_name: selectedElderly.full_name || selectedElderly.name };
+        }
+        if ((d.type === 'watch' || d.type === 'smartband') && String(d.elderly_id) === String(selectedElderly.id)) {
+          return { ...d, elderly_id: undefined, wearer_name: undefined };
+        }
+        return d;
+      });
       useDeviceStore.setState({ iotDevices: updatedStoreDevices });
     } catch (e) {}
 
@@ -156,6 +160,48 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
 
     const title = 'Gán Thiết Bị Thành Công';
     const msg = `Thiết bị ${device.name || 'Smartband'} đã được liên kết với ${selectedElderly.full_name || selectedElderly.name}.`;
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.alert(`${title}\n${msg}`);
+    } else {
+      Alert.alert(title, msg);
+    }
+  };
+
+  const handleUnassignWearer = async () => {
+    setIsAssigning(true);
+    const devId = device.id || device.device_id || deviceParam?.id || deviceParam?.device_id || 'BLE_BAND_01';
+
+    try {
+      await devicesApi.updateDevice(devId, {
+        elderly_id: null,
+      });
+    } catch (apiErr) {
+      console.warn('API updateDevice unassign fallback:', apiErr);
+    }
+
+    const updated = {
+      ...device,
+      elderly_id: undefined,
+      wearer_name: undefined,
+    };
+    setDevice(updated);
+    setSelectedElderlyId('');
+
+    try {
+      const storeDevices = useDeviceStore.getState().iotDevices;
+      const updatedStoreDevices = storeDevices.map((d) =>
+        d.id === devId || d.deviceId === devId
+          ? { ...d, elderly_id: undefined, wearer_name: undefined }
+          : d
+      );
+      useDeviceStore.setState({ iotDevices: updatedStoreDevices });
+    } catch (e) {}
+
+    setIsAssigning(false);
+    setAssignModalVisible(false);
+
+    const title = 'Đã hủy gán người đeo';
+    const msg = `Thiết bị ${device.name || 'Smartband'} đã được chuyển về trạng thái chưa gán người đeo.`;
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.alert(`${title}\n${msg}`);
     } else {
@@ -413,6 +459,18 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
               </ScrollView>
             )}
 
+            {Boolean(device.elderly_id || device.wearer_name) && (
+              <TouchableOpacity
+                style={styles.modalUnassignBtn}
+                onPress={handleUnassignWearer}
+                disabled={isAssigning}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="person-remove-outline" size={15} color="#EF4444" />
+                <Text style={styles.modalUnassignText}>Bỏ gán người đeo hiện tại</Text>
+              </TouchableOpacity>
+            )}
+
             <View style={styles.modalActionRow}>
               <TouchableOpacity
                 style={[styles.modalCancelBtn, isDarkMode && { borderColor: colors.border }]}
@@ -603,6 +661,23 @@ const styles = StyleSheet.create({
   },
   radioBox: {
     paddingLeft: 4,
+  },
+  modalUnassignBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    marginBottom: 10,
+    borderRadius: 10,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  modalUnassignText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#EF4444',
   },
   modalActionRow: {
     flexDirection: 'row',

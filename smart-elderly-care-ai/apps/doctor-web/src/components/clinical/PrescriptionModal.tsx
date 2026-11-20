@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { PrescriptionItem } from '../../types';
 import { doctorApi } from '../../services/api';
+import { getTodayYMD, parseYMD, formatYMD } from '../../utils/dateFilter';
 import {
   Pill,
   Plus,
@@ -19,6 +20,7 @@ import {
   Sunset,
   Moon,
   AlarmClock,
+  Calendar,
 } from 'lucide-react';
 
 interface PrescriptionModalProps {
@@ -56,6 +58,18 @@ const createEmptyMed = (): MedicationDraft => ({
   instructions: 'Uống sau ăn 15 phút',
 });
 
+const addDays = (baseDateStr: string, days: number): string => {
+  try {
+    const d = parseYMD(baseDateStr);
+    d.setDate(d.getDate() + days);
+    return formatYMD(d);
+  } catch {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return formatYMD(d);
+  }
+};
+
 const inputCls =
   'w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-blue-500 focus:outline-hidden bg-white dark:border-slate-700/60 dark:bg-[#0F172A] dark:text-slate-100 dark:placeholder-slate-500';
 
@@ -73,10 +87,17 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
   // Đồng bộ các trường giống Mobile App (Kê Đơn Thuốc Mới)
   const [diagnosis, setDiagnosis] = useState('Đơn thuốc điều trị');
   const [generalNotes, setGeneralNotes] = useState('');
+  const [startDate, setStartDate] = useState(() => getTodayYMD());
+  const [endDate, setEndDate] = useState(() => addDays(getTodayYMD(), 7));
   const [medications, setMedications] = useState<MedicationDraft[]>(() => [createEmptyMed()]);
   const [enableSpeaker, setEnableSpeaker] = useState(true);
   const [customTimeTargetId, setCustomTimeTargetId] = useState<string | null>(null);
   const [customTimeInput, setCustomTimeInput] = useState('');
+
+  const handleSetDuration = (days: number) => {
+    const base = startDate || getTodayYMD();
+    setEndDate(addDays(base, days));
+  };
 
   const updateMed = (id: string, patch: Partial<MedicationDraft>) => {
     setMedications((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
@@ -121,6 +142,11 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
 
   const handleAddPrescription = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (startDate && endDate && endDate < startDate) {
+      setErrorMsg('Ngày kết thúc đợt thuốc phải lớn hơn hoặc bằng ngày bắt đầu.');
+      return;
+    }
+
     const invalid = medications.find(
       (m) => !m.medication_name.trim() || !m.quantity.trim() || !m.dosage.trim()
     );
@@ -136,18 +162,23 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
         diagnosis: diagnosis.trim() || 'Đơn thuốc điều trị',
         general_notes: generalNotes.trim() || undefined,
         enable_speaker_reminder: enableSpeaker,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
         medications: medications.map((m) => ({
           medication_name: m.medication_name.trim(),
           quantity: m.quantity.trim(),
           dosage: m.dosage.trim(),
           frequency: m.frequency.trim() || 'Hàng ngày',
           schedule_times: m.schedule_times.length > 0 ? m.schedule_times : ['08:00'],
-          instructions: m.instructions.trim() || undefined,
+          instructions: m.instructions.trim() || 'Theo chỉ định của Bác sĩ',
         })),
       });
 
+      const freshToday = getTodayYMD();
       setDiagnosis('Đơn thuốc điều trị');
       setGeneralNotes('');
+      setStartDate(freshToday);
+      setEndDate(addDays(freshToday, 7));
       setMedications([createEmptyMed()]);
       setShowAddForm(false);
       onRefresh();
@@ -252,9 +283,19 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
                         <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">{rx.dosage}</span>
                       </div>
                       <p className="text-xs text-slate-500 dark:text-slate-400">{rx.frequency} • {rx.instructions || 'Theo chỉ định của Bác sĩ'}</p>
-                      <div className="flex items-center space-x-1 text-[11px] text-slate-400">
-                        <Clock className="h-3 w-3" />
-                        <span>Giờ uống: {rx.schedule_times?.join(', ') || 'Chưa đặt'}</span>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-400">
+                        <div className="flex items-center space-x-1">
+                          <Clock className="h-3 w-3" />
+                          <span>Giờ uống: {rx.schedule_times?.join(', ') || 'Chưa đặt'}</span>
+                        </div>
+                        {(rx.start_date || rx.end_date) && (
+                          <div className="flex items-center space-x-1 text-blue-600 dark:text-blue-400 font-medium">
+                            <Calendar className="h-3 w-3" />
+                            <span>
+                              Đợt dùng: {rx.start_date || '...'} → {rx.end_date || '...'}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -324,6 +365,59 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
                     placeholder="VD: Ăn nhạt, uống nhiều nước, tập thể dục nhẹ..."
                     className={inputCls}
                   />
+                </div>
+              </div>
+
+              {/* Thời gian đợt điều trị (Ngày bắt đầu & Ngày kết thúc) */}
+              <div className="rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#131C31] p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200">
+                    <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    <span>Thời gian đợt dùng thuốc</span>
+                  </div>
+                  {/* Nút chọn nhanh thời hạn */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-slate-400 mr-1 hidden sm:inline">Thời hạn nhanh:</span>
+                    {[
+                      { label: '+7 ngày', days: 7 },
+                      { label: '+14 ngày', days: 14 },
+                      { label: '+30 ngày', days: 30 },
+                    ].map((pill) => (
+                      <button
+                        key={pill.days}
+                        type="button"
+                        onClick={() => handleSetDuration(pill.days)}
+                        className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-blue-700 dark:hover:bg-blue-950/40 dark:hover:text-blue-300 transition-colors cursor-pointer"
+                      >
+                        {pill.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Ngày bắt đầu (*)
+                    </label>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Ngày kết thúc (*)
+                    </label>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className={inputCls}
+                    />
+                  </div>
                 </div>
               </div>
 

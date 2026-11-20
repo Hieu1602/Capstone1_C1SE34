@@ -3,6 +3,7 @@ doctor.py – Pydantic Schemas cho Phân hệ Bác sĩ Gia đình (Doctor Subsys
 Vị trí: backend/app/schemas/doctor.py
 """
 
+from datetime import datetime
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 from app.schemas.patient import MedicalCondition
@@ -64,6 +65,11 @@ class PrescriptionItem(BaseModel):
     schedule_times: List[str] = Field(default_factory=list)
     instructions: str = ""
     doctor_name: Optional[str] = None
+    diagnosis: Optional[str] = "Đơn thuốc điều trị"
+    general_notes: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    status: str = "ACTIVE"
     enable_speaker_reminder: bool = True
     created_at: Optional[str] = None
 
@@ -73,9 +79,13 @@ class PrescriptionCreate(BaseModel):
     medication_name: str
     dosage: str
     quantity: Optional[str] = None
-    frequency: Optional[str] = None
+    frequency: Optional[str] = "Hàng ngày"
     schedule_times: Optional[List[str]] = None
     instructions: Optional[str] = None
+    diagnosis: Optional[str] = "Đơn thuốc điều trị"
+    general_notes: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     enable_speaker_reminder: bool = True
 
 
@@ -87,6 +97,11 @@ class PrescriptionUpdate(BaseModel):
     frequency: Optional[str] = None
     schedule_times: Optional[List[str]] = None
     instructions: Optional[str] = None
+    diagnosis: Optional[str] = None
+    general_notes: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    status: Optional[str] = None
     enable_speaker_reminder: Optional[bool] = None
 
 
@@ -105,6 +120,8 @@ class BatchPrescriptionCreate(BaseModel):
     diagnosis: Optional[str] = None
     general_notes: Optional[str] = None
     enable_speaker_reminder: bool = True
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     medications: List[MedicationItemCreate]
 
 

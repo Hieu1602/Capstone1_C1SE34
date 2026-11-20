@@ -609,7 +609,7 @@ def main():
     ap.add_argument("--mode", choices=MODES, default="normal")
     ap.add_argument("--battery", type=int, default=None)
     ap.add_argument("--count", type=int, default=0, help="Số mẫu tối đa ở chế độ tương tác (0 = vô hạn)")
-    ap.add_argument("--profile", choices=["my_watch", "full"], default="my_watch",
+    ap.add_argument("--profile", choices=["my_watch", "full"], default="full",
                     help="my_watch = HR+SpO2+gia tốc; full = thêm nhiệt độ và huyết áp")
     ap.add_argument("--exercise-flag", choices=["unknown", "known"], default="unknown",
                     help="unknown: không gửi is_exercising; known: gửi true/false")

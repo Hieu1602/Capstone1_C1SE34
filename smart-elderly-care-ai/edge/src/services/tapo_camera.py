@@ -477,7 +477,7 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         try:
             u = urlparse(src)
             host = u.hostname
-            if not host:
+            if not host or host in ("192.168.1.100", "127.0.0.1", "localhost"):
                 return control
             user = unquote(u.username) if u.username else None
             password = unquote(u.password) if u.password else None
@@ -519,7 +519,7 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
             return web.json_response({"error": "Cần đăng nhập"}, status=401,
                                      headers={"WWW-Authenticate": 'Basic realm="Camera"'})
         # Các lệnh thay đổi trạng thái yêu cầu JSON (ngăn form POST từ site khác).
-        if request.method == "POST" and request.content_type != "application/json":
+        if request.method == "POST" and not request.path.startswith("/api/") and request.content_type != "application/json":
             return web.json_response({"error": "Cần Content-Type application/json"}, status=415)
         try:
             response = await handler(request)
@@ -848,6 +848,31 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         except Exception as e:
             return web.json_response({"success": False, "reachable": False, "message": f"Không thể kết nối đến {host}:{port}: {e}"})
 
+    async def proxy_audio(request):
+        """Chuyển tiếp yêu cầu signaling WebRTC/streams tới dịch vụ go2rtc (tapo-audio:1984)."""
+        target_url = f"http://tapo-audio:1984{request.rel_url}"
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                data = await request.read() if request.can_read_body else None
+                req_headers = {k: v for k, v in request.headers.items() if k.lower() not in ("host", "authorization")}
+                async with session.request(
+                    request.method,
+                    target_url,
+                    headers=req_headers,
+                    data=data,
+                    timeout=aiohttp.ClientTimeout(total=30),
+                ) as resp:
+                    resp_body = await resp.read()
+                    return web.Response(
+                        body=resp_body,
+                        status=resp.status,
+                        content_type=resp.content_type,
+                    )
+        except Exception as e:
+            LOG.warning("Lỗi chuyển tiếp tới tapo-audio: %s (%s)", type(e).__name__, e)
+            raise web.HTTPServiceUnavailable(text="Dịch vụ âm thanh go2rtc chưa sẵn sàng") from None
+
     async def lifecycle(app):
         """Gắn vòng đời driver, recorder và AI fall detector với ứng dụng.
 
@@ -870,7 +895,7 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
                 await asyncio.to_thread(d.stop)
             await asyncio.to_thread(camera.stop)
 
-    app = web.Application(middlewares=[authentication], client_max_size=4096)
+    app = web.Application(middlewares=[authentication], client_max_size=1048576)
     app.cleanup_ctx.append(lifecycle)
     app.add_routes([
         web.get("/", index), web.get("/healthz", health), web.get("/status", status),
@@ -883,6 +908,8 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         web.get("/recordings/{name}", download),
         web.get("/fall-detection", get_fall), web.post("/fall-detection", set_fall),
         web.get("/discover", discover), web.post("/probe", probe),
+        web.route("*", "/api/webrtc", proxy_audio),
+        web.route("*", "/api/streams", proxy_audio),
     ])
     return app
 

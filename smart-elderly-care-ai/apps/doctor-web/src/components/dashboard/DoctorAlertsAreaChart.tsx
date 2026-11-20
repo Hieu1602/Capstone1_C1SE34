@@ -12,6 +12,7 @@ import {
   CartesianGrid,
   Tooltip,
 } from 'recharts';
+import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 
 export interface AlertDayStat {
   label: string;
@@ -27,6 +28,14 @@ interface DoctorAlertsAreaChartProps {
   data: AlertDayStat[];
   range: '7D' | '30D';
   onRangeChange: (r: '7D' | '30D') => void;
+  periodLabel?: string;
+  onPrev?: () => void;
+  onNext?: () => void;
+  isNextDisabled?: boolean;
+  onResetCurrent?: () => void;
+  isCurrentPeriod?: boolean;
+  selectedMonthStr?: string;
+  onMonthSelect?: (monthStr: string) => void;
 }
 
 type SeriesKey = 'fall' | 'heart' | 'spo2' | 'sos';
@@ -105,6 +114,14 @@ export const DoctorAlertsAreaChart: React.FC<DoctorAlertsAreaChartProps> = ({
   data,
   range,
   onRangeChange,
+  periodLabel,
+  onPrev,
+  onNext,
+  isNextDisabled = false,
+  onResetCurrent,
+  isCurrentPeriod = true,
+  selectedMonthStr,
+  onMonthSelect,
 }) => {
   const [visibleSeries, setVisibleSeries] = useState<Record<SeriesKey, boolean>>({
     fall: true,
@@ -141,25 +158,90 @@ export const DoctorAlertsAreaChart: React.FC<DoctorAlertsAreaChartProps> = ({
           </p>
         </div>
 
-        {/* Bộ chuyển đổi khoảng thời gian: Segmented Control */}
-        <div className="inline-flex rounded-xl border border-slate-200/90 bg-slate-100/80 p-0.5 text-xs font-semibold self-start sm:self-auto dark:border-slate-800 dark:bg-slate-800/80 shrink-0">
-          {(['7D', '30D'] as const).map((r) => {
-            const isActive = range === r;
-            return (
+        {/* Bộ chuyển đổi khoảng thời gian & Điều hướng Tuần/Tháng */}
+        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+          {/* Segmented Control - Nút cố định kích thước */}
+          <div className="inline-flex rounded-xl border border-slate-200/90 bg-slate-100/80 p-0.5 text-xs font-semibold dark:border-slate-800 dark:bg-slate-800/80">
+            {(['7D', '30D'] as const).map((r) => {
+              const isActive = range === r;
+              return (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => onRangeChange(r)}
+                  className={`w-20 rounded-lg py-1 text-xs font-bold transition-all text-center cursor-pointer ${
+                    isActive
+                      ? 'bg-white text-blue-600 shadow-2xs dark:bg-slate-900 dark:text-blue-400'
+                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                  }`}
+                >
+                  {r === '7D' ? 'Theo tuần' : 'Theo tháng'}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Navigator: Cụm nút [<][>] cố định + Ô ngày cố định width + Nút reset cố định vị trí */}
+          <div className="inline-flex items-center gap-1.5">
+            {/* Cụm 2 nút lùi/tiến ghép đôi cố định vị trí - Bấm liên tiếp không bị nhảy nút */}
+            <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-800 shadow-2xs">
               <button
-                key={r}
                 type="button"
-                onClick={() => onRangeChange(r)}
-                className={`rounded-lg px-3 py-1 text-xs font-bold transition-all cursor-pointer ${
-                  isActive
-                    ? 'bg-white text-blue-600 shadow-2xs dark:bg-slate-900 dark:text-blue-400'
-                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-                }`}
+                onClick={onPrev}
+                className="flex h-6 w-6 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700 transition cursor-pointer"
+                title={range === '7D' ? 'Tuần trước' : 'Tháng trước'}
               >
-                {r === '7D' ? 'Theo tuần' : 'Theo tháng'}
+                <ChevronLeft className="h-3.5 w-3.5" />
               </button>
-            );
-          })}
+              <button
+                type="button"
+                onClick={onNext}
+                disabled={isNextDisabled}
+                className={`flex h-6 w-6 items-center justify-center rounded-md transition ${
+                  isNextDisabled
+                    ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700 cursor-pointer'
+                }`}
+                title={range === '7D' ? 'Tuần tiếp theo' : 'Tháng tiếp theo'}
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {/* Ô hiển thị nhãn thời gian - Khóa cứng chiều rộng w-36 (144px) để không làm xê dịch nút khác */}
+            <div className="relative flex items-center">
+              {range === '30D' ? (
+                <div className="relative flex w-36 h-7 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 shadow-2xs hover:border-blue-400 transition cursor-pointer">
+                  <Calendar className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                  <span className="truncate">{periodLabel}</span>
+                  <input
+                    type="month"
+                    value={selectedMonthStr}
+                    onChange={(e) => e.target.value && onMonthSelect?.(e.target.value)}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    title="Chọn tháng khác"
+                  />
+                </div>
+              ) : (
+                <div className="relative flex w-36 h-7 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 shadow-2xs">
+                  <Calendar className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                  <span className="truncate">{periodLabel}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Nút quay về hiện tại - Giữ vị trí cố định bằng visibility để không làm nhảy bố cục */}
+            <div className={`transition-opacity ${isCurrentPeriod ? 'invisible pointer-events-none' : 'visible'}`}>
+              <button
+                type="button"
+                onClick={onResetCurrent}
+                className="rounded-lg bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-600 border border-blue-200 hover:bg-blue-100 dark:bg-blue-950/50 dark:border-blue-900 dark:text-blue-300 dark:hover:bg-blue-900 transition cursor-pointer shrink-0"
+                title="Quay lại thời điểm hiện tại"
+              >
+                {range === '7D' ? 'Tuần này' : 'Tháng này'}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

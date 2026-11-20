@@ -18,9 +18,16 @@ import { Activity, Heart, ShieldAlert } from 'lucide-react';
 interface VitalsTrendChartProps {
   data: TrendItem[];
   days?: number;
+  titleOverride?: string;
+  isSingleDay?: boolean;
 }
 
-export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({ data, days = 7 }) => {
+export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
+  data,
+  days = 7,
+  titleOverride,
+  isSingleDay = false,
+}) => {
   if (!data || data.length === 0) {
     return (
       <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-[#0F172A] p-6 text-center">
@@ -31,25 +38,41 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({ data, days =
     );
   }
 
-  // Định dạng dữ liệu hiển thị
-  const chartData = data.map((item) => {
-    let dateLabel = item.date;
-    try {
-      const parts = item.date.split('-');
-      if (parts.length === 3) {
-        dateLabel = `${parts[2]}/${parts[1]}`;
-      }
-    } catch {
-      // fallback
-    }
+  const defaultTitle =
+    days === 1 ? 'Xu hướng Sinh hiệu Hôm nay' : `Xu hướng Sinh hiệu ${days} ngày gần nhất`;
+  const title = titleOverride || defaultTitle;
 
-    return {
-      date: dateLabel,
-      heartRate: item.avg_heart_rate ? Math.round(item.avg_heart_rate) : null,
-      spo2: item.avg_spo2 ? Math.round(item.avg_spo2 * 10) / 10 : null,
-      minSpo2: item.min_spo2 ? Math.round(item.min_spo2 * 10) / 10 : null,
-    };
-  });
+  const isHourlyView = Boolean(
+    isSingleDay || (data.length === 1 && data[0]?.hourly_records && data[0].hourly_records.length > 0)
+  );
+
+  // Định dạng dữ liệu hiển thị (theo mốc giờ nếu xem 1 ngày, theo ngày nếu xem tuần/tháng)
+  const chartData =
+    isHourlyView && data[0]?.hourly_records && data[0].hourly_records.length > 0
+      ? data[0].hourly_records.map((h) => ({
+          date: h.time,
+          heartRate: h.heart_rate ?? null,
+          spo2: h.spo2 ?? null,
+          minSpo2: h.spo2 ?? null,
+        }))
+      : data.map((item) => {
+          let dateLabel = item.date;
+          try {
+            const parts = item.date.split('-');
+            if (parts.length === 3) {
+              dateLabel = `${parts[2]}/${parts[1]}`;
+            }
+          } catch {
+            // fallback
+          }
+
+          return {
+            date: dateLabel,
+            heartRate: item.avg_heart_rate ? Math.round(item.avg_heart_rate) : null,
+            spo2: item.avg_spo2 ? Math.round(item.avg_spo2 * 10) / 10 : null,
+            minSpo2: item.min_spo2 ? Math.round(item.min_spo2 * 10) / 10 : null,
+          };
+        });
 
   return (
     <div className="space-y-4">
@@ -58,7 +81,7 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({ data, days =
         <div className="flex items-center space-x-2">
           <Activity className="h-5 w-5 text-blue-600 dark:text-blue-400" />
           <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-            Xu hướng Sinh hiệu {days} ngày gần nhất
+            {title}
           </h4>
         </div>
 
@@ -86,6 +109,7 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({ data, days =
               fontSize={11}
               tickLine={false}
               axisLine={{ stroke: '#475569' }}
+              interval={isHourlyView ? 1 : 0}
             />
             {/* Trục trái: Nhịp tim (40 - 140) */}
             <YAxis
@@ -117,6 +141,15 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({ data, days =
                 boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
                 fontSize: '12px',
               }}
+              formatter={(value: any, name: string) => {
+                if (value === null || value === undefined) return ['Chưa có dữ liệu', name];
+                if (name.includes('Nhịp tim')) return [`${value} bpm`, name];
+                if (name.includes('SpO2')) return [`${value}%`, name];
+                return [value, name];
+              }}
+              labelFormatter={(label: string) =>
+                isHourlyView ? `Khung giờ: ${label}` : `Ngày: ${label}`
+              }
             />
             <Line
               yAxisId="left"
@@ -125,7 +158,8 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({ data, days =
               name="Nhịp tim trung bình"
               stroke="#3B82F6"
               strokeWidth={2.5}
-              dot={{ r: 3, fill: '#3B82F6', strokeWidth: 0 }}
+              connectNulls={true}
+              dot={{ r: isHourlyView ? 2 : 3, fill: '#3B82F6', strokeWidth: 0 }}
               activeDot={{ r: 5 }}
             />
             <Line
@@ -135,7 +169,8 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({ data, days =
               name="SpO2 trung bình"
               stroke="#10B981"
               strokeWidth={2.5}
-              dot={{ r: 3, fill: '#10B981', strokeWidth: 0 }}
+              connectNulls={true}
+              dot={{ r: isHourlyView ? 2 : 3, fill: '#10B981', strokeWidth: 0 }}
               activeDot={{ r: 5 }}
             />
           </LineChart>

@@ -19,6 +19,7 @@ import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line, Text as SvgText } 
 import { Colors, Shadows } from '../../theme/colors';
 import { useTheme } from '../../store/useThemeStore';
 import { useAlertStore } from '../../store';
+import { usePatientStore } from '../../store/usePatientStore';
 import { LocalizedAlert, LocalizedText } from '../../i18n/LocalizedComponents';
 import { reportsApi } from '../../services/api';
 import { handleHeaderBack } from '../../navigation/navigationHelpers';
@@ -113,13 +114,55 @@ export default function MedicalReportScreen({ navigation, route }: any) {
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [reportChartWidth, setReportChartWidth] = useState<number>(300);
 
-  const patientId = route?.params?.patientId;
+  const { patientsList, fetchPatientsList, activePatientId, setActivePatientId } = usePatientStore();
+  const routePatientId = route?.params?.patientId;
   const deviceId = route?.params?.deviceId;
+
+  const [selectedPatientId, setSelectedPatientId] = useState<string | number | undefined>(
+    routePatientId || activePatientId || undefined
+  );
+
+  useEffect(() => {
+    fetchPatientsList();
+  }, [fetchPatientsList]);
+
+  useEffect(() => {
+    if (!selectedPatientId && patientsList && patientsList.length > 0) {
+      const firstId = patientsList[0].id || patientsList[0].elderly_id;
+      setSelectedPatientId(firstId);
+    }
+  }, [patientsList, selectedPatientId]);
+
+  const currentSenior = useMemo(() => {
+    if (!patientsList || patientsList.length === 0) return null;
+    return (
+      patientsList.find((p: any) => String(p.id || p.elderly_id) === String(selectedPatientId)) ||
+      patientsList[0]
+    );
+  }, [patientsList, selectedPatientId]);
+
+  const currentSeniorName = currentSenior?.full_name || currentSenior?.name || '';
 
   const storeCriticalStats = useMemo(() => {
     const daysWindow = period === 'WEEK' ? 7 : 30;
     const cutoffMs = Date.now() - daysWindow * 24 * 60 * 60 * 1000;
-    const allCritical = storeIncidents.filter((inc) => isCriticalIncidentItem(inc));
+    const seniorDeviceIds = new Set<string>();
+    if (currentSenior) {
+      if (currentSenior.device_id) seniorDeviceIds.add(String(currentSenior.device_id).toLowerCase());
+      if (Array.isArray(currentSenior.devices)) {
+        for (const d of currentSenior.devices) {
+          if (d.id) seniorDeviceIds.add(String(d.id).toLowerCase());
+          if (d.device_id) seniorDeviceIds.add(String(d.device_id).toLowerCase());
+        }
+      }
+    }
+    const allCritical = storeIncidents.filter((inc) => {
+      if (!isCriticalIncidentItem(inc)) return false;
+      if (seniorDeviceIds.size > 0 && inc.device_id) {
+        return seniorDeviceIds.has(String(inc.device_id).toLowerCase());
+      }
+      return true;
+    });
     const inPeriodCritical = allCritical.filter((inc) => {
       if (!inc.created_at) return true;
       const t = new Date(inc.created_at).getTime();
@@ -137,7 +180,7 @@ export default function MedicalReportScreen({ navigation, route }: any) {
       count: matched.length,
       events: tags,
     };
-  }, [storeIncidents, period]);
+  }, [storeIncidents, period, currentSenior]);
 
   const effectiveCriticalCount = Math.max(
     Number(report.criticalAlerts) || 0,
@@ -165,8 +208,9 @@ export default function MedicalReportScreen({ navigation, route }: any) {
     }
 
     try {
+      const pId = selectedPatientId ? String(selectedPatientId) : undefined;
       const [res] = await Promise.all([
-        reportsApi.getSummary(period, patientId, deviceId),
+        reportsApi.getSummary(period, pId, deviceId),
         fetchNotifications().catch(() => null),
       ]);
       if (res && res.data) {
@@ -214,7 +258,7 @@ export default function MedicalReportScreen({ navigation, route }: any) {
             Array.isArray(res.data.labels) && res.data.labels.length > 0
               ? res.data.labels
               : period === 'WEEK'
-              ? ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
+              ? ['T2', 'T3', 'T4', 'T5', 'T6', 'CN']
               : ['1', '5', '10', '15', '20', '25', '30'],
           isSynced: Boolean(res.data.isSynced),
           hasData: Boolean(res.data.hasData),
@@ -226,7 +270,7 @@ export default function MedicalReportScreen({ navigation, route }: any) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [period, patientId, deviceId, fetchNotifications]);
+  }, [period, selectedPatientId, deviceId, fetchNotifications]);
 
   useEffect(() => {
     fetchReport();
@@ -234,7 +278,8 @@ export default function MedicalReportScreen({ navigation, route }: any) {
 
   const handleExportPDF = async () => {
     try {
-      const url = reportsApi.getPdfUrl(period, patientId, deviceId);
+      const pId = selectedPatientId ? String(selectedPatientId) : undefined;
+      const url = reportsApi.getPdfUrl(period, pId, deviceId);
 
       // Nếu đang chạy trên Web: Tự động kích hoạt tải file trực tiếp hoặc mở tab mới
       if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
@@ -269,7 +314,8 @@ export default function MedicalReportScreen({ navigation, route }: any) {
 
   const handleExportExcel = async () => {
     try {
-      const url = reportsApi.getExcelUrl(period, patientId, deviceId);
+      const pId = selectedPatientId ? String(selectedPatientId) : undefined;
+      const url = reportsApi.getExcelUrl(period, pId, deviceId);
 
       // Nếu đang chạy trên Web: Tự động kích hoạt tải file trực tiếp hoặc mở tab mới
       if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
@@ -337,10 +383,59 @@ export default function MedicalReportScreen({ navigation, route }: any) {
           />
         }
       >
+        {/* Bộ chọn Người cao tuổi (Hỗ trợ hộ gia đình đa người cao tuổi) */}
+        {patientsList && patientsList.length > 0 && (
+          <View style={styles.patientSelectorWrapper}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.patientChipsRow}
+            >
+              {patientsList.map((p: any) => {
+                const pId = p.id || p.elderly_id;
+                const isSelected = String(pId) === String(selectedPatientId);
+                const pName = p.full_name || p.name || 'Người cao tuổi';
+                return (
+                  <TouchableOpacity
+                    key={String(pId)}
+                    style={[
+                      styles.patientChip,
+                      isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+                      isSelected && styles.patientChipActive,
+                    ]}
+                    onPress={() => {
+                      setSelectedPatientId(pId);
+                      setActivePatientId?.(pId);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="person"
+                      size={13}
+                      color={isSelected ? '#FFFFFF' : (isDarkMode ? '#94A3B8' : '#64748B')}
+                    />
+                    <LocalizedText
+                      style={[
+                        styles.patientChipText,
+                        isDarkMode && { color: '#94A3B8' },
+                        isSelected && styles.patientChipTextActive,
+                      ]}
+                    >
+                      {pName}
+                    </LocalizedText>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+
         {/* Tiêu đề & Trạng thái đồng bộ */}
         <View style={styles.reportIntro}>
           <View>
-            <LocalizedText style={[styles.reportIntroTitle, isDarkMode && { color: '#F8FAFC' }]}>Tổng quan</LocalizedText>
+            <LocalizedText style={[styles.reportIntroTitle, isDarkMode && { color: '#F8FAFC' }]}>
+              {currentSeniorName ? `Tổng quan • ${currentSeniorName}` : 'Tổng quan'}
+            </LocalizedText>
             <LocalizedText style={[styles.reportIntroDate, isDarkMode && { color: '#94A3B8' }]}>{report.label}</LocalizedText>
           </View>
           <View style={[styles.liveBadge, isDarkMode && { backgroundColor: '#134E4A' }]}>
@@ -898,6 +993,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 18,
     paddingBottom: 38,
+  },
+  patientSelectorWrapper: {
+    marginBottom: 14,
+  },
+  patientChipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  patientChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  patientChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  patientChipText: {
+    marginLeft: 6,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  patientChipTextActive: {
+    color: '#FFFFFF',
   },
   reportIntro: {
     flexDirection: 'row',

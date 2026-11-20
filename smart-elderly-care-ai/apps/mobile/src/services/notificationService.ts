@@ -133,32 +133,82 @@ class NotificationService {
   }
 
   /**
-   * Bắn thông báo đẩy lên thanh thông báo hệ thống của điện thoại (Notification Tray / Status Bar)
+   * Phân loại sự cố: Trả về true nếu là báo động nguy hiểm khẩn cấp (té ngã, nhịp tim nguy kịch, v.v.)
+   * Trả về false nếu là thông báo thường (lịch khám, tin nhắn, cập nhật bệnh án, pin yếu).
    */
-  async triggerEmergencyNotification(payload: NotificationPayload): Promise<void> {
-    const { title, body, data } = payload;
+  isCriticalAlert(payload: NotificationPayload): boolean {
+    const { title, data } = payload;
     const alertType = data?.alert_type || data?.type || '';
-    const isCritical =
-      alertType === 'FALL_DETECTED' ||
-      alertType === 'HIGH_HEART_RATE' ||
-      alertType === 'LOW_HEART_RATE' ||
-      alertType === 'CRITICAL_TRIAD' ||
-      alertType === 'LOW_SPO2' ||
-      alertType === 'CARDIO_COLLAPSE' ||
-      alertType === 'EXERTION_HYPOXIA' ||
+
+    // Danh sách các sự cố khẩn cấp nguy hiểm thực sự -> Phát chuông báo động & rung mạnh
+    const emergencyTypes = [
+      'FALL_DETECTED',
+      'AI_FALL_DETECTED',
+      'CRITICAL_TRIAD',
+      'CARDIO_COLLAPSE',
+      'HIGH_HEART_RATE',
+      'LOW_HEART_RATE',
+      'SUDDEN_HR_SPIKE',
+      'SUDDEN_HR_DROP',
+      'LOW_SPO2',
+      'EXERTION_HYPOXIA',
+      'HIGH_FEVER',
+      'FEVER_TACHYCARDIA',
+      'DEVICE_BATTERY_DEAD',
+    ];
+
+    if (emergencyTypes.includes(alertType)) {
+      return true;
+    }
+
+    // Danh sách thông báo bình thường chắc chắn không phải khẩn cấp -> Chỉ ting ting nhẹ
+    const normalTypes = [
+      'APPOINTMENT_SCHEDULED',
+      'APPOINTMENT_REQUESTED',
+      'APPOINTMENT_CONFIRMED',
+      'APPOINTMENT_CANCELLED',
+      'MEDICAL_RECORD_UPDATED',
+      'HOUSE_INVITE_PENDING',
+      'HOUSE_JOIN_REQUEST',
+      'HOUSE_MEMBER_ADDED',
+      'HOUSE_MEMBER_REMOVED',
+      'HOUSE_JOIN_APPROVED',
+      'HOUSE_JOIN_REJECTED',
+      'HOUSE_INVITE_REJECTED',
+      'MEDICATION_REMINDER',
+      'LOW_BATTERY',
+    ];
+
+    if (normalTypes.includes(alertType)) {
+      return false;
+    }
+
+    // Tiêu đề có chứa các biểu tượng hoặc từ khóa khẩn cấp
+    return (
       title.includes('🚨') ||
       title.includes('💓') ||
       title.includes('KHẨN CẤP') ||
       title.includes('BÁO ĐỘNG') ||
-      title.includes('NGUY CẤP');
+      title.includes('NGUY CẤP') ||
+      title.includes('TÉ NGÃ')
+    );
+  }
+
+  /**
+   * Bắn thông báo đẩy lên thanh thông báo hệ thống của điện thoại (Notification Tray / Status Bar)
+   */
+  async triggerEmergencyNotification(payload: NotificationPayload): Promise<void> {
+    const { title, body, data } = payload;
+    const isCritical = this.isCriticalAlert(payload);
 
     if (Platform.OS !== 'web') {
-      // 1. Kích hoạt rung điện thoại: Nếu khẩn cấp -> Rung liên tục (repeat = true)
+      // 1. Chỉ rung liên tục và rung mạnh đối với BÁO ĐỘNG NGUY HIỂM KHẨN CẤP
+      // Đối với thông báo thường (lịch khám, tin nhắn): chỉ rung nhẹ 1 nhịp ngắn (haptic feedback)
       try {
         if (isCritical) {
           Vibration.vibrate([0, 1000, 400, 1000, 400, 1000, 800], true);
         } else {
-          Vibration.vibrate([0, 500, 250, 500], false);
+          Vibration.vibrate([0, 150], false);
         }
       } catch (vibErr) {
         console.warn('[NotificationService] Lỗi rung thiết bị:', vibErr);
@@ -167,12 +217,14 @@ class NotificationService {
       // 2. Bắn thông báo lên thanh trạng thái qua NativeNotificationModule
       if (Platform.OS === 'android' && NativeNotificationModule) {
         try {
-          if (NativeNotificationModule.triggerEmergencyAlarm) {
-            NativeNotificationModule.triggerEmergencyAlarm(title, body, isCritical);
-          } else if (NativeNotificationModule.showNotification) {
+          if (isCritical) {
+            // Báo động nguy hiểm: Hú chuông báo động, rung liên tục, có nút [ĐÃ XỬ LÝ (TẮT CHUÔNG)]
+            NativeNotificationModule.triggerEmergencyAlarm(title, body, true);
+          } else {
+            // Thông báo thông thường (Lịch khám, Tin nhắn): Chỉ phát tiếng ting ting nhẹ nhàng, không hú còi
             NativeNotificationModule.showNotification(title, body);
           }
-          console.log('[NotificationService] Đã gửi thông báo qua NativeNotificationModule:', title);
+          console.log('[NotificationService] Đã gửi thông báo qua NativeNotificationModule:', title, { isCritical });
           return;
         } catch (nativeErr) {
           console.warn('[NotificationService] NativeNotificationModule failed:', nativeErr);

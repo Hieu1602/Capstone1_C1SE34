@@ -224,6 +224,55 @@ async def execute_escalation_decision(incident_id: str | UUID, force_escalate: b
         except Exception as e_voip:
             logger.warning("[Escalation] Không thể kết nối VoIP Cloud: %s", e_voip)
 
+        # Bắn thông báo đẩy FCM / Web Push khẩn cấp tới điện thoại Người nhà & Web Bác sĩ (chạy nền)
+        try:
+            from app.models.device import Device
+            from app.models.house import House, HouseMember
+            from app.models.user import User
+            from app.services.notification.fcm_service import FCMService
+
+            fcm_tokens: list[str] = []
+            if incident.device_id:
+                dev = await session.get(Device, incident.device_id)
+                if dev and dev.house_id:
+                    # 1. Tìm tất cả thành viên & bác sĩ trong căn nhà qua HouseMember
+                    stmt_members = select(HouseMember.user_id).where(HouseMember.house_id == dev.house_id)
+                    mem_res = await session.execute(stmt_members)
+                    user_ids = set(mem_res.scalars().all())
+
+                    # 2. Bổ sung chủ nhà nếu có
+                    house = await session.get(House, dev.house_id)
+                    if house and house.owner_id:
+                        user_ids.add(house.owner_id)
+
+                    if user_ids:
+                        stmt_users = select(User).where(User.id.in_(user_ids), User.is_active.is_(True))
+                        u_res = await session.execute(stmt_users)
+                        for u in u_res.scalars().all():
+                            if u.fcm_token:
+                                fcm_tokens.append(u.fcm_token)
+
+            unique_tokens = list(dict.fromkeys(fcm_tokens))
+            if unique_tokens:
+                fcm = FCMService()
+                fcm.send_alert(
+                    fcm_tokens=unique_tokens,
+                    title="🚨 BÁO ĐỘNG ĐỎ: TỰ ĐỘNG LEO THANG CẤP CỨU!",
+                    body=f"Sự cố {incident.alert_type} chưa có người phản hồi sau 45s. Hệ thống đã tự động gọi khẩn cấp tới {ESCALATION_TARGET_PHONE}!",
+                    data={
+                        "type": "INCIDENT_ESCALATED",
+                        "incident_id": str(incident.id),
+                        "device_id": str(incident.device_id) if incident.device_id else "",
+                        "alert_type": incident.alert_type,
+                        "target_phone": ESCALATION_TARGET_PHONE,
+                        "url": "/notifications",
+                    },
+                    priority="high",
+                )
+                logger.info("[Escalation] Đã bắn FCM push notification leo thang tới %d thiết bị", len(unique_tokens))
+        except Exception as e_fcm:
+            logger.warning("[Escalation] Lỗi khi gửi FCM Push leo thang khẩn cấp: %s", e_fcm)
+
         ws_payload = {
             "type": "INCIDENT_ESCALATED",
             "incident_id": str(incident.id),

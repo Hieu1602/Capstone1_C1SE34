@@ -86,10 +86,14 @@ async def init_db() -> None:
     try:
         import app.models  # noqa: F401
         
-        # 1. Tạo các bảng cơ sở và cập nhật cột mới (Idempotent schema upgrades)
+        # 1. Tạo các bảng cơ sở nếu chưa tồn tại
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;"))
+
+        # 2. Cập nhật cột mới (Idempotent schema upgrades)
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(10) DEFAULT 'vi';"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS font_size_mode VARCHAR(20) DEFAULT 'system';"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_font_scale INTEGER DEFAULT 2;"))
@@ -147,6 +151,8 @@ async def init_db() -> None:
             await conn.execute(text("ALTER TABLE incidents DROP CONSTRAINT IF EXISTS incidents_device_id_fkey, ADD CONSTRAINT incidents_device_id_fkey FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE;"))
             await conn.execute(text("ALTER TABLE vital_signs DROP CONSTRAINT IF EXISTS vital_signs_device_id_fkey, ADD CONSTRAINT vital_signs_device_id_fkey FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE;"))
             await conn.execute(text("ALTER TABLE camera_recordings DROP CONSTRAINT IF EXISTS camera_recordings_device_id_fkey, ADD CONSTRAINT camera_recordings_device_id_fkey FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE;"))
+        except Exception as upgrade_err:
+            logger.debug("[DB] Upgrade columns notice: %s", upgrade_err)
 
         # 2. Tạo các bảng hỗ trợ và quản trị
         async with engine.begin() as conn:
@@ -305,6 +311,32 @@ async def init_db() -> None:
             """))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_reminders_status_time ON appointment_reminders(status, scheduled_time);"))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_reminders_appointment_id ON appointment_reminders(appointment_id);"))
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS prescriptions (
+                    id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+                    patient_id UUID NOT NULL REFERENCES elderly_profiles(id) ON DELETE CASCADE,
+                    doctor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+                    doctor_name VARCHAR(150),
+                    diagnosis VARCHAR(255) NOT NULL DEFAULT 'Đơn thuốc điều trị',
+                    general_notes TEXT,
+                    medication_name VARCHAR(255) NOT NULL,
+                    dosage VARCHAR(100) NOT NULL,
+                    quantity VARCHAR(50),
+                    frequency VARCHAR(100) NOT NULL DEFAULT 'Hàng ngày',
+                    schedule_times_json TEXT NOT NULL DEFAULT '["08:00"]',
+                    instructions TEXT,
+                    start_date TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    end_date TIMESTAMPTZ,
+                    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+                    enable_speaker_reminder BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            """))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_prescriptions_patient_id ON prescriptions(patient_id);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_prescriptions_doctor_id ON prescriptions(doctor_id);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_prescriptions_status ON prescriptions(status);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_prescriptions_dates ON prescriptions(start_date, end_date);"))
 
         # 3. Dữ liệu khởi tạo (Seeding an toàn)
         try:

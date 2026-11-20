@@ -95,6 +95,14 @@ interface StepCameraRtspConfigProps {
     username?: string;
     password?: string;
   };
+  scannedData?: {
+    mac?: string;
+    sn?: string;
+    brand?: string;
+    suggestedName?: string;
+    deviceId?: string;
+  };
+  onOpenScanner?: () => void;
 }
 
 // Xóa IP khỏi tên thiết bị để giao diện thân thiện
@@ -129,24 +137,26 @@ export const StepCameraRtspConfig: React.FC<StepCameraRtspConfigProps> = ({
   colors = {},
   onApplyCamera,
   initialValues,
+  scannedData,
+  onOpenScanner,
 }) => {
   const parsed = parseInitialStreamUrl(initialValues?.streamUrl);
 
   const [selectedBrand, setSelectedBrand] = useState<string>(
-    initialValues?.brand || 'TP-Link Tapo'
+    scannedData?.brand || initialValues?.brand || 'TP-Link Tapo'
   );
   const [cameraIp, setCameraIp] = useState<string>(parsed.ip);
   const [username, setUsername] = useState<string>(
-    initialValues?.username || parsed.user
+    scannedData ? 'admin123' : (initialValues?.username || parsed.user)
   );
   const [password, setPassword] = useState<string>(
-    initialValues?.password || parsed.pass
+    scannedData ? 'admin123' : (initialValues?.password || parsed.pass)
   );
   const [streamUrl, setStreamUrl] = useState<string>(
     initialValues?.streamUrl || 'rtsp://192.168.1.100:554/stream1'
   );
   const [cameraName, setCameraName] = useState<string>(
-    cleanCameraName(initialValues?.name, initialValues?.brand || 'TP-Link Tapo')
+    scannedData?.suggestedName || cleanCameraName(initialValues?.name, initialValues?.brand || 'TP-Link Tapo')
   );
   const [location, setLocation] = useState<string>(
     initialValues?.location || 'Phòng khách'
@@ -305,19 +315,27 @@ export const StepCameraRtspConfig: React.FC<StepCameraRtspConfigProps> = ({
     const cleanName = cleanCameraName(item.name, resolvedBrand);
     setCameraName(cleanName);
 
-    const updatedUrl = buildRtspUrl(resolvedBrand, item.ip, username, password);
+    const targetUser = username || (scannedData ? 'admin123' : '');
+    const targetPass = password || (scannedData ? 'admin123' : '');
+    const updatedUrl = buildRtspUrl(resolvedBrand, item.ip, targetUser, targetPass);
     setStreamUrl(updatedUrl);
 
     // Kiểm tra kết nối ngầm ngay khi chọn
     verifyCameraConnection(updatedUrl);
   };
 
-  // Tự động quét camera ngầm khi mở màn hình
+  // Tự động quét camera ngầm khi mở màn hình hoặc nhận diện từ mã vạch
   useEffect(() => {
-    if (!initialValues?.streamUrl || initialValues.streamUrl.includes('192.168.1.100')) {
+    if (scannedData) {
+      if (scannedData.brand) setSelectedBrand(scannedData.brand);
+      if (scannedData.suggestedName) setCameraName(scannedData.suggestedName);
+      setUsername('admin123');
+      setPassword('admin123');
+      handleScanNetwork();
+    } else if (!initialValues?.streamUrl || initialValues.streamUrl.includes('192.168.1.100')) {
       handleScanNetwork();
     }
-  }, []);
+  }, [scannedData]);
 
   // Áp dụng cấu hình camera
   const handleApply = async (isDefault: boolean) => {
@@ -367,6 +385,56 @@ export const StepCameraRtspConfig: React.FC<StepCameraRtspConfigProps> = ({
           CẤU HÌNH NGUỒN CAMERA
         </LocalizedText>
       </View>
+
+      {/* Nút bấm Quét mã vạch ở đáy Camera */}
+      {onOpenScanner && (
+        <TouchableOpacity
+          style={[
+            localStyles.scanBarcodeBtn,
+            isDarkMode && { backgroundColor: '#1E293B', borderColor: '#0284C7' },
+          ]}
+          onPress={onOpenScanner}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="barcode-outline" size={20} color="#0284C7" style={{ marginRight: 8 }} />
+          <LocalizedText style={[localStyles.scanBarcodeBtnText, isDarkMode && { color: '#38BDF8' }]}>
+            {scannedData ? 'Quét lại mã vạch camera' : 'Quét mã vạch S/N hoặc MAC ở đáy camera'}
+          </LocalizedText>
+        </TouchableOpacity>
+      )}
+
+      {/* Thông tin nhận diện từ mã vạch / QR */}
+      {scannedData && (
+        <View
+          style={[
+            localStyles.scannedBanner,
+            isDarkMode && { backgroundColor: '#1E293B', borderColor: '#0284C7' },
+          ]}
+        >
+          <Ionicons name="barcode-outline" size={22} color="#0284C7" style={{ marginRight: 10 }} />
+          <View style={{ flex: 1 }}>
+            <LocalizedText
+              style={[
+                localStyles.scannedBannerTitle,
+                isDarkMode && { color: '#38BDF8' },
+              ]}
+            >
+              Đã nhận diện qua mã vạch / QR
+            </LocalizedText>
+            <LocalizedText
+              style={[
+                localStyles.scannedBannerText,
+                isDarkMode && { color: '#94A3B8' },
+              ]}
+            >
+              {scannedData.brand || 'Camera'}
+              {scannedData.mac ? ` • MAC: ${scannedData.mac}` : ''}
+              {scannedData.sn ? ` • S/N: ${scannedData.sn}` : ''}
+            </LocalizedText>
+          </View>
+          <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+        </View>
+      )}
 
       {/* 1. Hãng Camera */}
       <View style={localStyles.fieldGroup}>
@@ -1032,6 +1100,44 @@ const localStyles = StyleSheet.create({
     color: '#0F172A',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
+  },
+  scannedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    padding: 12,
+    marginBottom: 16,
+  },
+  scannedBannerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0369A1',
+  },
+  scannedBannerText: {
+    fontSize: 12,
+    color: '#0284C7',
+    marginTop: 2,
+  },
+  scanBarcodeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1.5,
+    borderColor: '#0284C7',
+    borderStyle: 'dashed',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  scanBarcodeBtnText: {
+    color: '#0284C7',
+    fontSize: 14,
+    fontWeight: '700',
   },
   twoColRow: {
     flexDirection: 'row',

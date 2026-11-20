@@ -6,6 +6,7 @@ import {
   DoctorPatientCard,
   DoctorPatientDetail,
   PrescriptionItem,
+  BatchPrescriptionPayload,
   AppointmentItem,
   AnalyticsData,
   DoctorUser,
@@ -118,6 +119,14 @@ export const authApi = {
     const res = await api.delete(`/users/me/terminals/${terminalId}`);
     return res.data;
   },
+  updateFcmToken: async (fcmToken: string) => {
+    const res = await api.patch('/users/me/fcm-token', { fcm_token: fcmToken });
+    return res.data;
+  },
+  testPushNotification: async () => {
+    const res = await api.post('/users/me/test-push');
+    return res.data;
+  },
   logout: async (userName?: string, role: string = 'doctor') => {
     const token = localStorage.getItem('seca_doctor_token');
     try {
@@ -156,8 +165,16 @@ export const doctorApi = {
   },
 
   // Lấy dữ liệu phân tích sinh hiệu (TimescaleDB)
-  getAnalytics: async (elderlyId: string, days: number = 7): Promise<AnalyticsData> => {
-    const res = await api.get(`/doctor/patients/${elderlyId}/analytics?days=${days}`);
+  getAnalytics: async (
+    elderlyId: string,
+    days: number = 7,
+    startDate?: string,
+    endDate?: string
+  ): Promise<AnalyticsData> => {
+    let url = `/doctor/patients/${elderlyId}/analytics?days=${days}`;
+    if (startDate) url += `&start_date=${startDate}`;
+    if (endDate) url += `&end_date=${endDate}`;
+    const res = await api.get(url);
     return res.data;
   },
 
@@ -172,8 +189,13 @@ export const doctorApi = {
     return res.data;
   },
 
-  createBatchPrescriptions: async (elderlyId: string, data: any): Promise<PrescriptionItem[]> => {
+  createBatchPrescriptions: async (elderlyId: string, data: BatchPrescriptionPayload): Promise<PrescriptionItem[]> => {
     const res = await api.post(`/doctor/patients/${elderlyId}/prescriptions/batch`, data);
+    return res.data;
+  },
+
+  updatePrescription: async (elderlyId: string, rxId: string, data: Partial<PrescriptionItem>): Promise<PrescriptionItem> => {
+    const res = await api.put(`/doctor/patients/${elderlyId}/prescriptions/${rxId}`, data);
     return res.data;
   },
 

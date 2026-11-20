@@ -84,9 +84,15 @@ async def get_patient_detail(
     response_model=List[PrescriptionItem],
     summary="Lấy danh mục các loại thuốc đang được kê đơn",
 )
-async def get_patient_prescriptions(elderly_id: str):
+async def get_patient_prescriptions(
+    elderly_id: str,
+    db: AsyncSession = Depends(get_db),
+):
     """Trả về danh sách đơn thuốc điều trị của bệnh nhân."""
-    return crud_doctor.get_prescriptions(elderly_id)
+    items = await crud_doctor.get_prescriptions_db(db, elderly_id)
+    if not items:
+        items = crud_doctor.get_prescriptions(elderly_id)
+    return items
 
 
 @router.post(
@@ -99,17 +105,21 @@ async def create_prescription(
     elderly_id: str,
     prescription_in: PrescriptionCreate,
     current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Bác sĩ kê đơn thuốc mới:
-    - Lưu vào hồ sơ điều trị.
+    - Lưu vào hồ sơ điều trị trong PostgreSQL.
     - Tự động đồng bộ lịch nhắc uống thuốc xuống Hub Orange Pi 5 để phát loa giọng nói tiếng Việt.
     """
     doctor_name = current_user.full_name if current_user else "BS. Trần Văn Minh"
-    return crud_doctor.add_prescription(
+    doctor_id = current_user.id if current_user else None
+    return await crud_doctor.add_prescription_db(
+        db=db,
         elderly_id=elderly_id,
         obj_in=prescription_in,
         doctor_name=doctor_name,
+        doctor_id=doctor_id,
     )
 
 
@@ -123,12 +133,16 @@ async def create_batch_prescriptions(
     elderly_id: str,
     batch_in: BatchPrescriptionCreate,
     current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
 ):
     doctor_name = current_user.full_name if current_user else "BS. Trần Văn Minh"
-    return crud_doctor.add_batch_prescriptions(
+    doctor_id = current_user.id if current_user else None
+    return await crud_doctor.add_batch_prescriptions_db(
+        db=db,
         elderly_id=elderly_id,
         batch=batch_in,
         doctor_name=doctor_name,
+        doctor_id=doctor_id,
     )
 
 
@@ -141,9 +155,12 @@ async def update_prescription(
     elderly_id: str,
     rx_id: str,
     prescription_in: PrescriptionUpdate,
+    db: AsyncSession = Depends(get_db),
 ):
     """Chỉnh sửa liều lượng, giờ uống hoặc hướng dẫn của đơn thuốc."""
-    updated = crud_doctor.update_prescription(elderly_id, rx_id, prescription_in)
+    updated = await crud_doctor.update_prescription_db(db, elderly_id, rx_id, prescription_in)
+    if not updated:
+        updated = crud_doctor.update_prescription(elderly_id, rx_id, prescription_in)
     if not updated:
         raise HTTPException(status_code=404, detail="Không tìm thấy đơn thuốc.")
     return updated
@@ -156,9 +173,12 @@ async def update_prescription(
 async def delete_prescription(
     elderly_id: str,
     rx_id: str,
+    db: AsyncSession = Depends(get_db),
 ):
     """Ngừng dùng hoặc loại bỏ đơn thuốc khỏi phác đồ."""
-    success = crud_doctor.delete_prescription(elderly_id, rx_id)
+    success = await crud_doctor.delete_prescription_db(db, elderly_id, rx_id)
+    if not success:
+        success = crud_doctor.delete_prescription(elderly_id, rx_id)
     if not success:
         raise HTTPException(status_code=404, detail="Không tìm thấy đơn thuốc cần xóa.")
     return {"success": True, "message": "Đã ngừng đơn thuốc thành công."}
@@ -172,9 +192,12 @@ async def delete_prescription(
 async def toggle_prescription_reminder(
     elderly_id: str,
     rx_id: str,
+    db: AsyncSession = Depends(get_db),
 ):
     """Bật/tắt tính năng loa thông minh Hub nhắc giờ uống thuốc."""
-    updated = crud_doctor.toggle_prescription_reminder(elderly_id, rx_id)
+    updated = await crud_doctor.toggle_prescription_reminder_db(db, elderly_id, rx_id)
+    if not updated:
+        updated = crud_doctor.toggle_prescription_reminder(elderly_id, rx_id)
     if not updated:
         raise HTTPException(status_code=404, detail="Không tìm thấy đơn thuốc.")
     return updated
@@ -208,11 +231,15 @@ async def update_patient_medical_record(
 )
 async def get_vitals_analytics(
     elderly_id: str,
-    days: int = Query(7, ge=1, le=30, description="Số ngày cần phân tích (1 - 30)"),
+    days: int = Query(7, ge=1, le=365, description="Số ngày cần phân tích (1 - 365)"),
+    start_date: Optional[str] = Query(None, description="Ngày bắt đầu (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="Ngày kết thúc (YYYY-MM-DD)"),
     db: AsyncSession = Depends(get_db),
 ):
     """Trích xuất dữ liệu xu hướng nhịp tim, SpO2, độ ổn định sinh hiệu."""
-    return await crud_doctor.get_vitals_analytics(db=db, elderly_id=elderly_id, days=days)
+    return await crud_doctor.get_vitals_analytics(
+        db=db, elderly_id=elderly_id, days=days, start_date=start_date, end_date=end_date
+    )
 
 
 @router.put(

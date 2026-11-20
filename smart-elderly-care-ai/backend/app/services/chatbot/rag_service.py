@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
@@ -182,6 +183,246 @@ class ChatbotRAGService:
             ],
         )
 
+    def _resolve_active_patient(
+        self,
+        question: str,
+        context: Dict[str, Any],
+        chat_history: Optional[List[Dict[str, str]]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Xác định người cao tuổi đang được nói tới (Active Patient):
+        1. Ưu tiên tìm tên trong câu hỏi hiện tại.
+        2. Nếu câu hỏi không nêu tên, dò ngược chat_history để tìm tên người cao tuổi đã được nhắc tới gần nhất.
+        3. Nếu gia đình chỉ có duy nhất 1 người cao tuổi, mặc định là người đó.
+        """
+        patients = context.get("patients") or []
+        if not patients:
+            single_p = context.get("patient")
+            return single_p if (single_p and single_p.get("full_name")) else None
+
+        if len(patients) == 1:
+            return patients[0]
+
+        q_lower = question.lower()
+        # 1. Tìm trong câu hỏi hiện tại
+        for p in patients:
+            p_name = (p.get("full_name") or "").lower()
+            if p_name and (p_name in q_lower or any(part in q_lower for part in p_name.split() if len(part) > 2)):
+                return p
+
+        # 2. Dò ngược trong lịch sử hội thoại gần nhất
+        if chat_history:
+            for msg in reversed(chat_history):
+                text = (msg.get("text") or "").lower()
+                for p in patients:
+                    p_name = (p.get("full_name") or "").lower()
+                    if p_name and (p_name in text or any(part in text for part in p_name.split() if len(part) > 2)):
+                        return p
+
+        return None
+
+    def _is_ambiguous_vitals_query(
+        self,
+        question: str,
+        context: Dict[str, Any],
+        active_patient: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """
+        Nhận diện các câu hỏi phân tích / kiểm tra chỉ số chung chung, mơ hồ:
+        - Người dùng chỉ nói chung chung: 'phân tích chỉ số', 'kiểm tra chỉ số', 'xem chỉ số', 'đánh giá sinh hiệu'...
+        - Chưa chỉ định cụ thể người cao tuổi nào (nếu gia đình có nhiều người cao tuổi và chưa có ngữ cảnh).
+        - Không áp dụng cho câu hỏi hướng dẫn / hành động cụ thể (đo lại sau 15-30p, uống thuốc, v.v.).
+        """
+        q = question.strip().lower()
+        q_clean = re.sub(r'[?!.,;:\-_\(\)]', ' ', q)
+        tokens = [t for t in q_clean.split() if t]
+        if not tokens:
+            return False
+
+        # Các câu hỏi thao tác / chỉ định chăm sóc cụ thể (KHÔNG phải là câu hỏi mở đầu mơ hồ)
+        follow_up_action_cues = [
+            "sau 15", "sau 30", "15 - 30", "15-30", "đo lại", "uống thuốc đúng",
+            "uống đủ nước", "nghỉ ngơi", "hướng dẫn đo", "làm gì tiếp",
+            "chế độ sinh hoạt", "uống thuốc", "bổ sung nước"
+        ]
+        if any(cue in q for cue in follow_up_action_cues):
+            return False
+
+        # Nếu tài khoản chưa có người cao tuổi nào -> Luôn bắt để trả về thông báo chưa có hồ sơ
+        patients = context.get("patients") or []
+        if not patients:
+            vital_terms = ["phân tích", "chỉ số", "sinh hiệu", "vitals", "chi so", "sinh hieu"]
+            if any(vt in q for vt in vital_terms):
+                return True
+            return False
+
+        vague_patterns = [
+            "phân tích chỉ số", "phan tich chi so",
+            "phân tích sinh hiệu", "phan tich sinh hieu",
+            "phân tích sức khỏe", "phan tich suc khoe",
+            "phân tích số liệu", "phan tich so lieu",
+            "kiểm tra chỉ số", "kiem tra chi so",
+            "xem chỉ số", "xem chi so",
+            "đánh giá chỉ số", "danh gia chi so",
+            "đánh giá sinh hiệu", "danh gia sinh hieu",
+            "tình hình chỉ số", "tinh hinh chi so",
+            "tình trạng chỉ số", "tinh trang chi so",
+            "chỉ số sức khỏe", "chi so suc khoe",
+            "chỉ số sinh hiệu", "chi so sinh hieu",
+            "báo cáo chỉ số", "bao cao chi so",
+            "phân tích giúp tôi", "phan tich giup toi",
+            "phân tích", "phan tich",
+            "chỉ số thế nào", "chi so the nao",
+            "chỉ số ra sao", "chi so ra sao",
+            "chỉ số hôm nay", "chi so hom nay",
+            "chỉ số", "chi so",
+            "sinh hiệu", "sinh hieu",
+            "vitals analysis", "check vitals", "analyze vitals"
+        ]
+
+        matched_pattern = any(p in q for p in vague_patterns)
+        if not matched_pattern:
+            return False
+
+        # Kiểm tra xem đã xác định được người cao tuổi chưa (từ câu hỏi hiện tại hoặc từ lịch sử chat)
+        has_specific_patient = active_patient is not None
+        if not has_specific_patient:
+            for p in patients:
+                p_name = (p.get("full_name") or "").lower()
+                if p_name and (p_name in q or any(name_part in q for name_part in p_name.split() if len(name_part) > 2)):
+                    has_specific_patient = True
+                    break
+
+        # Nếu ĐÃ XÁC ĐỊNH ĐƯỢC người cao tuổi cụ thể -> Tiếp tục phân tích cho cụ đó, KHÔNG hỏi lại
+        if has_specific_patient:
+            return False
+
+        # Nếu câu hỏi cực ngắn (dưới 6 từ) và chứa vague pattern -> Chắc chắn là câu hỏi mơ hồ cần hỏi lại
+        if len(tokens) <= 5:
+            return True
+
+        time_cues = ["hiện tại", "hien tai", "thời gian thực", "bây giờ", "bay gio", "lúc này", "luc nay", "gần nhất", "gan nhat", "hôm qua", "tuần này", "lịch sử"]
+        has_time_cue = any(t in q for t in time_cues)
+
+        metric_cues = ["nhịp tim", "nhip tim", "spo2", "oxy", "thân nhiệt", "than nhiet", "huyết áp", "huyet ap", "đường huyết", "duong huyet", "nhiệt độ", "té ngã", "te nga"]
+        has_metric_cue = any(m in q for m in metric_cues)
+
+        missing_count = sum([not has_specific_patient, not has_time_cue, not has_metric_cue])
+        if missing_count >= 2:
+            return True
+
+        return False
+
+    def _format_ambiguous_vitals_probing(
+        self,
+        question: str,
+        context: Dict[str, Any],
+        language: str = "vi",
+    ) -> Dict[str, Any]:
+        """
+        Xây dựng câu hỏi dò (Clarification Probing) lịch thiệp, thông minh khi người dùng
+        yêu cầu phân tích chỉ số chung chung / mơ hồ.
+        """
+        now_str = datetime.now(timezone.utc).isoformat()
+        is_en = language == "en"
+        disclaimer = STANDARD_DISCLAIMER_EN if is_en else STANDARD_DISCLAIMER_VI
+        patients = context.get("patients") or []
+
+        # Nếu tài khoản chưa gán vào ngôi nhà nào hoặc chưa có hồ sơ người cao tuổi
+        if not patients:
+            if is_en:
+                answer = (
+                    "There are no vital signs available to analyze as your account has not been assigned "
+                    "to any household or elderly profile yet.\n\n"
+                    "Please create or join a household and add an elderly profile to start tracking vital signs."
+                )
+                suggested_actions = ["Add elderly profile", "Connect wearable", "General health guidance"]
+            else:
+                answer = (
+                    "Dạ, **chưa có chỉ số nào để phân tích** do tài khoản của bạn hiện chưa được gán vào ngôi nhà nào "
+                    "(hoặc chưa có hồ sơ người cao tuổi trong hệ thống).\n\n"
+                    "Bạn vui lòng thêm hồ sơ người cao tuổi và kết nối thiết bị đo sinh hiệu để SmartCare có thể theo dõi "
+                    "và phân tích sức khỏe cho gia đình nhé!"
+                )
+                suggested_actions = ["Thêm hồ sơ người cao tuổi", "Kết nối vòng đeo tay", "Tư vấn sức khỏe tổng quát"]
+
+            return {
+                "status": "success",
+                "question": question,
+                "answer": answer,
+                "sources": [],
+                "engine": "SmartCare Account Scope Guard",
+                "timestamp": now_str,
+                "vitals_snapshot": None,
+                "disclaimer": disclaimer,
+                "triage_level": "GREEN",
+                "is_emergency": False,
+                "suggested_actions": suggested_actions,
+                "suggested_questions": suggested_actions,
+                "is_rejected_turn": False,
+            }
+
+        if is_en:
+            patient_list_str = ""
+            if patients:
+                names = [f"**{p.get('full_name')}**" for p in patients if p.get('full_name')]
+                patient_list_str = f" *(Family members: {', '.join(names)})*"
+
+            answer = (
+                "Hello! I am ready to provide an in-depth clinical analysis of the health metrics. "
+                "Because health monitoring involves multiple factors, please clarify the following so I can give you the most accurate assessment:\n\n"
+                f"1. **Which family member?**: Who would you like to review?{patient_list_str}\n"
+                "2. **Data Timeframe**:\n"
+                "   • **Real-time (Live)**: Check live sensor readings from the smart wearable right now.\n"
+                "   • **Latest Recorded / Trends**: Analyze the most recent measurement or historical daily trend.\n"
+                "3. **Scope of Metrics**:\n"
+                "   • **Comprehensive overview** (Heart rate, Blood Oxygen SpO₂, Body Temperature, Fall status).\n"
+                "   • **Specific vital sign** (e.g. Heart rate, SpO₂, Blood pressure).\n\n"
+                "*(You can reply with more details or tap any quick suggestion below to proceed!)*"
+            )
+            suggested_actions = [
+                f"Analyze live vitals for {p.get('full_name')}" for p in patients[:2]
+            ] if patients else ["Analyze current real-time vitals", "Review latest recorded measurement"]
+            suggested_actions += ["Analyze all vital signs overview", "Check heart rate & SpO₂ only"]
+        else:
+            patient_list_str = ""
+            if patients:
+                names = [f"**{p.get('full_name')}**" for p in patients if p.get('full_name')]
+                patient_list_str = f" *(Hiện gia đình có: {', '.join(names)})*"
+
+            answer = (
+                "Dạ chào bạn, Bác sĩ Trợ lý Y tế SmartCare luôn sẵn sàng hỗ trợ phân tích chuyên sâu về chỉ số sức khỏe. "
+                "Tuy nhiên, do mỗi người cao tuổi có dữ liệu và nhu cầu theo dõi khác nhau, bạn vui lòng cho tôi biết thêm một chút thông tin để tôi đưa ra nhận định chính xác nhất nhé:\n\n"
+                f"1. **Người cao tuổi cần kiểm tra**: Bạn muốn phân tích chỉ số cho cụ nào trong gia đình?{patient_list_str}\n"
+                "2. **Thời điểm dữ liệu**:\n"
+                "   • **Hiện tại (Thời gian thực)**: Kiểm tra ngay các chỉ số thiết bị đang ghi nhận lúc này.\n"
+                "   • **Gần nhất / Xu hướng**: Đánh giá lần đo gần nhất hoặc xu hướng biến thiên trong ngày.\n"
+                "3. **Chỉ số bạn quan tâm**:\n"
+                "   • **Tổng quan toàn diện** (Nhịp tim, Nồng độ oxy SpO₂, Thân nhiệt, Cảnh báo té ngã).\n"
+                "   • **Chỉ số chuyên biệt** (Ví dụ: Chuyên sâu về tim mạch, nồng độ oxy SpO₂, hay huyết áp).\n\n"
+                "*(Bạn có thể trả lời chi tiết hơn, hoặc nhấn chọn nhanh một trong các gợi ý bên dưới để tôi hỗ trợ ngay nhé!)*"
+            )
+            suggested_actions = [
+                f"Phân tích sinh hiệu hiện tại của {p.get('full_name')}" for p in patients[:2]
+            ] if patients else ["Phân tích toàn bộ sinh hiệu hiện tại (Realtime)", "Xem chỉ số đo lần gần nhất"]
+            suggested_actions += ["Phân tích tổng quan toàn bộ chỉ số", "Kiểm tra riêng nhịp tim và SpO₂"]
+
+        return {
+            "status": "success",
+            "question": question,
+            "answer": answer,
+            "sources": ["Cơ sở dữ liệu y tế gia đình SmartCare"],
+            "engine": "SmartCare Adaptive Clinical Probing",
+            "timestamp": now_str,
+            "vitals_snapshot": None,
+            "disclaimer": disclaimer,
+            "triage_level": "GREEN",
+            "is_emergency": False,
+            "suggested_actions": suggested_actions,
+            "suggested_questions": suggested_actions,
+            "is_rejected_turn": False,
+        }
+
     def _generate_pure_rag_response(
         self,
         question: str,
@@ -226,9 +467,34 @@ class ChatbotRAGService:
                 return f"Lịch khám sắp tới của cụ là vào lúc **{appt.get('scheduled_at')}** (Hình thức: {appt.get('visit_type')}, Địa điểm: {appt.get('location')})."
             return "Dạ, hiện tại cụ không có lịch khám bệnh nào sắp tới trong hệ thống."
 
+        # 3.1. Hướng dẫn quy trình đo lại sinh hiệu sau 15 - 30 phút
+        if any(term in q_lower for term in ["đo lại", "sau 15", "15 - 30 phút", "15-30 phút", "kiểm tra lại"]):
+            p_name = patient.get("full_name") or "cụ"
+            if is_en:
+                return (
+                    f"⏱️ **Procedure for Re-checking Vital Signs (after 15 - 30 mins) for {p_name}**:\n\n"
+                    "1. **Rest & Preparation**: Ensure the patient rests quietly in a cool, well-ventilated space for at least 15 minutes. Avoid physical exertion, eating, or emotional stress before measuring.\n"
+                    "2. **Posture**: Sit comfortably with back supported and feet flat on the floor, or lie in a comfortable supine position. Place the smartband / sensor snugly at heart level.\n"
+                    "3. **Device Check**: Ensure the wearable device is turned on and connected via Bluetooth / Smart Hub so real-time readings update immediately.\n"
+                    "4. **Warning Signs**: If the patient experiences dizziness, shortness of breath, or chest tightness, contact the family doctor or emergency services immediately without waiting."
+                )
+            return (
+                f"⏱️ **Quy trình kiểm tra và đo lại sinh hiệu (sau 15 - 30 phút) cho cụ {p_name}**:\n\n"
+                f"1. **Nghỉ ngơi tĩnh**: Cho cụ {p_name} ngồi hoặc nằm nghỉ ngơi thư giãn ở nơi thoáng khí, yên tĩnh ít nhất 15 phút. Tránh vận động mạnh, đi lại nhiều hoặc dùng trà/cà phê trước khi đo.\n"
+                "2. **Tư thế chuẩn**: Giữ cổ tay/tay đo ngang tầm tim, ngồi tựa lưng thoải mái, thả lỏng cơ thể và không nói chuyện trong lúc thiết bị ghi nhận chỉ số.\n"
+                "3. **Kiểm tra thiết bị**: Đảm bảo vòng đeo tay thông minh đã bật nguồn, vừa vặn cổ tay và kết nối ổn định với điện thoại hoặc Loa Smart Hub để chỉ số cập nhật ngay lên ứng dụng.\n"
+                "4. **Dấu hiệu cảnh báo đỏ**: Nếu cụ có cảm giác hồi hộp trống ngực, khó thở, đau tức ngực hoặc chóng mặt tăng dần, hãy nhấn nút 'Gọi bác sĩ' hoặc liên hệ cơ sở y tế gần nhất ngay lập tức."
+            )
+
         vital_terms = ["nhịp tim", "spo2", "oxy", "sinh hiệu", "thân nhiệt", "nhiệt độ", "té ngã", "ngã",
-                       "heart rate", "oxygen", "vital", "temperature", "fall"]
+                       "heart rate", "oxygen", "vital", "temperature", "fall", "chỉ số", "chi so"]
         if any(term in q_lower for term in vital_terms):
+            patients = context.get("patients") if context else []
+            if not patients:
+                if is_en:
+                    return "There are no vital signs available to analyze as your account has not been assigned to a household or elderly profile."
+                return "Dạ, **chưa có chỉ số nào để phân tích** do tài khoản của bạn hiện chưa được gán vào ngôi nhà nào (hoặc chưa có hồ sơ người cao tuổi trong hệ thống)."
+
             vitals_text = self.context_builder.format_vitals_summary(vitals, language=language)
             # Nếu người dùng chỉ tra cứu/kiểm tra chỉ số sinh hiệu (không hỏi xin tư vấn sâu, cách xử lý, dùng thuốc)
             consult_terms = ["cách", "làm sao", "làm gì", "uống thuốc", "chữa", "điều trị", "nguyên nhân", "tại sao", "thuốc", "bệnh gì", "tư vấn", "hướng dẫn", "phải làm"]
@@ -250,12 +516,16 @@ class ChatbotRAGService:
                 else:
                     clean_lines = [
                         line for line in text.split("\n")
-                        if not line.startswith("# ")
-                        and not line.startswith("Kiến thức tham khảo")
-                        and not line.startswith("Nội dung bổ sung")
+                        if not line.strip().startswith("#")
+                        and not line.strip().startswith("###")
+                        and not line.strip().startswith("Tiêu đề cột")
+                        and not line.strip().startswith("Kiến thức tham khảo")
+                        and not line.strip().startswith("Nội dung bổ sung")
+                        and not "Sheet:" in line
                         and line.strip()
                     ]
                     clean_text = "\n".join(clean_lines[:6]).strip()
+                    clean_text = clean_text.replace("Chỉ số sinh hiệu:", "").replace("Khoảng bình thường:", "• Bình thường:").replace("Ngưỡng cảnh báo:", "• Cảnh báo:")
                     snippet = clean_text[:300] + ("..." if len(clean_text) > 300 else "")
                     sections.append(f"• {snippet}")
         elif not sections:
@@ -384,6 +654,18 @@ class ChatbotRAGService:
         vitals = context.get("vitals")
         incidents = context.get("incidents", [])
         patient = context.get("patient", {})
+
+        # Tự động xác định người cao tuổi (từ câu hỏi hiện tại, lịch sử chat_history hoặc mặc định người duy nhất)
+        active_patient = self._resolve_active_patient(question, context, chat_history)
+        if active_patient:
+            patient = active_patient
+            context["patient"] = active_patient
+
+        # 2.1. Nhận diện câu hỏi phân tích / kiểm tra chỉ số chung chung, mơ hồ (Hỏi lại để dò đúng nhu cầu)
+        if self._is_ambiguous_vitals_query(question, context, active_patient=active_patient):
+            return self._format_ambiguous_vitals_probing(
+                question=question, context=context, language=language
+            )
 
         # Phân loại mức độ khẩn cấp (MedX Triage & Telemed-AI Red Flags)
         triage_level, is_emergency, suggested_actions = self._compute_triage(

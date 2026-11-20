@@ -113,17 +113,8 @@ class CRUDVital:
         uuid_val = None
         if device_id:
             uuid_val = await self.resolve_device_uuid(db, device_id)
-
-        # Nếu không tìm thấy UUID của device_id truyền vào (vd: 'hub-01' là Hub chứ không phải band),
-        # tự động tìm thiết bị Smartband trong hệ thống
-        if not uuid_val:
-            res_band = await db.execute(
-                select(Device.id)
-                .where(Device.device_type == DeviceType.SMARTBAND)
-                .order_by(Device.created_at.desc())
-                .limit(1)
-            )
-            uuid_val = res_band.scalar_one_or_none()
+            if not uuid_val:
+                return []
 
         query = select(VitalSign)
         if uuid_val:
@@ -606,121 +597,121 @@ class CRUDVital:
                         except Exception as e_esc:
                             logger.exception(f"[CRUDVital] Lỗi kích hoạt auto escalation: {e_esc}")
 
-                        # Lưu vào hàng đợi RAM Redis cho Doctor Web & Mobile tải tức thời
+                    # Lưu vào hàng đợi RAM Redis cho Doctor Web & Mobile tải tức thời
+                    try:
+                        from app.services.redis import redis_service
+                        await redis_service.push_recent_alert(alert_payload_dict)
+                        await redis_service.invalidate_incidents_cache()
+                    except Exception:
+                        pass
+
+                    alert_payload = json.dumps({
+                        "type": "ALERT_NEW",
+                        "alert_type": alert_type,
+                        "data": alert_payload_dict,
+                    }, ensure_ascii=False)
+                    for client_ws in list(alert_clients):
                         try:
-                            from app.services.redis import redis_service
-                            await redis_service.push_recent_alert(alert_payload_dict)
-                            await redis_service.invalidate_incidents_cache()
+                            await client_ws.send_text(alert_payload)
                         except Exception:
-                            pass
+                            if client_ws in alert_clients:
+                                alert_clients.remove(client_ws)
 
-                        alert_payload = json.dumps({
-                            "type": "ALERT_NEW",
-                            "alert_type": alert_type,
-                            "data": alert_payload_dict,
-                        }, ensure_ascii=False)
-                        for client_ws in list(alert_clients):
-                            try:
-                                await client_ws.send_text(alert_payload)
-                            except Exception:
-                                if client_ws in alert_clients:
-                                    alert_clients.remove(client_ws)
+                    # Broadcast tới WebSocket quản lý theo thiết bị
+                    try:
+                        from app.api.websockets.vitals_ws import manager
+                        await manager.broadcast_to_device(str(uuid_val), alert_payload_dict)
+                        if dev and dev.device_id and dev.device_id != str(uuid_val):
+                            await manager.broadcast_to_device(dev.device_id, alert_payload_dict)
+                    except Exception:
+                        pass
 
-                        # Broadcast tới WebSocket quản lý theo thiết bị
-                        try:
-                            from app.api.websockets.vitals_ws import manager
-                            await manager.broadcast_to_device(str(uuid_val), alert_payload_dict)
-                            if dev and dev.device_id and dev.device_id != str(uuid_val):
-                                await manager.broadcast_to_device(dev.device_id, alert_payload_dict)
-                        except Exception:
-                            pass
+                    # Gửi Push Notification (FCM) trực tiếp đến Chủ nhà, Người sở hữu & Thành viên gia đình
+                    try:
+                        from app.models.house import House, HouseMember
+                        from app.models.user import User
+                        from app.services.notification.fcm_service import FCMService
 
-                        # Gửi Push Notification (FCM) trực tiếp đến Chủ nhà, Người sở hữu & Thành viên gia đình
-                        try:
-                            from app.models.house import House, HouseMember
-                            from app.models.user import User
-                            from app.services.notification.fcm_service import FCMService
+                        target_user_ids = set()
+                        if dev and dev.owner_id:
+                            target_user_ids.add(dev.owner_id)
 
-                            target_user_ids = set()
-                            if dev and dev.owner_id:
-                                target_user_ids.add(dev.owner_id)
-
-                            h_id = dev.house_id if dev else None
-                            if h_id:
-                                house_obj = await db.get(House, h_id)
-                                if house_obj and house_obj.owner_id:
-                                    target_user_ids.add(house_obj.owner_id)
+                        h_id = dev.house_id if dev else None
+                        if h_id:
+                            house_obj = await db.get(House, h_id)
+                            if house_obj and house_obj.owner_id:
+                                target_user_ids.add(house_obj.owner_id)
+                            mem_res = await db.execute(
+                                select(HouseMember.user_id).where(HouseMember.house_id == h_id)
+                            )
+                            for m_uid in mem_res.scalars():
+                                if m_uid:
+                                    target_user_ids.add(m_uid)
+                        elif dev and dev.owner_id:
+                            house_res = await db.execute(
+                                select(House).where(House.owner_id == dev.owner_id).limit(1)
+                            )
+                            h_row = house_res.scalar_one_or_none()
+                            if h_row:
+                                target_user_ids.add(h_row.owner_id)
                                 mem_res = await db.execute(
-                                    select(HouseMember.user_id).where(HouseMember.house_id == h_id)
+                                    select(HouseMember.user_id).where(HouseMember.house_id == h_row.id)
                                 )
                                 for m_uid in mem_res.scalars():
                                     if m_uid:
                                         target_user_ids.add(m_uid)
-                            elif dev and dev.owner_id:
-                                house_res = await db.execute(
-                                    select(House).where(House.owner_id == dev.owner_id).limit(1)
+
+                        if target_user_ids:
+                            u_res = await db.execute(
+                                select(User).where(User.id.in_(target_user_ids), User.is_active.is_(True))
+                            )
+                            house_users = u_res.scalars().all()
+                            fcm_tokens = [u.fcm_token for u in house_users if u.fcm_token]
+
+                            if fcm_tokens:
+                                fcm = FCMService()
+                                fcm.initialize()
+
+                                alert_titles = {
+                                    "HIGH_HEART_RATE": "💓 CẢNH BÁO NHỊP TIM CAO BẤT THƯỜNG",
+                                    "LOW_HEART_RATE": "💓 CẢNH BÁO NHỊP TIM QUÁ THẤP",
+                                    "SUDDEN_HR_SPIKE": "💓 CẢNH BÁO LOẠN NHỊP: TIM TĂNG VỌT",
+                                    "SUDDEN_HR_DROP": "💓 CẢNH BÁO LOẠN NHỊP: TIM TỤT ĐỘT NGỘT",
+                                    "CRITICAL_TRIAD": "🚨 BÁO ĐỘNG ĐỎ: TAM CHỨNG NGUY KỊCH",
+                                    "EXERTION_HYPOXIA": "🚨 CẢNH BÁO NGUY CẤP: QUÁ TẢI TIM PHỔI",
+                                    "FEVER_TACHYCARDIA": "⚠️ CẢNH BÁO: SỐT CAO KÈM TIM NHANH",
+                                    "CARDIO_COLLAPSE": "🚨 BÁO ĐỘNG ĐỎ: NGUY CƠ TRỤY TIM MẠCH",
+                                    "LOW_SPO2": "⚠️ CẢNH BÁO NGUY CẤP: OXY MÁU (SPO2) TỤT SÂU",
+                                    "HIGH_FEVER": "⚠️ CẢNH BÁO: THÂN NHIỆT SỐT CAO",
+                                    "FALL_DETECTED": "🚨 CẢNH BÁO TÉ NGÃ KHẨN CẤP",
+                                    "DEVICE_BATTERY_DEAD": "🪫 VÒNG TAY ĐÃ CẠN PIN (0%)",
+                                    "LOW_BATTERY": "🔋 CẢNH BÁO PIN ĐỒNG HỒ YẾU",
+                                }
+                                alert_title = alert_titles.get(alert_type, f"⚠️ CẢNH BÁO SỨC KHỎE ({alert_type})")
+
+                                fcm_res = fcm.send_alert(
+                                    fcm_tokens=fcm_tokens,
+                                    title=alert_title,
+                                    body=alert_msg,
+                                    data={
+                                        "type": "VITAL_ALERT",
+                                        "incident_id": str(inc.id),
+                                        "device_id": str(uuid_val),
+                                        "device_name": dev_name,
+                                        "alert_type": alert_type,
+                                        "alert_level": alert_level,
+                                        "heart_rate": str(obj.heart_rate or ""),
+                                        "spo2": str(obj.spo2 or ""),
+                                        "skin_temp_max": str(obj.skin_temp_max or ""),
+                                    },
+                                    priority="high",
                                 )
-                                h_row = house_res.scalar_one_or_none()
-                                if h_row:
-                                    target_user_ids.add(h_row.owner_id)
-                                    mem_res = await db.execute(
-                                        select(HouseMember.user_id).where(HouseMember.house_id == h_row.id)
-                                    )
-                                    for m_uid in mem_res.scalars():
-                                        if m_uid:
-                                            target_user_ids.add(m_uid)
-
-                            if target_user_ids:
-                                u_res = await db.execute(
-                                    select(User).where(User.id.in_(target_user_ids), User.is_active.is_(True))
+                                logger.info(
+                                    "[CRUDVital] Đã gửi FCM push alert '%s' tới %d thiết bị của chủ nhà/gia đình: %s",
+                                    alert_type, len(fcm_tokens), fcm_res,
                                 )
-                                house_users = u_res.scalars().all()
-                                fcm_tokens = [u.fcm_token for u in house_users if u.fcm_token]
-
-                                if fcm_tokens:
-                                    fcm = FCMService()
-                                    fcm.initialize()
-
-                                    alert_titles = {
-                                        "HIGH_HEART_RATE": "💓 CẢNH BÁO NHỊP TIM CAO BẤT THƯỜNG",
-                                        "LOW_HEART_RATE": "💓 CẢNH BÁO NHỊP TIM QUÁ THẤP",
-                                        "SUDDEN_HR_SPIKE": "💓 CẢNH BÁO LOẠN NHỊP: TIM TĂNG VỌT",
-                                        "SUDDEN_HR_DROP": "💓 CẢNH BÁO LOẠN NHỊP: TIM TỤT ĐỘT NGỘT",
-                                        "CRITICAL_TRIAD": "🚨 BÁO ĐỘNG ĐỎ: TAM CHỨNG NGUY KỊCH",
-                                        "EXERTION_HYPOXIA": "🚨 CẢNH BÁO NGUY CẤP: QUÁ TẢI TIM PHỔI",
-                                        "FEVER_TACHYCARDIA": "⚠️ CẢNH BÁO: SỐT CAO KÈM TIM NHANH",
-                                        "CARDIO_COLLAPSE": "🚨 BÁO ĐỘNG ĐỎ: NGUY CƠ TRỤY TIM MẠCH",
-                                        "LOW_SPO2": "⚠️ CẢNH BÁO NGUY CẤP: OXY MÁU (SPO2) TỤT SÂU",
-                                        "HIGH_FEVER": "⚠️ CẢNH BÁO: THÂN NHIỆT SỐT CAO",
-                                        "FALL_DETECTED": "🚨 CẢNH BÁO TÉ NGÃ KHẨN CẤP",
-                                        "DEVICE_BATTERY_DEAD": "🪫 VÒNG TAY ĐÃ CẠN PIN (0%)",
-                                        "LOW_BATTERY": "🔋 CẢNH BÁO PIN ĐỒNG HỒ YẾU",
-                                    }
-                                    alert_title = alert_titles.get(alert_type, f"⚠️ CẢNH BÁO SỨC KHỎE ({alert_type})")
-
-                                    fcm_res = fcm.send_alert(
-                                        fcm_tokens=fcm_tokens,
-                                        title=alert_title,
-                                        body=alert_msg,
-                                        data={
-                                            "type": "VITAL_ALERT",
-                                            "incident_id": str(inc.id),
-                                            "device_id": str(uuid_val),
-                                            "device_name": dev_name,
-                                            "alert_type": alert_type,
-                                            "alert_level": alert_level,
-                                            "heart_rate": str(obj.heart_rate or ""),
-                                            "spo2": str(obj.spo2 or ""),
-                                            "skin_temp_max": str(obj.skin_temp_max or ""),
-                                        },
-                                        priority="high",
-                                    )
-                                    logger.info(
-                                        "[CRUDVital] Đã gửi FCM push alert '%s' tới %d thiết bị của chủ nhà/gia đình: %s",
-                                        alert_type, len(fcm_tokens), fcm_res,
-                                    )
-                        except Exception as fcm_err:
-                            logger.warning("[CRUDVital] Lỗi gửi thông báo FCM cho chủ nhà: %s", fcm_err)
+                    except Exception as fcm_err:
+                        logger.warning("[CRUDVital] Lỗi gửi thông báo FCM cho chủ nhà: %s", fcm_err)
             except Exception as e:
                 logger.warning("[CRUDVital] Lỗi kiểm tra sự cố & pin thiết bị: %s", e)
 
@@ -747,10 +738,12 @@ class CRUDVital:
         try:
             from app.api.websockets.vitals_ws import manager
             dev_str = str(data.get("device_id", obj.device_id))
+            serial_str = str(raw_dev) if raw_dev else dev_str
             act_state = data.get("activity_state") or data.get("activity") or "Sinh hoạt"
             ws_data = {
                 "type": "vital_update",
-                "device_id": dev_str,
+                "device_id": serial_str,
+                "device_uuid": str(obj.device_id),
                 "heart_rate": obj.heart_rate,
                 "spo2": obj.spo2,
                 "skin_temp_max": obj.skin_temp_max,
@@ -761,6 +754,8 @@ class CRUDVital:
                 "timestamp": int(obj.time.timestamp() * 1000) if obj.time else int(datetime.now().timestamp() * 1000),
             }
             await manager.broadcast_to_device(dev_str, ws_data)
+            if serial_str != dev_str:
+                await manager.broadcast_to_device(serial_str, ws_data)
             await manager.broadcast_all(ws_data)
         except Exception as exc:
             logger.warning("[CRUDVital] Lỗi broadcast WebSocket: %s", exc)
@@ -824,14 +819,8 @@ class CRUDVital:
         uuid_val = None
         if device_id:
             uuid_val = await self.resolve_device_uuid(db, device_id)
-        if not uuid_val:
-            res_band = await db.execute(
-                select(Device.id)
-                .where(Device.device_type == DeviceType.SMARTBAND)
-                .order_by(Device.created_at.desc())
-                .limit(1)
-            )
-            uuid_val = res_band.scalar_one_or_none()
+            if not uuid_val:
+                return []
 
         safe_days = max(1, min(int(days), 90))
         where_clauses = [f"time >= NOW() - INTERVAL '{safe_days} days'"]
@@ -902,23 +891,46 @@ class CRUDVital:
         else:
             smartband_cond.append(Device.owner_id == user_id)
 
+        # Lấy danh sách smartband, ưu tiên thiết bị đang online, có gán người đeo
         result = await db.execute(
             select(Device)
             .where(*smartband_cond)
-            .order_by(Device.created_at.desc())
-            .limit(1)
+            .order_by(
+                Device.is_online.desc(),
+                Device.elderly_id.isnot(None).desc(),
+                Device.last_heartbeat.desc().nullslast(),
+                Device.created_at.desc(),
+            )
         )
-        smartband_device = result.scalar_one_or_none()
+        smartband_devices = list(result.scalars().all())
 
-        # Fallback tìm smartband bất kỳ trong hệ thống
+        # Chọn thiết bị có dữ liệu sinh hiệu gần nhất
+        smartband_device = None
+        latest_vital = None
+        for dev in smartband_devices:
+            v = await self.get_latest(db, dev.id)
+            if v:
+                smartband_device = dev
+                latest_vital = v
+                break
+
+        if not smartband_device and smartband_devices:
+            smartband_device = smartband_devices[0]
+            latest_vital = await self.get_latest(db, smartband_device.id)
+
+        # Fallback tìm smartband bất kỳ trong hệ thống nếu user chưa có smartband nào
         if not smartband_device:
             res_any_band = await db.execute(
                 select(Device)
                 .where(Device.device_type == DeviceType.SMARTBAND)
-                .order_by(Device.created_at.desc())
-                .limit(1)
+                .order_by(Device.is_online.desc(), Device.created_at.desc())
             )
-            smartband_device = res_any_band.scalar_one_or_none()
+            for dev in res_any_band.scalars().all():
+                v = await self.get_latest(db, dev.id)
+                if v:
+                    smartband_device = dev
+                    latest_vital = v
+                    break
 
         # Nếu không có smartband, tìm thiết bị bất kỳ
         device = smartband_device
@@ -930,9 +942,7 @@ class CRUDVital:
 
         now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
 
-        # 2. Lấy chỉ số sinh hiệu mới nhất của thiết bị
-        latest_vital = None
-        if device:
+        if not latest_vital and device:
             latest_vital = await self.get_latest(db, device.id)
         if not latest_vital:
             # Fallback lấy bản ghi VitalSign mới nhất trong cơ sở dữ liệu
@@ -957,10 +967,6 @@ class CRUDVital:
                 "device_id": None,
                 "time": None,
             }
-
-        # 2. Lấy chỉ số sinh hiệu mới nhất của thiết bị
-        if device:
-            latest_vital = await self.get_latest(db, device.id)
 
         # Kiểm tra tính tươi mới của dữ liệu: nếu bản ghi cuối cùng đã quá 90 giây
         # hoặc thiết bị không còn online, xem như thiết bị đã ngắt kết nối (offline)

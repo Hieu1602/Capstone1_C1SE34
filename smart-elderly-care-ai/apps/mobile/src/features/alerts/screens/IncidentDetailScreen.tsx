@@ -15,6 +15,7 @@ import { useVitalStore } from '../../../store/useVitalStore';
 import type { Incident } from '../../../store/useAlertStore';
 import { IncidentEvidenceViewer } from '../components/IncidentEvidenceViewer';
 import { IncidentConfirmModal } from '../components/IncidentConfirmModal';
+import { notificationService } from '../../../services/notificationService';
 
 const ALERT_TYPE_LABELS: Record<string, string> = {
   FALL_DETECTED: '🤸 Cảnh báo té ngã khẩn cấp',
@@ -145,6 +146,7 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
       acknowledged_at: nowIso,
     } : null);
     setFeedbackBanner('ACKED');
+    notificationService.stopEmergencyAlarm();
     acknowledgeIncident(incident.id, 'Đã kiểm tra an toàn', operatorName);
 
     try {

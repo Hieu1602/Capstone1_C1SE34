@@ -313,13 +313,7 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
         return;
       }
     } catch {
-      try {
-        const fb = await vitalsApi.getHistory('BLE_BAND_001', 300, dateStr);
-        if (fb.data && Array.isArray(fb.data)) {
-          setDailyVitalsCount(fb.data.length);
-          return;
-        }
-      } catch {}
+      // Bệnh nhân chưa có dữ liệu đo trong ngày
     }
     setDailyVitalsCount(0);
   }, []);

@@ -1,6 +1,7 @@
 """Proxy camera cố định; không nhận URL upstream/credential từ điện thoại."""
 import asyncio
 import base64
+import logging
 import os
 import json
 import hmac
@@ -14,6 +15,7 @@ from typing import Literal
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
+
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field, StrictBool
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,6 +32,7 @@ from app.models.house import House
 from app.models.user import User
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def extra_sources():
@@ -536,7 +539,7 @@ async def forward(path: str, payload=None, camera_id: str | None = None, params:
                 code = response.status_code if response.status_code in (404, 409, 503) else 502
                 raise HTTPException(code, "Camera chưa sẵn sàng hoặc không thực hiện được lệnh")
             return response.json()
-    except httpx.HTTPError:
+    except (httpx.HTTPError, OSError):
         raise HTTPException(503, "Không kết nối được dịch vụ camera") from None
 
 
@@ -546,7 +549,10 @@ async def forward_camera(context, path: str, payload=None, params: dict | None =
     camera_id = str(device.id)
     forward_params = dict(params or {})
     if getattr(device, "config", None) and getattr(device.config, "stream_url", None) and "src" not in forward_params:
-        forward_params["src"] = device.config.stream_url
+        from urllib.parse import urlparse
+        u = urlparse(device.config.stream_url)
+        if u.hostname and u.hostname not in ("192.168.1.100", "127.0.0.1", "localhost"):
+            forward_params["src"] = device.config.stream_url
     extra_kw = {}
     if forward_params:
         extra_kw["params"] = forward_params
@@ -731,9 +737,19 @@ def intercom_client(camera_id: str | None = None):
     source = extra_sources().get(camera_id, {})
     if source and not source.get("intercom_url"):
         raise HTTPException(503, "Camera này chưa được cấu hình âm thanh")
+    base_url = (
+        source.get("intercom_url")
+        or os.getenv("CAMERA_INTERCOM_URL")
+        or os.getenv("CAMERA_SERVICE_URL")
+        or "http://tapo-audio:1984"
+    )
+    username = source.get("username", os.getenv("CAMERA_HTTP_USERNAME", ""))
+    password = source.get("password", os.getenv("CAMERA_HTTP_PASSWORD", ""))
+    auth = (username, password) if username and password else None
     return httpx.AsyncClient(
-        base_url=source.get("intercom_url", os.getenv("CAMERA_INTERCOM_URL", "http://tapo-audio:1984")),
-        timeout=httpx.Timeout(20, connect=5), trust_env=False,
+        base_url=base_url,
+        auth=auth,
+        timeout=httpx.Timeout(30, connect=10), trust_env=False,
     )
 
 
@@ -778,7 +794,7 @@ async def intercom_offer(request: Request, body: IntercomOffer, context=Depends(
         if getattr(device, "config", None) and device.config.stream_url:
             from urllib.parse import urlparse, unquote
             u = urlparse(device.config.stream_url)
-            if u.hostname:
+            if u.hostname and u.hostname not in ("192.168.1.100", "127.0.0.1", "localhost"):
                 user = unquote(u.username) if u.username else "admin"
                 pwd = unquote(u.password) if u.password else ""
                 if body.mode == "listen":
@@ -802,15 +818,17 @@ async def intercom_offer(request: Request, body: IntercomOffer, context=Depends(
                         pass
                 else:
                     extra = getattr(device.config, "extra_settings", None) or {}
-                    cloud_user = extra.get("cloud_username") or os.getenv("TAPO_CONTROL_USERNAME") or user
                     cloud_pwd = extra.get("cloud_password") or os.getenv("TAPO_CONTROL_PASSWORD") or pwd
-                    tapo_talk = f"tapo://{cloud_user}:{cloud_pwd}@{u.hostname}"
+                    import hashlib
+                    # Tapo backchannel yêu cầu tài khoản admin kèm SHA256 in hoa của cloud password
+                    pwd_hash = hashlib.sha256(cloud_pwd.encode("utf-8")).hexdigest().upper()
+                    tapo_talk = f"tapo://admin:{pwd_hash}@{u.hostname}"
                     target_src = f"tapo_{device.id.hex}"
                     try:
                         async with (intercom_client(camera_id) if camera_id in extra_sources() else intercom_client()) as upstream:
-                            await upstream.patch("/api/streams", params={"name": target_src, "src": tapo_talk})
-                    except Exception:
-                        pass
+                            await upstream.put("/api/streams", params={"name": target_src, "src": tapo_talk})
+                    except Exception as exc:
+                        logger.warning("Lỗi cập nhật stream đàm thoại Tapo: %s", exc)
 
         async with (intercom_client(camera_id) if camera_id in extra_sources() else intercom_client()) as upstream:
             response = await upstream.post(
@@ -819,9 +837,11 @@ async def intercom_offer(request: Request, body: IntercomOffer, context=Depends(
             )
             if response.status_code >= 400:
                 err_text = response.text or ""
+                logger.error("go2rtc trả về lỗi %s: %s", response.status_code, err_text)
                 if "401" in err_text or "Unauthorized" in err_text:
                     raise HTTPException(502, "Tapo từ chối tài khoản khi đàm thoại; micro yêu cầu tài khoản Cloud TP-Link ID.")
-                raise HTTPException(502, "Không mở được kênh âm thanh; kiểm tra Tapo và go2rtc")
+                sanitized_err = re.sub(r"://[^@]+@", "://***@", err_text)
+                raise HTTPException(502, f"Không mở được kênh âm thanh; kiểm tra Tapo và go2rtc ({response.status_code}: {sanitized_err[:200]})")
             data = response.json()
             if data.get("type") != "answer" or not isinstance(data.get("sdp"), str):
                 raise HTTPException(502, "Dịch vụ âm thanh trả về SDP không hợp lệ")
@@ -836,17 +856,29 @@ async def intercom_offer(request: Request, body: IntercomOffer, context=Depends(
             # Luôn tiêm candidate host cổng 8555 để client Web/Mobile LAN kết nối trực tiếp
             ufrag_match = re.search(r"a=ice-ufrag:(\S+)", sdp)
             ufrag_attr = f" ufrag {ufrag_match.group(1)}" if ufrag_match else ""
-            host_cand_udp = f"a=candidate:1001 1 udp 2130706432 {client_host} 8555 typ host{ufrag_attr}\r\n"
-            host_cand_tcp = f"a=candidate:1002 1 tcp 2130706431 {client_host} 8555 typ host tcptype passive{ufrag_attr}\r\n"
-            if host_cand_udp not in sdp:
-                sdp += host_cand_udp
-            if host_cand_tcp not in sdp:
-                sdp += host_cand_tcp
+            hosts_to_inject = [client_host]
+            webrtc_lan_host = os.getenv("CAMERA_WEBRTC_HOST", "").strip()
+            if webrtc_lan_host and webrtc_lan_host not in hosts_to_inject:
+                hosts_to_inject.append(webrtc_lan_host)
+
+            cand_idx = 1001
+            for h in hosts_to_inject:
+                c_udp = f"a=candidate:{cand_idx} 1 udp 2130706432 {h} 8555 typ host{ufrag_attr}\r\n"
+                c_tcp = f"a=candidate:{cand_idx+1} 1 tcp 2130706431 {h} 8555 typ host tcptype passive{ufrag_attr}\r\n"
+                if c_udp not in sdp:
+                    sdp += c_udp
+                if c_tcp not in sdp:
+                    sdp += c_tcp
+                cand_idx += 2
 
             return {"type": "answer", "sdp": sdp}
-    except httpx.HTTPError:
-        raise HTTPException(503, "Dịch vụ đàm thoại chưa sẵn sàng; kiểm tra tapo-audio") from None
-    except (ValueError, TypeError, AttributeError):
+    except HTTPException:
+        raise
+    except httpx.HTTPError as exc:
+        logger.error("Lỗi kết nối tới go2rtc (intercom): %s", exc)
+        raise HTTPException(503, f"Dịch vụ đàm thoại chưa sẵn sàng; kiểm tra tapo-audio ({exc})") from None
+    except (ValueError, TypeError, AttributeError) as exc:
+        logger.error("Lỗi định dạng dữ liệu go2rtc: %s", exc)
         raise HTTPException(502, "Dịch vụ âm thanh trả về dữ liệu không hợp lệ") from None
 
 
@@ -932,7 +964,7 @@ async def media(resource: str, ticket: str = Query(...), db: AsyncSession = Depe
         if dev_config and getattr(dev_config, "stream_url", None):
             params["src"] = dev_config.stream_url
         response = await upstream.send(upstream.build_request("GET", "/" + resource, params=params), stream=True)
-    except httpx.HTTPError:
+    except (httpx.HTTPError, OSError):
         await upstream.aclose()
         raise HTTPException(503, "Không kết nối được camera") from None
     if response.status_code != 200:
