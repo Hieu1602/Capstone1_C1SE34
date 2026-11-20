@@ -31,6 +31,8 @@ export interface PatientDetailDrawerProps {
   isLoadingAnalytics?: boolean;
   isLoadingPrescriptions?: boolean;
   isLoadingAppointments?: boolean;
+  vitalFilter?: any;
+  onVitalFilterChange?: (next: any) => void;
   onTabChange?: (tab: DrawerTabKey) => void;
   onClose: () => void;
   onOpenRecordModal: () => void;
