@@ -1,9 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, Modal, Animated, Linking } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  Modal,
+  Animated,
+  Linking,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+  StatusBar,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LocalizedAlert, LocalizedText } from '../../../../i18n/LocalizedComponents';
-import { parseDeviceQr } from '../../utils/deviceQr';
+import { parseDeviceQr, ScannedDevice } from '../../utils/deviceQr';
 
 // Dynamic safe load expo-camera to prevent bundler crash when module is uninstalled or on web
 let CameraView: any = View;
@@ -24,7 +36,7 @@ type BarcodeScanningResult = { data: string; type: string };
 interface DeviceQrScannerModalProps {
   visible: boolean;
   onClose: () => void;
-  onScan: (type: 'camera' | 'watch', deviceId: string) => void;
+  onScan: (type: 'camera' | 'watch', deviceId: string, metadata?: ScannedDevice) => void;
 }
 
 export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
@@ -32,18 +44,28 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
   onClose,
   onScan,
 }) => {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'ios' ? 48 : (StatusBar.currentHeight || 20));
+  const bottomInset = Math.max(insets.bottom, 20);
+
   const [isFlashOn, setIsFlashOn] = useState(false);
   const [scanned, setScanned] = useState(false);
+  const [manualCode, setManualCode] = useState('');
+  const [manualError, setManualError] = useState('');
+  const [showManual, setShowManual] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const laserAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
       setScanned(false);
+      setManualCode('');
+      setManualError('');
+      setShowManual(false);
       const animation = Animated.loop(
         Animated.sequence([
           Animated.timing(laserAnim, {
-            toValue: 220,
+            toValue: 176,
             duration: 1800,
             useNativeDriver: true,
           }),
@@ -62,19 +84,47 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
     }
   }, [laserAnim, visible]);
 
+  useEffect(() => {
+    if (visible && (!permission || (!permission.granted && permission.canAskAgain))) {
+      requestPermission();
+    }
+  }, [visible, permission]);
+
   const handleBarcodeScanned = ({ data, type }: BarcodeScanningResult) => {
     setScanned(true);
     const device = parseDeviceQr(data, type);
     if (device) {
-      onScan(device.type, device.deviceId);
+      onScan(device.type, device.deviceId, device);
       return;
     }
 
-    LocalizedAlert.alert(
-      'Mã thiết bị không hợp lệ',
-      'Hãy quét mã vạch S/N trên tem Tapo hoặc mã QR của thiết bị SECA/BLE.',
+    Alert.alert(
+      'Mã camera không hợp lệ',
+      'Hãy quét mã vạch S/N hoặc MAC trên tem đáy Camera.',
       [{ text: 'Quét lại', onPress: () => setScanned(false) }]
     );
+  };
+
+  const handleManualSubmit = () => {
+    const trimmed = manualCode.trim();
+    if (!trimmed) {
+      const msg = 'Vui lòng nhập mã vạch S/N hoặc địa chỉ MAC ở đáy camera.';
+      setManualError(msg);
+      Alert.alert('Chưa nhập mã camera', msg);
+      return;
+    }
+
+    const device = parseDeviceQr(trimmed);
+    if (device) {
+      setManualError('');
+      onScan(device.type, device.deviceId, device);
+      onClose();
+      return;
+    }
+
+    const errorMsg = 'Hãy kiểm tra lại S/N hoặc địa chỉ MAC ở đáy camera (VD: 0C-EF-15-15-80-C5).';
+    setManualError(errorMsg);
+    Alert.alert('Mã camera không hợp lệ', errorMsg);
   };
 
   return (
@@ -83,21 +133,54 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
       transparent
       animationType="slide"
       onRequestClose={onClose}
+      statusBarTranslucent
     >
+      <StatusBar barStyle="light-content" />
       <View style={styles.qrModalContainer}>
-        <SafeAreaView style={styles.qrModalSafeArea}>
-          {/* Header Scanner */}
-          <View style={styles.qrHeader}>
+        {permission?.granted && (
+          <CameraView
+            style={StyleSheet.absoluteFill}
+            facing="back"
+            enableTorch={isFlashOn}
+            barcodeScannerSettings={{
+              barcodeTypes: [
+                'qr',
+                'code128',
+                'code39',
+                'code93',
+                'ean13',
+                'ean8',
+                'upc_a',
+                'upc_e',
+                'itf14',
+                'codabar',
+                'datamatrix',
+              ],
+            }}
+            onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
+          />
+        )}
+
+        <KeyboardAvoidingView
+          style={styles.keyboardContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          {/* Header Scanner an toàn dưới tai thỏ */}
+          <View style={[styles.qrHeader, { paddingTop: topInset + 8 }]}>
             <TouchableOpacity
               style={styles.qrCloseBtn}
               onPress={onClose}
+              activeOpacity={0.7}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name="close" size={24} color="#FFF" />
             </TouchableOpacity>
-            <LocalizedText style={styles.qrHeaderTitle}>Quét Mã QR Thiết Bị</LocalizedText>
+            <LocalizedText style={styles.qrHeaderTitle}>Quét mã vạch camera</LocalizedText>
             <TouchableOpacity
               style={styles.qrFlashBtn}
               onPress={() => setIsFlashOn(!isFlashOn)}
+              activeOpacity={0.7}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons
                 name={isFlashOn ? 'flash' : 'flash-off'}
@@ -107,20 +190,16 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          {/* Viewfinder Khung quét */}
-          <View style={styles.qrViewfinderWrapper}>
+          {/* Mask Top */}
+          <View style={styles.maskTop} />
+
+          {/* Middle Row with Cutout */}
+          <View style={styles.middleRow}>
+            <View style={styles.maskSide} />
             <View style={styles.qrViewfinder}>
-              {permission?.granted ? (
-                <CameraView
-                  style={StyleSheet.absoluteFill}
-                  facing="back"
-                  enableTorch={isFlashOn}
-                  barcodeScannerSettings={{ barcodeTypes: ['qr', 'code128'] }}
-                  onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
-                />
-              ) : (
+              {!permission?.granted && (
                 <View style={styles.permissionMessage}>
-                  <Ionicons name="camera-outline" size={42} color="#94A3B8" />
+                  <Ionicons name="camera-outline" size={38} color="#94A3B8" />
                   <LocalizedText style={styles.permissionText}>
                     Cần quyền camera để quét mã thiết bị
                   </LocalizedText>
@@ -152,41 +231,55 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
                   },
                 ]}
               />
-
-              {!permission && (
-                <Ionicons name="scan-outline" size={80} color="rgba(255,255,255,0.2)" />
-              )}
             </View>
+            <View style={styles.maskSide} />
+          </View>
 
+          {/* Mask Bottom */}
+          <View style={[styles.maskBottom, { paddingBottom: bottomInset + 12 }]}>
             <LocalizedText style={styles.qrGuideText}>
-              Căn chỉnh mã QR hoặc mã vạch{' '}
-              <LocalizedText style={{ fontWeight: 'bold', color: '#38BDF8' }}>S/N của Camera Tapo</LocalizedText> vào khung; hoặc quét mã mặt sau{' '}
-              <LocalizedText style={{ fontWeight: 'bold', color: '#34D399' }}>Vòng đeo tay BLE</LocalizedText> vào trong khung hình.
+              Căn chỉnh mã vạch{' '}
+              <LocalizedText style={{ fontWeight: 'bold', color: '#38BDF8' }}>S/N hoặc MAC ở đáy Camera</LocalizedText> vào khung.
             </LocalizedText>
-          </View>
 
-          {/* Các nút bấm mô phỏng kiểm thử nhanh */}
-          <View style={styles.qrBottomBar}>
-            <LocalizedText style={styles.qrSimLabel}>Hoặc chọn mô phỏng quét thực tế:</LocalizedText>
-            <View style={styles.qrSimRow}>
-              <TouchableOpacity
-                style={[styles.qrSimBtn, { backgroundColor: '#EA580C' }]}
-                onPress={() => onScan('camera', `SECA_${Date.now()}`)}
-              >
-                <Ionicons name="videocam" size={18} color="#FFF" />
-                <LocalizedText style={styles.qrSimBtnText}>Quét Camera SECA_001</LocalizedText>
-              </TouchableOpacity>
+            {/* Nhập mã thủ công */}
+            <TouchableOpacity
+              style={styles.toggleManualBtn}
+              onPress={() => setShowManual(!showManual)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name={showManual ? 'chevron-up' : 'keypad-outline'} size={16} color="#38BDF8" style={{ marginRight: 6 }} />
+              <LocalizedText style={styles.toggleManualText}>
+                {showManual ? 'Ẩn nhập thủ công' : 'Hoặc nhập mã thủ công'}
+              </LocalizedText>
+            </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.qrSimBtn, { backgroundColor: '#059669' }]}
-                onPress={() => onScan('watch', `BLE_BAND_${Date.now()}`)}
-              >
-                <Ionicons name="watch" size={18} color="#FFF" />
-                <LocalizedText style={styles.qrSimBtnText}>Quét Vòng Tay BLE</LocalizedText>
-              </TouchableOpacity>
-            </View>
+            {showManual && (
+              <View style={styles.manualContainer}>
+                <View style={styles.manualInputRow}>
+                  <TextInput
+                    value={manualCode}
+                    onChangeText={(text) => {
+                      setManualCode(text);
+                      if (manualError) setManualError('');
+                    }}
+                    placeholder="VD: 0C-EF-15-15-80-C5 hoặc S/N..."
+                    placeholderTextColor="#94A3B8"
+                    style={[styles.input, manualError ? styles.inputError : null]}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                  />
+                  <TouchableOpacity onPress={handleManualSubmit} style={styles.submitBtn} activeOpacity={0.8}>
+                    <LocalizedText style={styles.submitBtnText}>Xác nhận</LocalizedText>
+                  </TouchableOpacity>
+                </View>
+                {manualError ? (
+                  <LocalizedText style={styles.manualErrorText}>{manualError}</LocalizedText>
+                ) : null}
+              </View>
+            )}
           </View>
-        </SafeAreaView>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -199,20 +292,23 @@ const styles = StyleSheet.create({
   },
   qrModalSafeArea: {
     flex: 1,
-    justifyContent: 'space-between',
+  },
+  keyboardContainer: {
+    flex: 1,
   },
   qrHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
   },
   qrCloseBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -222,23 +318,33 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   qrFlashBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  qrViewfinderWrapper: {
+  maskTop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+  },
+  middleRow: {
+    flexDirection: 'row',
+    height: 180,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
+  },
+  maskSide: {
+    flex: 1,
+    height: '100%',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
   },
   qrViewfinder: {
-    width: 240,
-    height: 240,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    width: 300,
+    height: 180,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(56, 189, 248, 0.5)',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -246,8 +352,8 @@ const styles = StyleSheet.create({
   },
   corner: {
     position: 'absolute',
-    width: 24,
-    height: 24,
+    width: 26,
+    height: 26,
     borderColor: '#38BDF8',
   },
   cornerTL: {
@@ -286,6 +392,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.9,
     shadowRadius: 8,
   },
+  maskBottom: {
+    flex: 1.5,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    alignItems: 'center',
+    paddingTop: 18,
+    paddingHorizontal: 20,
+  },
   permissionMessage: {
     alignItems: 'center',
     paddingHorizontal: 16,
@@ -308,42 +421,67 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   qrGuideText: {
-    color: '#94A3B8',
+    color: '#CBD5E1',
     fontSize: 13,
     textAlign: 'center',
-    marginTop: 24,
     lineHeight: 20,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
   },
-  qrBottomBar: {
-    backgroundColor: 'rgba(30, 41, 59, 0.8)',
-    padding: 20,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-  },
-  qrSimLabel: {
-    color: '#94A3B8',
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  qrSimRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  qrSimBtn: {
-    flex: 1,
+  toggleManualBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 12,
-    gap: 6,
+    marginTop: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.3)',
   },
-  qrSimBtnText: {
-    color: '#FFF',
-    fontSize: 12,
+  toggleManualText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#38BDF8',
+  },
+  manualContainer: {
+    width: '100%',
+    marginTop: 12,
+  },
+  manualInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: 'rgba(30, 41, 59, 0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.3)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 13,
+    color: '#F8FAFC',
+  },
+  submitBtn: {
+    backgroundColor: '#0284C7',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  submitBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
     fontWeight: '700',
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
+  manualErrorText: {
+    color: '#F87171',
+    fontSize: 12,
+    marginTop: 6,
+    paddingHorizontal: 4,
   },
 });

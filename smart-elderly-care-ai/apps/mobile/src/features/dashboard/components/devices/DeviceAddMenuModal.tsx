@@ -63,21 +63,21 @@ export const DeviceAddMenuModal: React.FC<DeviceAddMenuModalProps> = ({
 
             <View style={[styles.menuDivider, isDarkMode && { backgroundColor: colors.border }]} />
 
-            {/* 2. Quét mã QR */}
+            {/* 2. Quét mã vạch camera */}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={onSelectQr}
               activeOpacity={0.7}
             >
               <View style={[styles.menuItemIconBox, { backgroundColor: '#F0F9FF' }]}>
-                <Ionicons name="qr-code-outline" size={20} color="#0284C7" />
+                <Ionicons name="barcode-outline" size={20} color="#0284C7" />
               </View>
               <View style={styles.menuItemContent}>
                 <LocalizedText style={[styles.menuItemTitle, isDarkMode && { color: colors.textPrimary }]}>
-                  Quét mã QR
+                  Quét mã vạch camera
                 </LocalizedText>
                 <LocalizedText style={[styles.menuItemDesc, isDarkMode && { color: colors.textSecondary }]}>
-                  Quét tem QR trên thân camera/vòng tay
+                  Mã vạch S/N hoặc MAC ở đáy camera
                 </LocalizedText>
               </View>
               <Ionicons name="chevron-forward" size={16} color={isDarkMode ? '#64748B' : '#CBD5E1'} />

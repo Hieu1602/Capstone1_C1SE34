@@ -33,10 +33,10 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
 
     companion object {
         private const val TAG = "NativeNotificationModule"
-        private const val CHANNEL_ID = "smartcare_alert_v4"
-        private const val EMERGENCY_CHANNEL_ID = "emergency_alerts_v4"
-        private const val CHANNEL_NAME = "Thông báo cảnh báo SmartCare AI"
-        private const val EMERGENCY_CHANNEL_NAME = "Cảnh báo khẩn cấp SmartCare AI"
+        const val CHANNEL_ID = "smartcare_normal_v5"
+        const val EMERGENCY_CHANNEL_ID = "emergency_alerts_v5"
+        const val CHANNEL_NAME = "Thông báo thường SmartCare AI"
+        const val EMERGENCY_CHANNEL_NAME = "Cảnh báo khẩn cấp SmartCare AI"
 
         private var activeVibrator: Vibrator? = null
         private var activeRingtone: Ringtone? = null
@@ -158,46 +158,52 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
 
     private fun createChannelsIfNeeded(manager: NotificationManager) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-
-            val audioAttributes = AudioAttributes.Builder()
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .setUsage(AudioAttributes.USAGE_ALARM)
-                .build()
-
-            // 1. Kênh thông báo thông thường
+            // 1. Kênh thông báo thông thường (Lịch khám, Tin nhắn, Cập nhật bệnh án -> Chuông ting ting nhẹ nhàng)
             if (manager.getNotificationChannel(CHANNEL_ID) == null) {
+                val normalSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                val normalAudioAttributes = AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .build()
+
                 val channel = NotificationChannel(
                     CHANNEL_ID,
                     CHANNEL_NAME,
                     NotificationManager.IMPORTANCE_HIGH
                 ).apply {
-                    description = "Thông báo cảnh báo sự cố sức khỏe, té ngã và lịch khám người cao tuổi"
+                    description = "Thông báo thông thường: lịch khám, tin nhắn, cập nhật hồ sơ bệnh án"
                     enableLights(true)
                     enableVibration(true)
-                    vibrationPattern = longArrayOf(0, 500, 250, 500)
+                    vibrationPattern = longArrayOf(0, 200, 100, 200)
                     lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
-                    setSound(soundUri, audioAttributes)
+                    setSound(normalSoundUri, normalAudioAttributes)
                     setShowBadge(true)
                 }
                 manager.createNotificationChannel(channel)
-                Log.d(TAG, "Đã tạo kênh thông báo: $CHANNEL_ID")
+                Log.d(TAG, "Đã tạo kênh thông báo thường: $CHANNEL_ID")
             }
 
-            // 2. Kênh cảnh báo khẩn cấp (cho FCM và sự cố đe dọa tính mạng)
+            // 2. Kênh cảnh báo khẩn cấp (Té ngã, Nhịp tim bất thường, Nguy kịch -> Chuông báo động to và rung mạnh)
             if (manager.getNotificationChannel(EMERGENCY_CHANNEL_ID) == null) {
+                val emergencySoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
+                val emergencyAudioAttributes = AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .build()
+
                 val emergencyChannel = NotificationChannel(
                     EMERGENCY_CHANNEL_ID,
                     EMERGENCY_CHANNEL_NAME,
                     NotificationManager.IMPORTANCE_HIGH
                 ).apply {
-                    description = "Cảnh báo khẩn cấp: nhịp tim bất thường, té ngã, tụt oxy và suy hô hấp"
+                    description = "Cảnh báo khẩn cấp: nhịp tim bất thường, té ngã, tụt oxy và nguy kịch"
                     enableLights(true)
                     enableVibration(true)
                     vibrationPattern = longArrayOf(0, 1000, 400, 1000, 400, 1000, 800)
                     lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
-                    setSound(soundUri, audioAttributes)
+                    setSound(emergencySoundUri, emergencyAudioAttributes)
                     setShowBadge(true)
                     try {
                         setBypassDnd(true)
@@ -252,10 +258,8 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
 
     @ReactMethod
     fun showNotification(title: String, message: String) {
-        val isEmergency = title.contains("🚨") || title.contains("💓") || title.contains("KHẨN CẤP") ||
-                title.contains("BÁO ĐỘNG") || title.contains("NGUY CẤP") || title.contains("TÉ NGÃ") ||
-                title.contains("NHỊP TIM") || title.contains("OXY")
-        showNotificationInternal(title, message, isEmergency = isEmergency, isCritical = isEmergency)
+        // Thông báo thông thường (Lịch khám, Tin nhắn, Cập nhật bệnh án): Không hú còi, không rung liên tục
+        showNotificationInternal(title, message, isEmergency = false, isCritical = false)
     }
 
     @ReactMethod
@@ -321,20 +325,13 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                 PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
             )
 
-            // Nút hành động trực tiếp trên thông báo: "ĐÃ XỬ LÝ (TẮT CHUÔNG)"
-            val ackIntent = Intent(reactContext, AlarmDismissReceiver::class.java).apply {
-                action = "com.c1se34.smartelderlycare.ACTION_ACKNOWLEDGE_ALARM"
-                putExtra("NOTIFICATION_ID", notifId)
+            // Âm thanh: Báo động nguy hiểm dùng TYPE_ALARM; Thông báo thường dùng TYPE_NOTIFICATION (ting ting)
+            val soundUri = if (isEmergency) {
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            } else {
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
             }
-            val ackPendingIntent = PendingIntent.getBroadcast(
-                reactContext,
-                reqCode + 2,
-                ackIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
-            )
-
-            val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
             val chosenChannelId = if (isEmergency) EMERGENCY_CHANNEL_ID else CHANNEL_ID
 
@@ -343,8 +340,8 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                 .setContentTitle(title)
                 .setContentText(message)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(message))
-                .setPriority(NotificationCompat.PRIORITY_MAX)
-                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setPriority(if (isEmergency) NotificationCompat.PRIORITY_MAX else NotificationCompat.PRIORITY_HIGH)
+                .setCategory(if (isEmergency) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_EVENT)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setDefaults(NotificationCompat.DEFAULT_ALL)
                 .setSound(soundUri)
@@ -352,11 +349,25 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                 .setOngoing(false) // Cho phép vuốt xóa bất kỳ lúc nào
                 .setContentIntent(pendingIntent)
                 .setDeleteIntent(deletePendingIntent)
-                .addAction(
+
+            // CHỈ THÊM NÚT "ĐÃ XỬ LÝ (TẮT CHUÔNG)" NẾU LÀ BÁO ĐỘNG NGUY HIỂM KHẨN CẤP
+            if (isEmergency) {
+                val ackIntent = Intent(reactContext, AlarmDismissReceiver::class.java).apply {
+                    action = "com.c1se34.smartelderlycare.ACTION_ACKNOWLEDGE_ALARM"
+                    putExtra("NOTIFICATION_ID", notifId)
+                }
+                val ackPendingIntent = PendingIntent.getBroadcast(
+                    reactContext,
+                    reqCode + 2,
+                    ackIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+                )
+                builder.addAction(
                     android.R.drawable.ic_menu_close_clear_cancel,
                     "ĐÃ XỬ LÝ (TẮT CHUÔNG)",
                     ackPendingIntent
                 )
+            }
 
             // Hiển thị trực tiếp lên thanh thông báo hệ thống (Notification Drawer / Status Bar)
             try {
@@ -364,7 +375,7 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                     builder.setFullScreenIntent(pendingIntent, true)
                 }
                 manager.notify(notifId, builder.build())
-                Log.d(TAG, "Đã gửi thông báo thành công lên thanh trạng thái: $title (ID: $notifId)")
+                Log.d(TAG, "Đã gửi thông báo thành công: $title (ID: $notifId, isEmergency: $isEmergency)")
             } catch (se: SecurityException) {
                 // Trên Android 14+ nếu chưa có quyền đặc biệt USE_FULL_SCREEN_INTENT, fallback gửi thông báo tiêu chuẩn
                 Log.w(TAG, "Không có quyền fullScreenIntent trên Android 14, gửi lại thông báo tiêu chuẩn: ${se.message}")
@@ -372,10 +383,10 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                 manager.notify(notifId, builder.build())
             }
 
+            // CHỈ PHÁT CHUÔNG BÁO ĐỘNG VÀ RUNG LIÊN TỤC NẾU LÀ BÁO ĐỘNG NGUY HIỂM
+            // Thông báo thường (Lịch khám, Tin nhắn) chỉ phát tiếng ting ting nhẹ nhàng của hệ thống
             if (isEmergency) {
                 triggerAlarm(reactContext, isCritical = isCritical)
-            } else {
-                triggerVibration()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Lỗi khi gửi thông báo: ${e.message}", e)

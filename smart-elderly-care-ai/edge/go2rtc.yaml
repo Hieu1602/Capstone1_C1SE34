@@ -6,6 +6,11 @@ rtsp:
   default_query: tcp
 webrtc:
   listen: ':8555'
+  candidates:
+    - 192.168.1.9:8555
+    - stun:8555
 streams:
   tapo_intercom:
-    - ${TAPO_TALK_URL}
+    - tapo://admin:614C3880740D95867C8CB3F5B6077C39E81812EF62DC24F61B3697C45A9567C1@192.168.1.7
+  tapo_af3760d796b14f799fb8467091a8d415:
+    - tapo://admin:614C3880740D95867C8CB3F5B6077C39E81812EF62DC24F61B3697C45A9567C1@192.168.1.7

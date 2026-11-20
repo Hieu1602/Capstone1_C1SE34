@@ -4,6 +4,7 @@ Vị trí: backend/app/api/v1/endpoints/mobile/reports.py
 """
 
 import io
+import re
 from typing import Optional
 from uuid import UUID
 
@@ -100,12 +101,20 @@ async def export_default_pdf(
         device_id=resolved_dev_str,
         vitals=vitals,
         incidents=incidents,
+        elderly=elderly,
         language=get_request_language(request),
+        period_days=calc_days,
     )
+    patient_tag = ""
+    if elderly and getattr(elderly, "full_name", None):
+        clean_name = re.sub(r"[^\w\-]", "_", elderly.full_name.strip()).strip("_")
+        if clean_name:
+            patient_tag = f"_{clean_name}"
+    pdf_filename = f"report_health{patient_tag}_{calc_days}d.pdf"
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=report_health_{resolved_dev_str}_{calc_days}d.pdf"},
+        headers={"Content-Disposition": f"attachment; filename={pdf_filename}"},
     )
 
 
@@ -158,12 +167,20 @@ async def export_default_excel(
         device_id=resolved_dev_str,
         vitals=vitals,
         incidents=incidents,
+        elderly=elderly,
         language=get_request_language(request),
+        period_days=calc_days,
     )
+    patient_tag = ""
+    if elderly and getattr(elderly, "full_name", None):
+        clean_name = re.sub(r"[^\w\-]", "_", elderly.full_name.strip()).strip("_")
+        if clean_name:
+            patient_tag = f"_{clean_name}"
+    excel_filename = f"report_health{patient_tag}_{calc_days}d.xlsx"
     return StreamingResponse(
         io.BytesIO(excel_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename=report_health_{resolved_dev_str}_{calc_days}d.xlsx"},
+        headers={"Content-Disposition": f"attachment; filename={excel_filename}"},
     )
 
 

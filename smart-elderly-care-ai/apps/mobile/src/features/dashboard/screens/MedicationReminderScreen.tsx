@@ -23,6 +23,7 @@ import { handleHeaderBack } from '../../../navigation/navigationHelpers';
 
 // Cấu trúc dữ liệu một mốc nhắc uống nước / sinh hoạt
 interface HydrationSchedule {
+  id?: string;
   time: string;
   amount: string;
   note: string;
@@ -58,6 +59,21 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
   }, []);
 
   useEffect(() => {
+    if (patientsList && patientsList.length > 0) {
+      const exists = patientsList.some(
+        (p: any) => String(p.id || p.elderly_id) === String(selectedPatientId)
+      );
+      if (!exists) {
+        const defaultId = route?.params?.patientId || activePatientId || patientsList[0]?.id || patientsList[0]?.elderly_id;
+        if (defaultId) {
+          setSelectedPatientId(defaultId);
+          setActivePatientId?.(defaultId);
+        }
+      }
+    }
+  }, [patientsList, route?.params?.patientId, activePatientId]);
+
+  useEffect(() => {
     if (route?.params?.patientId && String(route.params.patientId) !== String(selectedPatientId)) {
       setSelectedPatientId(route.params.patientId);
     }
@@ -73,7 +89,7 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
 
   const currentPatient =
     (patientsList || []).find(
-      (p: any) => p.id == selectedPatientId || p.elderly_id == selectedPatientId
+      (p: any) => String(p.id) === String(selectedPatientId) || String(p.elderly_id) === String(selectedPatientId)
     ) || (patientsList && patientsList.length > 0 ? patientsList[0] : null);
 
   const patientDisplayName =
@@ -103,6 +119,13 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
 
   // Danh sách lịch uống nước trong ngày
   const [hydrationList, setHydrationList] = useState<HydrationSchedule[]>([]);
+  const [isAddHydrationModalVisible, setAddHydrationModalVisible] = useState(false);
+  const [hydrationDraft, setHydrationDraft] = useState({
+    time: '08:00',
+    amount: '250ml',
+    note: 'Nước ấm sau thức dậy',
+  });
+  const [isSavingHydration, setIsSavingHydration] = useState(false);
 
   // State quản lý Kê đơn thuốc mới (Chuẩn nghiệp vụ lâm sàng)
   interface PrescriptionMedDraft {
@@ -291,17 +314,101 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
     const nextState = !med.taken;
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    await markMedicationTaken(id, nextState, nextState ? timeStr : undefined, selectedPatientId);
-    if (nextState) {
-      LocalizedAlert.alert('Đã xác nhận', `Đã đánh dấu uống thuốc "${med.name}" lúc ${timeStr} cho ${patientDisplayName}.`);
-    } else {
-      LocalizedAlert.alert('Hoàn tác', `Đã chuyển "${med.name}" về trạng thái chưa uống.`);
+    try {
+      await markMedicationTaken(id, nextState, nextState ? timeStr : undefined, selectedPatientId);
+      if (nextState) {
+        LocalizedAlert.alert('Đã xác nhận', `Đã đánh dấu uống thuốc "${med.name}" lúc ${timeStr} cho ${patientDisplayName}.`);
+      } else {
+        LocalizedAlert.alert('Hoàn tác', `Đã chuyển "${med.name}" về trạng thái chưa uống.`);
+      }
+    } catch (err: any) {
+      LocalizedAlert.alert('Lỗi đồng bộ', 'Không thể cập nhật trạng thái uống thuốc trên máy chủ. Đã hoàn tác trạng thái.');
     }
   };
 
-  const toggleHydrationDone = (index: number) => {
+  useEffect(() => {
+    if (todayReminders?.hydrations) {
+      setHydrationList(todayReminders.hydrations as any);
+    } else {
+      setHydrationList([]);
+    }
+  }, [todayReminders?.hydrations]);
+
+  const toggleHydrationDone = async (index: number) => {
+    const item = hydrationList[index];
+    if (!item) return;
+    const nextDone = !item.done;
     setHydrationList((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, done: !item.done } : item))
+      prev.map((h, i) => (i === index ? { ...h, done: nextDone } : h))
+    );
+    if (item.id) {
+      try {
+        await remindersApi.toggleHydration(item.id, selectedPatientId);
+      } catch (e) {
+        console.warn('Lỗi toggle hydration:', e);
+      }
+    }
+  };
+
+  const handleApplyHydrationTemplate = async () => {
+    try {
+      const res = await remindersApi.applyHydrationTemplate(selectedPatientId);
+      if (res.data?.data) {
+        setHydrationList(res.data.data);
+      }
+      fetchReminders(selectedPatientId);
+      LocalizedAlert.alert('Thành công 🎉', `Đã áp dụng lịch uống nước 4 cữ chuẩn y tế (1.5 - 2L/ngày) cho ${patientDisplayName}.`);
+    } catch (e) {
+      console.warn('Lỗi áp dụng lịch uống nước mẫu:', e);
+      LocalizedAlert.alert('Lỗi', 'Không thể áp dụng lịch uống nước mẫu lúc này.');
+    }
+  };
+
+  const handleSaveHydration = async () => {
+    if (!hydrationDraft.time.trim()) {
+      LocalizedAlert.alert('Thiếu thông tin', 'Vui lòng nhập giờ uống nước (HH:MM).');
+      return;
+    }
+    setIsSavingHydration(true);
+    try {
+      await remindersApi.createHydration({
+        time: hydrationDraft.time.trim(),
+        amount: hydrationDraft.amount.trim() || '250ml',
+        note: hydrationDraft.note.trim() || 'Nước ấm',
+        patient_id: selectedPatientId ? String(selectedPatientId) : undefined,
+      });
+      await fetchReminders(selectedPatientId);
+      setAddHydrationModalVisible(false);
+      setHydrationDraft({ time: '08:00', amount: '250ml', note: 'Nước ấm sau thức dậy' });
+      LocalizedAlert.alert('Thành công 🎉', `Đã thêm mốc uống nước ${hydrationDraft.time} (${hydrationDraft.amount}) cho ${patientDisplayName}.`);
+    } catch (e) {
+      console.warn('Lỗi thêm mốc nước:', e);
+      LocalizedAlert.alert('Lỗi', 'Không thể lưu mốc uống nước lúc này.');
+    } finally {
+      setIsSavingHydration(false);
+    }
+  };
+
+  const handleDeleteHydration = (hydrationId?: string, timeStr?: string) => {
+    if (!hydrationId) return;
+    LocalizedAlert.alert(
+      'Xóa mốc uống nước',
+      `Bạn có chắc chắn muốn xóa mốc nhắc uống nước lúc ${timeStr || ''}?`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Xóa',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await remindersApi.deleteHydration(hydrationId, selectedPatientId);
+              await fetchReminders(selectedPatientId);
+            } catch (e) {
+              console.warn('Lỗi xóa mốc nước:', e);
+            }
+          },
+        },
+      ]
     );
   };
 
@@ -375,20 +482,20 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
         </TouchableOpacity>
       </View>
 
-      {/* 1.1. Bộ chọn người cao tuổi khi gia đình có từ 2 người trở lên */}
-      {patientsList && patientsList.length > 1 && (
+      {/* 1.1. Bộ chọn người cao tuổi (Đồng bộ đa hồ sơ người cao tuổi) */}
+      {patientsList && patientsList.length > 0 && (
         <View style={{ backgroundColor: isDarkMode ? '#0B0F19' : '#FFFFFF', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: borderCol }}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.patientChipsRow}
+            contentContainerStyle={[styles.patientChipsRow, { alignItems: 'center' }]}
           >
             {patientsList.map((p: any) => {
               const pId = p.id || p.elderly_id;
-              const isSelected = pId == selectedPatientId;
+              const isSelected = String(pId) === String(selectedPatientId);
               return (
                 <TouchableOpacity
-                  key={pId}
+                  key={`med-pchip-${pId}`}
                   style={[
                     styles.patientChip,
                     isSelected
@@ -420,6 +527,22 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
                 </TouchableOpacity>
               );
             })}
+
+            <TouchableOpacity
+              style={[
+                styles.patientChip,
+                styles.patientChipInactive,
+                { borderStyle: 'dashed' },
+                isDarkMode && { backgroundColor: '#1E293B', borderColor: '#475569' },
+              ]}
+              onPress={() => navigation.navigate('PatientsList')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="people-outline" size={13} color={Colors.primary} />
+              <LocalizedText style={[styles.patientChipText, { color: Colors.primary }]}>
+                Hồ sơ người cao tuổi
+              </LocalizedText>
+            </TouchableOpacity>
           </ScrollView>
         </View>
       )}
@@ -679,6 +802,11 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
                       {med.name}
                     </LocalizedText>
                     <LocalizedText style={styles.medItemDose}>{med.dose}</LocalizedText>
+                    {med.instructions ? (
+                      <LocalizedText style={styles.medItemInstructions}>
+                        HD: {med.instructions}
+                      </LocalizedText>
+                    ) : null}
                     <LocalizedText style={[styles.medItemPurpose, { color: textSub }]}>Mục đích: {med.purpose}</LocalizedText>
                   </View>
 
@@ -701,14 +829,37 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
         {/* Bổ sung nước định kỳ */}
         <View style={[styles.sectionCard, { backgroundColor: bgCard, borderColor: borderCol }]}>
           <View style={styles.sectionHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
               <View style={[styles.sectionIconBox, { backgroundColor: isDarkMode ? '#082F49' : '#E0F2FE' }]}>
                 <Ionicons name="water-outline" size={20} color="#0284C7" />
               </View>
-              <View>
+              <View style={{ flex: 1 }}>
                 <LocalizedText style={[styles.sectionTitle, { color: textTitle }]}>Bổ sung nước định kỳ</LocalizedText>
                 <LocalizedText style={[styles.sectionSubtitle, { color: textSub }]}>Khuyến nghị: 1.5 - 2L nước mỗi ngày</LocalizedText>
               </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {canManageRecords && (
+                <TouchableOpacity
+                  style={[styles.smallActionBtn, { backgroundColor: isDarkMode ? '#0F2942' : '#F0F9FF', borderColor: '#BAE6FD' }]}
+                  onPress={handleApplyHydrationTemplate}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="sparkles" size={12} color="#0284C7" />
+                  <LocalizedText style={[styles.smallActionBtnText, { color: '#0284C7' }]}>Mẫu chuẩn</LocalizedText>
+                </TouchableOpacity>
+              )}
+              {canManageRecords && (
+                <TouchableOpacity
+                  style={[styles.smallActionBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol }]}
+                  onPress={() => setAddHydrationModalVisible(true)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="add" size={13} color={Colors.primary} />
+                  <LocalizedText style={[styles.smallActionBtnText, { color: Colors.primary }]}>Thêm</LocalizedText>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -717,23 +868,64 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
               <Ionicons name="water-outline" size={36} color={isDarkMode ? '#64748B' : '#94A3B8'} />
               <LocalizedText style={[styles.emptyBoxTitle, { color: textTitle }]}>Chưa có mốc nhắc nhở uống nước</LocalizedText>
               <LocalizedText style={[styles.emptyBoxSub, { color: textSub }]}>
-                Hệ thống sẽ đồng bộ lịch uống nước theo khuyến nghị y tế của bác sĩ điều trị.
+                Người cao tuổi thường giảm cảm giác khát. Bấm nút dưới đây để tạo lịch uống nước chuẩn y tế hoặc thêm mốc nhắc nhở riêng cho {patientDisplayName}.
               </LocalizedText>
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
+                <TouchableOpacity
+                  style={[styles.emptyActionBtn, { backgroundColor: Colors.primary }]}
+                  onPress={handleApplyHydrationTemplate}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="sparkles" size={15} color="#FFFFFF" />
+                  <LocalizedText style={styles.emptyActionBtnText}>Tạo 4 cữ chuẩn y tế (Khuyên dùng)</LocalizedText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.emptyActionBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol, borderWidth: 1 }]}
+                  onPress={() => setAddHydrationModalVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="add-circle-outline" size={15} color={Colors.primary} />
+                  <LocalizedText style={[styles.emptyActionBtnText, { color: textTitle }]}>Tùy chỉnh mốc mới</LocalizedText>
+                </TouchableOpacity>
+              </View>
             </View>
           ) : (
             <View style={styles.hydrationGrid}>
               {hydrationList.map((h, idx) => (
                 <TouchableOpacity
-                  key={idx}
-                  style={[styles.hydrationCard, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: h.done ? '#0284C7' : borderCol }]}
+                  key={h.id || idx}
+                  style={[
+                    styles.hydrationCard,
+                    {
+                      backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                      borderColor: h.done ? '#10B981' : borderCol,
+                    },
+                    h.done && { backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.12)' : '#ECFDF5' },
+                  ]}
                   onPress={() => toggleHydrationDone(idx)}
                   activeOpacity={0.8}
                 >
                   <View style={styles.hydrationCardTop}>
-                    <LocalizedText style={styles.hydrationTimeText}>{h.time}</LocalizedText>
-                    <Ionicons name={h.done ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={h.done ? '#0284C7' : '#94A3B8'} />
+                    <LocalizedText style={[styles.hydrationTimeText, h.done && { color: '#10B981' }]}>{h.time}</LocalizedText>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      {canManageRecords && h.id && (
+                        <TouchableOpacity
+                          onPress={() => handleDeleteHydration(h.id, h.time)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="trash-outline" size={13} color="#94A3B8" />
+                        </TouchableOpacity>
+                      )}
+                      <Ionicons
+                        name={h.done ? 'checkmark-circle' : 'ellipse-outline'}
+                        size={18}
+                        color={h.done ? '#10B981' : '#94A3B8'}
+                      />
+                    </View>
                   </View>
-                  <LocalizedText style={[styles.hydrationAmountText, { color: textTitle }]}>{h.amount}</LocalizedText>
+                  <LocalizedText style={[styles.hydrationAmountText, { color: textTitle }, h.done && { textDecorationLine: 'line-through', opacity: 0.7 }]}>
+                    {h.amount}
+                  </LocalizedText>
                   <LocalizedText style={[styles.hydrationNoteText, { color: textSub }]} numberOfLines={2}>
                     {h.note}
                   </LocalizedText>
@@ -993,6 +1185,123 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Modal Thêm Mốc Nhắc Uống Nước Mới */}
+      <Modal transparent visible={isAddHydrationModalVisible} animationType="fade" onRequestClose={() => setAddHydrationModalVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setAddHydrationModalVisible(false)}>
+          <Pressable style={[styles.modalCard, { backgroundColor: bgCard, borderColor: borderCol }]} onPress={() => {}}>
+            <View style={styles.modalHeaderRow}>
+              <View style={[styles.modalHeaderIconBox, { backgroundColor: isDarkMode ? '#082F49' : '#E0F2FE' }]}>
+                <Ionicons name="water-outline" size={20} color="#0284C7" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <LocalizedText style={[styles.modalTitleLarge, { color: textTitle }]}>Thêm mốc nhắc uống nước</LocalizedText>
+                <LocalizedText style={[styles.modalSubtitleLarge, { color: textSub }]}>Thiết lập cho {patientDisplayName}</LocalizedText>
+              </View>
+              <TouchableOpacity onPress={() => setAddHydrationModalVisible(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={22} color={textSub} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ marginTop: 14 }}>
+              {/* Giờ uống */}
+              <LocalizedText style={[styles.inputLabelSmall, { color: textTitle }]}>Giờ uống nước (HH:MM) *</LocalizedText>
+              <LocalizedTextInput
+                style={[styles.textInputSmall, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', color: textTitle, borderColor: borderCol }]}
+                value={hydrationDraft.time}
+                onChangeText={(t: string) => setHydrationDraft((prev) => ({ ...prev, time: t }))}
+                placeholder="VD: 08:00, 14:30"
+                placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'}
+              />
+              <View style={{ flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                {['07:00 (Sáng)', '10:30 (Trưa)', '15:00 (Chiều)', '19:30 (Tối)'].map((slot) => {
+                  const tStr = slot.split(' ')[0];
+                  const isChosen = hydrationDraft.time === tStr;
+                  return (
+                    <TouchableOpacity
+                      key={slot}
+                      style={[styles.presetDayChip, { borderColor: borderCol }, isChosen && { backgroundColor: Colors.primary }]}
+                      onPress={() => setHydrationDraft((prev) => ({ ...prev, time: tStr }))}
+                    >
+                      <LocalizedText style={[styles.presetDayChipText, isChosen && { color: '#FFF' }]}>{slot}</LocalizedText>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Lượng nước */}
+              <LocalizedText style={[styles.inputLabelSmall, { color: textTitle, marginTop: 12 }]}>Lượng nước *</LocalizedText>
+              <LocalizedTextInput
+                style={[styles.textInputSmall, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', color: textTitle, borderColor: borderCol }]}
+                value={hydrationDraft.amount}
+                onChangeText={(a: string) => setHydrationDraft((prev) => ({ ...prev, amount: a }))}
+                placeholder="VD: 200ml, 250ml"
+                placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'}
+              />
+              <View style={{ flexDirection: 'row', gap: 6, marginTop: 6 }}>
+                {['150ml', '200ml', '250ml', '300ml'].map((amt) => {
+                  const isChosen = hydrationDraft.amount === amt;
+                  return (
+                    <TouchableOpacity
+                      key={amt}
+                      style={[styles.presetDayChip, { borderColor: borderCol }, isChosen && { backgroundColor: '#0284C7' }]}
+                      onPress={() => setHydrationDraft((prev) => ({ ...prev, amount: amt }))}
+                    >
+                      <LocalizedText style={[styles.presetDayChipText, isChosen && { color: '#FFF' }]}>{amt}</LocalizedText>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Ghi chú */}
+              <LocalizedText style={[styles.inputLabelSmall, { color: textTitle, marginTop: 12 }]}>Ghi chú / Hướng dẫn</LocalizedText>
+              <LocalizedTextInput
+                style={[styles.textInputSmall, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', color: textTitle, borderColor: borderCol }]}
+                value={hydrationDraft.note}
+                onChangeText={(n: string) => setHydrationDraft((prev) => ({ ...prev, note: n }))}
+                placeholder="VD: Nước ấm, Sau khi ăn, Nước canh"
+                placeholderTextColor={isDarkMode ? '#64748B' : '#94A3B8'}
+              />
+              <View style={{ flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                {['Nước ấm sau thức dậy', 'Uống sau ăn', 'Nước ép / Canh', 'Trước khi ngủ'].map((note) => {
+                  const isChosen = hydrationDraft.note === note;
+                  return (
+                    <TouchableOpacity
+                      key={note}
+                      style={[styles.presetDayChip, { borderColor: borderCol }, isChosen && { backgroundColor: '#0284C7' }]}
+                      onPress={() => setHydrationDraft((prev) => ({ ...prev, note }))}
+                    >
+                      <LocalizedText style={[styles.presetDayChipText, isChosen && { color: '#FFF' }]}>{note}</LocalizedText>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Nút hành động */}
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={[styles.modalCancelBtn, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol }]}
+                onPress={() => setAddHydrationModalVisible(false)}
+                disabled={isSavingHydration}
+              >
+                <LocalizedText style={[styles.modalCancelText, { color: textSub }]}>Hủy</LocalizedText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalSaveBtn, isSavingHydration && { opacity: 0.7 }]}
+                onPress={handleSaveHydration}
+                disabled={isSavingHydration}
+              >
+                {isSavingHydration ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <LocalizedText style={styles.modalSaveText}>Lưu mốc nước</LocalizedText>
+                )}
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1046,6 +1355,7 @@ const styles = StyleSheet.create({
   medItemName: { fontSize: 14, fontWeight: '700' },
   medItemNameDone: { textDecorationLine: 'line-through', opacity: 0.6 },
   medItemDose: { fontSize: 12, color: '#0284C7', marginTop: 2, fontWeight: '600' },
+  medItemInstructions: { fontSize: 11, color: '#D97706', marginTop: 2, fontStyle: 'italic' },
   medItemPurpose: { fontSize: 11, marginTop: 2 },
   medCheckBtn: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   medCheckBtnPending: { backgroundColor: '#F1F5F9' },
@@ -1062,6 +1372,10 @@ const styles = StyleSheet.create({
   hydrationTimeText: { fontSize: 11, fontWeight: '700', color: '#0284C7' },
   hydrationAmountText: { fontSize: 14, fontWeight: '800', marginTop: 4 },
   hydrationNoteText: { fontSize: 11, marginTop: 2 },
+  smallActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
+  smallActionBtnText: { fontSize: 11.5, fontWeight: '700' },
+  emptyActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10 },
+  emptyActionBtnText: { fontSize: 12.5, fontWeight: '700', color: '#FFF' },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', alignItems: 'center', justifyContent: 'center', padding: 16 },
   modalCard: { width: '100%', maxWidth: 420, borderRadius: 18, padding: 20, borderWidth: 1 },

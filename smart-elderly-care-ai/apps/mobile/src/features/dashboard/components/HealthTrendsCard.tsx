@@ -65,7 +65,8 @@ export function HealthTrendsCard({
         return;
       }
       try {
-        const devId = patientDevice.deviceId || patientDevice.id || 'BLE_BAND_001';
+        const devId = patientDevice.deviceId || patientDevice.id;
+        if (!devId) return;
         let resData: any[] = [];
         try {
           const res = await vitalsApi.getHistory(devId, 30);
@@ -73,14 +74,6 @@ export function HealthTrendsCard({
             resData = res.data;
           }
         } catch {}
-        if (resData.length === 0 && devId !== 'BLE_BAND_001') {
-          try {
-            const fallbackRes = await vitalsApi.getHistory('BLE_BAND_001', 30);
-            if (fallbackRes.data && Array.isArray(fallbackRes.data)) {
-              resData = fallbackRes.data;
-            }
-          } catch {}
-        }
         if (isMounted && resData.length > 0) {
           const now = Date.now();
           const twelveHoursAgo = now - 12 * 60 * 60 * 1000;

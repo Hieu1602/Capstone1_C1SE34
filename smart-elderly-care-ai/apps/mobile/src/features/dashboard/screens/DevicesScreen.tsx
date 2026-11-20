@@ -16,6 +16,7 @@ import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
 import { DeviceQrScannerModal } from '../components/devices/DeviceQrScannerModal';
+import { ScannedDevice } from '../utils/deviceQr';
 import { GroupActionModal } from '../components/devices/GroupActionModal';
 import { DeleteGroupConfirmModal } from '../components/devices/DeleteGroupConfirmModal';
 import { DeleteDeviceConfirmModal } from '../components/devices/DeleteDeviceConfirmModal';
@@ -149,7 +150,7 @@ export default function DevicesScreen({ navigation, route }: any) {
     dev.name.toLowerCase().includes('smartband') ||
     dev.name.toLowerCase().includes('đồng hồ');
 
-  const handleQrScan = async (type: 'camera' | 'watch', deviceId: string) => {
+  const handleQrScan = async (type: 'camera' | 'watch', deviceId: string, metadata?: ScannedDevice) => {
     setShowQrModal(false);
     if (!canManageDevices) {
       LocalizedAlert.alert(
@@ -159,29 +160,17 @@ export default function DevicesScreen({ navigation, route }: any) {
       return;
     }
     if (type === 'camera') {
-      const newCam: IoTDeviceItem = {
-        id: deviceId,
-        name: `${deviceId} (QR Config)`,
-        sub: 'Camera an ninh AI • Quét QR nhanh • 1080p FHD',
-        type: 'camera',
-        status: 'Trực tuyến • Đang ghi hình',
-        isOnline: true,
-        icon: 'videocam',
-        color: '#EA580C',
-        location: 'Phòng khách',
-      };
-      const createdId = await addIoTDevice(newCam);
-      if (!createdId) {
-        LocalizedAlert.alert('Không thể đăng ký thiết bị', 'Không thể lưu thiết bị lên máy chủ. Vui lòng kiểm tra kết nối và thử lại.');
-        return;
-      }
-      if (!hasLinkedHouse) await fetchMyPermissions();
-      LocalizedAlert.alert(
-        'Quét mã thành công',
-        hasLinkedHouse
-          ? 'Đã nhận diện camera và kích hoạt kết nối nhanh!'
-          : 'Đã đăng ký camera, tạo Nhà của tôi và cấp quyền Chủ hộ cho bạn!'
-      );
+      navigation.navigate('AddDevice', {
+        initialStep: 'CAMERA_RTSP_CONFIG',
+        scannedData: metadata || {
+          deviceId,
+          brand: 'TP-Link Tapo',
+          suggestedName: 'Camera TP-Link Tapo',
+          username: 'admin123',
+          password: 'admin123',
+        },
+      });
+      return;
     } else {
       const newWatch: IoTDeviceItem = {
         id: deviceId,
