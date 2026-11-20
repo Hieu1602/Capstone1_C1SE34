@@ -7,10 +7,12 @@ import {
     Linking,
     Modal,
     ScrollView,
+    StatusBar,
+    StyleSheet,
     TouchableOpacity,
     View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import {
     LocalizedAlert,
@@ -67,6 +69,7 @@ type DetailSheet = "settings" | "recordings" | "ai_care" | null;
  * @remarks Tác động: Các hook quản lý kết nối; thao tác SOS và mở video sự kiện có thể rời ứng dụng.
  */
 export default function CameraDetailScreen({ navigation, route }: Props) {
+    const insets = useSafeAreaInsets();
     const { colors, isDarkMode } = useTheme();
     const [showRtspConfigModal, setShowRtspConfigModal] = useState<boolean>(false);
     const { permissions, userRole, role } = useAuthStore();
@@ -493,217 +496,261 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                 animationType="slide"
                 onRequestClose={() => setSheet(null)}
             >
-                <SafeAreaView style={sheet === "recordings" ? [styles.screen, cardStyle] : styles.overlay}>
-                    <View style={[sheet === "recordings" ? styles.screen : styles.sheet, cardStyle]}>
-                        {sheet === "recordings" ? <View style={styles.archiveHeader}>
-                            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Đóng" style={styles.iconButton} onPress={() => setSheet(null)}>
-                                <Ionicons name="chevron-back" size={28} color={colors.textPrimary} />
-                            </TouchableOpacity>
-                            {(["playback", "download"] as const).map(tab => <TouchableOpacity key={tab}
-                                activeOpacity={1}
-                                accessibilityRole="tab" accessibilityState={{ selected: archiveTab === tab }}
-                                accessibilityLabel={tab === "playback" ? "Xem lại" : "Tải xuống"}
-                                style={[styles.archiveTab, archiveTab === tab && { borderBottomColor: colors.primary }]}
-                                onPress={() => { setRecordingUri(""); recordingRequest.current++; setArchiveTab(tab); }}>
-                                <Text style={[styles.archiveTabText, { color: archiveTab === tab ? colors.primary : colors.textSecondary }]}>
-                                    {tab === "playback" ? "Xem lại" : "Tải xuống"}
-                                </Text>
-                            </TouchableOpacity>)}
-                        </View> :
-                        <View style={styles.header}>
-                            <Text style={[styles.title, textStyle]}>
-                                {sheet === "ai_care"
-                                    ? "Chăm sóc AI"
-                                    : "Cài đặt camera"}
-                            </Text>
+                {sheet === "recordings" ? (
+                    <View
+                        style={[
+                            styles.screen,
+                            cardStyle,
+                            {
+                                paddingTop: insets.top,
+                                paddingBottom: insets.bottom,
+                            },
+                        ]}
+                    >
+                        <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} />
+                        <View style={styles.archiveHeader}>
                             <TouchableOpacity
                                 accessibilityRole="button"
                                 accessibilityLabel="Đóng"
                                 style={styles.iconButton}
                                 onPress={() => setSheet(null)}
+                                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                             >
                                 <Ionicons
-                                    name="close"
-                                    size={26}
+                                    name="chevron-back"
+                                    size={28}
                                     color={colors.textPrimary}
                                 />
                             </TouchableOpacity>
-                        </View>}
-                        <Animated.View style={[{ flex: 1 }, sheet === "recordings" && { opacity: archiveFade }]}>
-                            <ScrollView contentContainerStyle={sheet === "recordings" ? styles.archiveContent : styles.sheetContent}>
-                            {sheet === "recordings" ? (
-                                archiveTab === "playback" ? <CameraTimeline key={selectedCameraId || "default"} cameraId={selectedCameraId} /> : <View style={styles.downloadContent}>
-                                    {recordingUri ? <>
-                                        <ArchivePlayer key={recordingUri} uri={recordingUri}
-                                            onEnd={() => {}}
-                                            onError={() => LocalizedAlert.alert("Xem lại", "Không phát được video. Vui lòng thử lại.")} />
-                                        <TouchableOpacity accessibilityRole="button" style={styles.iconButton}
-                                            accessibilityLabel="Quay lại danh sách bản ghi" onPress={() => setRecordingUri("")}>
-                                            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-                                        </TouchableOpacity>
-                                    </> : null}
-                                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                                        <Text style={[styles.sectionTitle, textStyle]}>
-                                            Bản ghi khả dụng
+                                {(["playback", "download"] as const).map(tab => (
+                                    <TouchableOpacity
+                                        key={tab}
+                                        activeOpacity={1}
+                                        accessibilityRole="tab"
+                                        accessibilityState={{ selected: archiveTab === tab }}
+                                        accessibilityLabel={tab === "playback" ? "Xem lại" : "Tải xuống"}
+                                        style={[styles.archiveTab, archiveTab === tab && { borderBottomColor: colors.primary }]}
+                                        onPress={() => { setRecordingUri(""); recordingRequest.current++; setArchiveTab(tab); }}
+                                    >
+                                        <Text style={[styles.archiveTabText, { color: archiveTab === tab ? colors.primary : colors.textSecondary }]}>
+                                            {tab === "playback" ? "Xem lại" : "Tải xuống"}
                                         </Text>
-                                        <TouchableOpacity
-                                            accessibilityRole="button"
-                                            accessibilityLabel="Làm mới danh sách bản ghi"
-                                            style={styles.iconButton}
-                                            onPress={() => {
-                                                void loadArchiveFiles();
-                                                void connection.refresh?.();
-                                            }}
-                                        >
-                                            <Ionicons name="refresh" size={20} color={colors.primary} />
-                                        </TouchableOpacity>
-                                    </View>
-                                    {connection.recordings.active && (
-                                        <Text style={textStyle}>
-                                            Đang ghi hình…
-                                        </Text>
-                                    )}
-                                    {!!connection.recordings.error && (
-                                        <Text style={styles.error}>
-                                            {connection.recordings.error}
-                                        </Text>
-                                    )}
-                                    {/* Chỉ mở các tệp do server trả về. */}
-                                    {[...connection.recordings.files]
-                                        .reverse()
-                                        .map((file) => (
-                                            <View
-                                                key={file}
-                                                style={[
-                                                    styles.row,
-                                                    {
-                                                        borderColor:
-                                                            colors.border,
-                                                    },
-                                                ]}
-                                            >
-                                                <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Phát ${file}`}
-                                                    style={styles.iconButton} onPress={() => { void openRecording(file); }}>
-                                                    <Ionicons
-                                                        name="play-circle-outline"
-                                                        size={25}
-                                                        color={colors.textPrimary}
-                                                    />
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                            <Animated.View style={[{ flex: 1 }, { opacity: archiveFade }]}>
+                                <ScrollView contentContainerStyle={styles.archiveContent}>
+                                    {archiveTab === "playback" ? (
+                                        <CameraTimeline key={selectedCameraId || "default"} cameraId={selectedCameraId} />
+                                    ) : (
+                                        <View style={styles.downloadContent}>
+                                            {recordingUri ? <>
+                                                <ArchivePlayer key={recordingUri} uri={recordingUri}
+                                                    onEnd={() => {}}
+                                                    onError={() => LocalizedAlert.alert("Xem lại", "Không phát được video. Vui lòng thử lại.")} />
+                                                <TouchableOpacity accessibilityRole="button" style={styles.iconButton}
+                                                    accessibilityLabel="Quay lại danh sách bản ghi" onPress={() => setRecordingUri("")}>
+                                                    <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
                                                 </TouchableOpacity>
-                                                <Text
+                                            </> : null}
+                                            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                                                <Text style={[styles.sectionTitle, textStyle]}>
+                                                    Bản ghi khả dụng
+                                                </Text>
+                                                <TouchableOpacity
+                                                    accessibilityRole="button"
+                                                    accessibilityLabel="Làm mới danh sách bản ghi"
+                                                    style={styles.iconButton}
+                                                    onPress={() => {
+                                                        void loadArchiveFiles();
+                                                        void connection.refresh?.();
+                                                    }}
+                                                >
+                                                    <Ionicons name="refresh" size={20} color={colors.primary} />
+                                                </TouchableOpacity>
+                                            </View>
+                                            {connection.recordings.active && (
+                                                <Text style={textStyle}>
+                                                    Đang ghi hình…
+                                                </Text>
+                                            )}
+                                            {!!connection.recordings.error && (
+                                                <Text style={styles.error}>
+                                                    {connection.recordings.error}
+                                                </Text>
+                                            )}
+                                            {/* Chỉ mở các tệp do server trả về. */}
+                                            {[...connection.recordings.files]
+                                                .reverse()
+                                                .map((file) => (
+                                                    <View
+                                                        key={file}
+                                                        style={[
+                                                            styles.row,
+                                                            {
+                                                                borderColor:
+                                                                    colors.border,
+                                                                },
+                                                        ]}
+                                                    >
+                                                        <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Phát ${file}`}
+                                                            style={styles.iconButton} onPress={() => { void openRecording(file); }}>
+                                                            <Ionicons
+                                                                name="play-circle-outline"
+                                                                size={25}
+                                                                color={colors.textPrimary}
+                                                            />
+                                                        </TouchableOpacity>
+                                                        <Text
+                                                            style={[
+                                                                styles.rowText,
+                                                                textStyle,
+                                                            ]}
+                                                        >
+                                                            {file}
+                                                        </Text>
+                                                        <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Tải xuống ${file}`}
+                                                            style={styles.iconButton} onPress={() => { void openRecording(file, true); }}>
+                                                            <Ionicons
+                                                                name="download-outline"
+                                                                size={22}
+                                                                color={colors.textPrimary}
+                                                            />
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                ))}
+                                            {/* Danh sách bản ghi từ Cloud / Edge Hub Archive */}
+                                            {archiveFiles.map((item) => (
+                                                <View
+                                                    key={item.id}
                                                     style={[
-                                                        styles.rowText,
-                                                        textStyle,
+                                                        styles.row,
+                                                        { borderColor: colors.border },
                                                     ]}
                                                 >
-                                                    {file}
-                                                </Text>
-                                                <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Tải xuống ${file}`}
-                                                    style={styles.iconButton} onPress={() => { void openRecording(file, true); }}>
-                                                    <Ionicons
-                                                        name="download-outline"
-                                                        size={22}
-                                                        color={colors.textPrimary}
-                                                    />
-                                                </TouchableOpacity>
-                                            </View>
-                                        ))}
-                                    {/* Danh sách bản ghi từ Cloud / Edge Hub Archive */}
-                                    {archiveFiles.map((item) => (
-                                        <View
-                                            key={item.id}
-                                            style={[
-                                                styles.row,
-                                                { borderColor: colors.border },
-                                            ]}
-                                        >
-                                            <TouchableOpacity
-                                                accessibilityRole="button"
-                                                accessibilityLabel={`Phát lưu trữ ${item.id}`}
-                                                style={styles.iconButton}
-                                                onPress={() => { void openArchiveRecording(item); }}
-                                            >
-                                                <Ionicons
-                                                    name="play-circle-outline"
-                                                    size={25}
-                                                    color={colors.primary}
-                                                />
-                                            </TouchableOpacity>
-                                            <View style={{ flex: 1 }}>
-                                                <Text style={textStyle}>
-                                                    {new Date(item.started_at).toLocaleString("vi-VN", {
-                                                        day: "2-digit",
-                                                        month: "2-digit",
-                                                        hour: "2-digit",
-                                                        minute: "2-digit",
-                                                        second: "2-digit",
-                                                    })}
-                                                </Text>
-                                                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                                                    {item.duration}s • {item.kind === "incident" ? "Sự kiện AI" : "Đoạn lưu trữ"}
-                                                </Text>
-                                            </View>
-                                            <TouchableOpacity
-                                                accessibilityRole="button"
-                                                accessibilityLabel={`Tải xuống lưu trữ ${item.id}`}
-                                                style={styles.iconButton}
-                                                onPress={() => { void openArchiveRecording(item, true); }}
-                                            >
-                                                <Ionicons
-                                                    name="download-outline"
-                                                    size={22}
-                                                    color={colors.primary}
-                                                />
-                                            </TouchableOpacity>
-                                        </View>
-                                    ))}
-                                    {connection.recordings.files.length === 0 && archiveFiles.length === 0 && !loadingArchive && (
-                                        <View style={styles.downloadEmpty}>
-                                            <Ionicons name="download-outline" size={60} color={colors.textMuted} />
-                                            <Text style={[styles.sectionTitle, textStyle]}>Chưa có bản ghi để tải</Text>
-                                            <Text style={{ color: colors.textSecondary, textAlign: "center" }}>Các bản ghi hoàn tất sẽ xuất hiện tại đây.</Text>
+                                                    <TouchableOpacity
+                                                        accessibilityRole="button"
+                                                        accessibilityLabel={`Phát lưu trữ ${item.id}`}
+                                                        style={styles.iconButton}
+                                                        onPress={() => { void openArchiveRecording(item); }}
+                                                    >
+                                                        <Ionicons
+                                                            name="play-circle-outline"
+                                                            size={25}
+                                                            color={colors.primary}
+                                                        />
+                                                    </TouchableOpacity>
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={textStyle}>
+                                                            {new Date(item.started_at).toLocaleString("vi-VN", {
+                                                                day: "2-digit",
+                                                                month: "2-digit",
+                                                                hour: "2-digit",
+                                                                minute: "2-digit",
+                                                                second: "2-digit",
+                                                            })}
+                                                        </Text>
+                                                        <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                                                            {item.duration}s • {item.kind === "incident" ? "Sự kiện AI" : "Đoạn lưu trữ"}
+                                                        </Text>
+                                                    </View>
+                                                    <TouchableOpacity
+                                                        accessibilityRole="button"
+                                                        accessibilityLabel={`Tải xuống lưu trữ ${item.id}`}
+                                                        style={styles.iconButton}
+                                                        onPress={() => { void openArchiveRecording(item, true); }}
+                                                    >
+                                                        <Ionicons
+                                                            name="download-outline"
+                                                            size={22}
+                                                            color={colors.primary}
+                                                        />
+                                                    </TouchableOpacity>
+                                                </View>
+                                            ))}
+                                            {connection.recordings.files.length === 0 && archiveFiles.length === 0 && !loadingArchive && (
+                                                <View style={styles.downloadEmpty}>
+                                                    <Ionicons name="download-outline" size={60} color={colors.textMuted} />
+                                                    <Text style={[styles.sectionTitle, textStyle]}>Chưa có bản ghi để tải</Text>
+                                                    <Text style={{ color: colors.textSecondary, textAlign: "center" }}>Các bản ghi hoàn tất sẽ xuất hiện tại đây.</Text>
+                                                </View>
+                                            )}
                                         </View>
                                     )}
-                                </View>
-                            ) : sheet === "ai_care" ? (
-                                <CameraAiCareSettings
-                                    enabled={connection.fallDetection}
-                                    stats={connection.fallStats}
-                                    connected={!!connection.status?.connected}
-                                    overlay={connection.overlay}
-                                    onToggle={async () => {
-                                        await connection.toggleFallDetection();
-                                    }}
-                                    onToggleOverlay={connection.toggleOverlay}
-                                    onViewIncidents={() => {
-                                        openSheet("recordings");
-                                    }}
-                                />
-                            ) : (
-                                <CameraSettings
-                                    name={name}
-                                    room={effectiveRoom}
-                                    connected={!!connection.status?.connected}
-                                    privacy={connection.privacy}
-                                    motion={connection.motion}
-                                    onPrivacy={() => {
-                                        void connection.togglePrivacy();
-                                    }}
-                                    onReconnect={connection.refresh}
-                                    onMotion={() => {
-                                        void connection.toggleMotion();
-                                    }}
-                                    onConfigureSource={isOwnerOrAdmin ? () => {
-                                        setSheet(null);
-                                        setShowRtspConfigModal(true);
-                                    } : undefined}
-                                    onDeleteDevice={isOwnerOrAdmin ? handleDeleteCamera : undefined}
-                                />
-                            )}
-                        </ScrollView>
-                        </Animated.View>
+                                </ScrollView>
+                            </Animated.View>
+                        </View>
+                ) : (
+                    <View style={styles.overlay}>
+                        <TouchableOpacity
+                            style={StyleSheet.absoluteFill}
+                            activeOpacity={1}
+                            onPress={() => setSheet(null)}
+                        />
+                        <View style={[styles.sheet, cardStyle, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+                            <View style={styles.header}>
+                                <View style={{ width: 44 }} />
+                                <Text style={[styles.title, textStyle]}>
+                                    {sheet === "ai_care"
+                                        ? "Chăm sóc AI"
+                                        : "Cài đặt camera"}
+                                </Text>
+                                <TouchableOpacity
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Đóng"
+                                    style={styles.iconButton}
+                                    onPress={() => setSheet(null)}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                >
+                                    <Ionicons
+                                        name="close"
+                                        size={26}
+                                        color={colors.textPrimary}
+                                    />
+                                </TouchableOpacity>
+                            </View>
+                            <Animated.View style={{ flex: 1 }}>
+                                <ScrollView contentContainerStyle={styles.sheetContent}>
+                                    {sheet === "ai_care" ? (
+                                        <CameraAiCareSettings
+                                            enabled={connection.fallDetection}
+                                            stats={connection.fallStats}
+                                            connected={!!connection.status?.connected}
+                                            overlay={connection.overlay}
+                                            onToggle={async () => {
+                                                await connection.toggleFallDetection();
+                                            }}
+                                            onToggleOverlay={connection.toggleOverlay}
+                                            onViewIncidents={() => {
+                                                openSheet("recordings");
+                                            }}
+                                        />
+                                    ) : (
+                                        <CameraSettings
+                                            name={name}
+                                            room={effectiveRoom}
+                                            connected={!!connection.status?.connected}
+                                            privacy={connection.privacy}
+                                            motion={connection.motion}
+                                            onPrivacy={() => {
+                                                void connection.togglePrivacy();
+                                            }}
+                                            onReconnect={connection.refresh}
+                                            onMotion={() => {
+                                                void connection.toggleMotion();
+                                            }}
+                                            onConfigureSource={isOwnerOrAdmin ? () => {
+                                                setSheet(null);
+                                                setShowRtspConfigModal(true);
+                                            } : undefined}
+                                            onDeleteDevice={isOwnerOrAdmin ? handleDeleteCamera : undefined}
+                                        />
+                                    )}
+                                </ScrollView>
+                            </Animated.View>
+                        </View>
                     </View>
-                </SafeAreaView>
+                )}
             </Modal>
             {/* Modal Cấu hình nguồn camera RTSP theo ảnh mẫu */}
             <Modal
