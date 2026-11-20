@@ -24,6 +24,7 @@ class SmartCareBackgroundService : Service() {
 
     private var isRunning = false
     private var serverBaseUrl: String = "http://16.178.128.42:8000/api/v1"
+    private var authToken: String? = null
     private var workerThread: Thread? = null
     private var lastNotifiedIncidentId: String? = null
 
@@ -31,6 +32,11 @@ class SmartCareBackgroundService : Service() {
         const val SERVICE_CHANNEL_ID = "smartcare_service_monitor_channel"
         const val SERVICE_CHANNEL_NAME = "Dịch vụ bảo vệ người cao tuổi trong nền"
         const val SERVICE_NOTIFICATION_ID = 999
+        const val ALERT_CHANNEL_ID = "emergency_alerts_v5"
+        const val ALERT_CHANNEL_NAME = "Cảnh báo khẩn cấp SmartCare AI"
+        private const val PREFS_NAME = "smartcare_bg_prefs"
+        private const val KEY_AUTH_TOKEN = "auth_token"
+        private const val KEY_SERVER_URL = "server_url"
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -42,8 +48,24 @@ class SmartCareBackgroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val customUrl = intent?.getStringExtra("SERVER_URL")
+        val token = intent?.getStringExtra("AUTH_TOKEN")
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
         if (!customUrl.isNullOrBlank()) {
             serverBaseUrl = customUrl.trim().removeSuffix("/")
+            prefs.edit().putString(KEY_SERVER_URL, serverBaseUrl).apply()
+        } else {
+            val savedUrl = prefs.getString(KEY_SERVER_URL, null)
+            if (!savedUrl.isNullOrBlank()) {
+                serverBaseUrl = savedUrl
+            }
+        }
+
+        if (!token.isNullOrBlank()) {
+            authToken = token
+            prefs.edit().putString(KEY_AUTH_TOKEN, token).apply()
+        } else if (authToken.isNullOrBlank()) {
+            authToken = prefs.getString(KEY_AUTH_TOKEN, null)
         }
 
         // Chạy dưới dạng Foreground Service để duy trì trong nền ngay cả khi thoát app
@@ -153,6 +175,12 @@ class SmartCareBackgroundService : Service() {
     }
 
     private fun pollLatestIncidents() {
+        val token = authToken ?: getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_AUTH_TOKEN, null)
+        // Không thăm dò nếu chưa đăng nhập để chống báo động chéo dữ liệu đa gia đình
+        if (token.isNullOrBlank()) {
+            return
+        }
+
         val endpoint = if (serverBaseUrl.endsWith("/api/v1")) {
             "$serverBaseUrl/incidents?limit=3"
         } else {
@@ -167,6 +195,13 @@ class SmartCareBackgroundService : Service() {
                 connectTimeout = 4000
                 readTimeout = 4000
                 setRequestProperty("Accept", "application/json")
+                setRequestProperty("Authorization", "Bearer $token")
+            }
+
+            if (conn.responseCode == 401) {
+                authToken = null
+                getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().remove(KEY_AUTH_TOKEN).apply()
+                return
             }
 
             if (conn.responseCode == 200) {

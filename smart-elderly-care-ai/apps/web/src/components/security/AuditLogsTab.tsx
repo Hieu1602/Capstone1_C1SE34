@@ -1,7 +1,7 @@
 import React from 'react';
 import { Filter, Search } from 'lucide-react';
 import { SecurityAuditLog } from '../../types';
-import { isDoctorAuditLog, SEVERITY_BADGE_STYLES } from './securityConfig';
+import { isDoctorAuditLog, isFailedAuditLog, isRevokeAuditLog, SEVERITY_BADGE_STYLES } from './securityConfig';
 
 interface AuditLogsTabProps {
   auditLogs: SecurityAuditLog[];
@@ -11,8 +11,8 @@ interface AuditLogsTabProps {
   onSearchAuditChange: (val: string) => void;
   roleFilter: 'ALL' | 'doctor' | 'admin' | 'user';
   onRoleFilterChange: (val: 'ALL' | 'doctor' | 'admin' | 'user') => void;
-  actionFilter: 'ALL' | 'LOGIN' | 'LOGOUT';
-  onActionFilterChange: (val: 'ALL' | 'LOGIN' | 'LOGOUT') => void;
+  actionFilter: 'ALL' | 'LOGIN' | 'LOGOUT' | 'FAILED' | 'REVOKE';
+  onActionFilterChange: (val: 'ALL' | 'LOGIN' | 'LOGOUT' | 'FAILED' | 'REVOKE') => void;
   severityFilter: string;
   onSeverityFilterChange: (val: string) => void;
 }
@@ -63,7 +63,9 @@ export const AuditLogsTab: React.FC<AuditLogsTabProps> = ({
             className="text-xs py-1.5 px-3 rounded-xl border border-sky-200 dark:border-[#454A53] bg-white dark:bg-[#202329] text-slate-900 dark:text-[#F5F6F8]"
           >
             <option value="ALL">Mọi hành động</option>
-            <option value="LOGIN">Đăng nhập</option>
+            <option value="LOGIN">Đăng nhập thành công</option>
+            <option value="FAILED">⚠️ Đăng nhập thất bại / Khóa</option>
+            <option value="REVOKE">🔄 Thu hồi (Revoke)</option>
             <option value="LOGOUT">Đăng xuất</option>
           </select>
 
@@ -123,6 +125,28 @@ export const AuditLogsTab: React.FC<AuditLogsTabProps> = ({
         </button>
         <button
           type="button"
+          onClick={() => onActionFilterChange(actionFilter === 'FAILED' ? 'ALL' : 'FAILED')}
+          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+            actionFilter === 'FAILED'
+              ? 'bg-rose-600 text-white shadow-xs'
+              : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 hover:bg-rose-100'
+          }`}
+        >
+          <span>⚠️ Thất bại ({auditLogs.filter(isFailedAuditLog).length})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => onActionFilterChange(actionFilter === 'REVOKE' ? 'ALL' : 'REVOKE')}
+          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
+            actionFilter === 'REVOKE'
+              ? 'bg-amber-600 text-white shadow-xs'
+              : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100'
+          }`}
+        >
+          <span>🔄 Thu hồi ({auditLogs.filter(isRevokeAuditLog).length})</span>
+        </button>
+        <button
+          type="button"
           onClick={() => onActionFilterChange(actionFilter === 'LOGOUT' ? 'ALL' : 'LOGOUT')}
           className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
             actionFilter === 'LOGOUT'
@@ -139,7 +163,9 @@ export const AuditLogsTab: React.FC<AuditLogsTabProps> = ({
           filteredLogs.map((log, idx) => {
             const isDoctorLog = isDoctorAuditLog(log);
             const isLogout = log.event.toLowerCase().includes('đăng xuất');
-            const isLogin = log.event.toLowerCase().includes('đăng nhập');
+            const isFailed = isFailedAuditLog(log);
+            const isRevoke = isRevokeAuditLog(log);
+            const isLogin = log.event.toLowerCase().includes('đăng nhập') && !isFailed;
             const severityStyle = SEVERITY_BADGE_STYLES[log.severity] || SEVERITY_BADGE_STYLES.low;
 
             return (
@@ -160,6 +186,16 @@ export const AuditLogsTab: React.FC<AuditLogsTabProps> = ({
                     {isLogout && (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
                         Đăng xuất
+                      </span>
+                    )}
+                    {isRevoke && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                        🔄 Thu hồi
+                      </span>
+                    )}
+                    {isFailed && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                        ⚠️ Thất bại
                       </span>
                     )}
                     {isLogin && !isLogout && (

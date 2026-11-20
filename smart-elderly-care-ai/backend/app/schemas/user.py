@@ -64,6 +64,9 @@ class UserBase(BaseModel):
     def validate_identifier(self):
         normalized_phone = self.phone.strip() if self.phone else ""
         if not normalized_phone:
+            if getattr(self, "role", None) == "elderly":
+                self.phone = "Chưa có SĐT"
+                return self
             raise ValueError("Số điện thoại không được để trống.")
         self.phone = normalized_phone
         return self

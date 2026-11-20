@@ -112,9 +112,15 @@ class NotificationService {
   }
 
   startBackgroundMonitor(serverUrl: string): void {
-    if (Platform.OS === 'android' && NativeNotificationModule?.startBackgroundMonitor) {
+    if (Platform.OS === 'android' && NativeNotificationModule) {
       try {
-        NativeNotificationModule.startBackgroundMonitor(serverUrl);
+        const { useAuthStore } = require('../store/useAuthStore');
+        const token = useAuthStore.getState().accessToken || '';
+        if (NativeNotificationModule.startBackgroundMonitorWithToken) {
+          NativeNotificationModule.startBackgroundMonitorWithToken(serverUrl, token);
+        } else if (NativeNotificationModule.startBackgroundMonitor) {
+          NativeNotificationModule.startBackgroundMonitor(serverUrl);
+        }
         console.log('[NotificationService] Đã kích hoạt Android Foreground Service tới server:', serverUrl);
       } catch (err) {
         console.warn('[NotificationService] Lỗi kích hoạt Background Service:', err);
