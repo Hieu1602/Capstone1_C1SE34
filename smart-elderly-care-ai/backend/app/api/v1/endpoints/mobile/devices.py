@@ -8,13 +8,14 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.crud.crud_device import crud_device
 from app.crud.crud_house import crud_house
-from app.models.device import Device
+from app.models.device import Device, DeviceType
 from app.models.user import User
 from app.schemas.device import (
     DeviceConfigOut,
@@ -103,6 +104,17 @@ async def register_device(
                 detail="Bạn không có quyền thêm thiết bị vào căn nhà này.",
             )
 
+    # Đảm bảo quy tắc 1-1: Mỗi người cao tuổi chỉ gán tối đa 1 đồng hồ thông minh
+    if device_in.elderly_id and device_in.device_type == DeviceType.SMARTBAND:
+        await db.execute(
+            update(Device)
+            .where(
+                Device.device_type == DeviceType.SMARTBAND,
+                Device.elderly_id == device_in.elderly_id,
+            )
+            .values(elderly_id=None)
+        )
+
     return await crud_device.create(db, owner_id=house.owner_id, obj_in=device_in)
 
 
@@ -126,6 +138,19 @@ async def update_device(
 ):
     """Cập nhật thông tin cơ bản của thiết bị (tên, phân vùng nhóm phòng, trạng thái)."""
     device = await _get_device_or_404(db, device_id)
+
+    # Đảm bảo quy tắc 1-1: Mỗi người cao tuổi chỉ gán tối đa 1 đồng hồ thông minh
+    if obj_in.elderly_id and device.device_type == DeviceType.SMARTBAND:
+        await db.execute(
+            update(Device)
+            .where(
+                Device.device_type == DeviceType.SMARTBAND,
+                Device.elderly_id == obj_in.elderly_id,
+                Device.id != device.id,
+            )
+            .values(elderly_id=None)
+        )
+
     return await crud_device.update(db, device=device, obj_in=obj_in)
 
 

@@ -254,26 +254,34 @@ export const buildTelemetryData = (
   const now = new Date();
 
   if (timeRange === 'live') {
+    // Neo thời gian: Luôn luôn bám sát theo mốc thời gian thực tế hiện tại (now)
+    const anchorDate = now;
+    const windowMinutes = 20;
+    const windowStartMs = anchorDate.getTime() - windowMinutes * 60 * 1000;
+    const windowEndMs = anchorDate.getTime() + 60 * 1000;
+
     const minuteMap = new Map<string, BucketAccumulator>();
 
     for (const v of rawVitals) {
-      if (!v.time) continue;
-      const vDate = new Date(v.time);
-      const timeKey = `${String(vDate.getHours()).padStart(2, '0')}:${String(vDate.getMinutes()).padStart(2, '0')}`;
+      const rawTime = v.time || v.recorded_at;
+      if (!rawTime) continue;
+      const vDate = new Date(rawTime);
+      const vMs = vDate.getTime();
+      // Chỉ nhận bản ghi thực sự nằm trong cửa sổ 20 phút của thời điểm hiện tại
+      if (isNaN(vMs) || vMs < windowStartMs || vMs > windowEndMs) continue;
+
+      const timeKey = `${vDate.getFullYear()}-${String(vDate.getMonth() + 1).padStart(2, '0')}-${String(vDate.getDate()).padStart(2, '0')} ${String(vDate.getHours()).padStart(2, '0')}:${String(vDate.getMinutes()).padStart(2, '0')}`;
       const cur = minuteMap.get(timeKey) || createBucket();
       accumulateVital(cur, v, 30);
       minuteMap.set(timeKey, cur);
     }
 
-    // Neo thời gian: Luôn luôn bám sát theo mốc thời gian thực tế hiện tại (now)
-    const anchorDate = now;
-
     const points: TelemetryPoint[] = [];
-    const windowMinutes = 20;
     for (let i = windowMinutes - 1; i >= 0; i--) {
       const d = new Date(anchorDate.getTime() - i * 60 * 1000);
+      const fullMinuteKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
       const timeLabel = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-      const rec = minuteMap.get(timeLabel);
+      const rec = minuteMap.get(fullMinuteKey);
 
       const hasHr = Boolean(rec && rec.hrCnt > 0);
       const hasSpo2 = Boolean(rec && rec.spo2Cnt > 0);

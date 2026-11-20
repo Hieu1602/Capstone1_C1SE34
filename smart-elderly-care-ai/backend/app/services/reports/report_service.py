@@ -158,28 +158,22 @@ class ReportService:
         house_ids: set[UUID] = set()
         is_admin = False
 
-        if device:
-            target_device_ids.add(device.id)
-            if device.house_id:
-                house_ids.add(device.house_id)
-
-        if elderly:
-            if "devices" in elderly.__dict__ and elderly.__dict__["devices"]:
-                for d in elderly.__dict__["devices"]:
-                    target_device_ids.add(d.id)
-                    if d.house_id:
-                        house_ids.add(d.house_id)
-            else:
-                elderly_dev_res = await db.execute(
-                    select(Device.id, Device.house_id).where(Device.elderly_id == elderly.id)
-                )
-                for d_id, h_id in elderly_dev_res.fetchall():
-                    if d_id:
-                        target_device_ids.add(d_id)
-                    if h_id:
-                        house_ids.add(h_id)
-
-        if user_id:
+        if device or elderly:
+            # Đa người cao tuổi: Nếu có chỉ định người cao tuổi hoặc thiết bị cụ thể, CHỈ lấy sự cố của người đó
+            if device:
+                target_device_ids.add(device.id)
+            if elderly:
+                if "devices" in elderly.__dict__ and elderly.__dict__["devices"]:
+                    for d in elderly.__dict__["devices"]:
+                        target_device_ids.add(d.id)
+                else:
+                    elderly_dev_res = await db.execute(
+                        select(Device.id).where(Device.elderly_id == elderly.id)
+                    )
+                    for d_id in elderly_dev_res.scalars().all():
+                        if d_id:
+                            target_device_ids.add(d_id)
+        elif user_id:
             user_obj = await db.get(User, user_id)
             if user_obj and user_obj.role == "admin":
                 is_admin = True
@@ -205,13 +199,13 @@ class ReportService:
                     if row[0]:
                         target_device_ids.add(row[0])
 
-        if house_ids:
-            house_dev_res = await db.execute(
-                select(Device.id).where(Device.house_id.in_(list(house_ids)))
-            )
-            for row in house_dev_res.fetchall():
-                if row[0]:
-                    target_device_ids.add(row[0])
+            if house_ids:
+                house_dev_res = await db.execute(
+                    select(Device.id).where(Device.house_id.in_(list(house_ids)))
+                )
+                for row in house_dev_res.fetchall():
+                    if row[0]:
+                        target_device_ids.add(row[0])
 
         if not is_admin and not target_device_ids:
             return []
@@ -289,6 +283,15 @@ class ReportService:
                 "average_row": "Average",
                 "normal": "Normal",
                 "stable": "Stable",
+                "elderly_profile": "Elderly Profile",
+                "patient_name": "Senior Name",
+                "age": "Age",
+                "gender": "Gender",
+                "blood_type": "Blood Type",
+                "period": "Reporting Period",
+                "days_unit": "days",
+                "no_vitals_recorded": "No vital signs recorded in this reporting period.",
+                "no_incidents_recorded": "No alert events recorded in this reporting period (System normal).",
             }
         return {
             "title": "BÁO CÁO THEO DÕI SỨC KHỎE NGƯỜI CAO TUỔI",
@@ -327,6 +330,15 @@ class ReportService:
             "average_row": "Trung bình",
             "normal": "Bình thường",
             "stable": "Ổn định",
+            "elderly_profile": "Hồ sơ người cao tuổi",
+            "patient_name": "Người cao tuổi",
+            "age": "Tuổi",
+            "gender": "Giới tính",
+            "blood_type": "Nhóm máu",
+            "period": "Kỳ báo cáo",
+            "days_unit": "ngày",
+            "no_vitals_recorded": "Chưa ghi nhận dữ liệu đo sinh hiệu trong kỳ báo cáo này.",
+            "no_incidents_recorded": "Không có sự kiện cảnh báo bất thường nào trong kỳ báo cáo này (Hệ thống an toàn).",
         }
 
     @staticmethod
@@ -392,8 +404,8 @@ class ReportService:
                 if not device and elderly.devices:
                     device = elderly.devices[0]
 
-        # 3. Tra cứu theo user_id đang đăng nhập
-        if not device and user_id:
+        # 3. Tra cứu theo user_id đang đăng nhập (chỉ khi không chỉ định cụ thể người cao tuổi)
+        if not device and not patient_id and user_id:
             res_user_band = await db.execute(
                 select(Device)
                 .options(selectinload(Device.elderly))
@@ -438,8 +450,9 @@ class ReportService:
             if device and device.elderly:
                 elderly = device.elderly
 
-        # 4. Fallback: Nếu tài khoản chưa gán trực tiếp thiết bị, tự động liên kết với Smartband sẵn có của hệ thống
-        if not device:
+        # 4. Fallback: Nếu tài khoản chưa gán trực tiếp thiết bị và không chọn cụ thể người cao tuổi,
+        # tự động liên kết với Smartband sẵn có của hệ thống
+        if not device and not patient_id:
             res_default_band = await db.execute(
                 select(Device)
                 .options(selectinload(Device.elderly))
@@ -745,7 +758,9 @@ class ReportService:
         device_id: Union[UUID, str],
         vitals: List[VitalSign],
         incidents: List[Incident],
+        elderly: Optional[ElderlyProfile] = None,
         language: str = "vi",
+        period_days: int = 7,
     ) -> bytes:
         """Tạo PDF report tóm tắt các chỉ số sinh hiệu và sự kiện cảnh báo (bao gồm Cảnh báo nguy kịch)."""
         font_name, bold_font_name = _setup_pdf_fonts()
@@ -828,13 +843,36 @@ class ReportService:
             eval_desc = f"Nhịp tim trung bình ({avg_hr_str}) và các chỉ số SpO2 ({avg_spo2_str}), Nhiệt độ ({avg_temp_str}) đều nằm trong ngưỡng an toàn chuẩn y tế." if language != "en" else f"Average heart rate ({avg_hr_str}), SpO2 ({avg_spo2_str}) and Temperature ({avg_temp_str}) are within safe clinical ranges."
             eval_color_hex = "#059669"
 
-        # Tiêu đề
+        # Tiêu đề & Thông tin đối tượng theo dõi
         title = Paragraph(f"<b>{labels['title']}</b>", styles["Title"])
-        subtitle = Paragraph(
-            f"{labels['hub_id']}: {device_id} | {labels['exported']}: {datetime.now().strftime('%d/%m/%Y %H:%M')}",
-            styles["Normal"],
+        elements.append(title)
+
+        if elderly:
+            age_val = (datetime.now().year - elderly.birth_year) if getattr(elderly, "birth_year", None) else None
+            age_unit = "tuổi" if language != "en" else "years old"
+            age_str = f"{age_val} {age_unit}" if age_val else ""
+            gender_raw = str(getattr(elderly, "gender", "") or "").upper()
+            gender_str = "Nam" if gender_raw in ("MALE", "NAM") else ("Nữ" if gender_raw in ("FEMALE", "NU") else gender_raw)
+            blood_str = str(getattr(elderly, "blood_type", "") or "")
+
+            elderly_parts = [f"<b>{labels['patient_name']}:</b> <font color='#0F766E'><b>{elderly.full_name}</b></font>"]
+            if age_str:
+                elderly_parts.append(f"<b>{labels['age']}:</b> {age_str}")
+            if gender_str:
+                elderly_parts.append(f"<b>{labels['gender']}:</b> {gender_str}")
+            if blood_str:
+                elderly_parts.append(f"<b>{labels['blood_type']}:</b> {blood_str}")
+
+            elderly_line = " &nbsp;&nbsp;|&nbsp;&nbsp; ".join(elderly_parts)
+            elements.extend([Spacer(1, 4), Paragraph(elderly_line, styles["Normal"])])
+
+        subtitle_str = (
+            f"<b>{labels['hub_id']}:</b> {device_id} &nbsp;&nbsp;|&nbsp;&nbsp; "
+            f"<b>{labels['period']}:</b> {period_days} {labels['days_unit']} &nbsp;&nbsp;|&nbsp;&nbsp; "
+            f"<b>{labels['exported']}:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}"
         )
-        elements.extend([title, subtitle, Spacer(1, 14)])
+        subtitle = Paragraph(subtitle_str, styles["Normal"])
+        elements.extend([Spacer(1, 4), subtitle, Spacer(1, 14)])
 
         # Thống kê tổng quan & Đánh giá y khoa (bao gồm Nhịp tim trung bình và Đánh giá)
         critical_detail_str = f" ({', '.join(critical_labels)})" if critical_labels else ""
@@ -898,8 +936,8 @@ class ReportService:
         )
 
         # Bảng tóm tắt sinh hiệu gần nhất
+        elements.append(Paragraph(f"<b>{labels['recent_vitals']}</b>", styles["Heading2"]))
         if vitals:
-            elements.append(Paragraph(f"<b>{labels['recent_vitals']}</b>", styles["Heading2"]))
             table_data = [
                 [
                     Paragraph(f"<b>{labels['time']}</b>", th_blue_style),
@@ -960,10 +998,13 @@ class ReportService:
                 ("LINEABOVE", (0, -1), (-1, -1), 1.2, colors.HexColor("#2B6CB0")),
             ]))
             elements.extend([t, Spacer(1, 14)])
+        else:
+            no_vital_p = Paragraph(f"<i>{labels['no_vitals_recorded']}</i>", styles["Normal"])
+            elements.extend([no_vital_p, Spacer(1, 14)])
 
         # Bảng sự kiện cảnh báo
+        elements.append(Paragraph(f"<b>{labels['incident_history']}</b>", styles["Heading2"]))
         if incidents:
-            elements.append(Paragraph(f"<b>{labels['incident_history']}</b>", styles["Heading2"]))
             inc_data = [
                 [
                     Paragraph(f"<b>{labels['time']}</b>", th_red_style),
@@ -1018,6 +1059,9 @@ class ReportService:
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
             ]))
             elements.append(it)
+        else:
+            no_inc_p = Paragraph(f"<i><font color='#059669'>✓ {labels['no_incidents_recorded']}</font></i>", styles["Normal"])
+            elements.extend([no_inc_p, Spacer(1, 14)])
 
         doc.build(elements)
         buffer.seek(0)
@@ -1028,7 +1072,9 @@ class ReportService:
         device_id: Union[UUID, str],
         vitals: List[VitalSign],
         incidents: List[Incident],
+        elderly: Optional[ElderlyProfile] = None,
         language: str = "vi",
+        period_days: int = 30,
     ) -> bytes:
         """Tạo bảng tính Excel chứa toàn bộ raw data sinh hiệu, incidents và bảng tổng hợp cảnh báo nguy kịch."""
         labels = ReportService._labels(language)

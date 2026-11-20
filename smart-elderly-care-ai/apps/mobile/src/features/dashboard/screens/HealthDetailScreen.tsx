@@ -230,16 +230,11 @@ export default function HealthDetailScreen({ navigation, route }: any) {
         }
       }
 
-      // Nếu có đồng hồ nhưng chưa tải được, thử fallback qua API bệnh nhân hoặc BLE_BAND_001
+      // Nếu có đồng hồ nhưng chưa tải được, thử tải qua API bệnh nhân
       if (vitals.length === 0 && selectedPatientId && effectiveDevId) {
         const fbRes = await patientApi.getVitals(selectedPatientId, dateStr).catch(() => ({ data: [] }));
         if (fbRes.data && Array.isArray(fbRes.data) && fbRes.data.length > 0) {
           vitals = fbRes.data;
-        } else if (effectiveDevId !== 'BLE_BAND_001') {
-          const fbBand = await vitalsApi.getHistory('BLE_BAND_001', 300, dateStr).catch(() => ({ data: [] }));
-          if (fbBand.data && Array.isArray(fbBand.data) && fbBand.data.length > 0) {
-            vitals = fbBand.data;
-          }
         }
       }
 
@@ -322,10 +317,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
       if (res.data && Array.isArray(res.data) && res.data.length > 0) {
         setRangeVitals(res.data);
       } else {
-        let fb = await vitalsApi.getHistory(devId, days * 20).catch(() => ({ data: [] }));
-        if ((!fb.data || !Array.isArray(fb.data) || fb.data.length === 0) && devId !== 'BLE_BAND_001') {
-          fb = await vitalsApi.getHistory('BLE_BAND_001', days * 20).catch(() => ({ data: [] }));
-        }
+        const fb = await vitalsApi.getHistory(devId, days * 20).catch(() => ({ data: [] }));
         setRangeVitals(fb.data && Array.isArray(fb.data) ? fb.data : []);
       }
     } catch (e) {
@@ -368,12 +360,21 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   }, [metric, initialTab]);
 
   const acousticStatus = currentVitals.acoustic_status ?? 'Bình thường';
+  const isCurrentMatching = Boolean(
+    assignedBand &&
+    (currentVitals as any)?.device_id &&
+    (
+      String((currentVitals as any)?.device_id).toLowerCase() === String(assignedBand.deviceId || '').toLowerCase() ||
+      String((currentVitals as any)?.device_id).toLowerCase() === String(assignedBand.id || '').toLowerCase()
+    ) &&
+    currentVitals.bracelet_connected !== false
+  );
   const batteryDisplay = assignedBand
-    ? (currentVitals.bracelet_battery !== null && currentVitals.bracelet_battery !== undefined
+    ? (isCurrentMatching && currentVitals.bracelet_battery !== null && currentVitals.bracelet_battery !== undefined
         ? `${currentVitals.bracelet_battery}%`
-        : 'Đang kết nối')
+        : (assignedBand.isOnline ? `${assignedBand.batteryLevel || 85}%` : 'Ngoại tuyến'))
     : 'Chưa gán vòng';
-  const isFallDetected = Boolean(currentVitals.fall_detected);
+  const isFallDetected = Boolean(isCurrentMatching && currentVitals.fall_detected);
 
   const handleRefresh = async () => {
     await fetchVitals();
@@ -442,6 +443,11 @@ export default function HealthDetailScreen({ navigation, route }: any) {
       if (!assignedBand) return false; // Cụ chưa gán vòng -> không gán sinh hiệu real-time
       if (!currentVitals?.heart_rate) return false;
       if (currentVitals.bracelet_connected === false) return false;
+      const curDev = String((currentVitals as any)?.device_id || '').toLowerCase();
+      const assDev = String(assignedBand.deviceId || assignedBand.device_id || assignedBand.id || '').toLowerCase();
+      if (!curDev || !assDev || (curDev !== assDev && !curDev.includes(assDev) && !assDev.includes(curDev))) {
+        return false; // Vòng tay của cụ khác đang phát, không phải của cụ này!
+      }
       const vTime = (currentVitals as any)?.time || (currentVitals as any)?.recorded_at || currentVitals?.timestamp;
       if (!vTime) return false;
       const timeMs = typeof vTime === 'number' ? vTime : new Date(vTime).getTime();

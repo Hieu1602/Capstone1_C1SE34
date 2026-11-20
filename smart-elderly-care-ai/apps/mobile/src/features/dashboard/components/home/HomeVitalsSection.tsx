@@ -138,7 +138,38 @@ export const HomeVitalsSection: React.FC<HomeVitalsSectionProps> = ({
       };
     }
 
-    // Cụ này ĐƯỢC gán đồng hồ -> nhận luồng sinh hiệu hiện tại
+    // Kiểm tra chính xác: currentVitals có thực sự thuộc về đồng hồ của cụ này không?
+    const curDevId = String((currentVitals as any)?.device_id || '').toLowerCase();
+    const devSerial = String(patientDevice.deviceId || patientDevice.device_id || '').toLowerCase();
+    const devUuid = String(patientDevice.id || '').toLowerCase();
+
+    const isMatchingDevice = Boolean(
+      curDevId
+        ? (
+            (devSerial && (curDevId === devSerial || curDevId.includes(devSerial) || devSerial.includes(curDevId))) ||
+            (devUuid && (curDevId === devUuid || curDevId.includes(devUuid) || devUuid.includes(curDevId)))
+          )
+        : (idx === 0)
+    );
+
+    // Nếu đồng hồ của cụ này chưa bật hoặc không khớp với thiết bị đang phát dữ liệu:
+    if (!isMatchingDevice || currentVitals?.bracelet_connected === false) {
+      return {
+        patientDevice,
+        vitals: {
+          heart_rate: null,
+          spo2: null,
+          skin_temp_max: null,
+          fall_detected: false,
+          timestamp: null,
+          bracelet_connected: false,
+          bracelet_battery: null,
+        },
+        battery: null,
+      };
+    }
+
+    // Cụ này ĐƯỢC gán đồng hồ VÀ đúng là đồng hồ đang phát dữ liệu -> nhận luồng sinh hiệu hiện tại
     return {
       patientDevice,
       vitals: currentVitals,

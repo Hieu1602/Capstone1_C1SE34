@@ -520,6 +520,7 @@ class AlertsWebSocket {
     ) {
       const d = event.data || (event as any);
       store.setVitals({
+        device_id: d.device_id || (event as any).device_id,
         heart_rate: d.heart_rate,
         spo2: d.spo2,
         skin_temp_max: d.body_temp ?? d.skin_temp_max,
