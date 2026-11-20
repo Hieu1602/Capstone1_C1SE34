@@ -62,23 +62,44 @@ export const AlertsEmptyState: React.FC<AlertsEmptyStateProps> = ({
           </TouchableOpacity>
         </>
       ) : (
-        <>
-          <View style={[styles.emptyIconCircle, filterType === 'MEDICATION' && { backgroundColor: '#EFF6FF' }]}>
-            <Ionicons
-              name={filterType === 'MEDICATION' ? 'medical' : 'shield-checkmark-outline'}
-              size={36}
-              color={filterType === 'MEDICATION' ? '#0284C7' : '#10B981'}
-            />
-          </View>
-          <Text style={[styles.emptyTitle, isDarkMode && { color: colors.textPrimary }]}>
-            {filterType === 'MEDICATION' ? 'Không có lịch nhắc uống thuốc nào' : 'Không có cảnh báo bất thường nào'}
-          </Text>
-          <Text style={[styles.emptySub, isDarkMode && { color: colors.textSecondary }]}>
-            {filterType === 'MEDICATION'
-              ? 'Các cữ thuốc sẽ hiển thị theo đơn thuốc của bác sĩ và kế hoạch điều trị trong hồ sơ bệnh án.'
-              : 'Hệ thống AI đang giám sát an toàn 24/7 và mọi chỉ số sức khoẻ đều trong ngưỡng chuẩn.'}
-          </Text>
-        </>
+        (() => {
+          const EMPTY_STATE_CONFIG: Record<string, { icon: 'calendar-outline' | 'medical' | 'shield-checkmark-outline'; color: string; bg: string; title: string; subtitle: string }> = {
+            APPOINTMENT: {
+              icon: 'calendar-outline',
+              color: '#0284C7',
+              bg: '#EFF6FF',
+              title: 'Chưa có thông báo lịch khám nào',
+              subtitle: 'Các lịch hẹn tái khám và nhắc lịch từ bác sĩ sẽ hiển thị tại đây.',
+            },
+            MEDICATION: {
+              icon: 'medical',
+              color: '#0284C7',
+              bg: '#EFF6FF',
+              title: 'Không có nhắc nhở uống thuốc nào',
+              subtitle: 'Lịch nhắc uống thuốc hằng ngày của người cao tuổi đang được đồng bộ.',
+            },
+          };
+          const cfg = EMPTY_STATE_CONFIG[filterType] ?? {
+            icon: 'shield-checkmark-outline' as const,
+            color: '#10B981',
+            bg: '#ECFDF5',
+            title: 'Không có cảnh báo bất thường nào',
+            subtitle: 'Hệ thống AI đang giám sát an toàn 24/7 và mọi chỉ số sức khỏe đều trong ngưỡng chuẩn.',
+          };
+          return (
+            <>
+              <View style={[styles.emptyIconCircle, { backgroundColor: cfg.bg }]}>
+                <Ionicons name={cfg.icon} size={36} color={cfg.color} />
+              </View>
+              <Text style={[styles.emptyTitle, isDarkMode && { color: colors.textPrimary }]}>
+                {cfg.title}
+              </Text>
+              <Text style={[styles.emptySub, isDarkMode && { color: colors.textSecondary }]}>
+                {cfg.subtitle}
+              </Text>
+            </>
+          );
+        })()
       )}
     </View>
   );

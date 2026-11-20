@@ -17,31 +17,36 @@ export interface NotificationInboxItem extends UnifiedNotification {
   sortTimestamp: number;
 }
 
-const ADMIN_BADGE_MAP: Record<string, { label: string; color: string }> = {
+export const ADMIN_BADGE_MAP: Record<string, { label: string; color: string; bg: string }> = {
   system_maintenance: {
     label: 'Bảo trì hệ thống',
     color: 'text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300',
+    bg: 'bg-amber-50',
   },
   emergency: {
     label: 'Khẩn cấp Admin',
     color: 'text-rose-700 bg-rose-50 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300',
+    bg: 'bg-rose-50',
   },
   feature_update: {
     label: 'Cập nhật tính năng',
     color: 'text-blue-700 bg-blue-50 border-blue-200 dark:bg-blue-900/50 dark:text-blue-300',
+    bg: 'bg-blue-50',
   },
   health_tip: {
     label: 'Chỉ dẫn y tế',
     color: 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300',
+    bg: 'bg-emerald-50',
   },
 };
 
-const DEFAULT_ADMIN_BADGE = {
+export const DEFAULT_ADMIN_BADGE = {
   label: 'Thông báo Admin',
   color: 'text-sky-700 bg-sky-50 border-sky-200 dark:bg-sky-900/50 dark:text-sky-300',
+  bg: 'bg-sky-50',
 };
 
-const DEVICE_OP_KEYWORDS = [
+export const DEVICE_OP_KEYWORDS = [
   'pin',
   'sạc',
   'mất kết nối',

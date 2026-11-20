@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { formatGenderVN } from '../../../utils/formatters';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
 import { useTheme } from '../../../store/useThemeStore';
@@ -73,7 +74,7 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
               elderly_id: String(record.patient_id || 1),
               full_name: record.name,
               age: record.age || 75,
-              gender: record.gender || 'Nam',
+              gender: formatGenderVN(record.gender, 'Nam'),
             },
           ];
         } else {
@@ -100,7 +101,7 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
           elderly_id: '1',
           full_name: patientRecord?.name || 'Cụ Nguyễn Văn An',
           age: patientRecord?.age || 78,
-          gender: patientRecord?.gender || 'Nam',
+          gender: formatGenderVN(patientRecord?.gender, 'Nam'),
         },
       ]);
     } finally {
@@ -396,7 +397,7 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
                           {elderly.full_name || elderly.name || 'Người cao tuổi'}
                         </Text>
                         <Text style={[styles.elderlyMeta, isDarkMode && { color: colors.textSecondary }]}>
-                          {elderly.age ? `${elderly.age} tuổi` : 'Cao tuổi'} • {elderly.gender || 'Nam'}
+                          {elderly.age ? `${elderly.age} tuổi` : 'Cao tuổi'} • {formatGenderVN(elderly.gender, 'Nam')}
                         </Text>
                       </View>
                       <View style={styles.radioBox}>

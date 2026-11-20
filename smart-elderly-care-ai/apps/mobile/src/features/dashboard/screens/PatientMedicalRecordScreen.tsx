@@ -13,6 +13,7 @@ import { LocalizedAlert as Alert, LocalizedText as Text } from '../../../i18n/Lo
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { formatGenderVN } from '../../../utils/formatters';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../../store/useThemeStore';
 import { Colors } from '../../../theme/colors';
@@ -22,6 +23,8 @@ import { BASE_URL, patientApi, vitalsApi } from '../../../services/api';
 import { alertsWS } from '../../../services/websocket';
 import { resolveAvatarUrl } from '../../auth/hooks/useProfileManager';
 import { handleHeaderBack } from '../../../navigation/navigationHelpers';
+import { HealthDatePickerModal } from '../components/HealthDatePickerModal';
+import { BirthYearPickerModal } from '../components/BirthYearPickerModal';
 
 const getDaysAgoStr = (days = 0) => {
   const d = new Date(); d.setDate(d.getDate() - days);
@@ -53,7 +56,7 @@ const calculateAgeFromYear = (yearStr: string) => {
 };
 
 export default function PatientMedicalRecordScreen({ navigation, route }: any) {
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, colors } = useTheme();
   const {
     fetchPatientRecord,
     updatePatientRecord,
@@ -66,7 +69,8 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
     createPatient,
     deletePatient,
   } = useVitalStore();
-  const { userRole, role, permissions, viewRole } = useAuthStore();
+  const { userRole, role, permissions, viewRole, userPhone, phone_number } = useAuthStore();
+  const ownerPhone = (userPhone || phone_number || '').trim();
   const canEdit = Boolean(
     userRole === 'admin' ||
     role === 'admin' ||
@@ -80,7 +84,7 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
   const patientName = patientRecord?.name?.trim() || '--';
   const birthYear = patientRecord?.birth_year ? String(patientRecord.birth_year).trim() : '--';
   const age = patientRecord?.age && Number(patientRecord.age) > 0 ? String(patientRecord.age) : birthYear !== '--' && calculateAgeFromYear(birthYear) > 0 ? String(calculateAgeFromYear(birthYear)) : '--';
-  const gender = patientRecord?.gender?.trim() || '--', bloodType = patientRecord?.blood_type?.trim() || '--';
+  const gender = formatGenderVN(patientRecord?.gender, '--'), bloodType = patientRecord?.blood_type?.trim() || '--';
   const height = patientRecord?.height_cm && Number(patientRecord.height_cm) > 0 ? String(patientRecord.height_cm) : '--';
   const weight = patientRecord?.weight_kg && Number(patientRecord.weight_kg) > 0 ? String(patientRecord.weight_kg) : '--';
   const cardBMI = calculateBMIInfo(height, weight), avatarUrl = patientRecord?.avatar_url || null;
@@ -103,21 +107,28 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
   const doctorAvatar = patientRecord?.doctor_avatar_url ? resolveAvatarUrl(patientRecord.doctor_avatar_url) : null;
 
   const [selectedDate, setSelectedDate] = useState(() => getDaysAgoStr(0));
+  const [isLogDateModalVisible, setLogDateModalVisible] = useState(false);
+  const [logDateDraft, setLogDateDraft] = useState(() => getDaysAgoStr(0));
   const [dailyVitalsCount, setDailyVitalsCount] = useState<number>(0);
   const [isFaceModalVisible, setFaceModalVisible] = useState(false);
   const [isAddConditionModalVisible, setAddConditionModalVisible] = useState(false);
-  const [condDraft, setCondDraft] = useState({ name: '', note: '' });
+  const [condDraft, setCondDraft] = useState<{ name: string; note: string; severity: 'info' | 'warning' | 'danger' }>({
+    name: '',
+    note: '',
+    severity: 'warning',
+  });
   const [isEditPatientVisible, setEditPatientVisible] = useState(false);
   const [patientDraft, setPatientDraft] = useState({ name: '', birthYear: '', gender: 'Nam', blood: 'A+', weight: '', height: '' });
   const [isSavingPatient, setIsSavingPatient] = useState(false);
 
   // Thêm hồ sơ người cao tuổi mới (> 1 người cao tuổi/nhà)
   const [isCreatePatientVisible, setCreatePatientVisible] = useState(false);
+  const [isBirthYearPickerVisible, setBirthYearPickerVisible] = useState(false);
   const [createDraft, setCreateDraft] = useState({
     name: '',
     birthYear: '',
     gender: 'Nam',
-    blood: 'A+',
+    blood: 'Chưa rõ',
     weight: '',
     height: '',
     phone: '',
@@ -252,13 +263,13 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
         full_name: trimmedName,
         birth_year: by,
         gender: createDraft.gender,
-        blood_type: createDraft.blood,
+        blood_type: createDraft.blood === 'Chưa rõ' ? undefined : createDraft.blood,
         height_cm: parseInt(createDraft.height, 10) || undefined,
         weight_kg: parseInt(createDraft.weight, 10) || undefined,
         emergency_contact_phone: createDraft.phone.trim() || undefined,
       });
       setCreatePatientVisible(false);
-      setCreateDraft({ name: '', birthYear: '', gender: 'Nam', blood: 'A+', weight: '', height: '', phone: '' });
+      setCreateDraft({ name: '', birthYear: '', gender: 'Nam', blood: 'Chưa rõ', weight: '', height: '', phone: '' });
       showAlert('Thành công 🎉', `Đã thêm hồ sơ cụ ${trimmedName} vào căn nhà!`);
     } catch (err: any) {
       showAlert('Lỗi', err?.response?.data?.detail || 'Không thể tạo hồ sơ lúc này. Vui lòng thử lại.');
@@ -354,7 +365,7 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
     setPatientDraft({
       name: patientRecord?.name || '',
       birthYear: patientRecord?.birth_year ? String(patientRecord.birth_year) : '',
-      gender: patientRecord?.gender || 'Nam',
+      gender: formatGenderVN(patientRecord?.gender, 'Nam'),
       blood: patientRecord?.blood_type || 'A+',
       weight: patientRecord?.weight_kg && Number(patientRecord.weight_kg) > 0 ? String(patientRecord.weight_kg) : '',
       height: patientRecord?.height_cm && Number(patientRecord.height_cm) > 0 ? String(patientRecord.height_cm) : '',
@@ -431,7 +442,7 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
   const handleCloseEditPatient = () => {
     const isDirty =
       patientDraft.name.trim() !== (patientRecord?.name || '').trim() ||
-      patientDraft.gender !== (patientRecord?.gender || 'male') ||
+      patientDraft.gender !== formatGenderVN(patientRecord?.gender, 'Nam') ||
       patientDraft.blood !== (patientRecord?.blood_type || 'A+') ||
       patientDraft.birthYear !== (patientRecord?.birth_year || '');
 
@@ -456,8 +467,17 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
 
   const handleAddCondition = async () => {
     if (!condDraft.name.trim()) return Alert.alert('Lỗi', 'Vui lòng nhập tên bệnh lý hoặc tiền sử bệnh.');
-    const next = [...conditions, { id: `c_${Date.now()}`, name: condDraft.name.trim(), severity: 'warning' as const, note: condDraft.note.trim() }];
-    setCondDraft({ name: '', note: '' }); setAddConditionModalVisible(false);
+    const next = [
+      ...conditions,
+      {
+        id: `c_${Date.now()}`,
+        name: condDraft.name.trim(),
+        severity: condDraft.severity,
+        note: condDraft.note.trim(),
+      },
+    ];
+    setCondDraft({ name: '', note: '', severity: 'warning' });
+    setAddConditionModalVisible(false);
     await updatePatientRecord(1, { conditions: next });
     Alert.alert('Thành công', 'Đã thêm tiền sử bệnh lý vào hồ sơ.');
   };
@@ -629,13 +649,36 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
         {/* Khối Lọc Dữ Liệu Sinh Hiệu Theo Ngày */}
         <View style={[styles.cardBlock, { backgroundColor: bgCard, borderColor: borderCol }]}>
           <View style={styles.cardHeader}>
-            <View style={styles.rowCenterGap8}>
+            <View style={[styles.rowCenterGap8, { flex: 1 }]}>
               <View style={[styles.cardIconBox, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.15)' : '#EFF6FF' }]}><Ionicons name="calendar-outline" size={20} color="#2563EB" /></View>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={[styles.cardTitle, { color: textTitle }]}>Nhật ký sinh hiệu theo ngày</Text>
                 <Text style={[styles.cardSubtitle, { color: textSub }]}>Đồng bộ từ vòng đeo tay BLE và Hub AI</Text>
               </View>
             </View>
+            {hasPatient && (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                  setLogDateDraft(selectedDate);
+                  setLogDateModalVisible(true);
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 5,
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: isDarkMode ? '#9A3412' : '#FED7AA',
+                  backgroundColor: isDarkMode ? 'rgba(249, 115, 22, 0.15)' : '#FFF7ED',
+                }}
+              >
+                <Ionicons name="calendar-outline" size={14} color="#EA580C" />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#EA580C' }}>Chọn ngày</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {!hasPatient ? (
@@ -659,6 +702,7 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
                 ]}
                 contentContainerStyle={[
                   styles.dateScrollContent,
+                  { paddingRight: 16 },
                   Platform.OS === 'web' && ({
                     display: 'flex',
                     flexDirection: 'row',
@@ -768,22 +812,177 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
           {isEditingAllergies ? (
             <View style={{ gap: 12 }}>
               {[
-                { tagStyle: styles.allergyTagDanger, textStyle: styles.allergyTagDangerText, icon: 'bandage-outline' as const, color: '#EF4444', label: 'Dị ứng thuốc', ph: 'Nhập thông tin dị ứng thuốc...', val: allergyDraft.drug, key: 'drug' },
-                { tagStyle: styles.allergyTagWarning, textStyle: styles.allergyTagWarningText, icon: 'restaurant-outline' as const, color: '#D97706', label: 'Dị ứng thức ăn', ph: 'Nhập thông tin dị ứng thức ăn...', val: allergyDraft.food, key: 'food' },
-              ].map((f) => (
-                <View key={f.key}>
-                  <View style={[f.tagStyle, { alignSelf: 'flex-start', marginBottom: 6 }]}>
-                    <Ionicons name={f.icon} size={14} color={f.color} /><Text style={f.textStyle}>{f.label}</Text>
+                {
+                  tagStyle: styles.allergyTagDanger,
+                  textStyle: styles.allergyTagDangerText,
+                  icon: 'bandage-outline' as const,
+                  color: '#EF4444',
+                  label: 'Dị ứng thuốc',
+                  ph: 'Nhập hoặc thêm thuốc dị ứng khác...',
+                  val: allergyDraft.drug,
+                  key: 'drug' as const,
+                  chips: ['Penicillin', 'Paracetamol', 'Aspirin', 'NSAIDs', 'Kháng sinh Sulfa', 'Không dị ứng'],
+                  activeBg: isDarkMode ? 'rgba(239, 68, 68, 0.2)' : '#FEF2F2',
+                  activeBorder: '#F87171',
+                  activeText: isDarkMode ? '#FCA5A5' : '#B91C1C',
+                },
+                {
+                  tagStyle: styles.allergyTagWarning,
+                  textStyle: styles.allergyTagWarningText,
+                  icon: 'restaurant-outline' as const,
+                  color: '#D97706',
+                  label: 'Dị ứng thức ăn',
+                  ph: 'Nhập hoặc thêm thức ăn dị ứng khác...',
+                  val: allergyDraft.food,
+                  key: 'food' as const,
+                  chips: ['Hải sản', 'Đậu phộng', 'Sữa & Chế phẩm sữa', 'Trứng', 'Đồ ngọt / Chè', 'Không dị ứng'],
+                  activeBg: isDarkMode ? 'rgba(245, 158, 11, 0.2)' : '#FFFBEB',
+                  activeBorder: '#FBBF24',
+                  activeText: isDarkMode ? '#FCD34D' : '#92400E',
+                },
+              ].map((f) => {
+                const isChipMatched = (raw: string, chip: string) => {
+                  const low = (raw || '').toLowerCase();
+                  if (!low.trim()) return false;
+                  if (chip === 'Không dị ứng') return low.trim() === 'không dị ứng';
+                  if (low.includes(chip.toLowerCase())) return true;
+                  if (chip.includes('/')) {
+                    return chip
+                      .toLowerCase()
+                      .split('/')
+                      .some((part) => {
+                        const p = part.trim();
+                        return p.length >= 3 && low.includes(p);
+                      });
+                  }
+                  return false;
+                };
+
+                const toggleChip = (chip: string) => {
+                  if (chip === 'Không dị ứng') {
+                    const already = isChipMatched(f.val, chip);
+                    setAllergyDraft((p) => ({ ...p, [f.key]: already ? '' : 'Không dị ứng' }));
+                    return;
+                  }
+                  const parts = f.val
+                    .split(',')
+                    .map((s) => s.trim())
+                    .filter((s) => s && s.toLowerCase() !== 'không dị ứng');
+                  const matchIdx = parts.findIndex((item) => isChipMatched(item, chip));
+                  const nextParts =
+                    matchIdx >= 0 ? parts.filter((_, i) => i !== matchIdx) : [...parts, chip];
+                  setAllergyDraft((p) => ({ ...p, [f.key]: nextParts.join(', ') }));
+                };
+
+                return (
+                  <View key={f.key}>
+                    <View style={[f.tagStyle, { alignSelf: 'flex-start', marginBottom: 6 }]}>
+                      <Ionicons name={f.icon} size={14} color={f.color} />
+                      <Text style={f.textStyle}>{f.label}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                      {f.chips.map((chip) => {
+                        const active = isChipMatched(f.val, chip);
+                        const isNone = chip === 'Không dị ứng';
+                        const bg = active
+                          ? isNone
+                            ? isDarkMode ? 'rgba(16, 185, 129, 0.2)' : '#ECFDF5'
+                            : f.activeBg
+                          : isDarkMode ? '#0F172A' : '#F8FAFC';
+                        const bdr = active ? (isNone ? '#34D399' : f.activeBorder) : borderCol;
+                        const txt = active ? (isNone ? (isDarkMode ? '#6EE7B7' : '#047857') : f.activeText) : textTitle;
+                        return (
+                          <TouchableOpacity
+                            key={chip}
+                            activeOpacity={0.75}
+                            onPress={() => toggleChip(chip)}
+                            style={{
+                              paddingHorizontal: 10,
+                              paddingVertical: 5,
+                              borderRadius: 14,
+                              borderWidth: 1,
+                              borderColor: bdr,
+                              backgroundColor: bg,
+                            }}
+                          >
+                            <Text style={{ fontSize: 11.5, fontWeight: active ? '700' : '500', color: txt }}>
+                              {chip}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                    <TextInput
+                      style={inputStyle}
+                      placeholder={f.ph}
+                      placeholderTextColor="#94A3B8"
+                      value={f.val}
+                      onChangeText={(v) => setAllergyDraft((p) => ({ ...p, [f.key]: v }))}
+                    />
                   </View>
-                  <TextInput style={inputStyle} placeholder={f.ph} placeholderTextColor="#94A3B8" value={f.val} onChangeText={(v) => setAllergyDraft(p => ({ ...p, [f.key]: v }))} />
-                </View>
-              ))}
+                );
+              })}
+
               <View>
                 <View style={[styles.rowCenterGap8, { marginBottom: 6 }]}>
-                  <Ionicons name="nutrition-outline" size={16} color="#10B981" /><Text style={styles.dietaryNoteTitle}>Chế độ ăn khuyến nghị</Text>
+                  <Ionicons name="nutrition-outline" size={16} color="#10B981" />
+                  <Text style={styles.dietaryNoteTitle}>Chế độ ăn khuyến nghị</Text>
                 </View>
-                <TextInput style={[...inputStyle, styles.textArea]} placeholder="Nhập chế độ ăn khuyến nghị..." placeholderTextColor="#94A3B8" multiline numberOfLines={3} value={allergyDraft.diet} onChangeText={(diet) => setAllergyDraft(p => ({ ...p, diet }))} />
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                  {[
+                    'Ăn nhạt (Giảm muối)',
+                    'Ít đường / Tinh bột',
+                    'Thức ăn mềm dễ tiêu',
+                    'Tăng cường rau xanh',
+                    'Tránh thực phẩm từ đậu nành',
+                  ].map((dietPreset) => {
+                    const already = allergyDraft.diet.toLowerCase().includes(dietPreset.toLowerCase());
+                    return (
+                      <TouchableOpacity
+                        key={dietPreset}
+                        activeOpacity={0.75}
+                        onPress={() =>
+                          setAllergyDraft((p) => {
+                            const cur = p.diet.trim();
+                            if (cur.toLowerCase().includes(dietPreset.toLowerCase())) return p;
+                            return { ...p, diet: cur ? `${cur}, ${dietPreset}` : dietPreset };
+                          })
+                        }
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          borderRadius: 14,
+                          borderWidth: 1,
+                          borderColor: already ? '#10B981' : borderCol,
+                          backgroundColor: already
+                            ? isDarkMode ? 'rgba(16, 185, 129, 0.2)' : '#ECFDF5'
+                            : isDarkMode ? '#0F172A' : '#F8FAFC',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 11.5,
+                            fontWeight: already ? '700' : '500',
+                            color: already ? (isDarkMode ? '#6EE7B7' : '#047857') : textTitle,
+                          }}
+                        >
+                          + {dietPreset}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <TextInput
+                  style={[...inputStyle, styles.textArea]}
+                  placeholder="Nhập chế độ ăn khuyến nghị..."
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                  numberOfLines={3}
+                  value={allergyDraft.diet}
+                  onChangeText={(diet) => setAllergyDraft((p) => ({ ...p, diet }))}
+                />
               </View>
+
               <View style={styles.inlineEditActionRow}>
                 <TouchableOpacity style={[styles.inlineCancelBtn, { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]} onPress={() => setIsEditingAllergies(false)} activeOpacity={0.7}>
                   <Text style={[styles.inlineCancelBtnText, { color: isDarkMode ? '#E2E8F0' : '#475569' }]}>Hủy</Text>
@@ -878,23 +1077,157 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
       {/* Modal Thêm Bệnh Lý */}
       <Modal transparent visible={isAddConditionModalVisible} animationType="fade" onRequestClose={() => setAddConditionModalVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setAddConditionModalVisible(false)}>
-          <Pressable style={[styles.modalCard, { backgroundColor: bgCard, borderColor: borderCol }]} onPress={() => {}}>
-            <Text style={[styles.modalTitle, { color: textTitle }]}>Thêm tiền sử bệnh nền</Text>
-            <Text style={[styles.inputLabel, { color: textSub }]}>Tên bệnh lý / Chẩn đoán:</Text>
-            <TextInput style={inputStyle} placeholder="VD: Thoái hoá đốt sống, Viêm xoang..." placeholderTextColor="#94A3B8" value={condDraft.name} onChangeText={(name) => setCondDraft(p => ({ ...p, name }))} />
-            <Text style={[styles.inputLabel, { color: textSub, marginTop: 10 }]}>Ghi chú:</Text>
-            <TextInput style={[...inputStyle, styles.textArea]} placeholder="Ghi chú điều trị hoặc lưu ý..." placeholderTextColor="#94A3B8" multiline numberOfLines={3} value={condDraft.note} onChangeText={(note) => setCondDraft(p => ({ ...p, note }))} />
-            <View style={styles.modalBtnRow}>
-              <TouchableOpacity style={[styles.modalCancelBtn, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol }]} onPress={() => setAddConditionModalVisible(false)}>
-                <Text style={[styles.modalCancelText, { color: textSub }]}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalSaveBtn} onPress={handleAddCondition}>
-                <Text style={styles.modalSaveText}>Lưu bệnh lý</Text>
-              </TouchableOpacity>
-            </View>
+          <Pressable style={[styles.modalCard, { backgroundColor: bgCard, borderColor: borderCol, maxHeight: '88%' }]} onPress={() => {}}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <Text style={[styles.modalTitle, { color: textTitle }]}>Thêm tiền sử bệnh nền</Text>
+
+              <Text style={[styles.inputLabel, { color: textSub }]}>Tên bệnh lý / Chẩn đoán:</Text>
+              <TextInput
+                style={inputStyle}
+                placeholder="VD: Tăng huyết áp, Đái tháo đường Type 2..."
+                placeholderTextColor="#94A3B8"
+                value={condDraft.name}
+                onChangeText={(name) => setCondDraft(p => ({ ...p, name }))}
+              />
+
+              {/* Gợi ý nhanh bệnh lý nền phổ biến */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                {[
+                  'Tăng huyết áp',
+                  'Đái tháo đường Type 2',
+                  'Rối loạn mỡ máu',
+                  'Bệnh mạch vành / Tim mạch',
+                  'Thoái hóa khớp',
+                  'COPD / Hen phế quản',
+                  'Rối loạn tiền đình',
+                ].map((preset) => {
+                  const selected = condDraft.name.trim() === preset;
+                  return (
+                    <TouchableOpacity
+                      key={preset}
+                      activeOpacity={0.75}
+                      onPress={() => setCondDraft(p => ({ ...p, name: preset }))}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 16,
+                        borderWidth: 1,
+                        borderColor: selected ? '#F97316' : borderCol,
+                        backgroundColor: selected
+                          ? (isDarkMode ? 'rgba(249, 115, 22, 0.2)' : '#FFF7ED')
+                          : (isDarkMode ? '#0F172A' : '#F8FAFC'),
+                      }}
+                    >
+                      <Text style={{ fontSize: 11.5, fontWeight: selected ? '700' : '500', color: selected ? '#EA580C' : textTitle }}>
+                        + {preset}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Mức độ kiểm soát hiện tại */}
+              <Text style={[styles.inputLabel, { color: textSub, marginTop: 12 }]}>Mức độ kiểm soát hiện tại:</Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {[
+                  { key: 'info' as const, label: 'Đang ổn định', color: '#10B981', bg: '#ECFDF5' },
+                  { key: 'warning' as const, label: 'Cần theo dõi', color: '#F59E0B', bg: '#FFFBEB' },
+                  { key: 'danger' as const, label: 'Nguy cơ cao', color: '#EF4444', bg: '#FEF2F2' },
+                ].map((st) => {
+                  const active = condDraft.severity === st.key;
+                  return (
+                    <TouchableOpacity
+                      key={st.key}
+                      activeOpacity={0.8}
+                      onPress={() => setCondDraft(p => ({ ...p, severity: st.key }))}
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 5,
+                        paddingVertical: 9,
+                        paddingHorizontal: 6,
+                        borderRadius: 10,
+                        borderWidth: active ? 1.5 : 1,
+                        borderColor: active ? st.color : borderCol,
+                        backgroundColor: active ? (isDarkMode ? '#0F172A' : st.bg) : (isDarkMode ? '#0F172A' : '#F8FAFC'),
+                      }}
+                    >
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: st.color }} />
+                      <Text style={{ fontSize: 11, fontWeight: active ? '800' : '600', color: active ? st.color : textTitle }} numberOfLines={1}>
+                        {st.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Gợi ý ghi chú điều trị nhanh */}
+              <Text style={[styles.inputLabel, { color: textSub, marginTop: 12 }]}>Ghi chú điều trị:</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                {[
+                  'Đang uống thuốc duy trì hằng ngày',
+                  'Tái khám định kỳ hằng tháng',
+                  'Kiêng đồ ngọt & mặn',
+                ].map((notePreset) => (
+                  <TouchableOpacity
+                    key={notePreset}
+                    activeOpacity={0.75}
+                    onPress={() =>
+                      setCondDraft(p => ({
+                        ...p,
+                        note: p.note.trim() ? (p.note.includes(notePreset) ? p.note : `${p.note.trim()}; ${notePreset}`) : notePreset,
+                      }))
+                    }
+                    style={{
+                      paddingHorizontal: 9,
+                      paddingVertical: 5,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: borderCol,
+                      backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9',
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '500', color: textSub }}>+ {notePreset}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TextInput
+                style={[...inputStyle, styles.textArea]}
+                placeholder="Ghi chú điều trị hoặc lưu ý..."
+                placeholderTextColor="#94A3B8"
+                multiline
+                numberOfLines={3}
+                value={condDraft.note}
+                onChangeText={(note) => setCondDraft(p => ({ ...p, note }))}
+              />
+
+              <View style={styles.modalBtnRow}>
+                <TouchableOpacity style={[styles.modalCancelBtn, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol }]} onPress={() => setAddConditionModalVisible(false)}>
+                  <Text style={[styles.modalCancelText, { color: textSub }]}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.modalSaveBtn} onPress={handleAddCondition}>
+                  <Text style={styles.modalSaveText}>Lưu bệnh lý</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Custom Calendar Modal cho Nhật ký sinh hiệu theo ngày */}
+      <HealthDatePickerModal
+        visible={isLogDateModalVisible}
+        onClose={() => setLogDateModalVisible(false)}
+        draftDate={logDateDraft}
+        setDraftDate={setLogDateDraft}
+        onConfirmDate={(val) => setSelectedDate(val)}
+        todayStr={getDaysAgoStr(0)}
+        datesWithData={dailyVitalsCount > 0 ? [selectedDate] : []}
+        isDarkMode={isDarkMode}
+        colors={colors}
+      />
 
       {/* Modal Chỉnh Sửa / Thêm Mới Thông Tin Bệnh Nhân */}
       <Modal transparent visible={isEditPatientVisible} animationType="fade" onRequestClose={handleCloseEditPatient}>
@@ -1169,26 +1502,41 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
                 onChangeText={(v) => setCreateDraft((p) => ({ ...p, name: v }))}
               />
 
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginTop: 12 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.inputLabel, { color: textSub }]}>Năm sinh:</Text>
-                  <TextInput
-                    style={inputStyle}
-                    keyboardType="numeric"
-                    maxLength={4}
-                    placeholder="VD: 1948"
-                    placeholderTextColor="#94A3B8"
-                    value={createDraft.birthYear}
-                    onChangeText={(v) => setCreateDraft((p) => ({ ...p, birthYear: v.replace(/[^0-9]/g, '') }))}
-                  />
-                </View>
-                <View style={{ flex: 1, justifyContent: 'flex-end', paddingBottom: 6 }}>
-                  <View style={[styles.calcBadge, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' }]}>
-                    <Ionicons name="calendar-outline" size={14} color={Colors.primary} />
-                    <Text style={[styles.calcBadgeText, { color: textTitle }]}>
-                      {createAge > 0 ? `Tuổi: ${createAge}` : 'Tuổi: --'}
-                    </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TextInput
+                      style={[inputStyle, { flex: 1, height: 42 }]}
+                      keyboardType="numeric"
+                      maxLength={4}
+                      placeholder="VD: 1948"
+                      placeholderTextColor="#94A3B8"
+                      value={createDraft.birthYear}
+                      onChangeText={(v) => setCreateDraft((p) => ({ ...p, birthYear: v.replace(/[^0-9]/g, '') }))}
+                    />
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      onPress={() => setBirthYearPickerVisible(true)}
+                      style={{
+                        height: 42,
+                        paddingHorizontal: 10,
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: '#FED7AA',
+                        backgroundColor: isDarkMode ? 'rgba(249, 115, 22, 0.15)' : '#FFF7ED',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Ionicons name="calendar-outline" size={18} color="#EA580C" />
+                    </TouchableOpacity>
                   </View>
+                </View>
+                <View style={[styles.calcBadge, { height: 42, paddingHorizontal: 12, borderRadius: 10, backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', justifyContent: 'center', alignItems: 'center' }]}>
+                  <Text style={[styles.calcBadgeText, { color: textTitle }]}>
+                    {createAge > 0 ? `${createAge} tuổi` : '-- tuổi'}
+                  </Text>
                 </View>
               </View>
 
@@ -1215,22 +1563,38 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
               </View>
 
               <Text style={[styles.inputLabel, { color: textSub, marginTop: 12 }]}>Nhóm máu:</Text>
-              <View style={styles.bloodTypeGrid}>
-                {['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].map((type) => {
+              <View style={[styles.bloodTypeGrid, { gap: 8 }]}>
+                {['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-', 'Chưa rõ'].map((type) => {
                   const isSel = createDraft.blood === type;
+                  const isUnknown = type === 'Chưa rõ';
                   return (
                     <TouchableOpacity
                       key={type}
                       style={[
                         styles.bloodChip,
+                        { width: '31.3%', height: 38, paddingVertical: 0 },
                         isDarkMode && { backgroundColor: bgSubtle, borderColor: borderCol },
-                        isSel && { backgroundColor: isDarkMode ? '#4C1D1D' : '#FEE2E2', borderColor: '#EF4444', borderWidth: 1.5 },
+                        isSel && {
+                          backgroundColor: isUnknown ? (isDarkMode ? '#1E293B' : '#FFF7ED') : (isDarkMode ? '#4C1D1D' : '#FEE2E2'),
+                          borderColor: isUnknown ? '#F97316' : '#EF4444',
+                          borderWidth: 1.5,
+                        },
                       ]}
                       onPress={() => setCreateDraft((p) => ({ ...p, blood: type }))}
                       activeOpacity={0.7}
                     >
-                      <Ionicons name="water" size={12} color={isSel ? '#EF4444' : textSub} />
-                      <Text style={[styles.bloodChipText, { color: isSel ? '#EF4444' : textTitle, fontWeight: isSel ? '800' : '600' }]}>{type}</Text>
+                      {!isUnknown && <Ionicons name="water" size={12} color={isSel ? '#EF4444' : textSub} />}
+                      <Text
+                        style={[
+                          styles.bloodChipText,
+                          {
+                            color: isSel ? (isUnknown ? '#EA580C' : '#EF4444') : textTitle,
+                            fontWeight: isSel ? '800' : '600',
+                          },
+                        ]}
+                      >
+                        {type}
+                      </Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -1275,7 +1639,25 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
                 </View>
               </View>
 
-              <Text style={[styles.inputLabel, { color: textSub, marginTop: 12 }]}>Số ĐT liên hệ khẩn cấp (tùy chọn):</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 4 }}>
+                <Text style={[styles.inputLabel, { color: textSub, marginBottom: 0 }]}>Số ĐT liên hệ khẩn cấp (tùy chọn):</Text>
+                {Boolean(ownerPhone) && (
+                  <TouchableOpacity
+                    activeOpacity={0.75}
+                    onPress={() => setCreateDraft((p) => ({ ...p, phone: ownerPhone }))}
+                    style={{
+                      paddingHorizontal: 9,
+                      paddingVertical: 4,
+                      borderRadius: 12,
+                      backgroundColor: isDarkMode ? 'rgba(249, 115, 22, 0.2)' : '#FFF7ED',
+                      borderWidth: 1,
+                      borderColor: '#FED7AA',
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#EA580C' }}>Dùng số của tôi</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
               <TextInput
                 style={inputStyle}
                 keyboardType="phone-pad"
@@ -1310,6 +1692,17 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <BirthYearPickerModal
+        visible={isBirthYearPickerVisible}
+        selectedYear={createDraft.birthYear}
+        onSelectYear={(yr) => setCreateDraft((p) => ({ ...p, birthYear: yr }))}
+        onClose={() => setBirthYearPickerVisible(false)}
+        isDarkMode={isDarkMode}
+        bgCard={bgCard}
+        borderCol={borderCol}
+        textTitle={textTitle}
+      />
     </SafeAreaView>
   );
 }

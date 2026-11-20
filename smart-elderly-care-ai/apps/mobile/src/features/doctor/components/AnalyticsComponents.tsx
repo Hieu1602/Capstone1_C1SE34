@@ -12,6 +12,7 @@ import { View, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Modal } from
 import { Ionicons } from '@expo/vector-icons';
 import { LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
 import { AnalyticsData, PatientOption, TrendItem } from './types';
+import { formatGenderVN } from '../../../utils/formatters';
 
 // =============================================================
 // 1. THẺ ĐIỂM ĐÁNH GIÁ & CÁC CHỈ SỐ TỔNG QUAN
@@ -142,51 +143,39 @@ export interface AnalyticsTrendChartProps {
 }
 
 export const AnalyticsTrendChart: React.FC<AnalyticsTrendChartProps> = ({
-  selectedPatient,
   trends,
   chartMode,
   selectedFilteredDate,
-  onChartModeChange,
   onPressDay,
   isDarkMode,
   colors,
-}) => (
-  <View style={[styles.chartCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border }]}>
-    <View style={styles.chartHeader}>
-      <LocalizedText style={[styles.chartTitle, { color: colors.textPrimary }]}>Diễn Tiến Lâm Sàng Từng Ngày</LocalizedText>
-      <LocalizedText style={[styles.chartSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-        {selectedPatient.deviceId ? `Đo tự động qua Smartband (${selectedPatient.deviceId})` : 'Đo tự động qua thiết bị giám sát'}
-      </LocalizedText>
-      <LocalizedText style={styles.chartTapHint}>💡 Chạm vào ngày bất kỳ để xem phân tích chi tiết 24h</LocalizedText>
-    </View>
+}) => {
+  const visibleTrends = selectedFilteredDate
+    ? trends.filter((t) => t.date === selectedFilteredDate)
+    : trends;
 
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chartTabRow}>
-      {[
-        { key: 'HR' as const, label: 'Nhịp tim (bpm)' },
-        { key: 'SPO2' as const, label: 'SpO₂ (%)' },
-        { key: 'BP' as const, label: 'Huyết áp' },
-        { key: 'TEMP' as const, label: 'Thân nhiệt' },
-        { key: 'STEPS' as const, label: 'Vận động' },
-      ].map((tab) => {
-        const active = chartMode === tab.key;
-        return (
-          <TouchableOpacity key={tab.key} onPress={() => onChartModeChange(tab.key)} style={[styles.chartModeBtn, active && styles.chartModeBtnActive]}>
-            <LocalizedText style={[styles.chartModeText, active ? { color: '#FFFFFF', fontWeight: '700' } : { color: isDarkMode ? '#CBD5E1' : '#64748B' }]}>
-              {tab.label}
+  return (
+    <View style={[styles.chartCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border }]}>
+      <View style={styles.chartHeader}>
+        <LocalizedText style={[styles.chartTitle, { color: colors.textPrimary }]}>Diễn Tiến Lâm Sàng Từng Ngày</LocalizedText>
+        <LocalizedText style={[styles.chartSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+          Đồng bộ tự động từ vòng đeo tay Smartband
+        </LocalizedText>
+        <LocalizedText style={styles.chartTapHint}>💡 Chạm vào ngày bất kỳ để xem phân tích chi tiết 24h</LocalizedText>
+      </View>
+
+      <View style={styles.barsContainer}>
+        {visibleTrends.length === 0 ? (
+          <View style={styles.noDataBox}>
+            <Ionicons name="stats-chart-outline" size={28} color="#94A3B8" />
+            <LocalizedText style={styles.noDataText}>
+              {selectedFilteredDate
+                ? `Chưa có dữ liệu đo sinh hiệu cho ngày ${selectedFilteredDate}`
+                : 'Chưa có dữ liệu sinh hiệu chuỗi thời gian'}
             </LocalizedText>
-          </TouchableOpacity>
-        );
-      })}
-    </ScrollView>
-
-    <View style={styles.barsContainer}>
-      {trends.length === 0 ? (
-        <View style={styles.noDataBox}>
-          <Ionicons name="stats-chart-outline" size={28} color="#94A3B8" />
-          <LocalizedText style={styles.noDataText}>Chưa có dữ liệu sinh hiệu chuỗi thời gian</LocalizedText>
-        </View>
-      ) : (
-        trends.map((item: TrendItem, idx: number) => {
+          </View>
+        ) : (
+          visibleTrends.map((item: TrendItem, idx: number) => {
           let barPercent = 50, barColor = '#0284C7', displayVal = `${item.avg_heart_rate} bpm`, isAlert = false;
 
           if (chartMode === 'HR') {
@@ -252,10 +241,11 @@ export const AnalyticsTrendChart: React.FC<AnalyticsTrendChartProps> = ({
             </TouchableOpacity>
           );
         })
-      )}
+        )}
+      </View>
     </View>
-  </View>
-);
+  );
+};
 
 // =============================================================
 // 3. BẢNG NHẬT KÝ CHỈ SỐ SINH HIỆU
@@ -564,6 +554,20 @@ export interface DayFilterSelectorModalProps {
   colors: any;
 }
 
+const WEEKDAY_LABELS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+
+const normalizeDayMonthKey = (raw: string): string => {
+  const parts = raw.trim().split(/[-/]/);
+  if (parts.length >= 2) {
+    // Support YYYY-MM-DD or DD/MM or DD/MM/YYYY
+    if (parts[0].length === 4) {
+      return `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}`;
+    }
+    return `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}`;
+  }
+  return raw.trim();
+};
+
 export const DayFilterSelectorModal: React.FC<DayFilterSelectorModalProps> = ({
   visible,
   onClose,
@@ -573,118 +577,192 @@ export const DayFilterSelectorModal: React.FC<DayFilterSelectorModalProps> = ({
   onViewDetail,
   isDarkMode,
   colors,
-}) => (
-  <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-    <View style={styles.modalOverlay}>
-      <View style={[styles.modalContentCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border }]}>
-        <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }}>
-            <View style={styles.modalHeaderIconBox}>
-              <Ionicons name="calendar-outline" size={20} color="#2563EB" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <LocalizedText style={[styles.modalHeaderTitle, { color: colors.textPrimary }]}>Lọc Báo Cáo Theo Ngày</LocalizedText>
-              <LocalizedText style={[styles.modalHeaderSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
-                Chọn 1 ngày cụ thể để xem biểu đồ và chỉ số chuyên sâu
-              </LocalizedText>
-            </View>
-          </View>
-          <TouchableOpacity onPress={onClose} style={styles.modalCloseBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="close" size={20} color={colors.textPrimary} />
-          </TouchableOpacity>
-        </View>
+}) => {
+  const [cursorMonth, setCursorMonth] = React.useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
 
-        <ScrollView style={styles.modalBodyScroll} showsVerticalScrollIndicator={false}>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => {
-              onSelectDate(null);
-              onClose();
-            }}
-            style={[
-              styles.dayOptionRow,
-              {
-                backgroundColor: !selectedFilteredDate ? (isDarkMode ? '#1E3A8A44' : '#EFF6FF') : (isDarkMode ? '#0F172A' : '#F8FAFC'),
-                borderColor: !selectedFilteredDate ? '#2563EB' : colors.border,
-                borderWidth: !selectedFilteredDate ? 1.5 : 1,
-              },
-            ]}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-              <Ionicons name={!selectedFilteredDate ? 'radio-button-on' : 'radio-button-off'} size={18} color={!selectedFilteredDate ? '#2563EB' : '#94A3B8'} />
+  const trendByDateKey = React.useMemo(() => {
+    const map = new Map<string, TrendItem>();
+    for (const item of trends) {
+      if (item.date) {
+        map.set(normalizeDayMonthKey(item.date), item);
+      }
+    }
+    return map;
+  }, [trends]);
+
+  const year = cursorMonth.getFullYear();
+  const month = cursorMonth.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstWeekdayMon0 = (new Date(year, month, 1).getDay() + 6) % 7;
+
+  const calendarCells: (number | null)[] = [];
+  for (let i = 0; i < firstWeekdayMon0; i++) calendarCells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) calendarCells.push(d);
+  while (calendarCells.length % 7 !== 0) calendarCells.push(null);
+
+  const shiftMonth = (delta: number) => {
+    setCursorMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
+  };
+
+  const selectedKey = selectedFilteredDate ? normalizeDayMonthKey(selectedFilteredDate) : null;
+  const selectedTrendItem = selectedKey ? trendByDateKey.get(selectedKey) : undefined;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalContentCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }}>
+              <View style={styles.modalHeaderIconBox}>
+                <Ionicons name="calendar-outline" size={20} color="#2563EB" />
+              </View>
               <View style={{ flex: 1 }}>
-                <LocalizedText style={[styles.dayOptionDate, { color: colors.textPrimary }]}>Tất cả các ngày trong chu kỳ</LocalizedText>
-                <LocalizedText style={[styles.dayOptionSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Hiển thị toàn bộ dữ liệu diễn tiến chuỗi thời gian</LocalizedText>
+                <LocalizedText style={[styles.modalHeaderTitle, { color: colors.textPrimary }]}>Lọc Báo Cáo Theo Ngày</LocalizedText>
+                <LocalizedText style={[styles.modalHeaderSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={2}>
+                  Chọn 1 ngày cụ thể để xem biểu đồ và chỉ số chuyên sâu
+                </LocalizedText>
               </View>
             </View>
-          </TouchableOpacity>
+            <TouchableOpacity onPress={onClose} style={styles.modalCloseBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={20} color={colors.textPrimary} />
+            </TouchableOpacity>
+          </View>
 
-          <LocalizedText style={[styles.dayOptionSectionLabel, { color: isDarkMode ? '#CBD5E1' : '#475569' }]}>Hoặc chọn một ngày đo cụ thể:</LocalizedText>
-
-          {trends.length === 0 ? (
-            <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-              <LocalizedText style={{ fontSize: 13, color: '#94A3B8' }}>Chưa có dữ liệu ngày đo nào</LocalizedText>
-            </View>
-          ) : (
-            trends.map((item, idx) => {
-              const isSelected = selectedFilteredDate === item.date;
-              const isAlert = (item.min_spo2 && item.min_spo2 < 94) || (item.avg_heart_rate && item.avg_heart_rate > 85);
-              return (
-                <View
-                  key={idx}
-                  style={[
-                    styles.dayOptionRow,
-                    {
-                      backgroundColor: isSelected ? (isDarkMode ? '#1E3A8A44' : '#EFF6FF') : (isDarkMode ? '#0F172A' : '#F8FAFC'),
-                      borderColor: isSelected ? '#2563EB' : colors.border,
-                      borderWidth: isSelected ? 1.5 : 1,
-                    },
-                  ]}
-                >
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}
-                    onPress={() => {
-                      onSelectDate(item.date);
-                      onClose();
-                    }}
-                  >
-                    <Ionicons name={isSelected ? 'radio-button-on' : 'radio-button-off'} size={18} color={isSelected ? '#2563EB' : '#94A3B8'} />
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <LocalizedText style={[styles.dayOptionDate, { color: colors.textPrimary }]}>Ngày {item.date}</LocalizedText>
-                        <View style={[styles.statusTagMini, { backgroundColor: isAlert ? '#FEE2E2' : '#ECFDF5' }]}>
-                          <LocalizedText style={[styles.statusTagMiniText, { color: isAlert ? '#DC2626' : '#059669' }]}>{isAlert ? 'Lưu ý' : 'Chuẩn'}</LocalizedText>
-                        </View>
-                      </View>
-                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-                        <LocalizedText style={{ fontSize: 11, color: '#EF4444', fontWeight: '600' }}>❤️ {item.avg_heart_rate ? `${item.avg_heart_rate} bpm` : '--'}</LocalizedText>
-                        <LocalizedText style={{ fontSize: 11, color: '#0284C7', fontWeight: '600' }}>💧 {item.avg_spo2 ? `${item.avg_spo2}%` : '--'}</LocalizedText>
-                        <LocalizedText style={{ fontSize: 11, color: '#10B981', fontWeight: '600' }}>🩺 {item.bp || '113/71'}</LocalizedText>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                  {onViewDetail && (
-                    <TouchableOpacity style={styles.dayOptionDetailBtn} onPress={() => onViewDetail(item)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                      <LocalizedText style={styles.dayOptionDetailBtnText}>Chi tiết 24h</LocalizedText>
-                      <Ionicons name="chevron-forward" size={12} color="#2563EB" />
-                    </TouchableOpacity>
-                  )}
+          <ScrollView style={styles.modalBodyScroll} showsVerticalScrollIndicator={false}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                onSelectDate(null);
+                onClose();
+              }}
+              style={[
+                styles.dayOptionRow,
+                {
+                  backgroundColor: !selectedFilteredDate ? (isDarkMode ? '#1E3A8A44' : '#EFF6FF') : (isDarkMode ? '#0F172A' : '#F8FAFC'),
+                  borderColor: !selectedFilteredDate ? '#2563EB' : colors.border,
+                  borderWidth: !selectedFilteredDate ? 1.5 : 1,
+                },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                <Ionicons name={!selectedFilteredDate ? 'radio-button-on' : 'radio-button-off'} size={18} color={!selectedFilteredDate ? '#2563EB' : '#94A3B8'} />
+                <View style={{ flex: 1 }}>
+                  <LocalizedText style={[styles.dayOptionDate, { color: colors.textPrimary }]}>Tất cả các ngày trong chu kỳ</LocalizedText>
+                  <LocalizedText style={[styles.dayOptionSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Hiển thị toàn bộ dữ liệu diễn tiến chuỗi thời gian</LocalizedText>
                 </View>
-              );
-            })
-          )}
-        </ScrollView>
+              </View>
+            </TouchableOpacity>
 
-        <View style={[styles.modalFooter, { borderTopColor: colors.border }]}>
-          <TouchableOpacity style={styles.modalCloseFullBtn} onPress={onClose} activeOpacity={0.85}>
-            <LocalizedText style={styles.modalCloseFullBtnText}>Đóng</LocalizedText>
-          </TouchableOpacity>
+            {/* Bảng Lịch Tháng Trực Quan */}
+            <View style={[styles.calendarCard, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: colors.border }]}>
+              <View style={styles.calendarMonthBar}>
+                <TouchableOpacity onPress={() => shiftMonth(-1)} style={[styles.calendarNavBtn, { borderColor: colors.border }]}>
+                  <Ionicons name="chevron-back" size={16} color={colors.textPrimary} />
+                </TouchableOpacity>
+                <LocalizedText style={[styles.calendarMonthTitle, { color: colors.textPrimary }]}>
+                  {`Tháng ${String(month + 1).padStart(2, '0')}/${year}`}
+                </LocalizedText>
+                <TouchableOpacity onPress={() => shiftMonth(1)} style={[styles.calendarNavBtn, { borderColor: colors.border }]}>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.calendarWeekRow}>
+                {WEEKDAY_LABELS.map((wd) => (
+                  <View key={wd} style={styles.calendarWeekCell}>
+                    <LocalizedText style={styles.calendarWeekText}>{wd}</LocalizedText>
+                  </View>
+                ))}
+              </View>
+
+              <View style={styles.calendarGrid}>
+                {calendarCells.map((dayNum, idx) => {
+                  if (dayNum === null) {
+                    return <View key={`empty-${idx}`} style={styles.calendarDayCell} />;
+                  }
+                  const dateKey = `${String(dayNum).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}`;
+                  const matchedTrend = trendByDateKey.get(dateKey);
+                  const hasData = Boolean(matchedTrend);
+                  const isSelected = selectedKey === dateKey;
+
+                  return (
+                    <TouchableOpacity
+                      key={dateKey}
+                      activeOpacity={0.75}
+                      onPress={() => {
+                        onSelectDate(matchedTrend?.date || dateKey);
+                        onClose();
+                      }}
+                      style={[
+                        styles.calendarDayCell,
+                        isSelected && { backgroundColor: '#2563EB', borderRadius: 10 },
+                      ]}
+                    >
+                      <LocalizedText
+                        style={[
+                          styles.calendarDayText,
+                          {
+                            color: isSelected
+                              ? '#FFFFFF'
+                              : hasData
+                                ? colors.textPrimary
+                                : isDarkMode
+                                  ? '#64748B'
+                                  : '#94A3B8',
+                            opacity: isSelected || hasData ? 1 : 0.55,
+                          },
+                        ]}
+                      >
+                        {dayNum}
+                      </LocalizedText>
+                      <View
+                        style={[
+                          styles.calendarDot,
+                          {
+                            backgroundColor: isSelected
+                              ? '#FFFFFF'
+                              : hasData
+                                ? '#10B981'
+                                : 'transparent',
+                          },
+                        ]}
+                      />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <View style={styles.calendarLegendRow}>
+                <View style={styles.calendarLegendItem}>
+                  <View style={[styles.calendarDot, { backgroundColor: '#10B981' }]} />
+                  <LocalizedText style={styles.calendarLegendText}>Có dữ liệu đo sinh hiệu</LocalizedText>
+                </View>
+                {selectedTrendItem && onViewDetail && (
+                  <TouchableOpacity
+                    style={styles.dayOptionDetailBtn}
+                    onPress={() => onViewDetail(selectedTrendItem)}
+                  >
+                    <LocalizedText style={styles.dayOptionDetailBtnText}>Chi tiết 24h</LocalizedText>
+                    <Ionicons name="chevron-forward" size={12} color="#2563EB" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          </ScrollView>
+
+          <View style={[styles.modalFooter, { borderTopColor: colors.border }]}>
+            <TouchableOpacity style={styles.modalCloseFullBtn} onPress={onClose} activeOpacity={0.85}>
+              <LocalizedText style={styles.modalCloseFullBtnText}>Đóng</LocalizedText>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
-    </View>
-  </Modal>
-);
+    </Modal>
+  );
+};
 
 // =============================================================
 // 6. MÀN HÌNH CHỌN BỆNH NHÂN ĐỂ XEM BÁO CÁO (PatientSelectionView)
@@ -820,7 +898,7 @@ export const PatientSelectionView: React.FC<PatientSelectionViewProps> = ({
                       </LocalizedText>
                     </View>
                   </View>
-                  <LocalizedText style={[styles.cardMeta, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>{pat.age} tuổi • {pat.gender}</LocalizedText>
+                  <LocalizedText style={[styles.cardMeta, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>{pat.age} tuổi • {formatGenderVN(pat.gender)}</LocalizedText>
                   {patAddress ? <LocalizedText style={[styles.cardAddress, { color: isDarkMode ? '#64748B' : '#94A3B8' }]} numberOfLines={1}>📍 {patAddress}</LocalizedText> : null}
                 </View>
               </View>
@@ -984,4 +1062,18 @@ const styles = StyleSheet.create({
   dayOptionSectionLabel: { fontSize: 12, fontWeight: '700', marginVertical: 8, marginLeft: 2 },
   dayOptionDetailBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: '#BFDBFE', gap: 2 },
   dayOptionDetailBtnText: { fontSize: 11, fontWeight: '700', color: '#2563EB' },
+  calendarCard: { borderRadius: 14, borderWidth: 1, padding: 12, marginTop: 4 },
+  calendarMonthBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  calendarNavBtn: { width: 32, height: 32, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  calendarMonthTitle: { fontSize: 14, fontWeight: '800' },
+  calendarWeekRow: { flexDirection: 'row', marginBottom: 6 },
+  calendarWeekCell: { width: '14.285%', alignItems: 'center' },
+  calendarWeekText: { fontSize: 11, fontWeight: '700', color: '#64748B' },
+  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  calendarDayCell: { width: '14.285%', height: 38, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
+  calendarDayText: { fontSize: 13, fontWeight: '700' },
+  calendarDot: { width: 5, height: 5, borderRadius: 2.5, marginTop: 2 },
+  calendarLegendRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#CBD5E1' },
+  calendarLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  calendarLegendText: { fontSize: 11, color: '#64748B', fontWeight: '600' },
 });

@@ -55,97 +55,37 @@ export const HealthDateFilterBar: React.FC<HealthDateFilterBarProps> = ({
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.datePillsRow}>
-        {/* Nút "Chọn ngày trên lịch" kèm icon Calendar */}
-        {Platform.OS === 'web' ? (
-          <label
-            style={{
-              position: 'relative',
-              display: 'inline-flex',
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: isCustomDate ? '#2563EB' : (isDarkMode ? '#1E293B' : '#EFF6FF'),
-              borderWidth: 1.5,
-              borderColor: isCustomDate ? '#1D4ED8' : (isDarkMode ? '#334155' : '#BFDBFE'),
-              borderRadius: 12,
-              paddingHorizontal: 14,
-              paddingVertical: 8,
-              cursor: 'pointer',
-              boxShadow: isCustomDate ? '0 4px 10px rgba(37, 99, 235, 0.3)' : 'none',
-            } as any}
-          >
-            <Ionicons
-              name="calendar"
-              size={16}
-              color={isCustomDate ? '#FFFFFF' : '#2563EB'}
-              style={{ marginRight: 6 }}
-            />
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: '800',
-                color: isCustomDate ? '#FFFFFF' : '#1D4ED8',
-              }}
-            >
-              📅 Ngày: {formatDisplayDateVN(selectedDate)}
-            </Text>
-            <Ionicons
-              name="chevron-down"
-              size={13}
-              color={isCustomDate ? '#FFFFFF' : '#2563EB'}
-              style={{ marginLeft: 6 }}
-            />
-            <input
-              type="date"
-              value={selectedDate}
-              max={formatDateYMD(new Date())}
-              onChange={(e: any) => {
-                if (e.target.value) {
-                  setSelectedDate(e.target.value);
-                }
-              }}
-              style={{
-                position: 'absolute',
-                left: 0,
-                top: 0,
-                width: '100%',
-                height: '100%',
-                opacity: 0,
-                cursor: 'pointer',
-              }}
-            />
-          </label>
-        ) : (
-          <TouchableOpacity
+        {/* Nút "Chọn ngày trên lịch" mở Custom Calendar Modal */}
+        <TouchableOpacity
+          style={[
+            styles.calendarPickerBtn,
+            isCustomDate && styles.calendarPickerBtnActive,
+            isDarkMode && !isCustomDate && { backgroundColor: '#1E293B', borderColor: '#334155' },
+          ]}
+          onPress={onOpenCalendarModal}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name="calendar"
+            size={16}
+            color={isCustomDate ? '#FFFFFF' : '#2563EB'}
+            style={{ marginRight: 6 }}
+          />
+          <Text
             style={[
-              styles.calendarPickerBtn,
-              isCustomDate && styles.calendarPickerBtnActive,
-              isDarkMode && !isCustomDate && { backgroundColor: '#1E293B', borderColor: '#334155' },
+              styles.calendarPickerBtnText,
+              isCustomDate && { color: '#FFFFFF' },
             ]}
-            onPress={onOpenCalendarModal}
-            activeOpacity={0.8}
           >
-            <Ionicons
-              name="calendar"
-              size={16}
-              color={isCustomDate ? '#FFFFFF' : '#2563EB'}
-              style={{ marginRight: 6 }}
-            />
-            <Text
-              style={[
-                styles.calendarPickerBtnText,
-                isCustomDate && { color: '#FFFFFF' },
-              ]}
-            >
-              📅 Ngày: {formatDisplayDateVN(selectedDate)}
-            </Text>
-            <Ionicons
-              name="chevron-down"
-              size={13}
-              color={isCustomDate ? '#FFFFFF' : '#2563EB'}
-              style={{ marginLeft: 6 }}
-            />
-          </TouchableOpacity>
-        )}
+            Ngày: {formatDisplayDateVN(selectedDate)}
+          </Text>
+          <Ionicons
+            name="chevron-down"
+            size={13}
+            color={isCustomDate ? '#FFFFFF' : '#2563EB'}
+            style={{ marginLeft: 6 }}
+          />
+        </TouchableOpacity>
 
         {/* Các nút chọn nhanh (Hôm nay, Hôm qua, 2 ngày trước, 3 ngày trước) */}
         {dateOptions.map((opt) => {

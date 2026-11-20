@@ -10,9 +10,11 @@
 // ==============================================================================
 
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, Switch, Modal, Pressable, ActivityIndicator, Platform } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Switch, Modal, Pressable, ActivityIndicator, Platform, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { formatGenderVN } from '../../../utils/formatters';
+import { resolveAvatarUrl } from '../../auth/hooks/useProfileManager';
 import { useTheme } from '../../../store/useThemeStore';
 import { Colors } from '../../../theme/colors';
 import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
@@ -103,6 +105,16 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
 
   // Danh sách lịch uống nước trong ngày
   const [hydrationList, setHydrationList] = useState<HydrationSchedule[]>([]);
+  const [isAddHydrationVisible, setAddHydrationVisible] = useState(false);
+  const [hydrationDraft, setHydrationDraft] = useState({ time: '08:00', amount: '250ml', note: 'Uống 1 ly nước ấm' });
+
+  const handleAddHydrationSlot = () => {
+    const t = hydrationDraft.time.trim() || '08:00';
+    const amt = hydrationDraft.amount.trim() || '250ml';
+    const nt = hydrationDraft.note.trim() || 'Nhắc uống nước qua loa Hub';
+    setHydrationList((prev) => [...prev, { time: t, amount: amt, note: nt, done: false }].sort((a, b) => a.time.localeCompare(b.time)));
+    setAddHydrationVisible(false);
+  };
 
   // State quản lý Kê đơn thuốc mới (Chuẩn nghiệp vụ lâm sàng)
   interface PrescriptionMedDraft {
@@ -111,10 +123,12 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
     dose: string;
     sessions: ('MORNING' | 'NOON' | 'EVENING')[];
     time: string;
+    sessionTimes?: Partial<Record<'MORNING' | 'NOON' | 'EVENING', string>>;
     instructions: string;
   }
 
   const [isAddMedModalVisible, setAddMedModalVisible] = useState(false);
+  const [timePickerTarget, setTimePickerTarget] = useState<{ medId: string; session: 'MORNING' | 'NOON' | 'EVENING' } | null>(null);
   const [diagnosis, setDiagnosis] = useState('');
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
@@ -125,6 +139,22 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
     d.setDate(d.getDate() + 14);
     return d.toISOString().split('T')[0];
   });
+  const [datePickerTarget, setDatePickerTarget] = useState<'START' | 'END' | null>(null);
+  const [datePickerMonth, setDatePickerMonth] = useState<Date>(() => new Date());
+
+  const formatDisplayDateVN = (isoDate: string) => {
+    const parts = (isoDate || '').split('-');
+    if (parts.length !== 3) return isoDate || 'Chọn ngày';
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  };
+
+  const openPrescriptionDatePicker = (target: 'START' | 'END') => {
+    const raw = target === 'START' ? startDate : endDate;
+    const parsed = raw ? new Date(raw) : new Date();
+    const valid = !isNaN(parsed.getTime()) ? parsed : new Date();
+    setDatePickerMonth(new Date(valid.getFullYear(), valid.getMonth(), 1));
+    setDatePickerTarget(target);
+  };
   const [medList, setMedList] = useState<PrescriptionMedDraft[]>([
     {
       id: 'm_1',
@@ -357,22 +387,7 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
           <LocalizedText style={[styles.headerSubtitle, { color: textSub }]}>Đồng bộ giọng nói Loa thông minh Hub</LocalizedText>
         </View>
 
-        <TouchableOpacity
-          style={[styles.addHeaderBtn, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderColor: borderCol }, !canManageRecords && { opacity: 0.7 }]}
-          onPress={() => {
-            if (!canManageRecords) {
-              LocalizedAlert.alert(
-                'Không có quyền thao tác',
-                'Tài khoản Thành viên chưa được cấp quyền "Quản lý Lịch thuốc & Bệnh án". Vui lòng nhờ Chủ hộ cấp quyền trong mục Quản lý nhà.'
-              );
-              return;
-            }
-            setAddMedModalVisible(true);
-          }}
-          activeOpacity={0.7}
-        >
-          <Ionicons name={canManageRecords ? "add" : "lock-closed"} size={canManageRecords ? 22 : 18} color={canManageRecords ? Colors.primary : Colors.textMuted} />
-        </TouchableOpacity>
+        <View style={{ width: 38 }} />
       </View>
 
       {/* 1.1. Bộ chọn người cao tuổi khi gia đình có từ 2 người trở lên */}
@@ -428,15 +443,29 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
         {/* 1.2. Thẻ tóm tắt thông tin người cao tuổi đang theo dõi */}
         <View style={[styles.patientHeroCard, { backgroundColor: bgCard, borderColor: borderCol }]}>
           <View style={styles.patientHeroRow}>
-            <View style={[styles.patientAvatarCircle, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF' }]}>
-              <Ionicons name="person" size={24} color="#2563EB" />
-            </View>
+            {(() => {
+              const rawAvatar =
+                currentPatient?.avatar_url ||
+                (patientDisplayName.includes('Nguyễn Văn A')
+                  ? '/static/faces/fc51dc68-3ea2-4394-ac4b-906364ae425d.jpg'
+                  : null);
+              const resolvedUri = rawAvatar ? resolveAvatarUrl(rawAvatar) : null;
+              return (
+                <View style={[styles.patientAvatarCircle, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF', overflow: 'hidden', marginRight: 12 }]}>
+                  {resolvedUri ? (
+                    <Image source={{ uri: resolvedUri }} style={{ width: 44, height: 44, borderRadius: 22 }} resizeMode="cover" />
+                  ) : (
+                    <Ionicons name="person" size={24} color="#2563EB" />
+                  )}
+                </View>
+              );
+            })()}
             <View style={{ flex: 1 }}>
               <LocalizedText style={[styles.patientHeroName, { color: textTitle }]}>
                 {patientDisplayName} {currentPatient?.age ? `(${currentPatient.age} tuổi)` : ''}
               </LocalizedText>
               <LocalizedText style={[styles.patientHeroMeta, { color: textSub }]}>
-                {currentPatient?.gender ? `Giới tính: ${currentPatient.gender} • ` : ''}
+                {currentPatient?.gender ? `Giới tính: ${formatGenderVN(currentPatient.gender)} • ` : ''}
                 {currentPatient?.blood_type ? `Nhóm máu: ${currentPatient.blood_type}` : 'Đang theo dõi cữ thuốc & đơn điều trị'}
               </LocalizedText>
             </View>
@@ -546,7 +575,15 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
           </View>
         )}
         {/* Loa thông minh Hub */}
-        <View style={[styles.speakerCard, { backgroundColor: bgCard, borderColor: hubVoiceReminderEnabled ? Colors.primary : borderCol }]}>
+        <View
+          style={[
+            styles.speakerCard,
+            {
+              backgroundColor: hubVoiceReminderEnabled ? (isDarkMode ? '#1E293B' : '#FFFBF5') : bgCard,
+              borderColor: hubVoiceReminderEnabled ? (isDarkMode ? '#9A3412' : '#FED7AA') : borderCol,
+            },
+          ]}
+        >
           <View style={styles.speakerTopRow}>
             <View style={[styles.speakerIconCircle, { backgroundColor: isDarkMode ? '#432005' : '#FFF7ED' }]}>
               <Ionicons name="volume-high" size={24} color={Colors.primary} />
@@ -701,15 +738,27 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
         {/* Bổ sung nước định kỳ */}
         <View style={[styles.sectionCard, { backgroundColor: bgCard, borderColor: borderCol }]}>
           <View style={styles.sectionHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
               <View style={[styles.sectionIconBox, { backgroundColor: isDarkMode ? '#082F49' : '#E0F2FE' }]}>
                 <Ionicons name="water-outline" size={20} color="#0284C7" />
               </View>
-              <View>
+              <View style={{ flex: 1 }}>
                 <LocalizedText style={[styles.sectionTitle, { color: textTitle }]}>Bổ sung nước định kỳ</LocalizedText>
                 <LocalizedText style={[styles.sectionSubtitle, { color: textSub }]}>Khuyến nghị: 1.5 - 2L nước mỗi ngày</LocalizedText>
               </View>
             </View>
+            <TouchableOpacity
+              onPress={() => {
+                if (!canManageRecords) {
+                  LocalizedAlert.alert('Không có quyền thao tác', 'Tài khoản Thành viên chưa được cấp quyền quản lý lịch.');
+                  return;
+                }
+                setAddHydrationVisible(true);
+              }}
+              activeOpacity={0.75}
+            >
+              <LocalizedText style={styles.addMedLink}>+ Thêm mốc</LocalizedText>
+            </TouchableOpacity>
           </View>
 
           {hydrationList.length === 0 ? (
@@ -753,90 +802,191 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
                 <Ionicons name="medical" size={20} color={Colors.primary} />
               </View>
               <View style={{ flex: 1, marginLeft: 10 }}>
-                <LocalizedText style={[styles.modalTitleLarge, { color: textTitle }]}>Kê đơn thuốc điều trị</LocalizedText>
-                <LocalizedText style={[styles.modalSubtitleLarge, { color: textSub }]}>Tạo đơn bệnh và thiết lập lịch nhắc nhở các cữ uống</LocalizedText>
+                <LocalizedText style={[styles.modalTitleLarge, { color: textTitle }]}>Thêm lịch uống thuốc</LocalizedText>
+                <LocalizedText style={[styles.modalSubtitleLarge, { color: textSub }]}>
+                  {`Thiết lập lịch nhắc nhở uống thuốc cho: ${patientDisplayName}${currentPatient?.age ? ` (${currentPatient.age} tuổi)` : ''}`}
+                </LocalizedText>
               </View>
               <TouchableOpacity onPress={() => setAddMedModalVisible(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={22} color={textSub} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 520, marginTop: 10 }} contentContainerStyle={{ paddingBottom: 10 }}>
-              {/* Người cao tuổi nhận đơn thuốc */}
-              <View style={[styles.modalPatientBanner, { backgroundColor: isDarkMode ? '#1E293B' : '#EFF6FF', borderColor: isDarkMode ? '#3B82F644' : '#BFDBFE' }]}>
-                <Ionicons name="person-circle" size={24} color="#2563EB" />
-                <View style={{ flex: 1, marginLeft: 8 }}>
-                  <LocalizedText style={[styles.modalPatientBannerTitle, { color: textTitle }]}>
-                    Kê đơn cho: {patientDisplayName} {currentPatient?.age ? `(${currentPatient.age} tuổi)` : ''}
-                  </LocalizedText>
-                  <LocalizedText style={[styles.modalPatientBannerSub, { color: textSub }]}>
-                    Đơn thuốc sẽ tự động đồng bộ vào lịch nhắc nhở của người cao tuổi này.
-                  </LocalizedText>
-                </View>
-              </View>
-              {patientsList && patientsList.length > 1 && (
-                <View style={{ marginBottom: 10 }}>
-                  <LocalizedText style={[styles.inputLabelSmall, { color: textSub, marginBottom: 5 }]}>
-                    Đổi người nhận đơn thuốc:
-                  </LocalizedText>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {patientsList.map((p: any) => {
-                      const pId = p.id || p.elderly_id;
-                      const isSelected = pId == selectedPatientId;
-                      return (
-                        <TouchableOpacity
-                          key={`modal-p-${pId}`}
-                          style={[
-                            styles.patientChip,
-                            { paddingVertical: 4, paddingHorizontal: 10 },
-                            isSelected ? styles.patientChipActive : [styles.patientChipInactive, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }],
-                          ]}
-                          onPress={() => setSelectedPatientId(pId)}
-                        >
-                          <Ionicons name="person" size={12} color={isSelected ? '#FFFFFF' : (isDarkMode ? '#94A3B8' : '#64748B')} />
-                          <LocalizedText style={[styles.patientChipText, isSelected ? styles.patientChipTextActive : { color: isDarkMode ? '#CBD5E1' : '#475569' }]}>
-                            {p.full_name || p.name}
-                          </LocalizedText>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
-              )}
-
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 540, marginTop: 10 }} contentContainerStyle={{ paddingBottom: 10 }}>
               {/* PHẦN 1: THÔNG TIN BỆNH & THỜI GIAN ĐIỀU TRỊ */}
               <View style={[styles.prescriptionSectionBox, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: borderCol }]}>
-                <LocalizedText style={[styles.inputLabel, { color: textTitle }]}>1. Tên bệnh / Chẩn đoán (Diagnosis) *</LocalizedText>
+                <LocalizedText style={[styles.inputLabel, { color: textTitle }]}>Tên bệnh / Nhóm thuốc *</LocalizedText>
                 <LocalizedTextInput
                   style={[styles.textInput, { backgroundColor: bgCard, color: textTitle, borderColor: borderCol }]}
-                  placeholder="VD: Tăng huyết áp, Đái tháo đường Tuýp 2..."
+                  placeholder="VD: Tăng huyết áp, Tiểu đường..."
                   placeholderTextColor="#94A3B8"
                   value={diagnosis}
                   onChangeText={setDiagnosis}
                 />
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                  {['Tăng huyết áp', 'Tiểu đường', 'Tim mạch', 'Mỡ máu', 'Xương khớp', 'Bổ sung Vitamin'].map((group) => {
+                    const active = diagnosis.trim() === group;
+                    return (
+                      <TouchableOpacity
+                        key={group}
+                        activeOpacity={0.75}
+                        onPress={() => setDiagnosis(group)}
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          borderRadius: 14,
+                          borderWidth: 1,
+                          borderColor: active ? '#F97316' : borderCol,
+                          backgroundColor: active ? (isDarkMode ? 'rgba(249, 115, 22, 0.2)' : '#FFF7ED') : bgCard,
+                        }}
+                      >
+                        <LocalizedText style={{ fontSize: 11.5, fontWeight: active ? '700' : '500', color: active ? '#EA580C' : textTitle }}>
+                          {group}
+                        </LocalizedText>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
 
                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
                   <View style={{ flex: 1 }}>
                     <LocalizedText style={[styles.inputLabel, { color: textSub }]}>Ngày bắt đầu:</LocalizedText>
-                    <LocalizedTextInput
-                      style={[styles.textInput, { backgroundColor: bgCard, color: textTitle, borderColor: borderCol }]}
-                      placeholder="YYYY-MM-DD"
-                      placeholderTextColor="#94A3B8"
-                      value={startDate}
-                      onChangeText={setStartDate}
-                    />
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      onPress={() => openPrescriptionDatePicker('START')}
+                      style={[
+                        styles.textInput,
+                        {
+                          backgroundColor: bgCard,
+                          borderColor: borderCol,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        },
+                      ]}
+                    >
+                      <LocalizedText style={{ fontSize: 13.5, fontWeight: '600', color: textTitle }}>
+                        {formatDisplayDateVN(startDate)}
+                      </LocalizedText>
+                      <Ionicons name="calendar-outline" size={17} color="#2563EB" />
+                    </TouchableOpacity>
                   </View>
                   <View style={{ flex: 1 }}>
                     <LocalizedText style={[styles.inputLabel, { color: textSub }]}>Ngày kết thúc:</LocalizedText>
-                    <LocalizedTextInput
-                      style={[styles.textInput, { backgroundColor: bgCard, color: textTitle, borderColor: borderCol }]}
-                      placeholder="YYYY-MM-DD"
-                      placeholderTextColor="#94A3B8"
-                      value={endDate}
-                      onChangeText={setEndDate}
-                    />
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      onPress={() => openPrescriptionDatePicker('END')}
+                      style={[
+                        styles.textInput,
+                        {
+                          backgroundColor: bgCard,
+                          borderColor: borderCol,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        },
+                      ]}
+                    >
+                      <LocalizedText style={{ fontSize: 13.5, fontWeight: '600', color: textTitle }}>
+                        {formatDisplayDateVN(endDate)}
+                      </LocalizedText>
+                      <Ionicons name="calendar-outline" size={17} color="#2563EB" />
+                    </TouchableOpacity>
                   </View>
                 </View>
+
+                {/* Modal Calendar Date Picker cho Ngày bắt đầu / Ngày kết thúc */}
+                <Modal visible={Boolean(datePickerTarget)} transparent animationType="fade" onRequestClose={() => setDatePickerTarget(null)}>
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 20 }}
+                    activeOpacity={1}
+                    onPress={() => setDatePickerTarget(null)}
+                  >
+                    <View
+                      style={{ width: '100%', maxWidth: 350, borderRadius: 16, padding: 16, backgroundColor: bgCard }}
+                      onStartShouldSetResponder={() => true}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <LocalizedText style={{ fontSize: 14, fontWeight: '800', color: textTitle }}>
+                          {datePickerTarget === 'START' ? 'Chọn Ngày bắt đầu' : 'Chọn Ngày kết thúc'}
+                        </LocalizedText>
+                        <TouchableOpacity onPress={() => setDatePickerTarget(null)} hitSlop={8}>
+                          <Ionicons name="close" size={20} color="#94A3B8" />
+                        </TouchableOpacity>
+                      </View>
+
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <TouchableOpacity
+                          onPress={() => setDatePickerMonth(new Date(datePickerMonth.getFullYear(), datePickerMonth.getMonth() - 1, 1))}
+                          style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: isDarkMode ? '#0F172A' : '#EFF6FF', justifyContent: 'center', alignItems: 'center' }}
+                        >
+                          <Ionicons name="chevron-back" size={16} color="#2563EB" />
+                        </TouchableOpacity>
+                        <LocalizedText style={{ fontSize: 13.5, fontWeight: '700', color: textTitle }}>
+                          Tháng {datePickerMonth.getMonth() + 1}/{datePickerMonth.getFullYear()}
+                        </LocalizedText>
+                        <TouchableOpacity
+                          onPress={() => setDatePickerMonth(new Date(datePickerMonth.getFullYear(), datePickerMonth.getMonth() + 1, 1))}
+                          style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: isDarkMode ? '#0F172A' : '#EFF6FF', justifyContent: 'center', alignItems: 'center' }}
+                        >
+                          <Ionicons name="chevron-forward" size={16} color="#2563EB" />
+                        </TouchableOpacity>
+                      </View>
+
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 6 }}>
+                        {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((d) => (
+                          <LocalizedText key={d} style={{ width: 36, textAlign: 'center', fontSize: 11, fontWeight: '700', color: '#64748B' }}>{d}</LocalizedText>
+                        ))}
+                      </View>
+
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                        {(() => {
+                          const y = datePickerMonth.getFullYear();
+                          const m = datePickerMonth.getMonth();
+                          const firstRaw = new Date(y, m, 1).getDay();
+                          const firstDay = firstRaw === 0 ? 6 : firstRaw - 1;
+                          const totalDays = new Date(y, m + 1, 0).getDate();
+                          const activeStr = datePickerTarget === 'START' ? startDate : endDate;
+                          return Array.from({ length: firstDay + totalDays }, (_, idx) => {
+                            const isCurrent = idx >= firstDay;
+                            const dayNum = idx - firstDay + 1;
+                            const iso = `${y}-${String(m + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+                            const isSelected = isCurrent && iso === activeStr;
+                            return (
+                              <TouchableOpacity
+                                key={idx}
+                                disabled={!isCurrent}
+                                onPress={() => {
+                                  if (datePickerTarget === 'START') {
+                                    setStartDate(iso);
+                                    if (endDate && iso > endDate) {
+                                      setEndDate(iso);
+                                    }
+                                  } else {
+                                    setEndDate(iso);
+                                  }
+                                  setDatePickerTarget(null);
+                                }}
+                                style={{
+                                  width: '14.28%',
+                                  height: 36,
+                                  justifyContent: 'center',
+                                  alignItems: 'center',
+                                  borderRadius: 8,
+                                  backgroundColor: isSelected ? '#2563EB' : 'transparent',
+                                }}
+                              >
+                                <LocalizedText style={{ fontSize: 12.5, fontWeight: isSelected ? '800' : '600', color: !isCurrent ? 'transparent' : isSelected ? '#FFFFFF' : textTitle }}>
+                                  {isCurrent ? dayNum : ''}
+                                </LocalizedText>
+                              </TouchableOpacity>
+                            );
+                          });
+                        })()}
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                </Modal>
 
                 {/* Helper chips cho thời gian đợt thuốc */}
                 <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
@@ -893,51 +1043,98 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
                       onChangeText={(val) => handleUpdateMedItem(med.id, 'name', val)}
                     />
 
-                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                      <View style={{ flex: 1 }}>
-                        <LocalizedText style={[styles.inputLabelSmall, { color: textSub }]}>Liều lượng:</LocalizedText>
-                        <LocalizedTextInput
-                          style={[styles.textInputSmall, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', color: textTitle, borderColor: borderCol }]}
-                          placeholder="VD: 1 viên"
-                          placeholderTextColor="#94A3B8"
-                          value={med.dose}
-                          onChangeText={(val) => handleUpdateMedItem(med.id, 'dose', val)}
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <LocalizedText style={[styles.inputLabelSmall, { color: textSub }]}>Giờ uống cụ thể:</LocalizedText>
-                        <LocalizedTextInput
-                          style={[styles.textInputSmall, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', color: textTitle, borderColor: borderCol }]}
-                          placeholder="08:00"
-                          placeholderTextColor="#94A3B8"
-                          value={med.time}
-                          onChangeText={(val) => handleUpdateMedItem(med.id, 'time', val)}
-                        />
+                    <View style={{ marginTop: 8 }}>
+                      <LocalizedText style={[styles.inputLabelSmall, { color: textSub }]}>Liều lượng:</LocalizedText>
+                      <LocalizedTextInput
+                        style={[styles.textInputSmall, { backgroundColor: isDarkMode ? '#1E293B' : '#F8FAFC', color: textTitle, borderColor: borderCol }]}
+                        placeholder="VD: 1 viên"
+                        placeholderTextColor="#94A3B8"
+                        value={med.dose}
+                        onChangeText={(val) => handleUpdateMedItem(med.id, 'dose', val)}
+                      />
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                        {['1/2 viên', '1 viên', '2 viên', '1 gói', '10 ml'].map((dosePreset) => {
+                          const active = med.dose.trim() === dosePreset;
+                          return (
+                            <TouchableOpacity
+                              key={dosePreset}
+                              activeOpacity={0.75}
+                              onPress={() => handleUpdateMedItem(med.id, 'dose', dosePreset)}
+                              style={{
+                                paddingHorizontal: 9,
+                                paddingVertical: 4,
+                                borderRadius: 12,
+                                borderWidth: 1,
+                                borderColor: active ? '#F97316' : borderCol,
+                                backgroundColor: active ? (isDarkMode ? 'rgba(249, 115, 22, 0.2)' : '#FFF7ED') : (isDarkMode ? '#1E293B' : '#F8FAFC'),
+                              }}
+                            >
+                              <LocalizedText style={{ fontSize: 11, fontWeight: active ? '700' : '500', color: active ? '#EA580C' : textSub }}>
+                                {dosePreset}
+                              </LocalizedText>
+                            </TouchableOpacity>
+                          );
+                        })}
                       </View>
                     </View>
 
-                    {/* Cữ uống trong ngày */}
-                    <LocalizedText style={[styles.inputLabelSmall, { color: textSub, marginTop: 8 }]}>Cữ uống:</LocalizedText>
+                    {/* Cữ uống trong ngày (gộp giờ uống trực tiếp) */}
+                    <LocalizedText style={[styles.inputLabelSmall, { color: textSub, marginTop: 10 }]}>
+                      Cữ uống (chạm giờ để đổi nhanh):
+                    </LocalizedText>
                     <View style={{ flexDirection: 'row', gap: 6 }}>
-                      {(['MORNING', 'NOON', 'EVENING'] as const).map((s) => {
-                        const isChosen = med.sessions.includes(s);
+                      {([
+                        { key: 'MORNING' as const, label: 'Sáng', defaultTime: '08:00' },
+                        { key: 'NOON' as const, label: 'Trưa', defaultTime: '12:00' },
+                        { key: 'EVENING' as const, label: 'Tối', defaultTime: '20:00' },
+                      ]).map((s) => {
+                        const isChosen = med.sessions.includes(s.key);
+                        const slotTime = med.sessionTimes?.[s.key] || (med.sessions.length === 1 && isChosen ? med.time : s.defaultTime);
                         return (
-                          <TouchableOpacity
-                            key={s}
-                            style={[styles.sessionMultiChip, isChosen && styles.sessionMultiChipActive]}
-                            onPress={() => handleToggleMedSession(med.id, s)}
-                            activeOpacity={0.7}
+                          <View
+                            key={s.key}
+                            style={[
+                              styles.sessionMultiChip,
+                              { flexDirection: 'column', paddingVertical: 6, paddingHorizontal: 4, gap: 4 },
+                              isChosen && styles.sessionMultiChipActive,
+                            ]}
                           >
-                            <Ionicons
-                              name={isChosen ? 'checkbox' : 'square-outline'}
-                              size={14}
-                              color={isChosen ? '#FFF' : textSub}
-                              style={{ marginRight: 4 }}
-                            />
-                            <LocalizedText style={[styles.sessionMultiChipText, isChosen && styles.sessionMultiChipTextActive]}>
-                              {s === 'MORNING' ? 'Sáng (08:00)' : s === 'NOON' ? 'Trưa (12:00)' : 'Tối (20:00)'}
-                            </LocalizedText>
-                          </TouchableOpacity>
+                            <TouchableOpacity
+                              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}
+                              onPress={() => handleToggleMedSession(med.id, s.key)}
+                              activeOpacity={0.7}
+                            >
+                              <Ionicons
+                                name={isChosen ? 'checkbox' : 'square-outline'}
+                                size={14}
+                                color={isChosen ? '#FFF' : textSub}
+                                style={{ marginRight: 4 }}
+                              />
+                              <LocalizedText style={[styles.sessionMultiChipText, isChosen && styles.sessionMultiChipTextActive]}>
+                                {s.label}
+                              </LocalizedText>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              disabled={!isChosen}
+                              onPress={() => setTimePickerTarget({ medId: med.id, session: s.key })}
+                              activeOpacity={0.75}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 3,
+                                paddingHorizontal: 7,
+                                paddingVertical: 2,
+                                borderRadius: 8,
+                                backgroundColor: isChosen ? 'rgba(255,255,255,0.22)' : 'rgba(148,163,184,0.18)',
+                              }}
+                            >
+                              <LocalizedText style={{ fontSize: 10.5, fontWeight: '700', color: isChosen ? '#FFFFFF' : textSub }}>
+                                {slotTime}
+                              </LocalizedText>
+                              {isChosen && <Ionicons name="chevron-down" size={10} color="#FFFFFF" />}
+                            </TouchableOpacity>
+                          </View>
                         );
                       })}
                     </View>
@@ -993,6 +1190,151 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Modal Thêm mốc uống nước */}
+      <Modal transparent visible={isAddHydrationVisible} animationType="fade" onRequestClose={() => setAddHydrationVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setAddHydrationVisible(false)}>
+          <Pressable style={[styles.modalCard, { backgroundColor: bgCard, borderColor: borderCol }]} onPress={() => {}}>
+            <LocalizedText style={[styles.modalTitleLarge, { color: textTitle, marginBottom: 12 }]}>
+              Thêm mốc nhắc uống nước
+            </LocalizedText>
+
+            <LocalizedText style={[styles.inputLabel, { color: textSub }]}>Khung giờ nhắc qua loa:</LocalizedText>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+              {['08:00', '10:30', '14:30', '16:30', '20:00'].map((slot) => {
+                const active = hydrationDraft.time === slot;
+                return (
+                  <TouchableOpacity
+                    key={slot}
+                    activeOpacity={0.75}
+                    onPress={() => setHydrationDraft((p) => ({ ...p, time: slot }))}
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: active ? '#0284C7' : borderCol,
+                      backgroundColor: active ? '#E0F2FE' : (isDarkMode ? '#0F172A' : '#F8FAFC'),
+                    }}
+                  >
+                    <LocalizedText style={{ fontSize: 12, fontWeight: active ? '700' : '500', color: active ? '#0284C7' : textTitle }}>
+                      {slot}
+                    </LocalizedText>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <LocalizedTextInput
+              style={[styles.textInput, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', color: textTitle, borderColor: borderCol, marginBottom: 10 }]}
+              placeholder="Hoặc nhập giờ (VD: 09:15)"
+              placeholderTextColor="#94A3B8"
+              value={hydrationDraft.time}
+              onChangeText={(time) => setHydrationDraft((p) => ({ ...p, time }))}
+            />
+
+            <LocalizedText style={[styles.inputLabel, { color: textSub }]}>Lượng nước:</LocalizedText>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+              {['150ml', '200ml', '250ml', '300ml'].map((amt) => {
+                const active = hydrationDraft.amount === amt;
+                return (
+                  <TouchableOpacity
+                    key={amt}
+                    activeOpacity={0.75}
+                    onPress={() => setHydrationDraft((p) => ({ ...p, amount: amt }))}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 7,
+                      borderRadius: 10,
+                      alignItems: 'center',
+                      borderWidth: 1,
+                      borderColor: active ? '#0284C7' : borderCol,
+                      backgroundColor: active ? '#E0F2FE' : (isDarkMode ? '#0F172A' : '#F8FAFC'),
+                    }}
+                  >
+                    <LocalizedText style={{ fontSize: 12, fontWeight: active ? '700' : '500', color: active ? '#0284C7' : textTitle }}>
+                      {amt}
+                    </LocalizedText>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <LocalizedText style={[styles.inputLabel, { color: textSub }]}>Ghi chú lời nhắc:</LocalizedText>
+            <LocalizedTextInput
+              style={[styles.textInput, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', color: textTitle, borderColor: borderCol }]}
+              placeholder="VD: Uống 1 ly nước ấm"
+              placeholderTextColor="#94A3B8"
+              value={hydrationDraft.note}
+              onChangeText={(note) => setHydrationDraft((p) => ({ ...p, note }))}
+            />
+
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={[styles.modalCancelBtn, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderColor: borderCol }]}
+                onPress={() => setAddHydrationVisible(false)}
+              >
+                <LocalizedText style={[styles.modalCancelText, { color: textSub }]}>Hủy</LocalizedText>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalSaveBtn} onPress={handleAddHydrationSlot}>
+                <LocalizedText style={styles.modalSaveText}>Thêm mốc</LocalizedText>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+      {/* Modal chọn giờ nhanh cho từng cữ uống */}
+      <Modal transparent visible={Boolean(timePickerTarget)} animationType="fade" onRequestClose={() => setTimePickerTarget(null)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setTimePickerTarget(null)}>
+          <Pressable style={[styles.modalCard, { backgroundColor: bgCard, borderColor: borderCol, maxWidth: 320 }]} onPress={() => {}}>
+            <LocalizedText style={[styles.modalTitleLarge, { color: textTitle, marginBottom: 10 }]}>
+              {timePickerTarget?.session === 'MORNING'
+                ? 'Chọn giờ uống Buổi sáng'
+                : timePickerTarget?.session === 'NOON'
+                ? 'Chọn giờ uống Buổi trưa'
+                : 'Chọn giờ uống Buổi tối'}
+            </LocalizedText>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {(timePickerTarget?.session === 'MORNING'
+                ? ['06:30', '07:00', '07:30', '08:00', '08:30', '09:00']
+                : timePickerTarget?.session === 'NOON'
+                ? ['11:00', '11:30', '12:00', '12:30', '13:00', '13:30']
+                : ['18:30', '19:00', '19:30', '20:00', '20:30', '21:00']
+              ).map((slot) => (
+                <TouchableOpacity
+                  key={slot}
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    if (!timePickerTarget) return;
+                    setMedList((prev) =>
+                      prev.map((m) =>
+                        m.id === timePickerTarget.medId
+                          ? {
+                              ...m,
+                              time: slot,
+                              sessionTimes: { ...(m.sessionTimes || {}), [timePickerTarget.session]: slot },
+                            }
+                          : m
+                      )
+                    );
+                    setTimePickerTarget(null);
+                  }}
+                  style={{
+                    width: '30.5%',
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    alignItems: 'center',
+                    borderWidth: 1,
+                    borderColor: '#FED7AA',
+                    backgroundColor: isDarkMode ? '#0F172A' : '#FFF7ED',
+                  }}
+                >
+                  <LocalizedText style={{ fontSize: 13, fontWeight: '700', color: '#EA580C' }}>{slot}</LocalizedText>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1013,7 +1355,7 @@ const styles = StyleSheet.create({
   addHeaderBtn: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   scrollContent: { padding: 16, paddingBottom: 40, gap: 14 },
 
-  speakerCard: { borderRadius: 16, padding: 14, borderWidth: 1.5 },
+  speakerCard: { borderRadius: 16, padding: 14, borderWidth: 1 },
   speakerTopRow: { flexDirection: 'row', alignItems: 'center' },
   speakerIconCircle: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   speakerTitle: { fontSize: 14, fontWeight: '700' },
@@ -1086,9 +1428,9 @@ const styles = StyleSheet.create({
   sessionMultiChipText: { fontSize: 10.5, fontWeight: '700', color: '#475569' },
   sessionMultiChipTextActive: { color: '#FFF' },
   instChip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
-  instChipActive: { backgroundColor: '#E0F2FE', borderColor: '#0284C7' },
+  instChipActive: { backgroundColor: '#FFF7ED', borderColor: '#F97316' },
   instChipText: { fontSize: 11, color: '#64748B', fontWeight: '500' },
-  instChipTextActive: { color: '#0284C7', fontWeight: '700' },
+  instChipTextActive: { color: '#EA580C', fontWeight: '700' },
   modalTitle: { fontSize: 17, fontWeight: '800', marginBottom: 14, textAlign: 'center' },
   inputLabel: { fontSize: 12, fontWeight: '600', marginBottom: 4 },
   textInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
@@ -1123,7 +1465,9 @@ const styles = StyleSheet.create({
   },
 
   patientChipsRow: {
-    marginBottom: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    gap: 8,
   },
   patientChip: {
     flexDirection: 'row',
