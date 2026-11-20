@@ -120,6 +120,40 @@ def encrypt_huami_challenge(auth_key_hex: str, challenge_bytes: bytes) -> bytes:
     return cipher.encrypt(challenge_bytes)
 
 
+def extract_key_from_oauth_url(oauth_url_or_code: str, format_type: str = "AMAZ_TOOLS") -> List[Dict[str, str]]:
+    """Gửi link redirect OAuth (hm.xiaomi.com/watch.do?code=...) lên API để lấy token."""
+    clean_url = oauth_url_or_code.strip()
+    if not clean_url.startswith("http"):
+        clean_url = f"https://hm.xiaomi.com/watch.do?code={clean_url}"
+
+    payload = {
+        "url": clean_url,
+        "format": format_type,
+    }
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        "https://xiaomikey.mmk.pw/api/v1/perform",
+        data=data,
+        headers={"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        result = json.loads(resp.read().decode("utf-8"))
+        if result.get("status") == "ready":
+            devices = result.get("devices", [])
+            return [
+                {
+                    "name": d.get("name", "Xiaomi Band"),
+                    "mac": d.get("mac", ""),
+                    "auth_key": d.get("token", ""),
+                }
+                for d in devices
+            ]
+        else:
+            err = result.get("error", "Không thể lấy Auth Key từ link xác thực")
+            raise ValueError(f"{err} (Mã lỗi: {result.get('error_code', 'unknown')})")
+
+
 def fetch_huami_tokens(method: str, email: str, password: str) -> List[Dict[str, str]]:
     """Truy vấn máy chủ Xiaomi / Zepp để lấy danh sách thiết bị và Auth Key tương ứng."""
     results = []
@@ -484,12 +518,33 @@ def main():
 
     # huami-token integration options
     parser.add_argument("--get-token", action="store_true", help="Trợ lý lấy Auth Key từ đám mây Xiaomi / Zepp")
+    parser.add_argument("--oauth-url", type=str, default="", help="Link redirect OAuth (https://hm.xiaomi.com/watch.do?code=...) để trích xuất token")
     parser.add_argument("--method", choices=["xiaomi", "amazfit"], default="xiaomi", help="Phương thức đăng nhập (mặc định: xiaomi)")
     parser.add_argument("-e", "--email", type=str, default="", help="Email tài khoản")
     parser.add_argument("-p", "--password", type=str, default="", help="Mật khẩu tài khoản")
     parser.add_argument("--auth-key", type=str, default="", help="Auth Key 16-byte hex (e.g. 0x1234...)")
 
     args = parser.parse_args()
+
+    if args.oauth_url:
+        print("\n🔍 Đang trích xuất Auth Key từ link redirect OAuth...")
+        try:
+            devs = extract_key_from_oauth_url(args.oauth_url)
+            print(f"🎉 Tìm thấy {len(devs)} thiết bị:")
+            target_key = ""
+            target_mac = ""
+            for d in devs:
+                print(f"  👉 Tên: {d['name']} | MAC: {d['mac']} | Key: {d['auth_key']}")
+                if "band 7" in d["name"].lower() or not target_key:
+                    target_key = d["auth_key"]
+                    target_mac = d["mac"]
+            if target_key:
+                save_auth_key_to_config(target_key, target_mac or None)
+                print("💾 Đã lưu Auth Key vào cấu hình! Bắt đầu kết nối...\n")
+                asyncio.run(run_stream(target_mac or args.mac, args.backend_url, auth_key=target_key))
+        except Exception as e:
+            print(f"❌ Lỗi: {e}")
+        return
 
     if args.get_token:
         handle_get_token(args)
