@@ -1,0 +1,14 @@
+notebooks
+.idea
+.DS_Store
+*.zip
+__pycache__
+*.dump
+*.fw
+*.bin
+venv
+.venv/
+.mypy_cache
+dist
+akps/
+frida-js/
