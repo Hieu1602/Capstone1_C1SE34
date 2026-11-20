@@ -398,7 +398,7 @@ export const StepCameraRtspConfig: React.FC<StepCameraRtspConfigProps> = ({
         >
           <Ionicons name="barcode-outline" size={20} color="#0284C7" style={{ marginRight: 8 }} />
           <LocalizedText style={[localStyles.scanBarcodeBtnText, isDarkMode && { color: '#38BDF8' }]}>
-            {scannedData ? 'Quét lại mã vạch / QR' : 'Quét mã vạch S/N hoặc MAC ở đáy camera'}
+            {scannedData ? 'Quét lại mã vạch camera' : 'Quét mã vạch S/N hoặc MAC ở đáy camera'}
           </LocalizedText>
         </TouchableOpacity>
       )}
