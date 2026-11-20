@@ -13,6 +13,7 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { formatGenderVN } from '../../../utils/formatters';
 import { LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { Colors, Shadows } from '../../../theme/colors';
 
@@ -85,7 +86,7 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
               <Text style={{ fontSize: 11, color: isDarkMode ? '#94A3B8' : '#64748B', fontWeight: '600', marginTop: 1 }} numberOfLines={1}>
                 {patient?.age ? `${patient.age} tuổi` : ''}
                 {patient?.age && patient?.gender ? ' • ' : ''}
-                {patient?.gender ? `${patient.gender}` : ''}
+                {patient?.gender ? formatGenderVN(patient.gender, '') : ''}
                 {patientDevice ? ` • ${patientDevice.name || 'Vòng Smartband'}` : ' • Chưa gán vòng tay'}
               </Text>
             )}

@@ -1,4 +1,5 @@
 import { BASE_URL } from '../../../services/api';
+import { formatGenderVN } from '../../../utils/formatters';
 // types.ts
 // Các kiểu dữ liệu dùng chung cho phân hệ Doctor
 
@@ -71,6 +72,7 @@ export interface PatientOption {
   spo2?: number;
   healthStatus?: 'NORMAL' | 'WARNING' | 'DANGER' | string;
   lastUpdated?: string;
+  avatarUrl?: string | null;
 }
 
 export interface HourlyVitalRecord {
@@ -191,8 +193,7 @@ export const normalizePatientsList = (rawList: any[]): PatientCardData[] => {
 
       const birthYear = item.birth_year ? Number(item.birth_year) : (item.age ? currentYear - Number(item.age) : 0);
       const age = item.age ? Number(item.age) : (birthYear > 0 ? currentYear - birthYear : 0);
-      const rawGender = (item.gender || '').trim().toUpperCase();
-      const gender = rawGender === 'MALE' ? 'Nam' : rawGender === 'FEMALE' ? 'Nữ' : item.gender || '';
+      const gender = formatGenderVN(item.gender, '');
 
       const avatarUrl =
         item.avatar_url ||

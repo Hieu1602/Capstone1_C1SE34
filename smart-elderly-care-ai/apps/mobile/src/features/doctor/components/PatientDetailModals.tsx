@@ -14,10 +14,22 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  KeyboardTypeOptions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SeverityType, MedicationFormItem } from './types';
+import { MedicationFormItem } from './types';
+
+export {
+  DoctorNotesModal,
+  ConditionFormModal,
+  AllergiesDietModal,
+  ThresholdsConfigModal,
+} from './MedicalRecordEditModals';
+export type {
+  DoctorNotesModalProps,
+  ConditionFormModalProps,
+  AllergiesDietModalProps,
+  ThresholdsConfigModalProps,
+} from './MedicalRecordEditModals';
 
 // Wrapper dùng chung cho các Modal chi tiết bệnh nhân
 const BaseModal: React.FC<{
@@ -56,9 +68,8 @@ const LabeledField: React.FC<{
   placeholder?: string;
   colors: any;
   multilineHeight?: number;
-  keyboardType?: KeyboardTypeOptions;
   small?: boolean;
-}> = ({ label, value, onChangeText, placeholder, colors, multilineHeight, keyboardType, small }) => (
+}> = ({ label, value, onChangeText, placeholder, colors, multilineHeight, small }) => (
   <>
     <Text style={small ? styles.subFieldLabel : styles.fieldLabel}>{label}</Text>
     <TextInput
@@ -68,7 +79,6 @@ const LabeledField: React.FC<{
         { color: colors.textPrimary, borderColor: colors.border },
       ]}
       multiline={Boolean(multilineHeight)}
-      keyboardType={keyboardType}
       placeholder={placeholder}
       placeholderTextColor="#94A3B8"
       value={value}
@@ -78,230 +88,7 @@ const LabeledField: React.FC<{
 );
 
 // =============================================================
-// 1. MODAL GHI CHÚ BÁC SĨ & LỊCH TÁI KHÁM
-// =============================================================
-export interface DoctorNotesModalProps {
-  visible: boolean;
-  notes: string;
-  nextAppt: string;
-  onChangeNotes: (val: string) => void;
-  onChangeNextAppt: (val: string) => void;
-  isSaving: boolean;
-  onSave: () => void;
-  onClose: () => void;
-  isDarkMode: boolean;
-  colors: any;
-}
-
-export const DoctorNotesModal: React.FC<DoctorNotesModalProps> = ({
-  visible,
-  notes,
-  nextAppt,
-  onChangeNotes,
-  onChangeNextAppt,
-  isSaving,
-  onSave,
-  onClose,
-  isDarkMode,
-  colors,
-}) => (
-  <BaseModal visible={visible} title="Ghi Chú & Lịch Tái Khám" onClose={onClose} isDarkMode={isDarkMode} colors={colors}>
-    <LabeledField
-      label="Lời dặn dò y khoa"
-      value={notes}
-      onChangeText={onChangeNotes}
-      placeholder="Nhập ghi chú / tiến triển lâm sàng..."
-      colors={colors}
-      multilineHeight={80}
-    />
-    <LabeledField
-      label="Lịch hẹn tái khám tiếp theo"
-      value={nextAppt}
-      onChangeText={onChangeNextAppt}
-      placeholder="VD: 15/10/2026 - 08:30"
-      colors={colors}
-    />
-    <SubmitBtn title="Lưu Thay Đổi" onPress={onSave} loading={isSaving} />
-  </BaseModal>
-);
-
-// =============================================================
-// 2. MODAL THÊM / SỬA BỆNH LÝ NỀN
-// =============================================================
-export interface ConditionFormModalProps {
-  visible: boolean;
-  isEditing: boolean;
-  name: string;
-  severity: SeverityType;
-  note: string;
-  onChangeName: (val: string) => void;
-  onChangeSeverity: (val: SeverityType) => void;
-  onChangeNote: (val: string) => void;
-  isSaving: boolean;
-  onSave: () => void;
-  onClose: () => void;
-  isDarkMode: boolean;
-  colors: any;
-}
-
-const SEVERITY_OPTIONS = [
-  { key: 'danger' as const, label: 'Nguy cơ cao', color: '#EF4444', bg: '#FEE2E2' },
-  { key: 'warning' as const, label: 'Cần theo dõi', color: '#F59E0B', bg: '#FEF3C7' },
-  { key: 'info' as const, label: 'Ổn định', color: '#0284C7', bg: '#E0F2FE' },
-];
-
-export const ConditionFormModal: React.FC<ConditionFormModalProps> = ({
-  visible,
-  isEditing,
-  name,
-  severity,
-  note,
-  onChangeName,
-  onChangeSeverity,
-  onChangeNote,
-  isSaving,
-  onSave,
-  onClose,
-  isDarkMode,
-  colors,
-}) => (
-  <BaseModal
-    visible={visible}
-    title={isEditing ? 'Sửa Chẩn Đoán Bệnh Lý' : 'Thêm Bệnh Lý Nền Mới'}
-    onClose={onClose}
-    isDarkMode={isDarkMode}
-    colors={colors}
-  >
-    <LabeledField
-      label="Tên bệnh lý / chẩn đoán (*)"
-      value={name}
-      onChangeText={onChangeName}
-      placeholder="VD: Tăng huyết áp, Đái tháo đường..."
-      colors={colors}
-    />
-
-    <Text style={styles.fieldLabel}>Mức độ nghiêm trọng</Text>
-    <View style={styles.severityPickerRow}>
-      {SEVERITY_OPTIONS.map((s) => {
-        const isSelected = severity === s.key;
-        return (
-          <TouchableOpacity
-            key={s.key}
-            style={[
-              styles.severityOptionBtn,
-              isSelected ? { borderColor: s.color, backgroundColor: s.bg } : { borderColor: colors.border },
-            ]}
-            onPress={() => onChangeSeverity(s.key)}
-          >
-            <Text style={[styles.severityOptionText, { color: isSelected ? s.color : isDarkMode ? '#CBD5E1' : '#64748B' }]}>
-              {s.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-
-    <LabeledField
-      label="Ghi chú lâm sàng"
-      value={note}
-      onChangeText={onChangeNote}
-      placeholder="Dặn dò cụ thể..."
-      colors={colors}
-      multilineHeight={70}
-    />
-    <SubmitBtn title="Lưu Bệnh Lý" onPress={onSave} loading={isSaving} />
-  </BaseModal>
-);
-
-// =============================================================
-// 3. MODAL DỊ ỨNG & DINH DƯỠNG
-// =============================================================
-export interface AllergiesDietModalProps {
-  visible: boolean;
-  drugAllergies: string;
-  foodAllergies: string;
-  dietaryNotes: string;
-  onChangeDrugAllergies: (val: string) => void;
-  onChangeFoodAllergies: (val: string) => void;
-  onChangeDietaryNotes: (val: string) => void;
-  isSaving: boolean;
-  onSave: () => void;
-  onClose: () => void;
-  isDarkMode: boolean;
-  colors: any;
-}
-
-export const AllergiesDietModal: React.FC<AllergiesDietModalProps> = ({
-  visible,
-  drugAllergies,
-  foodAllergies,
-  dietaryNotes,
-  onChangeDrugAllergies,
-  onChangeFoodAllergies,
-  onChangeDietaryNotes,
-  isSaving,
-  onSave,
-  onClose,
-  isDarkMode,
-  colors,
-}) => (
-  <BaseModal visible={visible} title="Dị Ứng & Dinh Dưỡng" onClose={onClose} isDarkMode={isDarkMode} colors={colors}>
-    <LabeledField label="Dị ứng thuốc" value={drugAllergies} onChangeText={onChangeDrugAllergies} placeholder="VD: Penicillin, Aspirin..." colors={colors} />
-    <LabeledField label="Dị ứng thực phẩm" value={foodAllergies} onChangeText={onChangeFoodAllergies} placeholder="VD: Hải sản, đậu phộng..." colors={colors} />
-    <LabeledField
-      label="Chế độ ăn khuyến nghị"
-      value={dietaryNotes}
-      onChangeText={onChangeDietaryNotes}
-      placeholder="VD: Ăn nhạt, giảm muối..."
-      colors={colors}
-      multilineHeight={75}
-    />
-    <SubmitBtn title="Lưu Dinh Dưỡng" onPress={onSave} loading={isSaving} />
-  </BaseModal>
-);
-
-// =============================================================
-// 4. MODAL CẤU HÌNH NGƯỠNG SINH HIỆU
-// =============================================================
-export interface ThresholdsConfigModalProps {
-  visible: boolean;
-  hrHigh: string;
-  hrLow: string;
-  spo2Low: string;
-  onChangeHrHigh: (val: string) => void;
-  onChangeHrLow: (val: string) => void;
-  onChangeSpo2Low: (val: string) => void;
-  isSaving?: boolean;
-  onSave: () => void;
-  onClose: () => void;
-  isDarkMode: boolean;
-  colors: any;
-}
-
-export const ThresholdsConfigModal: React.FC<ThresholdsConfigModalProps> = ({
-  visible,
-  hrHigh,
-  hrLow,
-  spo2Low,
-  onChangeHrHigh,
-  onChangeHrLow,
-  onChangeSpo2Low,
-  isSaving,
-  onSave,
-  onClose,
-  isDarkMode,
-  colors,
-}) => (
-  <BaseModal visible={visible} title="Cấu Hình Ngưỡng Y Tế" onClose={onClose} isDarkMode={isDarkMode} colors={colors}>
-    <LabeledField label="Nhịp tim tối đa (bpm)" value={hrHigh} onChangeText={onChangeHrHigh} keyboardType="numeric" colors={colors} />
-    <LabeledField label="Nhịp tim tối thiểu (bpm)" value={hrLow} onChangeText={onChangeHrLow} keyboardType="numeric" colors={colors} />
-    <LabeledField label="SpO₂ tối thiểu (%)" value={spo2Low} onChangeText={onChangeSpo2Low} keyboardType="numeric" colors={colors} />
-    <SubmitBtn title="Lưu Cấu Hình" onPress={onSave} loading={isSaving} />
-  </BaseModal>
-);
-
-// =============================================================
-// 5. MODAL KÊ ĐƠN THUỐC / SỬA ĐƠN THUỐC
+// MODAL KÊ ĐƠN THUỐC / SỬA ĐƠN THUỐC
 // =============================================================
 export interface PrescriptionFormModalProps {
   visible: boolean;

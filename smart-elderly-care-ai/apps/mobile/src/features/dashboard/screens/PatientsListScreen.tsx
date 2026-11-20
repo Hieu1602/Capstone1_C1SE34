@@ -23,6 +23,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
+import { BirthYearPickerModal } from '../components/BirthYearPickerModal';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { BASE_URL } from '../../../services/api';
@@ -54,18 +55,20 @@ export default function PatientsListScreen({ navigation }: any) {
     createPatient,
     isLoadingList,
   } = useVitalStore();
-  const { userRole, role, permissions, viewRole } = useAuthStore();
+  const { userRole, role, permissions, viewRole, userPhone, phone_number } = useAuthStore();
+  const ownerPhone = (userPhone || phone_number || '').trim();
 
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreateVisible, setIsCreateVisible] = useState(false);
+  const [isBirthYearPickerVisible, setBirthYearPickerVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [createDraft, setCreateDraft] = useState({
     name: '',
     birthYear: '',
     gender: 'Nam',
-    blood: 'A+',
+    blood: 'Chưa rõ',
     weight: '',
     height: '',
     phone: '',
@@ -134,13 +137,13 @@ export default function PatientsListScreen({ navigation }: any) {
         full_name: trimmed,
         birth_year: by,
         gender: createDraft.gender,
-        blood_type: createDraft.blood,
+        blood_type: createDraft.blood === 'Chưa rõ' ? undefined : createDraft.blood,
         height_cm: parseInt(createDraft.height, 10) || undefined,
         weight_kg: parseInt(createDraft.weight, 10) || undefined,
         emergency_contact_phone: createDraft.phone.trim() || undefined,
       });
       setIsCreateVisible(false);
-      setCreateDraft({ name: '', birthYear: '', gender: 'Nam', blood: 'A+', weight: '', height: '', phone: '' });
+      setCreateDraft({ name: '', birthYear: '', gender: 'Nam', blood: 'Chưa rõ', weight: '', height: '', phone: '' });
       showAlert('Thành công 🎉', `Đã thêm hồ sơ cụ ${trimmed}!`);
       if (created?.id) {
         navigation.navigate('PatientMedicalRecord', { patientId: created.id, patientName: trimmed });
@@ -191,7 +194,7 @@ export default function PatientsListScreen({ navigation }: any) {
             activeOpacity={0.8}
           >
             <Ionicons name="add" size={18} color="#FFFFFF" />
-            <Text style={styles.addTopBtnText}>Thêm cụ</Text>
+            <Text style={styles.addTopBtnText}>Thêm hồ sơ</Text>
           </TouchableOpacity>
         ) : (
           <View style={{ width: 40 }} />
@@ -351,26 +354,41 @@ export default function PatientsListScreen({ navigation }: any) {
                 onChangeText={(v) => setCreateDraft((p) => ({ ...p, name: v }))}
               />
 
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginTop: 12 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.inputLabel, { color: textSub }]}>Năm sinh:</Text>
-                  <TextInput
-                    style={inputStyle}
-                    keyboardType="numeric"
-                    maxLength={4}
-                    placeholder="VD: 1948"
-                    placeholderTextColor="#94A3B8"
-                    value={createDraft.birthYear}
-                    onChangeText={(v) => setCreateDraft((p) => ({ ...p, birthYear: v.replace(/[^0-9]/g, '') }))}
-                  />
-                </View>
-                <View style={{ flex: 1, justifyContent: 'flex-end', paddingBottom: 6 }}>
-                  <View style={[styles.calcBadge, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' }]}>
-                    <Ionicons name="calendar-outline" size={14} color={Colors.primary} />
-                    <Text style={[styles.calcBadgeText, { color: textTitle }]}>
-                      {createAge > 0 ? `Tuổi: ${createAge}` : 'Tuổi: --'}
-                    </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TextInput
+                      style={[inputStyle, { flex: 1, height: 42 }]}
+                      keyboardType="numeric"
+                      maxLength={4}
+                      placeholder="VD: 1948"
+                      placeholderTextColor="#94A3B8"
+                      value={createDraft.birthYear}
+                      onChangeText={(v) => setCreateDraft((p) => ({ ...p, birthYear: v.replace(/[^0-9]/g, '') }))}
+                    />
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      onPress={() => setBirthYearPickerVisible(true)}
+                      style={{
+                        height: 42,
+                        paddingHorizontal: 10,
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: '#FED7AA',
+                        backgroundColor: isDarkMode ? 'rgba(249, 115, 22, 0.15)' : '#FFF7ED',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Ionicons name="calendar-outline" size={18} color="#EA580C" />
+                    </TouchableOpacity>
                   </View>
+                </View>
+                <View style={[styles.calcBadge, { height: 42, paddingHorizontal: 12, borderRadius: 10, backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', justifyContent: 'center', alignItems: 'center' }]}>
+                  <Text style={[styles.calcBadgeText, { color: textTitle }]}>
+                    {createAge > 0 ? `${createAge} tuổi` : '-- tuổi'}
+                  </Text>
                 </View>
               </View>
 
@@ -397,22 +415,38 @@ export default function PatientsListScreen({ navigation }: any) {
               </View>
 
               <Text style={[styles.inputLabel, { color: textSub, marginTop: 12 }]}>Nhóm máu:</Text>
-              <View style={styles.bloodTypeGrid}>
-                {['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].map((type) => {
+              <View style={[styles.bloodTypeGrid, { gap: 8 }]}>
+                {['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-', 'Chưa rõ'].map((type) => {
                   const isSel = createDraft.blood === type;
+                  const isUnknown = type === 'Chưa rõ';
                   return (
                     <TouchableOpacity
                       key={type}
                       style={[
                         styles.bloodChip,
-                        isDarkMode && { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: borderCol },
-                        isSel && { backgroundColor: isDarkMode ? '#4C1D1D' : '#FEE2E2', borderColor: '#EF4444', borderWidth: 1.5 },
+                        { width: '31.3%', height: 38, paddingVertical: 0 },
+                        isDarkMode && { backgroundColor: '#0F172A', borderColor: borderCol },
+                        isSel && {
+                          backgroundColor: isUnknown ? (isDarkMode ? '#1E293B' : '#FFF7ED') : (isDarkMode ? '#4C1D1D' : '#FEE2E2'),
+                          borderColor: isUnknown ? '#F97316' : '#EF4444',
+                          borderWidth: 1.5,
+                        },
                       ]}
                       onPress={() => setCreateDraft((p) => ({ ...p, blood: type }))}
                       activeOpacity={0.7}
                     >
-                      <Ionicons name="water" size={12} color={isSel ? '#EF4444' : textSub} />
-                      <Text style={[styles.bloodChipText, { color: isSel ? '#EF4444' : textTitle, fontWeight: isSel ? '800' : '600' }]}>{type}</Text>
+                      {!isUnknown && <Ionicons name="water" size={12} color={isSel ? '#EF4444' : textSub} />}
+                      <Text
+                        style={[
+                          styles.bloodChipText,
+                          {
+                            color: isSel ? (isUnknown ? '#EA580C' : '#EF4444') : textTitle,
+                            fontWeight: isSel ? '800' : '600',
+                          },
+                        ]}
+                      >
+                        {type}
+                      </Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -457,7 +491,25 @@ export default function PatientsListScreen({ navigation }: any) {
                 </View>
               </View>
 
-              <Text style={[styles.inputLabel, { color: textSub, marginTop: 12 }]}>Số ĐT liên hệ khẩn cấp (tùy chọn):</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 4 }}>
+                <Text style={[styles.inputLabel, { color: textSub, marginBottom: 0 }]}>Số ĐT liên hệ khẩn cấp (tùy chọn):</Text>
+                {Boolean(ownerPhone) && (
+                  <TouchableOpacity
+                    activeOpacity={0.75}
+                    onPress={() => setCreateDraft((p) => ({ ...p, phone: ownerPhone }))}
+                    style={{
+                      paddingHorizontal: 9,
+                      paddingVertical: 4,
+                      borderRadius: 12,
+                      backgroundColor: isDarkMode ? 'rgba(249, 115, 22, 0.2)' : '#FFF7ED',
+                      borderWidth: 1,
+                      borderColor: '#FED7AA',
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#EA580C' }}>Dùng số của tôi</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
               <TextInput
                 style={inputStyle}
                 keyboardType="phone-pad"
@@ -492,6 +544,17 @@ export default function PatientsListScreen({ navigation }: any) {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <BirthYearPickerModal
+        visible={isBirthYearPickerVisible}
+        selectedYear={createDraft.birthYear}
+        onSelectYear={(yr) => setCreateDraft((p) => ({ ...p, birthYear: yr }))}
+        onClose={() => setBirthYearPickerVisible(false)}
+        isDarkMode={isDarkMode}
+        bgCard={bgCard}
+        borderCol={borderCol}
+        textTitle={textTitle}
+      />
     </SafeAreaView>
   );
 }

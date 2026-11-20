@@ -45,8 +45,8 @@ def _async_database_url(database_url: str):
 _parsed_db_url = _async_database_url(settings.DATABASE_URL)
 
 _connect_args: dict = {
-    "timeout": 20,
-    "command_timeout": 30,
+    "timeout": 10,
+    "command_timeout": 25,
     "server_settings": {
         "application_name": "smartcare_ai_fastapi",
         "tcp_keepalives_idle": "30",
@@ -59,10 +59,10 @@ engine = create_async_engine(
     _parsed_db_url,
     echo=settings.DEBUG,
     connect_args=_connect_args,
-    pool_size=10,
-    max_overflow=20,
-    pool_timeout=10,
-    pool_recycle=300,
+    pool_size=20,
+    max_overflow=30,
+    pool_timeout=20,
+    pool_recycle=180,
     pool_pre_ping=True,
 )
 

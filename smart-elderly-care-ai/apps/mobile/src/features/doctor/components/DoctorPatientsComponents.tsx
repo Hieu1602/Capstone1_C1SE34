@@ -10,6 +10,7 @@ import Svg, { Path, Circle } from 'react-native-svg';
 import { Colors } from '../../../theme/colors';
 import { LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
 import { PatientCardData, getPatientAvatarUrl } from './types';
+import { formatGenderVN } from '../../../utils/formatters';
 
 // =============================================================
 // MINI SPARKLINE COMPONENT (Lấy cảm hứng từ phần Records ở Ảnh 5)
@@ -375,7 +376,7 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
             style={[cardStyles.patientMeta, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}
             numberOfLines={1}
           >
-            {patient.age ? `${patient.age} tuổi` : 'Cao tuổi'} • {patient.gender ? (patient.gender === 'Nữ' || patient.gender.toUpperCase() === 'FEMALE' ? 'Nữ' : 'Nam') : 'Chưa cập nhật'}
+            {patient.age ? `${patient.age} tuổi` : 'Cao tuổi'} • {formatGenderVN(patient.gender)}
             {patient.house_name && patient.house_name !== 'Nhà của tôi'
               ? ` • ${patient.house_name}`
               : (!patient.house_address ? ' • Nhà riêng' : '')}

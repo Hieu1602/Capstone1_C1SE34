@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+import { formatGenderVN } from '../../../utils/formatters';
 import { AppointmentItem, PatientCardData, getPatientAvatarUrl } from './types';
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
@@ -87,14 +88,14 @@ const PatientAvatarMini: React.FC<{ pat?: any; fallbackName?: string; bg?: strin
 };
 
 const PopoverCard: React.FC<ThemeProps & {
-  visible: boolean; title: string; onClose: () => void;
+  visible: boolean; title: string; titleNode?: React.ReactNode; onClose: () => void;
   headerRight?: React.ReactNode; children: React.ReactNode;
-}> = ({ visible, title, onClose, isDarkMode, colors, headerRight, children }) => (
+}> = ({ visible, title, titleNode, onClose, isDarkMode, colors, headerRight, children }) => (
   <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
     <TouchableOpacity style={styles.popoverBackdrop} activeOpacity={1} onPress={onClose}>
       <View style={[styles.popoverCard, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]} onStartShouldSetResponder={() => true}>
         <View style={styles.popoverHeader}>
-          <LocalizedText style={[styles.popoverTitle, { color: colors.textPrimary }]}>{title}</LocalizedText>
+          {titleNode || <LocalizedText style={[styles.popoverTitle, { color: colors.textPrimary }]}>{title}</LocalizedText>}
           {headerRight || (
             <TouchableOpacity onPress={onClose} hitSlop={8}>
               <Ionicons name="close" size={20} color="#94A3B8" />
@@ -169,6 +170,7 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
   const [selectedDate, setSelectedDate] = useState<Date>(() => getDefaultScheduledDate(scheduledAt));
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('08:30');
   const [calendarViewDate, setCalendarViewDate] = useState<Date>(new Date());
+  const [calendarPickerMode, setCalendarPickerMode] = useState<'DAY' | 'MONTH_YEAR'>('DAY');
 
   const syncScheduledAt = (date: Date, timeSlot: string) => {
     const [hours, minutes] = timeSlot.split(':').map(Number);
@@ -472,37 +474,127 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
       <PopoverCard
         visible={activePopover === 'DATE'}
         title={`Tháng ${calendarViewDate.getMonth() + 1}/${calendarViewDate.getFullYear()}`}
-        onClose={() => setActivePopover('NONE')}
+        titleNode={
+          <TouchableOpacity
+            style={[styles.rowCenter, { gap: 5, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, backgroundColor: isDarkMode ? '#0F2942' : '#EFF6FF' }]}
+            activeOpacity={0.75}
+            onPress={() => setCalendarPickerMode((prev) => (prev === 'DAY' ? 'MONTH_YEAR' : 'DAY'))}
+          >
+            <LocalizedText style={[styles.popoverTitle, { color: '#0284C7' }]}>
+              {`Tháng ${calendarViewDate.getMonth() + 1}/${calendarViewDate.getFullYear()}`}
+            </LocalizedText>
+            <Ionicons name={calendarPickerMode === 'MONTH_YEAR' ? 'caret-up' : 'caret-down'} size={13} color="#0284C7" />
+          </TouchableOpacity>
+        }
+        onClose={() => { setCalendarPickerMode('DAY'); setActivePopover('NONE'); }}
         isDarkMode={isDarkMode}
         colors={colors}
         headerRight={
-          <View style={[styles.rowCenter, { gap: 8 }]}>
-            {[-1, 1].map((delta) => (
-              <TouchableOpacity key={delta} style={styles.calendarNavBtn} onPress={() => setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + delta, 1))}>
-                <Ionicons name={delta < 0 ? 'chevron-back' : 'chevron-forward'} size={18} color="#0284C7" />
-              </TouchableOpacity>
-            ))}
-          </View>
+          calendarPickerMode === 'DAY' ? (
+            <View style={[styles.rowCenter, { gap: 8 }]}>
+              {[-1, 1].map((delta) => (
+                <TouchableOpacity key={delta} style={styles.calendarNavBtn} onPress={() => setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + delta, 1))}>
+                  <Ionicons name={delta < 0 ? 'chevron-back' : 'chevron-forward'} size={18} color="#0284C7" />
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            <TouchableOpacity onPress={() => setCalendarPickerMode('DAY')} hitSlop={8}>
+              <LocalizedText style={{ fontSize: 12, fontWeight: '700', color: '#0284C7' }}>Quay lại</LocalizedText>
+            </TouchableOpacity>
+          )
         }
       >
-        <View style={styles.calendarWeekRow}>
-          {DAYS_SHORT.map((d) => <LocalizedText key={d} style={styles.calendarWeekText}>{d}</LocalizedText>)}
-        </View>
-        <View style={styles.calendarGrid}>
-          {calendarDays.map((dayItem, idx) => (
-            <TouchableOpacity
-              key={idx}
-              style={[styles.calendarCell, dayItem.selected && { backgroundColor: '#0284C7' }]}
-              disabled={!dayItem.current || dayItem.past}
-              onPress={() => { syncScheduledAt(dayItem.date, selectedTimeSlot); setActivePopover('NONE'); }}
-            >
-              <LocalizedText style={{ fontSize: 12, color: !dayItem.current ? '#CBD5E1' : dayItem.past ? '#94A3B8' : dayItem.selected ? '#FFFFFF' : colors.textPrimary, fontWeight: dayItem.selected ? '800' : '600' }}>
-                {dayItem.date.getDate()}
+        {calendarPickerMode === 'MONTH_YEAR' ? (
+          <View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <TouchableOpacity
+                style={styles.calendarNavBtn}
+                onPress={() => setCalendarViewDate(new Date(calendarViewDate.getFullYear() - 1, calendarViewDate.getMonth(), 1))}
+              >
+                <Ionicons name="chevron-back" size={16} color="#0284C7" />
+              </TouchableOpacity>
+              <LocalizedText style={{ fontSize: 14, fontWeight: '800', color: colors.textPrimary }}>
+                Năm {calendarViewDate.getFullYear()}
               </LocalizedText>
-            </TouchableOpacity>
-          ))}
-        </View>
-        <TouchableOpacity style={styles.calendarCloseBtn} onPress={() => setActivePopover('NONE')}>
+              <TouchableOpacity
+                style={styles.calendarNavBtn}
+                onPress={() => setCalendarViewDate(new Date(calendarViewDate.getFullYear() + 1, calendarViewDate.getMonth(), 1))}
+              >
+                <Ionicons name="chevron-forward" size={16} color="#0284C7" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 10 }}>
+              {[2024, 2025, 2026, 2027, 2028, 2029].map((yr) => {
+                const activeYr = calendarViewDate.getFullYear() === yr;
+                return (
+                  <TouchableOpacity
+                    key={yr}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 14,
+                      backgroundColor: activeYr ? '#0284C7' : (isDarkMode ? '#0F172A' : '#F1F5F9'),
+                    }}
+                    onPress={() => setCalendarViewDate(new Date(yr, calendarViewDate.getMonth(), 1))}
+                  >
+                    <LocalizedText style={{ fontSize: 12, fontWeight: '700', color: activeYr ? '#FFFFFF' : colors.textPrimary }}>
+                      {yr}
+                    </LocalizedText>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {Array.from({ length: 12 }, (_, mIdx) => {
+                const activeMonth = calendarViewDate.getMonth() === mIdx;
+                return (
+                  <TouchableOpacity
+                    key={mIdx}
+                    style={{
+                      width: '22.8%',
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                      alignItems: 'center',
+                      backgroundColor: activeMonth ? '#0284C7' : (isDarkMode ? '#0F172A' : '#F8FAFC'),
+                      borderWidth: 1,
+                      borderColor: activeMonth ? '#0284C7' : colors.border,
+                    }}
+                    onPress={() => {
+                      setCalendarViewDate(new Date(calendarViewDate.getFullYear(), mIdx, 1));
+                      setCalendarPickerMode('DAY');
+                    }}
+                  >
+                    <LocalizedText style={{ fontSize: 12.5, fontWeight: activeMonth ? '800' : '600', color: activeMonth ? '#FFFFFF' : colors.textPrimary }}>
+                      T{mIdx + 1}
+                    </LocalizedText>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        ) : (
+          <>
+            <View style={styles.calendarWeekRow}>
+              {DAYS_SHORT.map((d) => <LocalizedText key={d} style={styles.calendarWeekText}>{d}</LocalizedText>)}
+            </View>
+            <View style={styles.calendarGrid}>
+              {calendarDays.map((dayItem, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={[styles.calendarCell, dayItem.selected && { backgroundColor: '#0284C7' }]}
+                  disabled={!dayItem.current || dayItem.past}
+                  onPress={() => { syncScheduledAt(dayItem.date, selectedTimeSlot); setCalendarPickerMode('DAY'); setActivePopover('NONE'); }}
+                >
+                  <LocalizedText style={{ fontSize: 12, color: !dayItem.current ? '#CBD5E1' : dayItem.past ? '#94A3B8' : dayItem.selected ? '#FFFFFF' : colors.textPrimary, fontWeight: dayItem.selected ? '800' : '600' }}>
+                    {dayItem.date.getDate()}
+                  </LocalizedText>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
+        <TouchableOpacity style={styles.calendarCloseBtn} onPress={() => { setCalendarPickerMode('DAY'); setActivePopover('NONE'); }}>
           <LocalizedText style={{ color: '#0284C7', fontWeight: '700', fontSize: 12 }}>Đóng</LocalizedText>
         </TouchableOpacity>
       </PopoverCard>
@@ -720,7 +812,7 @@ export const AppointmentDetailModal: React.FC<AppointmentDetailModalProps> = ({
 }) => {
   if (!appointment) return null;
   const rows = [
-    { icon: 'person-outline', label: 'Bệnh nhân:', val: `${appointment.patient_name || 'Bệnh nhân'}${patientInfo ? ` (${patientInfo.age ? `${patientInfo.age} tuổi` : ''}${patientInfo.gender ? ` • ${patientInfo.gender}` : ''})` : ''}` },
+    { icon: 'person-outline', label: 'Bệnh nhân:', val: `${appointment.patient_name || 'Bệnh nhân'}${patientInfo ? ` (${patientInfo.age ? `${patientInfo.age} tuổi` : ''}${patientInfo.gender ? ` • ${formatGenderVN(patientInfo.gender)}` : ''})` : ''}` },
     { icon: 'time-outline', label: 'Thời gian & Hình thức:', val: `Hôm nay, ${formatAptTime(appointment.scheduled_at)} • ${appointment.visit_type === 'CLINIC' ? 'Tại phòng khám' : 'Khám tại nhà'}` },
     { icon: 'location-outline', label: 'Địa chỉ khám:', val: appointment.location || patientInfo?.house_address || 'Nhà riêng bệnh nhân' },
     { icon: 'call-outline', label: 'Số điện thoại người nhà:', val: maskPhoneNumber(patientInfo?.emergency_contact_phone) },
