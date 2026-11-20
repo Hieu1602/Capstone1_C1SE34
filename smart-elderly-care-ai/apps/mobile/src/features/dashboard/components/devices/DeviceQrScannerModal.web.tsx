@@ -145,8 +145,15 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
   }, [visible, hasPermission, scanned]);
 
   const handleManualSubmit = () => {
-    if (!manualCode.trim()) return;
-    const device = parseDeviceQr(manualCode.trim());
+    const trimmed = manualCode.trim();
+    if (!trimmed) {
+      LocalizedAlert.alert(
+        'Chưa nhập mã camera',
+        'Vui lòng nhập mã vạch S/N hoặc địa chỉ MAC ở đáy camera.'
+      );
+      return;
+    }
+    const device = parseDeviceQr(trimmed);
     if (device) {
       stopCamera();
       onScan(device.type, device.deviceId, device);
@@ -154,8 +161,8 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
       return;
     }
     LocalizedAlert.alert(
-      'Mã thiết bị không hợp lệ',
-      'Hãy nhập mã vạch S/N hoặc MAC trên tem đáy Tapo hoặc mã thiết bị SECA/BLE.'
+      'Mã camera không hợp lệ',
+      'Hãy kiểm tra lại S/N hoặc địa chỉ MAC ở đáy camera (VD: 0C-EF-15-15-80-C5).'
     );
   };
 
@@ -175,7 +182,7 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
           <View style={styles.header}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Ionicons name="barcode-outline" size={20} color="#0284C7" style={{ marginRight: 6 }} />
-              <LocalizedText style={styles.headerTitle}>Quét Mã Vạch / QR Thiết Bị</LocalizedText>
+              <LocalizedText style={styles.headerTitle}>Quét mã vạch camera</LocalizedText>
             </View>
             <TouchableOpacity
               onPress={() => {
