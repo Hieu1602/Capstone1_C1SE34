@@ -155,6 +155,28 @@ class XiaomiSession:
                 message=f"Authentication failed: {data.get('description', data.get('code'))}",
             )
 
+        if (not data.get("ssecurity") or not data.get("location")) and "notificationUrl" in data:
+            notif_url = data["notificationUrl"]
+            logger.info("Xiaomi yêu cầu xác minh danh tính 2 bước (2FA)...")
+            print("\n" + "=" * 70)
+            print("🔐 XIAOMI YÊU CẦU XÁC MINH DANH TÍNH (2FA)")
+            print("=" * 70)
+            print("Vui lòng mở liên kết sau trên trình duyệt để xác thực danh tính:")
+            print(f"👉 {notif_url}\n")
+            try:
+                input("Sau khi hoàn tất xác minh trên trang web, nhấn [Enter] tại đây để tiếp tục...")
+            except EOFError:
+                pass
+
+            # Thử lại xác thực sau khi người dùng đã xác nhận trên web
+            response = requests.post(
+                XIAOMI_URLS.SERVICE_LOGIN_AUTH2.value,
+                data=payload,
+                headers=XIAOMI_HEADERS.SERVICE_LOGIN_AUTH2.value,
+                cookies=cookies,
+            )
+            data = _parse_xiaomi_json(response.text)
+
         self._ssecurity = data.get("ssecurity")
         self._nonce = data.get("nonce")
         self._user_id = str(data.get("userId", ""))
