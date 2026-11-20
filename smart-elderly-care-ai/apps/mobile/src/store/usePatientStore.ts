@@ -56,6 +56,7 @@ export interface ReminderItem {
   session: 'MORNING' | 'NOON' | 'EVENING' | string;
   dose: string;
   purpose: string;
+  instructions?: string;
   taken: boolean;
   takenAt?: string;
   snoozedUntil?: string;
@@ -176,7 +177,12 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
       const targetId = patientId || get().activePatientId || undefined;
       const res = await remindersApi.getToday(targetId);
       if (res.data) {
-        const meds = Array.isArray(res.data.medications) ? res.data.medications : [];
+        const rawMeds = Array.isArray(res.data.medications) ? res.data.medications : [];
+        const meds: ReminderItem[] = rawMeds.map((m: any) => ({
+          ...m,
+          takenAt: m.takenAt || undefined,
+          instructions: m.instructions !== undefined && m.instructions !== null ? String(m.instructions) : undefined,
+        }));
         const completed = meds.filter((m: any) => m.taken).length;
         const normalized: RemindersData = {
           ...res.data,
@@ -206,6 +212,14 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
 
   markMedicationTaken: async (idOrName: string, taken: boolean = true, takenAt?: string, patientId?: string | number) => {
     const timeStr = takenAt || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+
+    // Save previous state for rollback if server synchronization fails
+    const currentMeds = get().todayReminders?.medications || [];
+    const prevItem = currentMeds.find((m) => m.id === idOrName || m.name === idOrName);
+    const prevTaken = prevItem ? prevItem.taken : false;
+    const prevTakenAt = prevItem ? prevItem.takenAt : undefined;
+
+    // Optimistic update
     set((state) => {
       const currentList = state.todayReminders?.medications || [];
 
@@ -222,14 +236,21 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
 
       const completedCount = updated.filter((m) => m.taken).length;
       return {
-        todayReminders: {
-          date: state.todayReminders?.date || new Date().toISOString().split('T')[0],
-          total_medications: updated.length,
-          completed_medications: completedCount,
-          hub_voice_reminder_enabled: state.todayReminders?.hub_voice_reminder_enabled ?? true,
-          medications: updated,
-          meals: state.todayReminders?.meals || [],
-        },
+        todayReminders: state.todayReminders
+          ? {
+              ...state.todayReminders,
+              total_medications: updated.length,
+              completed_medications: completedCount,
+              medications: updated,
+            }
+          : {
+              date: new Date().toISOString().split('T')[0],
+              total_medications: updated.length,
+              completed_medications: completedCount,
+              hub_voice_reminder_enabled: true,
+              medications: updated,
+              meals: [],
+            },
       };
     });
 
@@ -237,8 +258,34 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
       if (idOrName && !idOrName.startsWith('med-')) {
         await remindersApi.toggle(idOrName, patientId || get().activePatientId || undefined);
       }
-    } catch {
-      // offline fallback
+    } catch (error) {
+      console.warn('markMedicationTaken API toggle failed, rolling back optimistic update:', error);
+      // Rollback optimistic update to prevent UI/server desync
+      set((state) => {
+        const currentList = state.todayReminders?.medications || [];
+        const reverted = currentList.map((m) => {
+          if (m.id === idOrName || m.name === idOrName) {
+            return {
+              ...m,
+              taken: prevTaken,
+              takenAt: prevTakenAt,
+            };
+          }
+          return m;
+        });
+        const completedCount = reverted.filter((m) => m.taken).length;
+        return {
+          todayReminders: state.todayReminders
+            ? {
+                ...state.todayReminders,
+                total_medications: reverted.length,
+                completed_medications: completedCount,
+                medications: reverted,
+              }
+            : null,
+        };
+      });
+      throw error;
     }
   },
 

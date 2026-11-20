@@ -4,6 +4,7 @@ Vị trí: backend/app/crud/crud_doctor.py
 """
 
 from datetime import datetime, timedelta, timezone
+import json
 from typing import List, Optional, Dict, Any
 
 SMARTBAND_STALE_SECONDS = 45
@@ -56,6 +57,7 @@ from app.models.device import Device
 from app.models.device_config import DeviceConfig
 from app.models.vital_sign import VitalSign
 from app.models.user import User
+from app.models.prescription import Prescription
 from app.crud.crud_elderly import crud_elderly
 from app.schemas.doctor import (
     DoctorPatientCard,
@@ -97,6 +99,107 @@ def _init_clinical_data(patient_id: str) -> Dict[str, Any]:
         "height_cm": None,
         "weight_kg": None,
     }
+
+
+def _prescription_model_to_item(rx: Prescription) -> PrescriptionItem:
+    times = rx.schedule_times
+    return PrescriptionItem(
+        id=str(rx.id),
+        patient_id=str(rx.patient_id),
+        medication_name=rx.medication_name,
+        dosage=rx.dosage,
+        quantity=rx.quantity,
+        frequency=rx.frequency or "Hàng ngày",
+        schedule_times=times,
+        instructions=rx.instructions or "",
+        doctor_name=rx.doctor_name,
+        diagnosis=rx.diagnosis,
+        general_notes=rx.general_notes,
+        start_date=rx.start_date.isoformat() if rx.start_date else None,
+        end_date=rx.end_date.isoformat() if rx.end_date else None,
+        status=rx.status or "ACTIVE",
+        enable_speaker_reminder=rx.enable_speaker_reminder,
+        created_at=rx.created_at.strftime("%Y-%m-%d %H:%M:%S") if rx.created_at else None,
+    )
+
+
+async def _resolve_elderly_id(
+    db: AsyncSession, elderly_id_str: str, create_if_missing: bool = False
+) -> Optional[uuid.UUID]:
+    target_uuid = None
+    try:
+        target_uuid = uuid.UUID(str(elderly_id_str))
+    except (ValueError, TypeError):
+        pass
+
+    if target_uuid:
+        res = await db.execute(select(ElderlyProfile.id).where(ElderlyProfile.id == target_uuid))
+        if res.scalar_one_or_none():
+            return target_uuid
+        if not create_if_missing:
+            return None
+
+    if target_uuid and create_if_missing:
+        res_h = await db.execute(select(House).limit(1))
+        house = res_h.scalar_one_or_none()
+        if not house:
+            res_u = await db.execute(select(User).limit(1))
+            owner = res_u.scalar_one_or_none()
+            if not owner:
+                owner = User(
+                    phone="0905999888",
+                    full_name="Chủ Nhà Mặc Định",
+                    hashed_password="pw",
+                    role="user",
+                )
+                db.add(owner)
+                await db.flush()
+            house = House(name="Nhà Người Cao Tuổi", address="Đà Nẵng", owner_id=owner.id)
+            db.add(house)
+            await db.flush()
+        profile = ElderlyProfile(
+            id=target_uuid,
+            house_id=house.id,
+            full_name="Người cao tuổi",
+            birth_year=1948,
+        )
+        db.add(profile)
+        await db.flush()
+        return target_uuid
+
+    # If elderly_id is not a valid UUID (e.g. "1" or "default_user"), find any existing profile
+    res_any = await db.execute(select(ElderlyProfile.id).order_by(ElderlyProfile.created_at.asc()).limit(1))
+    first_id = res_any.scalar_one_or_none()
+    if first_id:
+        return first_id
+
+    if create_if_missing:
+        res_u = await db.execute(select(User).limit(1))
+        owner = res_u.scalar_one_or_none()
+        if not owner:
+            owner = User(
+                phone="0905999888",
+                full_name="Chủ Nhà Mặc Định",
+                hashed_password="pw",
+                role="user",
+            )
+            db.add(owner)
+            await db.flush()
+        house = House(name="Nhà Người Cao Tuổi", address="Đà Nẵng", owner_id=owner.id)
+        db.add(house)
+        await db.flush()
+        new_uuid = uuid.uuid4()
+        profile = ElderlyProfile(
+            id=new_uuid,
+            house_id=house.id,
+            full_name="Người cao tuổi",
+            birth_year=1948,
+        )
+        db.add(profile)
+        await db.flush()
+        return new_uuid
+
+    return None
 
 
 class CRUDDoctor:
@@ -376,7 +479,9 @@ class CRUDDoctor:
     ) -> DoctorPatientDetail:
         """Lấy chi tiết hồ sơ bệnh nhân cho Bác sĩ."""
         med_record = await crud_elderly.get_medical_record(db, elderly_id_or_serial)
-        prescriptions = self.get_prescriptions(elderly_id_or_serial)
+        prescriptions = await self.get_prescriptions_db(db, elderly_id_or_serial)
+        if not prescriptions:
+            prescriptions = self.get_prescriptions(elderly_id_or_serial)
 
         # Khởi tạo dữ liệu lâm sàng riêng của bác sĩ nếu chưa có
         if elderly_id_or_serial not in _CLINICAL_STORE:
@@ -583,6 +688,201 @@ class CRUDDoctor:
             hr_threshold_high=cfg_hr_high,
             spo2_threshold_low=cfg_spo2_low,
         )
+
+    async def get_prescriptions_db(self, db: AsyncSession, elderly_id: str) -> List[PrescriptionItem]:
+        """Lấy danh sách đơn thuốc từ PostgreSQL theo ID người cao tuổi."""
+        patient_uuid = await _resolve_elderly_id(db, elderly_id, create_if_missing=False)
+        if not patient_uuid:
+            return []
+        res = await db.execute(
+            select(Prescription)
+            .where(Prescription.patient_id == patient_uuid)
+            .order_by(desc(Prescription.created_at))
+        )
+        prescriptions = res.scalars().all()
+        return [_prescription_model_to_item(rx) for rx in prescriptions]
+
+    async def add_prescription_db(
+        self,
+        db: AsyncSession,
+        elderly_id: str,
+        obj_in: PrescriptionCreate,
+        doctor_name: Optional[str] = None,
+        doctor_id: Optional[uuid.UUID] = None,
+    ) -> PrescriptionItem:
+        """Bác sĩ kê một đơn thuốc mới và lưu vào PostgreSQL."""
+        patient_uuid = await _resolve_elderly_id(db, elderly_id, create_if_missing=True)
+        start_dt = obj_in.start_date or datetime.now(timezone.utc)
+        new_rx = Prescription(
+            patient_id=patient_uuid,
+            doctor_id=doctor_id,
+            doctor_name=doctor_name,
+            diagnosis=obj_in.diagnosis or "Đơn thuốc điều trị",
+            general_notes=obj_in.general_notes,
+            medication_name=obj_in.medication_name,
+            dosage=obj_in.dosage,
+            quantity=obj_in.quantity,
+            frequency=obj_in.frequency or "Hàng ngày",
+            schedule_times_json=json.dumps(obj_in.schedule_times or ["08:00"]),
+            instructions=obj_in.instructions or "",
+            start_date=start_dt,
+            end_date=obj_in.end_date,
+            status="ACTIVE",
+            enable_speaker_reminder=obj_in.enable_speaker_reminder,
+        )
+        db.add(new_rx)
+        await db.commit()
+        await db.refresh(new_rx)
+
+        item = _prescription_model_to_item(new_rx)
+        if elderly_id not in _PRESCRIPTION_STORE:
+            _PRESCRIPTION_STORE[elderly_id] = []
+        _PRESCRIPTION_STORE[elderly_id].insert(0, item)
+        return item
+
+    async def add_batch_prescriptions_db(
+        self,
+        db: AsyncSession,
+        elderly_id: str,
+        batch: BatchPrescriptionCreate,
+        doctor_name: Optional[str] = None,
+        doctor_id: Optional[uuid.UUID] = None,
+    ) -> List[PrescriptionItem]:
+        """Bác sĩ kê một đơn gồm nhiều loại thuốc và lưu vào PostgreSQL."""
+        patient_uuid = await _resolve_elderly_id(db, elderly_id, create_if_missing=True)
+        start_dt = batch.start_date or datetime.now(timezone.utc)
+        end_dt = batch.end_date
+        created_items: List[PrescriptionItem] = []
+
+        for med in batch.medications:
+            note = med.instructions or ""
+            if batch.general_notes:
+                note = f"{note} (Dặn dò: {batch.general_notes})".strip() if note else f"Dặn dò: {batch.general_notes}"
+            new_rx = Prescription(
+                patient_id=patient_uuid,
+                doctor_id=doctor_id,
+                doctor_name=doctor_name,
+                diagnosis=batch.diagnosis or "Đơn thuốc điều trị",
+                general_notes=batch.general_notes,
+                medication_name=med.medication_name,
+                dosage=med.dosage,
+                quantity=med.quantity,
+                frequency=med.frequency or "Hàng ngày",
+                schedule_times_json=json.dumps(med.schedule_times or ["08:00"]),
+                instructions=note,
+                start_date=start_dt,
+                end_date=end_dt,
+                status="ACTIVE",
+                enable_speaker_reminder=batch.enable_speaker_reminder,
+            )
+            db.add(new_rx)
+            await db.flush()
+            await db.refresh(new_rx)
+            item = _prescription_model_to_item(new_rx)
+            created_items.append(item)
+
+        await db.commit()
+
+        if elderly_id not in _PRESCRIPTION_STORE:
+            _PRESCRIPTION_STORE[elderly_id] = []
+        for it in reversed(created_items):
+            _PRESCRIPTION_STORE[elderly_id].insert(0, it)
+        return created_items
+
+    async def update_prescription_db(
+        self,
+        db: AsyncSession,
+        elderly_id: str,
+        rx_id: str,
+        obj_in: PrescriptionUpdate,
+    ) -> Optional[PrescriptionItem]:
+        """Cập nhật đơn thuốc hiện có trong PostgreSQL."""
+        rx_uuid = None
+        try:
+            rx_uuid = uuid.UUID(rx_id)
+        except (ValueError, TypeError):
+            pass
+
+        rx = None
+        if rx_uuid:
+            res = await db.execute(select(Prescription).where(Prescription.id == rx_uuid))
+            rx = res.scalar_one_or_none()
+
+        if rx:
+            if obj_in.medication_name is not None:
+                rx.medication_name = obj_in.medication_name
+            if obj_in.dosage is not None:
+                rx.dosage = obj_in.dosage
+            if obj_in.quantity is not None:
+                rx.quantity = obj_in.quantity
+            if obj_in.frequency is not None:
+                rx.frequency = obj_in.frequency
+            if obj_in.schedule_times is not None:
+                rx.schedule_times_json = json.dumps(obj_in.schedule_times)
+            if obj_in.instructions is not None:
+                rx.instructions = obj_in.instructions
+            if obj_in.diagnosis is not None:
+                rx.diagnosis = obj_in.diagnosis
+            if obj_in.general_notes is not None:
+                rx.general_notes = obj_in.general_notes
+            if obj_in.start_date is not None:
+                rx.start_date = obj_in.start_date
+            if obj_in.end_date is not None:
+                rx.end_date = obj_in.end_date
+            if obj_in.status is not None:
+                rx.status = obj_in.status
+            if obj_in.enable_speaker_reminder is not None:
+                rx.enable_speaker_reminder = obj_in.enable_speaker_reminder
+            await db.commit()
+            await db.refresh(rx)
+            item = _prescription_model_to_item(rx)
+            self.update_prescription(elderly_id, rx_id, obj_in)
+            return item
+
+        return None
+
+    async def delete_prescription_db(self, db: AsyncSession, elderly_id: str, rx_id: str) -> bool:
+        """Xóa hoặc ngừng đơn thuốc trong PostgreSQL."""
+        rx_uuid = None
+        try:
+            rx_uuid = uuid.UUID(rx_id)
+        except (ValueError, TypeError):
+            pass
+
+        deleted = False
+        if rx_uuid:
+            res = await db.execute(select(Prescription).where(Prescription.id == rx_uuid))
+            rx = res.scalar_one_or_none()
+            if rx:
+                await db.delete(rx)
+                await db.commit()
+                deleted = True
+
+        mem_del = self.delete_prescription(elderly_id, rx_id)
+        return deleted or mem_del
+
+    async def toggle_prescription_reminder_db(
+        self, db: AsyncSession, elderly_id: str, rx_id: str
+    ) -> Optional[PrescriptionItem]:
+        """Bật/tắt phát loa thông minh cho đơn thuốc trong PostgreSQL."""
+        rx_uuid = None
+        try:
+            rx_uuid = uuid.UUID(rx_id)
+        except (ValueError, TypeError):
+            pass
+
+        if rx_uuid:
+            res = await db.execute(select(Prescription).where(Prescription.id == rx_uuid))
+            rx = res.scalar_one_or_none()
+            if rx:
+                rx.enable_speaker_reminder = not rx.enable_speaker_reminder
+                await db.commit()
+                await db.refresh(rx)
+                item = _prescription_model_to_item(rx)
+                self.toggle_prescription_reminder(elderly_id, rx_id)
+                return item
+
+        return None
 
     def get_prescriptions(self, elderly_id: str) -> List[PrescriptionItem]:
         """Lấy danh sách thuốc đang kê đơn."""

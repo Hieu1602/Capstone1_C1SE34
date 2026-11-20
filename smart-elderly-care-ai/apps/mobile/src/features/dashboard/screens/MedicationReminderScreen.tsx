@@ -314,11 +314,15 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
     const nextState = !med.taken;
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    await markMedicationTaken(id, nextState, nextState ? timeStr : undefined, selectedPatientId);
-    if (nextState) {
-      LocalizedAlert.alert('Đã xác nhận', `Đã đánh dấu uống thuốc "${med.name}" lúc ${timeStr} cho ${patientDisplayName}.`);
-    } else {
-      LocalizedAlert.alert('Hoàn tác', `Đã chuyển "${med.name}" về trạng thái chưa uống.`);
+    try {
+      await markMedicationTaken(id, nextState, nextState ? timeStr : undefined, selectedPatientId);
+      if (nextState) {
+        LocalizedAlert.alert('Đã xác nhận', `Đã đánh dấu uống thuốc "${med.name}" lúc ${timeStr} cho ${patientDisplayName}.`);
+      } else {
+        LocalizedAlert.alert('Hoàn tác', `Đã chuyển "${med.name}" về trạng thái chưa uống.`);
+      }
+    } catch (err: any) {
+      LocalizedAlert.alert('Lỗi đồng bộ', 'Không thể cập nhật trạng thái uống thuốc trên máy chủ. Đã hoàn tác trạng thái.');
     }
   };
 
@@ -798,6 +802,11 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
                       {med.name}
                     </LocalizedText>
                     <LocalizedText style={styles.medItemDose}>{med.dose}</LocalizedText>
+                    {med.instructions ? (
+                      <LocalizedText style={styles.medItemInstructions}>
+                        HD: {med.instructions}
+                      </LocalizedText>
+                    ) : null}
                     <LocalizedText style={[styles.medItemPurpose, { color: textSub }]}>Mục đích: {med.purpose}</LocalizedText>
                   </View>
 
@@ -1346,6 +1355,7 @@ const styles = StyleSheet.create({
   medItemName: { fontSize: 14, fontWeight: '700' },
   medItemNameDone: { textDecorationLine: 'line-through', opacity: 0.6 },
   medItemDose: { fontSize: 12, color: '#0284C7', marginTop: 2, fontWeight: '600' },
+  medItemInstructions: { fontSize: 11, color: '#D97706', marginTop: 2, fontStyle: 'italic' },
   medItemPurpose: { fontSize: 11, marginTop: 2 },
   medCheckBtn: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   medCheckBtnPending: { backgroundColor: '#F1F5F9' },

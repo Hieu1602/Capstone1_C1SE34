@@ -76,6 +76,7 @@ api_router.include_router(mobile_vitals_router,        prefix="/vitals",        
 api_router.include_router(mobile_incidents_router,     prefix="/incidents",     tags=["[MOBILE APP] Cảnh báo khẩn cấp & Té ngã"])
 api_router.include_router(mobile_incidents_router,     prefix="/notifications", tags=["[MOBILE APP] Cảnh báo (Notifications Alias)"])
 api_router.include_router(mobile_reminders_router,     prefix="/reminders",     tags=["[MOBILE APP] Nhắc nhở uống thuốc"])
+api_router.include_router(mobile_reminders_router,     prefix="/mobile/reminders", tags=["[MOBILE APP] Nhắc nhở uống thuốc (Mobile Alias)"])
 api_router.include_router(mobile_patients_router,      prefix="/patients",      tags=["[MOBILE APP] Hồ sơ bệnh án người cao tuổi"])
 api_router.include_router(mobile_doctor_router,        prefix="/doctor",        tags=["[MOBILE APP] Bác sĩ gia đình"])
 api_router.include_router(mobile_reports_router,       prefix="/reports",       tags=["[MOBILE APP] Báo cáo sức khỏe tổng hợp"])

@@ -8,6 +8,7 @@ interface StepWatchFlowProps {
   currentStep: FlowStep;
   styles: any;
   hasBlePermission: boolean;
+  selectedDeviceModel?: string;
   onSelectWatchModel: (model: string) => void;
   onConnectHealthConnect: () => void;
   onOpenHealthConnectSettings?: () => void;
@@ -20,6 +21,7 @@ export const StepWatchFlow: React.FC<StepWatchFlowProps> = ({
   currentStep,
   styles,
   hasBlePermission,
+  selectedDeviceModel,
   onSelectWatchModel,
   onConnectHealthConnect,
   onOpenHealthConnectSettings,
@@ -27,6 +29,8 @@ export const StepWatchFlow: React.FC<StepWatchFlowProps> = ({
   onRequestBlePermission,
   onStartBleScan,
 }) => {
+  const isXiaomiBand = Boolean(selectedDeviceModel?.toLowerCase().includes('xiaomi') || selectedDeviceModel?.toLowerCase().includes('band 7'));
+
   return (
     <>
       {/* 2B. STATE: WATCH_LIST */}
@@ -37,30 +41,53 @@ export const StepWatchFlow: React.FC<StepWatchFlowProps> = ({
             Chọn phương thức kết nối thiết bị hoặc đồng bộ dữ liệu sức khỏe:
           </LocalizedText>
 
-          {/* Nhánh 1: Vòng đeo tay / Đồng hồ BLE */}
+          {/* Nhánh 1: Xiaomi Smart Band 7 */}
           <TouchableOpacity
-            style={[styles.modelCard, styles.modelCardActive, { borderColor: '#10B981' }]}
+            style={[styles.modelCard, styles.modelCardActive, { borderColor: '#FF6900', backgroundColor: '#FFF7ED' }]}
+            onPress={() => onSelectWatchModel('Xiaomi Smart Band 7')}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.modelIconBox, { backgroundColor: '#FFEDD5' }]}>
+              <Ionicons name="watch" size={26} color="#EA580C" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.modelHeaderRow}>
+                <LocalizedText style={styles.modelTitle}>Xiaomi Smart Band 7</LocalizedText>
+                <View style={[styles.activeTag, { backgroundColor: '#FFEDD5' }]}>
+                  <LocalizedText style={[styles.activeTagText, { color: '#C2410C' }]}>Phổ biến</LocalizedText>
+                </View>
+              </View>
+              <LocalizedText style={styles.modelDesc}>
+                Hỗ trợ kết nối Bluetooth BLE trực tiếp (Heart Rate Broadcast) hoặc đồng bộ qua Mi Fitness
+              </LocalizedText>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#EA580C" />
+          </TouchableOpacity>
+
+          {/* Nhánh 2: Vòng đeo tay / Đồng hồ BLE chung */}
+          <TouchableOpacity
+            style={[styles.modelCard, { borderColor: '#10B981' }]}
             onPress={() => onSelectWatchModel('Vòng đeo tay / Đồng hồ Bluetooth BLE')}
             activeOpacity={0.8}
           >
             <View style={[styles.modelIconBox, { backgroundColor: '#D1FAE5' }]}>
-              <Ionicons name="watch" size={26} color="#059669" />
+              <Ionicons name="bluetooth" size={26} color="#059669" />
             </View>
             <View style={{ flex: 1 }}>
               <View style={styles.modelHeaderRow}>
-                <LocalizedText style={styles.modelTitle}>Đồng hồ / Vòng đeo tay BLE</LocalizedText>
+                <LocalizedText style={styles.modelTitle}>Đồng hồ / Vòng đeo tay BLE khác</LocalizedText>
                 <View style={[styles.activeTag, { backgroundColor: '#DCFCE7' }]}>
                   <LocalizedText style={[styles.activeTagText, { color: '#15803D' }]}>Trực tiếp</LocalizedText>
                 </View>
               </View>
               <LocalizedText style={styles.modelDesc}>
-                Đo nhịp tim, nồng độ oxy trong máu SpO₂, thân nhiệt và đếm bước chân liên tục
+                Giao thức chuẩn GATT 0x180D (CooSpo, Garmin, Apple Watch, generic BLE)
               </LocalizedText>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#059669" />
           </TouchableOpacity>
 
-          {/* Nhánh 2: Google Health Connect */}
+          {/* Nhánh 3: Google Health Connect */}
           <TouchableOpacity
             style={[styles.modelCard, { borderColor: '#7C3AED' }]}
             onPress={() => onSelectWatchModel('Google Health Connect (Android)')}
@@ -77,7 +104,7 @@ export const StepWatchFlow: React.FC<StepWatchFlowProps> = ({
                 </View>
               </View>
               <LocalizedText style={styles.modelDesc}>
-                Đồng bộ các chỉ số sức khỏe được hỗ trợ từ Health Connect
+                Đồng bộ các chỉ số sức khỏe được hỗ trợ từ Health Connect (Mi Fitness, Samsung Health, Fit)
               </LocalizedText>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#7C3AED" />
@@ -184,55 +211,65 @@ export const StepWatchFlow: React.FC<StepWatchFlowProps> = ({
       {/* 3B. STATE: BLE_POWER_CHECK */}
       {currentStep === 'BLE_POWER_CHECK' && (
         <View style={styles.guideContainer}>
-          <View style={[styles.visualGraphicBox, { backgroundColor: '#ECFDF5' }]}>
-            <Ionicons name="bluetooth" size={54} color="#059669" />
+          <View style={[styles.visualGraphicBox, { backgroundColor: isXiaomiBand ? '#FFF7ED' : '#ECFDF5' }]}>
+            <Ionicons name="bluetooth" size={54} color={isXiaomiBand ? '#EA580C' : '#059669'} />
             <View style={styles.ledIndicatorRow}>
-              <Ionicons name="battery-charging" size={18} color="#059669" />
-              <LocalizedText style={[styles.ledText, { color: '#059669' }]}>Đồng hồ đã bật nguồn</LocalizedText>
+              <Ionicons name="battery-charging" size={18} color={isXiaomiBand ? '#EA580C' : '#059669'} />
+              <LocalizedText style={[styles.ledText, { color: isXiaomiBand ? '#EA580C' : '#059669' }]}>
+                {isXiaomiBand ? 'Xiaomi Band 7 sẵn sàng kết nối' : 'Đồng hồ đã bật nguồn'}
+              </LocalizedText>
             </View>
           </View>
 
-          <LocalizedText style={styles.guideMainTitle}>Mở Nguồn & Bật Bluetooth Đồng Hồ</LocalizedText>
+          <LocalizedText style={styles.guideMainTitle}>
+            {isXiaomiBand ? 'Chuẩn Bị Xiaomi Smart Band 7' : 'Mở Nguồn & Bật Bluetooth Đồng Hồ'}
+          </LocalizedText>
           <LocalizedText style={styles.guideSubtitle}>
-            Chuẩn bị thiết bị trước khi tiến hành quét sóng BLE:
+            {isXiaomiBand
+              ? 'Để app SECA kết nối trực tiếp qua Bluetooth BLE, hãy đảm bảo các bước sau:'
+              : 'Chuẩn bị thiết bị trước khi tiến hành quét sóng BLE:'}
           </LocalizedText>
 
           <View style={styles.instructionsList}>
             <View style={styles.instItem}>
-              <View style={[styles.instNumber, { backgroundColor: '#10B981' }]}>
+              <View style={[styles.instNumber, { backgroundColor: isXiaomiBand ? '#EA580C' : '#10B981' }]}>
                 <LocalizedText style={styles.instNumberText}>1</LocalizedText>
               </View>
               <LocalizedText style={styles.instText}>
-                Nhấn giữ nút nguồn cạnh bên đồng hồ để màn hình sáng lên.
+                {isXiaomiBand
+                  ? 'Chạm vào màn hình hoặc cắm sạc để màn hình vòng đeo tay Xiaomi sáng lên.'
+                  : 'Nhấn giữ nút nguồn cạnh bên đồng hồ để màn hình sáng lên.'}
               </LocalizedText>
             </View>
 
             <View style={styles.instItem}>
-              <View style={[styles.instNumber, { backgroundColor: '#10B981' }]}>
+              <View style={[styles.instNumber, { backgroundColor: isXiaomiBand ? '#EA580C' : '#10B981' }]}>
                 <LocalizedText style={styles.instNumberText}>2</LocalizedText>
               </View>
               <LocalizedText style={styles.instText}>
-                Đảm bảo pin đồng hồ còn trên 20% và biểu tượng Bluetooth đang sẵn sàng kết nối.
+                {isXiaomiBand
+                  ? 'Mở app Mi Fitness (hoặc Zepp Life) > Thiết bị > Cài đặt theo dõi sức khỏe > Bật "Phát sóng nhịp tim" (Heart rate broadcast) và "Khả năng phát hiện" (Discoverable).'
+                  : 'Đảm bảo pin đồng hồ còn trên 20% và biểu tượng Bluetooth đang sẵn sàng kết nối.'}
               </LocalizedText>
             </View>
 
             <View style={styles.instItem}>
-              <View style={[styles.instNumber, { backgroundColor: '#10B981' }]}>
+              <View style={[styles.instNumber, { backgroundColor: isXiaomiBand ? '#EA580C' : '#10B981' }]}>
                 <LocalizedText style={styles.instNumberText}>3</LocalizedText>
               </View>
               <LocalizedText style={styles.instText}>
-                Đặt đồng hồ ngay cạnh điện thoại trong khoảng cách dưới 1 mét để tín hiệu ổn định nhất.
+                Đặt vòng đeo tay Xiaomi ngay cạnh điện thoại (trong phạm vi 1 mét) để tín hiệu tốt nhất.
               </LocalizedText>
             </View>
           </View>
 
           <View style={[styles.continueButtonSection, { width: '100%', alignSelf: 'stretch' }]}>
             <TouchableOpacity
-              style={[styles.primaryActionButton, { backgroundColor: '#059669' }]}
+              style={[styles.primaryActionButton, { backgroundColor: isXiaomiBand ? '#EA580C' : '#059669' }]}
               onPress={onContinueBlePowerCheck}
               activeOpacity={0.85}
             >
-              <LocalizedText style={styles.primaryActionButtonText}>Tiếp Tục</LocalizedText>
+              <LocalizedText style={styles.primaryActionButtonText}>Tiếp Tục Quét Bluetooth</LocalizedText>
               <Ionicons name="arrow-forward" size={20} color="#FFF" />
             </TouchableOpacity>
           </View>

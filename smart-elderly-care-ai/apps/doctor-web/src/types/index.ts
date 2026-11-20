@@ -58,6 +58,25 @@ export interface PrescriptionItem {
   doctor_name: string;
   enable_speaker_reminder: boolean;
   created_at?: string;
+  start_date?: string;
+  end_date?: string;
+  diagnosis?: string;
+}
+
+export interface BatchPrescriptionPayload {
+  diagnosis: string;
+  general_notes?: string;
+  enable_speaker_reminder: boolean;
+  start_date?: string;
+  end_date?: string;
+  medications: Array<{
+    medication_name: string;
+    dosage: string;
+    quantity: string;
+    frequency: string;
+    schedule_times: string[];
+    instructions: string;
+  }>;
 }
 
 export interface DoctorPatientDetail {

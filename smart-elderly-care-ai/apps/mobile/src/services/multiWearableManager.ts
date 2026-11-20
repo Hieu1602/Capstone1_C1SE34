@@ -24,7 +24,7 @@ export class MultiWearableManager {
   private manager: BleManager | null = null;
   private devices: Map<string, WearableInstance> = new Map(); // key = device.id
 
-  private getManager(): BleManager | null {
+  getManager(): BleManager | null {
     if (Platform.OS === 'web' || !BleManagerClass) return null;
     if (!this.manager) {
       try {
@@ -36,8 +36,12 @@ export class MultiWearableManager {
     return this.manager;
   }
 
+  getBleManager(): BleManager | null {
+    return this.getManager();
+  }
+
   // Request Android permissions – same as single manager
-  private async requestPermissions(): Promise<boolean> {
+  async requestPermissions(): Promise<boolean> {
     if (Platform.OS === 'android') {
       const granted = await PermissionsAndroid.requestMultiple([
         PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
@@ -47,6 +51,68 @@ export class MultiWearableManager {
       return Object.values(granted).every(v => v === PermissionsAndroid.RESULTS.GRANTED);
     }
     return true;
+  }
+
+  // Quét thiết bị BLE liên tục với event stream callback
+  startBleScan(
+    onDeviceFound: (device: any) => void,
+    onError: (error: any) => void
+  ): void {
+    const mgr = this.getManager();
+    if (!mgr) {
+      onError(new Error('BLE Manager không khả dụng trên môi trường này.'));
+      return;
+    }
+
+    this.requestPermissions()
+      .then((granted) => {
+        if (!granted) {
+          onError(new Error('Chưa được cấp quyền Bluetooth / Vị trí.'));
+          return;
+        }
+        mgr.startDeviceScan(null, null, (error: any, device: any) => {
+          if (error) {
+            onError(error);
+            return;
+          }
+          if (device) {
+            onDeviceFound(device);
+          }
+        });
+      })
+      .catch(onError);
+  }
+
+  stopBleScan(): void {
+    const mgr = this.getManager();
+    mgr?.stopDeviceScan();
+  }
+
+  // Ghép nối và lắng nghe dữ liệu từ 1 thiết bị BLE cụ thể
+  async connectDevice(
+    rawDevice: Device,
+    onData: (data: { heartRate?: number; spo2?: number; temperature?: number }) => void
+  ): Promise<boolean> {
+    if (!rawDevice) return false;
+    try {
+      const connected = await rawDevice.connect();
+      await connected.discoverAllServicesAndCharacteristics();
+      const wearable = new WearableInstance(connected);
+      this.devices.set(rawDevice.id, wearable);
+      await wearable.start((m: Measurement) => {
+        if (m.metric === 'heartRate') {
+          onData({ heartRate: m.value });
+        } else if (m.metric === 'spo2') {
+          onData({ spo2: m.value });
+        } else if (m.metric === 'bodyTemperature') {
+          onData({ temperature: m.value });
+        }
+      });
+      return true;
+    } catch (e) {
+      console.warn('[MultiWearable] connectDevice error:', e);
+      return false;
+    }
   }
 
   // Scan for BLE devices that advertise at least one of the required services.
@@ -157,12 +223,16 @@ class WearableInstance {
       );
       this.subscriptions.push(sub);
     };
-    // Heart Rate is mandatory
-    await monitorChar(
-      WearableInstance.HEART_RATE_SERVICE,
-      WearableInstance.HEART_RATE_CHAR,
-      'heartRate',
-    );
+    // Try Heart Rate service
+    try {
+      await monitorChar(
+        WearableInstance.HEART_RATE_SERVICE,
+        WearableInstance.HEART_RATE_CHAR,
+        'heartRate',
+      );
+    } catch (e) {
+      console.warn('[MultiWearable] Heart rate service monitor warning:', e);
+    }
     // Try optional services – ignore errors
     try {
       await monitorChar(

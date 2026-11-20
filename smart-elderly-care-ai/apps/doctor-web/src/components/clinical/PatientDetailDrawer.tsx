@@ -830,6 +830,21 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
                       <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                         {rx.frequency} • {rx.instructions}
                       </p>
+                      {(rx.start_date || rx.end_date) && (
+                        <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                          <Calendar className="h-3 w-3 shrink-0 text-blue-500" />
+                          <span>
+                            Đợt dùng thuốc:{' '}
+                            <strong className="font-semibold text-slate-700 dark:text-slate-200">
+                              {rx.start_date || '...'}
+                            </strong>{' '}
+                            đến{' '}
+                            <strong className="font-semibold text-slate-700 dark:text-slate-200">
+                              {rx.end_date || '...'}
+                            </strong>
+                          </span>
+                        </div>
+                      )}
                       <div className="mt-2.5 flex items-center justify-between text-[11px] border-t border-slate-100 dark:border-slate-800 pt-2">
                         <span className="text-slate-400">Giờ uống: {rx.schedule_times?.join(', ')}</span>
                         {rx.enable_speaker_reminder && (

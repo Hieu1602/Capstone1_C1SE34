@@ -687,6 +687,7 @@ export default function AddDeviceScreen({ navigation, route }: any) {
           currentStep={currentStep}
           styles={styles}
           hasBlePermission={hasBlePermission}
+          selectedDeviceModel={selectedDeviceModel}
           onSelectWatchModel={handleSelectWatchModel}
           onConnectHealthConnect={handleConnectHealthConnect}
           onOpenHealthConnectSettings={handleOpenHealthConnectSettings}
