@@ -372,7 +372,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   const batteryDisplay = assignedBand
     ? (isCurrentMatching && currentVitals.bracelet_battery !== null && currentVitals.bracelet_battery !== undefined
         ? `${currentVitals.bracelet_battery}%`
-        : (assignedBand.isOnline ? `${assignedBand.batteryLevel || 85}%` : 'Ngoại tuyến'))
+        : (assignedBand.isOnline ? `${(assignedBand as any).batteryLevel || 85}%` : 'Ngoại tuyến'))
     : 'Chưa gán vòng';
   const isFallDetected = Boolean(isCurrentMatching && currentVitals.fall_detected);
 
@@ -444,7 +444,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
       if (!currentVitals?.heart_rate) return false;
       if (currentVitals.bracelet_connected === false) return false;
       const curDev = String((currentVitals as any)?.device_id || '').toLowerCase();
-      const assDev = String(assignedBand.deviceId || assignedBand.device_id || assignedBand.id || '').toLowerCase();
+      const assDev = String(assignedBand.deviceId || (assignedBand as any).device_id || assignedBand.id || '').toLowerCase();
       if (!curDev || !assDev || (curDev !== assDev && !curDev.includes(assDev) && !assDev.includes(curDev))) {
         return false; // Vòng tay của cụ khác đang phát, không phải của cụ này!
       }

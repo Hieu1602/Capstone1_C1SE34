@@ -30,8 +30,6 @@ class SmartCareBackgroundService : Service() {
     companion object {
         const val SERVICE_CHANNEL_ID = "smartcare_service_monitor_channel"
         const val SERVICE_CHANNEL_NAME = "Dịch vụ bảo vệ người cao tuổi trong nền"
-        const val ALERT_CHANNEL_ID = "emergency_alerts_v4"
-        const val ALERT_CHANNEL_NAME = "Cảnh báo khẩn cấp SmartCare AI"
         const val SERVICE_NOTIFICATION_ID = 999
     }
 
@@ -185,13 +183,33 @@ class SmartCareBackgroundService : Service() {
                     val alertLevel = latest.optString("alert_level", "HIGH")
                     val message = latest.optString("message", "Phát hiện sự cố mới")
 
+                    val isEmergency = alertType in listOf(
+                        "FALL_DETECTED",
+                        "AI_FALL_DETECTED",
+                        "CRITICAL_TRIAD",
+                        "CARDIO_COLLAPSE",
+                        "EXERTION_HYPOXIA",
+                        "FEVER_TACHYCARDIA",
+                        "HIGH_HEART_RATE",
+                        "LOW_HEART_RATE",
+                        "SUDDEN_HR_SPIKE",
+                        "SUDDEN_HR_DROP",
+                        "LOW_SPO2",
+                        "HIGH_FEVER",
+                        "DEVICE_BATTERY_DEAD"
+                    ) || alertLevel == "CRITICAL"
+
                     // Nếu sự cố đã được xử lý (trên web, app hoặc người dùng bấm Đã xử lý)
                     // -> Ngay lập tức ngắt chuông, dừng rung và xóa thông báo (0ms)
                     if (isAck) {
                         NativeNotificationModule.stopAlarm(this)
                     } else if (id != lastNotifiedIncidentId && id.isNotBlank()) {
                         lastNotifiedIncidentId = id
-                        triggerHighPriorityAlarm(id, alertType, alertLevel, message)
+                        if (isEmergency) {
+                            triggerHighPriorityAlarm(id, alertType, alertLevel, message)
+                        } else {
+                            triggerRoutineNotification(id, alertType, message)
+                        }
                     }
                 }
             }
@@ -276,7 +294,7 @@ class SmartCareBackgroundService : Service() {
         val soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
             ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
 
-        val notification = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
+        val notification = NotificationCompat.Builder(this, NativeNotificationModule.EMERGENCY_CHANNEL_ID)
             .setSmallIcon(iconRes)
             .setContentTitle(title)
             .setContentText(message)
@@ -305,5 +323,67 @@ class SmartCareBackgroundService : Service() {
 
         // Kích hoạt chuông báo động và rung phần cứng tập trung qua NativeNotificationModule
         NativeNotificationModule.triggerAlarm(this, isCritical = true)
+    }
+
+    private fun triggerRoutineNotification(
+        incidentId: String,
+        alertType: String,
+        message: String
+    ) {
+        val title = when {
+            alertType == "APPOINTMENT_SCHEDULED" -> "🗓️ LỊCH KHÁM MỚI TỪ BÁC SĨ"
+            alertType == "APPOINTMENT_REQUESTED" -> "🗓️ YÊU CẦU LỊCH KHÁM TỪ GIA ĐÌNH"
+            alertType == "APPOINTMENT_CONFIRMED" -> "🗓️ GIA ĐÌNH ĐÃ XÁC NHẬN LỊCH KHÁM"
+            alertType == "APPOINTMENT_CANCELLED" -> "🗓️ LỊCH KHÁM ĐÃ BỊ HỦY"
+            alertType == "MEDICAL_RECORD_UPDATED" -> "📋 HỒ SƠ BỆNH ÁN ĐƯỢC CẬP NHẬT"
+            alertType == "LOW_BATTERY" -> "🔋 CẢNH BÁO PIN ĐỒNG HỒ YẾU"
+            alertType.startsWith("HOUSE_") -> "🏠 THÔNG BÁO GIA ĐÌNH"
+            else -> "🔔 THÔNG BÁO TỪ SMARTCARE AI"
+        }
+
+        val iconRes = try {
+            val id = resources.getIdentifier("ic_notification", "drawable", packageName)
+            if (id != 0) id else android.R.drawable.ic_dialog_alert
+        } catch (_: Exception) {
+            android.R.drawable.ic_dialog_alert
+        }
+
+        val notifId = ((System.currentTimeMillis() % 1000000L).toInt() + 3000).let { if (it < 0) -it else it }
+        val reqCode = (System.currentTimeMillis() % 100000L).toInt().let { if (it < 0) -it else it }
+
+        val launchIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("OPEN_INCIDENT_ID", incidentId)
+            putExtra("OPEN_INCIDENT_TYPE", alertType)
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            reqCode,
+            launchIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+        )
+
+        val notificationManager =
+            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        // Dùng âm thanh chuông ting ting thông báo thông thường của điện thoại
+        val soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+
+        val notification = NotificationCompat.Builder(this, NativeNotificationModule.CHANNEL_ID)
+            .setSmallIcon(iconRes)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_EVENT)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setSound(soundUri)
+            .setAutoCancel(true)
+            .setOngoing(false)
+            .setContentIntent(pendingIntent)
+
+        notificationManager.notify(notifId, notification.build())
+        // KHÔNG gọi NativeNotificationModule.triggerAlarm -> Không hú còi, không rung liên tục
     }
 }

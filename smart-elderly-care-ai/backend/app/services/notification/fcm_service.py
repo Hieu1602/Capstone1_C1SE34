@@ -107,15 +107,35 @@ class FCMService:
 
             notification = messaging.Notification(title=title, body=body)
 
-            # Android config: high priority để ghi đè silent/DND mode, phát chuông chuẩn của hệ thống và cho phép xóa
+            # Phân loại kênh thông báo: Báo động nguy hiểm (emergency_alerts_v5) vs Thông báo thường ting ting (smartcare_normal_v5)
+            alert_type = (data or {}).get("alert_type") or (data or {}).get("type") or ""
+            is_emergency = alert_type in (
+                "FALL_DETECTED",
+                "AI_FALL_DETECTED",
+                "CRITICAL_TRIAD",
+                "CARDIO_COLLAPSE",
+                "HIGH_HEART_RATE",
+                "LOW_HEART_RATE",
+                "SUDDEN_HR_SPIKE",
+                "SUDDEN_HR_DROP",
+                "LOW_SPO2",
+                "EXERTION_HYPOXIA",
+                "HIGH_FEVER",
+                "FEVER_TACHYCARDIA",
+                "DEVICE_BATTERY_DEAD",
+            ) or any(k in title for k in ("🚨", "💓", "KHẨN CẤP", "BÁO ĐỘNG", "NGUY CẤP", "TÉ NGÃ"))
+
+            chosen_channel_id = "emergency_alerts_v5" if is_emergency else "smartcare_normal_v5"
+
+            # Android config: Báo động nguy hiểm dùng priority max; Thông báo thường chỉ ting ting
             android_config = messaging.AndroidConfig(
-                priority="high",
+                priority="high" if is_emergency else "normal",
                 notification=messaging.AndroidNotification(
                     title=title,
                     body=body,
                     sound="default",
-                    channel_id="emergency_alerts_v4",
-                    priority="max",
+                    channel_id=chosen_channel_id,
+                    priority="max" if is_emergency else "high",
                     visibility="PUBLIC",
                     default_sound=True,
                     default_vibrate_timings=True,
