@@ -1,14 +1,21 @@
 // src/components/layout/DoctorLayout.tsx
 // Bố cục tổng thể trang Bác sĩ: Navbar + Sidebar + Vùng nội dung (#F4F7FE)
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Outlet } from 'react-router-dom';
 import { DoctorNavbar } from './DoctorNavbar';
 import { DoctorSidebar } from './DoctorSidebar';
 import { AdminMarqueeBanner } from './AdminMarqueeBanner';
 import { doctorWebSocket } from '../../services/websocket';
 import { useDoctorDataStore } from '../../store/useDoctorDataStore';
-import { AlertCircle, X } from 'lucide-react';
+import {
+  isBrowserNotificationSupported,
+  getBrowserNotificationPermission,
+  requestBrowserNotificationPermission,
+  showBrowserNotification,
+  playEmergencyAlarmSound,
+} from '../../utils/browserNotification';
+import { AlertCircle, X, Bell } from 'lucide-react';
 
 export const DoctorLayout: React.FC = () => {
   const [realtimeAlert, setRealtimeAlert] = useState<{
@@ -17,6 +24,22 @@ export const DoctorLayout: React.FC = () => {
     time?: string;
     type?: string;
   } | null>(null);
+
+  const [showPermissionBanner, setShowPermissionBanner] = useState<boolean>(() => {
+    return isBrowserNotificationSupported() && getBrowserNotificationPermission() === 'default';
+  });
+
+  const handleEnableNotifications = useCallback(async () => {
+    const granted = await requestBrowserNotificationPermission();
+    if (granted) {
+      setShowPermissionBanner(false);
+      showBrowserNotification({
+        title: '✅ Đã bật thông báo đẩy Bác sĩ thành công',
+        body: 'Hệ thống SmartCare AI sẽ phát chuông và hiển thị cảnh báo té ngã / nguy kịch ngay cả khi thu nhỏ trình duyệt.',
+        url: '/notifications',
+      });
+    }
+  }, []);
 
   useEffect(() => {
     // Duy trì kết nối WebSocket duy nhất tại Root Layout
@@ -29,6 +52,23 @@ export const DoctorLayout: React.FC = () => {
       if (event && (event.type === 'ALERT_NEW' || event.message || event.heart_rate || event.spo2)) {
         // Revalidate background data khi nhận cảnh báo lâm sàng mới
         useDoctorDataStore.getState().fetchAllData(true);
+
+        const alertTitle =
+          event.alert_type === 'FALL_DETECTED' || event.alert_type === 'AI_FALL_DETECTED'
+            ? '🚨 BÁO ĐỘNG ĐỎ: PHÁT HIỆN TÉ NGÃ!'
+            : '⚠️ CẢNH BÁO LÂM SÀNG KHẨN CẤP';
+        const alertBody = event.message || 'Phát hiện bất thường sinh hiệu hoặc sự cố nguy kịch!';
+
+        // 1. Luôn phát âm thanh còi y tế báo động nếu là cảnh báo khẩn cấp
+        playEmergencyAlarmSound(4);
+
+        // 2. Bắn thông báo đẩy Desktop lên hệ điều hành (hiển thị kể cả khi ẩn Chrome hoặc chuyển tab)
+        showBrowserNotification({
+          title: alertTitle,
+          body: alertBody,
+          tag: event.incident_id || 'seca-alert',
+          url: '/notifications',
+        });
 
         setRealtimeAlert({
           message: event.message || 'Cảnh báo sinh hiệu bất thường từ bệnh nhân!',
@@ -56,6 +96,42 @@ export const DoctorLayout: React.FC = () => {
 
         {/* Content Area: phân vùng nội dung duy nhất cuộn theo chiều dọc */}
         <main className="flex-1 min-w-0 p-6 lg:p-8 overflow-y-auto">
+          {/* Banner xin quyền thông báo trình duyệt nếu chưa bật */}
+          {showPermissionBanner && (
+            <div className="mb-5 flex items-center justify-between rounded-2xl border border-blue-200 bg-blue-50/95 p-3.5 text-xs text-blue-900 shadow-xs backdrop-blur-xs dark:border-blue-900/60 dark:bg-blue-950/50 dark:text-blue-200 animate-in fade-in duration-200">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-white shrink-0 shadow-xs">
+                  <Bell className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="font-extrabold text-blue-950 dark:text-white">
+                    Bật thông báo đẩy trên trình duyệt
+                  </p>
+                  <p className="text-[11px] text-blue-700 dark:text-blue-300">
+                    Nhận chuông còi cấp cứu và pop-up cảnh báo té ngã / sinh hiệu ngay cả khi bạn thu nhỏ trình duyệt hoặc chuyển tab làm việc.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleEnableNotifications}
+                  className="rounded-xl bg-blue-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition cursor-pointer"
+                >
+                  Bật thông báo ngay
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPermissionBanner(false)}
+                  className="rounded-lg p-1.5 text-blue-400 hover:text-blue-700 transition cursor-pointer dark:hover:text-blue-200"
+                  title="Để sau"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Thanh thông báo chữ chạy từ trái sang phải chuẩn như Mobile App */}
           <AdminMarqueeBanner />
 

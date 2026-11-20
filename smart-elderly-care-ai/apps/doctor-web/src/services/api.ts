@@ -118,6 +118,14 @@ export const authApi = {
     const res = await api.delete(`/users/me/terminals/${terminalId}`);
     return res.data;
   },
+  updateFcmToken: async (fcmToken: string) => {
+    const res = await api.patch('/users/me/fcm-token', { fcm_token: fcmToken });
+    return res.data;
+  },
+  testPushNotification: async () => {
+    const res = await api.post('/users/me/test-push');
+    return res.data;
+  },
   logout: async (userName?: string, role: string = 'doctor') => {
     const token = localStorage.getItem('seca_doctor_token');
     try {
