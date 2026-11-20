@@ -970,14 +970,8 @@ async def delete_my_account(
         await db.execute(delete(DeviceGroup).where(DeviceGroup.house_id == house.id))
         await db.delete(house)
 
-    # 3.2 Gỡ thiết bị cá nhân
-    user_devs_res = await db.execute(select(Device).where(Device.owner_id == uid))
-    for dev in user_devs_res.scalars().all():
-        dev.owner_id = None
-        dev.house_id = None
-        dev.group_id = None
-        dev.is_online = False
-        db.add(dev)
+    # 3.2 Dọn dẹp thiết bị cá nhân thuộc sở hữu của user
+    await db.execute(delete(Device).where(Device.owner_id == uid))
 
     # 3.3 Gỡ acknowledged_by trên Incident
     await db.execute(

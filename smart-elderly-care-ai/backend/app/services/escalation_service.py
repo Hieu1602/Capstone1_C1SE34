@@ -227,7 +227,7 @@ async def execute_escalation_decision(incident_id: str | UUID, force_escalate: b
         # Bắn thông báo đẩy FCM / Web Push khẩn cấp tới điện thoại Người nhà & Web Bác sĩ (chạy nền)
         try:
             from app.models.device import Device
-            from app.models.house import House
+            from app.models.house import House, HouseMember
             from app.models.user import User
             from app.services.notification.fcm_service import FCMService
 
@@ -235,19 +235,22 @@ async def execute_escalation_decision(incident_id: str | UUID, force_escalate: b
             if incident.device_id:
                 dev = await session.get(Device, incident.device_id)
                 if dev and dev.house_id:
-                    # 1. Tìm các thành viên trong gia đình
-                    stmt_users = select(User).where(User.house_id == dev.house_id, User.is_active.is_(True))
-                    u_res = await session.execute(stmt_users)
-                    for u in u_res.scalars().all():
-                        if u.fcm_token:
-                            fcm_tokens.append(u.fcm_token)
+                    # 1. Tìm tất cả thành viên & bác sĩ trong căn nhà qua HouseMember
+                    stmt_members = select(HouseMember.user_id).where(HouseMember.house_id == dev.house_id)
+                    mem_res = await session.execute(stmt_members)
+                    user_ids = set(mem_res.scalars().all())
 
-                    # 2. Tìm bác sĩ phụ trách căn nhà
+                    # 2. Bổ sung chủ nhà nếu có
                     house = await session.get(House, dev.house_id)
-                    if house and house.assigned_doctor_id:
-                        doc = await session.get(User, house.assigned_doctor_id)
-                        if doc and doc.fcm_token:
-                            fcm_tokens.append(doc.fcm_token)
+                    if house and house.owner_id:
+                        user_ids.add(house.owner_id)
+
+                    if user_ids:
+                        stmt_users = select(User).where(User.id.in_(user_ids), User.is_active.is_(True))
+                        u_res = await session.execute(stmt_users)
+                        for u in u_res.scalars().all():
+                            if u.fcm_token:
+                                fcm_tokens.append(u.fcm_token)
 
             unique_tokens = list(dict.fromkeys(fcm_tokens))
             if unique_tokens:
