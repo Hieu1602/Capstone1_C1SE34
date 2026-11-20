@@ -135,11 +135,30 @@ class FCMService:
                 ),
             )
 
+            # Webpush config cho Trình duyệt Web Desktop & Mobile (Chrome, Edge, Firefox, Safari)
+            webpush_link = (data or {}).get("target_url") or (data or {}).get("url") or "/notifications"
+            webpush_config = messaging.WebpushConfig(
+                headers={"Urgency": "high" if priority == "high" else "normal"},
+                notification=messaging.WebpushNotification(
+                    title=title,
+                    body=body,
+                    icon="/icon-192.png",
+                    badge="/favicon.ico",
+                    vibrate=[200, 100, 200] if priority == "high" else [100],
+                    require_interaction=True if priority == "high" else False,
+                    tag=str((data or {}).get("incident_id") or (data or {}).get("id") or "seca-notification"),
+                ),
+                fcm_options=messaging.WebpushFCMOptions(
+                    link=str(webpush_link),
+                ),
+            )
+
             messages = [
                 messaging.Message(
                     notification=notification,
                     android=android_config,
                     apns=apns_config,
+                    webpush=webpush_config,
                     data={k: str(v) for k, v in (data or {}).items()},
                     token=token,
                 )

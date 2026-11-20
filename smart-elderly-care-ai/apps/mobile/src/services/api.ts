@@ -244,6 +244,8 @@ export const usersApi = {
     api.delete('/users/me', { data }),
   updateFcmToken: (fcm_token: string) =>
     api.patch('/users/me/fcm-token', { fcm_token }),
+  testPushNotification: () =>
+    api.post('/users/me/test-push'),
   getNotificationPreferences: () =>
     api.get('/users/me/notification-preferences'),
   updateNotificationPreferences: (preferences: {

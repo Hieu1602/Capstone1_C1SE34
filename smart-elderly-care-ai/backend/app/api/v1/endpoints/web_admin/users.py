@@ -1166,9 +1166,43 @@ async def update_fcm_token(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Cập nhật FCM Push token khi app mobile khởi động."""
+    """Cập nhật FCM Push token khi app mobile / web khởi động."""
 
     return await crud_user.update(db, db_obj=current_user, obj_in={"fcm_token": fcm_token})
+
+
+@router.post("/me/test-push")
+async def test_push_notification(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Bắn thông báo đẩy thử nghiệm (FCM / Web Push) tới thiết bị của người dùng hiện tại."""
+    if not current_user.fcm_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tài khoản chưa được liên kết FCM Push Token. Vui lòng mở ứng dụng di động hoặc bật thông báo trên web trước.",
+        )
+
+    from app.services.notification.fcm_service import FCMService
+    fcm = FCMService()
+    fcm.initialize()
+    res = fcm.send_alert(
+        fcm_tokens=[current_user.fcm_token],
+        title="🔔 Thông báo thử nghiệm SmartCare AI",
+        body="Hệ thống thông báo đẩy FCM / Web Push đã được cấu hình thành công trên thiết bị của bạn!",
+        data={
+            "type": "TEST_PUSH",
+            "time": datetime.now(timezone.utc).isoformat(),
+            "target_url": "/notifications",
+        },
+        priority="high",
+    )
+    return {
+        "message": "Đã gửi thông báo đẩy thử nghiệm.",
+        "success_count": res.get("success_count", 0),
+        "failure_count": res.get("failure_count", 0),
+        "token_prefix": current_user.fcm_token[:15] + "...",
+    }
 
 # ==============================================================================
 # QUẢN LÝ ĐẦU CUỐI (CLIENT TERMINALS / DEVICES) & LỊCH SỬ ĐĂNG NHẬP (LOGIN HISTORY)
