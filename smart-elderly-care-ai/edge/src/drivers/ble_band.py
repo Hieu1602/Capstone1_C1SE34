@@ -26,7 +26,7 @@ class VitalReading:
     spo2: Optional[int] = None            # %
     battery_level: Optional[int] = None   # %
     sensor_contact: bool = True           # True: Đang đeo, False: Tháo vòng
-    rr_intervals: list[float] = None      # ms (HRV)
+    rr_intervals: Optional[list[float]] = None  # ms (HRV)
     timestamp: float = 0.0
 
 
