@@ -20,6 +20,7 @@ import { Colors, Shadows } from '../../theme/colors';
 import { useTheme } from '../../store/useThemeStore';
 import { useAlertStore } from '../../store';
 import { usePatientStore } from '../../store/usePatientStore';
+import { useAuthStore } from '../../store/useAuthStore';
 import { LocalizedAlert, LocalizedText } from '../../i18n/LocalizedComponents';
 import { reportsApi } from '../../services/api';
 import { handleHeaderBack } from '../../navigation/navigationHelpers';
@@ -115,33 +116,40 @@ export default function MedicalReportScreen({ navigation, route }: any) {
   const [reportChartWidth, setReportChartWidth] = useState<number>(300);
 
   const { patientsList, fetchPatientsList, activePatientId, setActivePatientId } = usePatientStore();
+  const { userRole, role, has_house, household_id } = useAuthStore();
+  const isSpecialUser = userRole === 'admin' || userRole === 'doctor' || role === 'admin' || role === 'doctor';
+  const hasNoHouse = !isSpecialUser && !household_id && has_house === false;
+  const effectivePatientsList = hasNoHouse ? [] : (patientsList || []);
+
   const routePatientId = route?.params?.patientId;
   const deviceId = route?.params?.deviceId;
 
   const [selectedPatientId, setSelectedPatientId] = useState<string | number | undefined>(
-    routePatientId || activePatientId || undefined
+    hasNoHouse ? undefined : (routePatientId || activePatientId || undefined)
   );
 
   useEffect(() => {
-    fetchPatientsList();
-  }, [fetchPatientsList]);
+    if (!hasNoHouse) {
+      fetchPatientsList();
+    }
+  }, [fetchPatientsList, hasNoHouse]);
 
   useEffect(() => {
-    if (!selectedPatientId && patientsList && patientsList.length > 0) {
-      const firstId = patientsList[0].id || patientsList[0].elderly_id;
+    if (!selectedPatientId && effectivePatientsList && effectivePatientsList.length > 0) {
+      const firstId = effectivePatientsList[0].id || effectivePatientsList[0].elderly_id;
       setSelectedPatientId(firstId);
     }
-  }, [patientsList, selectedPatientId]);
+  }, [effectivePatientsList, selectedPatientId]);
 
   const currentSenior = useMemo(() => {
-    if (!patientsList || patientsList.length === 0) return null;
+    if (hasNoHouse || !effectivePatientsList || effectivePatientsList.length === 0) return null;
     return (
-      patientsList.find((p: any) => String(p.id || p.elderly_id) === String(selectedPatientId)) ||
-      patientsList[0]
+      effectivePatientsList.find((p: any) => String(p.id || p.elderly_id) === String(selectedPatientId)) ||
+      effectivePatientsList[0]
     );
-  }, [patientsList, selectedPatientId]);
+  }, [effectivePatientsList, selectedPatientId, hasNoHouse]);
 
-  const currentSeniorName = currentSenior?.full_name || currentSenior?.name || '';
+  const currentSeniorName = hasNoHouse ? '' : (currentSenior?.full_name || currentSenior?.name || '');
 
   const storeCriticalStats = useMemo(() => {
     const daysWindow = period === 'WEEK' ? 7 : 30;
@@ -201,6 +209,12 @@ export default function MedicalReportScreen({ navigation, route }: any) {
   const hasAlertWarning = effectiveCriticalCount > 0 || (Number(report.falls) || 0) > 0;
 
   const fetchReport = useCallback(async (isPullRefresh = false) => {
+    if (!patientsList || patientsList.length === 0) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     if (isPullRefresh) {
       setRefreshing(true);
     } else {
@@ -383,15 +397,37 @@ export default function MedicalReportScreen({ navigation, route }: any) {
           />
         }
       >
+        {!patientsList || patientsList.length === 0 ? (
+          <View style={[styles.emptyReportCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+            <View style={[styles.emptyReportIconCircle, isDarkMode && { backgroundColor: '#0F172A' }]}>
+              <Ionicons name="document-text-outline" size={42} color="#94A3B8" />
+            </View>
+            <LocalizedText style={[styles.emptyReportTitle, isDarkMode && { color: '#F8FAFC' }]}>
+              Chưa có hồ sơ người cao tuổi
+            </LocalizedText>
+            <LocalizedText style={[styles.emptyReportDesc, isDarkMode && { color: '#94A3B8' }]}>
+              Căn nhà chưa có hồ sơ người cao tuổi nào để tổng hợp dữ liệu báo cáo sức khỏe. Vui lòng tham gia căn nhà hoặc thêm hồ sơ người cao tuổi mới.
+            </LocalizedText>
+            <TouchableOpacity
+              style={styles.emptyReportBtn}
+              onPress={() => navigation.navigate('PatientsList')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="people-outline" size={18} color="#FFFFFF" />
+              <LocalizedText style={styles.emptyReportBtnText}>Quản lý hồ sơ người cao tuổi</LocalizedText>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
         {/* Bộ chọn Người cao tuổi (Hỗ trợ hộ gia đình đa người cao tuổi) */}
-        {patientsList && patientsList.length > 0 && (
+        {effectivePatientsList && effectivePatientsList.length > 0 && (
           <View style={styles.patientSelectorWrapper}>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.patientChipsRow}
             >
-              {patientsList.map((p: any) => {
+              {effectivePatientsList.map((p: any) => {
                 const pId = p.id || p.elderly_id;
                 const isSelected = String(pId) === String(selectedPatientId);
                 const pName = p.full_name || p.name || 'Người cao tuổi';
@@ -939,6 +975,8 @@ export default function MedicalReportScreen({ navigation, route }: any) {
             </TouchableOpacity>
           </>
         )}
+        </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -1387,5 +1425,53 @@ const styles = StyleSheet.create({
     marginTop: 3,
     fontSize: 11,
     color: '#B45309',
+  },
+  emptyReportCard: {
+    alignItems: 'center',
+    paddingVertical: 36,
+    paddingHorizontal: 20,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    marginTop: 10,
+  },
+  emptyReportIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyReportTitle: {
+    fontSize: 16.5,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptyReportDesc: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+    paddingHorizontal: 12,
+  },
+  emptyReportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  emptyReportBtnText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

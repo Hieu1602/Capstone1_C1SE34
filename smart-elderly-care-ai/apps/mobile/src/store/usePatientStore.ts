@@ -92,7 +92,7 @@ interface PatientState {
   setActivePatientId: (patientId: string | number) => void;
   createPatient: (data: any) => Promise<any>;
   deletePatient: (patientId: string | number) => Promise<boolean>;
-  fetchPatientRecord: (patientId?: number | string, target_date?: string) => Promise<PatientMedicalRecord | null>;
+  fetchPatientRecord: (patientId?: number | string | null, target_date?: string) => Promise<PatientMedicalRecord | null>;
   updatePatientRecord: (patientId: number | string, data: Partial<PatientMedicalRecord>) => Promise<PatientMedicalRecord | null>;
   enrollPatientFace: (patientId: number, formData: FormData) => Promise<any>;
   resetPatientStore: () => void;
@@ -115,21 +115,49 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
   isLoadingList: false,
 
   fetchPatientsList: async () => {
+    try {
+      const authState = require('./useAuthStore').useAuthStore.getState();
+      const isSpecial = authState.userRole === 'admin' || authState.userRole === 'doctor' || authState.role === 'admin' || authState.role === 'doctor';
+      if (!isSpecial && !authState.household_id && authState.has_house === false) {
+        set({ patientsList: [], activePatientId: null, patientRecord: null, isLoadingList: false });
+        return [];
+      }
+    } catch {}
+
     set({ isLoadingList: true });
     try {
       const res = await patientApi.list();
       if (Array.isArray(res.data)) {
-        const list = res.data;
+        try {
+          const currentAuth = require('./useAuthStore').useAuthStore.getState();
+          const currentIsSpecial = currentAuth.userRole === 'admin' || currentAuth.userRole === 'doctor' || currentAuth.role === 'admin' || currentAuth.role === 'doctor';
+          if (!currentIsSpecial && !currentAuth.household_id && currentAuth.has_house === false) {
+            set({ patientsList: [], activePatientId: null, patientRecord: null, isLoadingList: false });
+            return [];
+          }
+        } catch {}
+
+        const list = res.data.filter((p: any) => p && (p.name || p.full_name));
         const currentActive = get().activePatientId;
         const exists = list.some((p: any) => p.id === currentActive || p.elderly_id === currentActive);
         const newActive = exists ? currentActive : (list[0]?.id || list[0]?.elderly_id || null);
-        set({ patientsList: list, activePatientId: newActive, isLoadingList: false });
+        set({
+          patientsList: list,
+          activePatientId: newActive,
+          patientRecord: list.length === 0 ? null : get().patientRecord,
+          isLoadingList: false,
+        });
+        if (newActive) {
+          get().fetchPatientRecord(newActive);
+        } else {
+          set({ patientRecord: null });
+        }
         return list;
       }
     } catch (e) {
       console.warn('fetchPatientsList API fallback:', e);
     }
-    set({ isLoadingList: false });
+    set({ patientsList: [], activePatientId: null, patientRecord: null, isLoadingList: false });
     return [];
   },
 
@@ -172,6 +200,25 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
   },
 
   fetchReminders: async (patientId?: string | number) => {
+    try {
+      const authState = require('./useAuthStore').useAuthStore.getState();
+      const isSpecial = authState.userRole === 'admin' || authState.userRole === 'doctor' || authState.role === 'admin' || authState.role === 'doctor';
+      if (!isSpecial && !authState.household_id && authState.has_house === false) {
+        set({
+          todayReminders: {
+            date: new Date().toISOString().split('T')[0],
+            total_medications: 0,
+            completed_medications: 0,
+            hub_voice_reminder_enabled: true,
+            medications: [],
+            meals: [],
+          },
+          isLoadingReminders: false,
+        });
+        return null;
+      }
+    } catch {}
+
     set({ isLoadingReminders: true });
     try {
       const targetId = patientId || get().activePatientId || undefined;
@@ -309,18 +356,32 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
     });
   },
 
-  fetchPatientRecord: async (patientId: number | string = 1, target_date?: string) => {
+  fetchPatientRecord: async (patientId?: number | string | null, target_date?: string) => {
+    try {
+      const authState = require('./useAuthStore').useAuthStore.getState();
+      const isSpecial = authState.userRole === 'admin' || authState.userRole === 'doctor' || authState.role === 'admin' || authState.role === 'doctor';
+      if (!isSpecial && !authState.household_id && authState.has_house === false) {
+        set({ patientRecord: null, isLoadingPatient: false });
+        return null;
+      }
+    } catch {}
+
+    const targetId = patientId ?? get().activePatientId;
+    if (!targetId) {
+      set({ patientRecord: null, isLoadingPatient: false });
+      return null;
+    }
     set({ isLoadingPatient: true });
     try {
-      const res = await patientApi.getMedicalRecord(patientId, target_date);
-      if (res.data) {
+      const res = await patientApi.getMedicalRecord(targetId, target_date);
+      if (res.data && res.data.name && res.data.name.trim() !== '') {
         set({ patientRecord: res.data, isLoadingPatient: false });
         return res.data;
       }
     } catch (e) {
       console.warn('fetchPatientRecord API fallback:', e);
     }
-    set({ isLoadingPatient: false });
+    set({ patientRecord: null, isLoadingPatient: false });
     return null;
   },
 
@@ -369,6 +430,8 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
   resetPatientStore: () =>
     set({
       patientRecord: null,
+      patientsList: [],
+      activePatientId: null,
       todayReminders: {
         date: new Date().toISOString().split('T')[0],
         total_medications: 0,
@@ -379,5 +442,6 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
       },
       isLoadingReminders: false,
       isLoadingPatient: false,
+      isLoadingList: false,
     }),
 }));

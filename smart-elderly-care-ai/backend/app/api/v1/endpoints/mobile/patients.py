@@ -82,6 +82,12 @@ async def list_patients(
             house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
             if house:
                 query = query.where(ElderlyProfile.house_id == house.id)
+            else:
+                # Tài khoản mới chưa tham gia căn nhà nào -> trả về danh sách rỗng (Không dùng dữ liệu ảo)
+                return []
+    else:
+        # Chưa đăng nhập -> không trả dữ liệu người cao tuổi
+        return []
 
     if q and q.strip():
         term = q.strip()
@@ -98,26 +104,22 @@ async def list_patients(
     res = await db.execute(query)
     profiles = list(res.scalars().all())
 
-    if not profiles and current_user and current_user.role not in ("admin", "doctor") and not q:
-        house = await crud_house.get_or_create_default_house(db, owner_id=current_user.id)
-        if house:
-            default_p = await crud_elderly.get_or_create_default(db, house_id=house.id)
-            profiles = [default_p]
-
     current_year = datetime.now().year
     out = []
     for p in profiles:
-        calc_age = (current_year - p.birth_year) if p.birth_year else 75
+        if not p.full_name or not p.full_name.strip():
+            continue
+        calc_age = (current_year - p.birth_year) if p.birth_year else 0
         out.append({
             "id": str(p.id),
             "elderly_id": str(p.id),
-            "full_name": p.full_name or "Cụ Nguyễn Văn An",
-            "name": p.full_name or "Cụ Nguyễn Văn An",
-            "birth_year": p.birth_year or (current_year - 75),
+            "full_name": p.full_name,
+            "name": p.full_name,
+            "birth_year": p.birth_year,
             "age": calc_age,
             "gender": p.gender or "Nam",
-            "blood_type": p.blood_type or "A+",
-            "house_name": p.house.name if (hasattr(p, "house") and p.house) else f"Gia đình {p.full_name or ''}".strip(),
+            "blood_type": p.blood_type or "",
+            "house_name": p.house.name if (hasattr(p, "house") and p.house) else f"Gia đình {p.full_name}".strip(),
             "avatar_url": p.avatar_url,
             "emergency_contact_phone": p.emergency_contact_phone or "",
         })

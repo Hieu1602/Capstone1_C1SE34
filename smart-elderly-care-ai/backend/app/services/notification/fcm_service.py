@@ -122,7 +122,6 @@ class FCMService:
                 "EXERTION_HYPOXIA",
                 "HIGH_FEVER",
                 "FEVER_TACHYCARDIA",
-                "DEVICE_BATTERY_DEAD",
             ) or any(k in title for k in ("🚨", "💓", "KHẨN CẤP", "BÁO ĐỘNG", "NGUY CẤP", "TÉ NGÃ"))
 
             chosen_channel_id = "emergency_alerts_v5" if is_emergency else "smartcare_normal_v5"

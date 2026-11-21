@@ -425,6 +425,9 @@ const createAuthStore: StateCreator<AuthStoreState, [], [['zustand/persist', Aut
   },
 
   clearHouseData: () => {
+    try {
+      require('./usePatientStore').usePatientStore.getState().resetPatientStore?.();
+    } catch {}
     const independentPerms: HousePermissions = {
       can_view_health: false,
       can_view_camera: false,

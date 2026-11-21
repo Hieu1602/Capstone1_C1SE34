@@ -55,8 +55,10 @@ export default function PatientsListScreen({ navigation }: any) {
     createPatient,
     isLoadingList,
   } = useVitalStore();
-  const { userRole, role, permissions, viewRole, userPhone, phone_number } = useAuthStore();
+  const { userRole, role, permissions, viewRole, userPhone, phone_number, has_house, household_id } = useAuthStore();
   const ownerPhone = (userPhone || phone_number || '').trim();
+  const isSpecialUser = userRole === 'admin' || userRole === 'doctor' || role === 'admin' || role === 'doctor';
+  const hasNoHouse = !isSpecialUser && !household_id && has_house === false;
 
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -162,7 +164,9 @@ export default function PatientsListScreen({ navigation }: any) {
   const textSub = isDarkMode ? '#94A3B8' : '#64748B';
   const inputStyle = [styles.textInput, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', color: textTitle, borderColor: borderCol }];
 
-  const filteredPatients = (patientsList || []).filter((p: any) => {
+  const actualPatientsList = hasNoHouse ? [] : (patientsList || []);
+
+  const filteredPatients = actualPatientsList.filter((p: any) => {
     if (!searchQuery.trim()) return true;
     const term = searchQuery.toLowerCase().trim();
     const name = (p.full_name || p.name || '').toLowerCase();
@@ -184,10 +188,14 @@ export default function PatientsListScreen({ navigation }: any) {
         <View style={styles.headerTitleCenter}>
           <Text style={[styles.headerTitle, { color: textTitle }]}>Hồ sơ bệnh án</Text>
           <Text style={[styles.headerSubtitle, { color: textSub }]}>
-            {patientsList.length > 0 ? `${patientsList.length} người cao tuổi trong nhà` : 'Hồ sơ người cao tuổi'}
+            {hasNoHouse
+              ? 'Chưa tham gia gia đình nào'
+              : actualPatientsList.length > 0
+              ? `${actualPatientsList.length} người cao tuổi trong nhà`
+              : 'Hồ sơ người cao tuổi'}
           </Text>
         </View>
-        {canEdit ? (
+        {canEdit && !hasNoHouse ? (
           <TouchableOpacity
             style={[styles.addTopBtn, { backgroundColor: Colors.primary }]}
             onPress={() => setIsCreateVisible(true)}
@@ -222,13 +230,15 @@ export default function PatientsListScreen({ navigation }: any) {
               </View>
             </View>
             <Text style={[styles.securityDesc, { color: isDarkMode ? '#94A3B8' : '#0C4A6E' }]}>
-              Chọn thẻ người cao tuổi bên dưới để xem bệnh án chi tiết, đơn thuốc và nhật ký chăm sóc y tế.
+              {hasNoHouse
+                ? 'Tài khoản chưa tham gia căn nhà nào. Hãy liên kết vào nhà để xem hồ sơ bệnh án người cao tuổi.'
+                : 'Chọn thẻ người cao tuổi bên dưới để xem bệnh án chi tiết, đơn thuốc và nhật ký chăm sóc y tế.'}
             </Text>
           </View>
         </View>
 
         {/* Thanh tìm kiếm nếu danh sách có nhiều cụ */}
-        {patientsList.length > 2 && (
+        {actualPatientsList.length > 2 && (
           <View style={[styles.searchBox, { backgroundColor: bgCard, borderColor: borderCol }]}>
             <Ionicons name="search" size={18} color={textSub} style={{ marginRight: 8 }} />
             <TextInput
@@ -247,7 +257,7 @@ export default function PatientsListScreen({ navigation }: any) {
         )}
 
         {/* Danh sách thẻ bệnh nhân (Thiết kế chính xác theo ảnh mẫu người dùng) */}
-        {isLoadingList && patientsList.length === 0 ? (
+        {isLoadingList && actualPatientsList.length === 0 ? (
           <View style={{ paddingVertical: 40, alignItems: 'center' }}>
             <ActivityIndicator size="large" color={Colors.primary} />
             <Text style={{ marginTop: 12, color: textSub, fontSize: 13 }}>Đang tải danh sách hồ sơ...</Text>
@@ -257,11 +267,15 @@ export default function PatientsListScreen({ navigation }: any) {
             <View style={[styles.emptyIconCircle, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' }]}>
               <Ionicons name="people-outline" size={44} color="#94A3B8" />
             </View>
-            <Text style={[styles.emptyTitle, { color: textTitle }]}>Chưa có hồ sơ người cao tuổi</Text>
-            <Text style={[styles.emptyDesc, { color: textSub }]}>
-              Thêm thông tin người cao tuổi vào căn nhà để theo dõi sức khỏe và lịch uống thuốc.
+            <Text style={[styles.emptyTitle, { color: textTitle }]}>
+              {hasNoHouse ? 'Chưa tham gia gia đình nào' : 'Chưa có hồ sơ người cao tuổi'}
             </Text>
-            {canEdit && (
+            <Text style={[styles.emptyDesc, { color: textSub }]}>
+              {hasNoHouse
+                ? 'Tài khoản của bạn chưa thuộc căn nhà nào. Hãy nhập mã mời tham gia nhà từ Menu để xem hồ sơ người cao tuổi.'
+                : 'Thêm thông tin người cao tuổi vào căn nhà để theo dõi sức khỏe và lịch uống thuốc.'}
+            </Text>
+            {canEdit && !hasNoHouse && (
               <TouchableOpacity
                 style={styles.emptyAddBtn}
                 onPress={() => setIsCreateVisible(true)}

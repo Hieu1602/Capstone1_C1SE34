@@ -230,8 +230,7 @@ class SmartCareBackgroundService : Service() {
                         "SUDDEN_HR_SPIKE",
                         "SUDDEN_HR_DROP",
                         "LOW_SPO2",
-                        "HIGH_FEVER",
-                        "DEVICE_BATTERY_DEAD"
+                        "HIGH_FEVER"
                     ) || alertLevel == "CRITICAL"
 
                     // Nếu sự cố đã được xử lý (trên web, app hoặc người dùng bấm Đã xử lý)
@@ -269,7 +268,6 @@ class SmartCareBackgroundService : Service() {
             alertType == "HIGH_HEART_RATE" -> "💓 CẢNH BÁO: NHỊP TIM TĂNG CAO BẤT THƯỜNG!"
             alertType == "LOW_HEART_RATE" -> "⚠️ CẢNH BÁO: NHỊP TIM TỤT QUÁ THẤP!"
             alertType == "LOW_SPO2" -> "🫁 NGUY CẤP: NỒNG ĐỘ OXY MÁU (SpO₂) TỤT SÂU!"
-            alertType == "DEVICE_BATTERY_DEAD" -> "⛔ VÒNG ĐEO TAY ĐÃ CẠN PIN (0%)!"
             alertType == "LOW_BATTERY" -> "🪫 PIN ĐỒNG HỒ SẮP HẾT (DƯỚI 20%)!"
             else -> "🚨 CẢNH BÁO SỨC KHỎE NGƯỜI CAO TUỔI!"
         }
@@ -371,6 +369,7 @@ class SmartCareBackgroundService : Service() {
             alertType == "APPOINTMENT_CONFIRMED" -> "🗓️ GIA ĐÌNH ĐÃ XÁC NHẬN LỊCH KHÁM"
             alertType == "APPOINTMENT_CANCELLED" -> "🗓️ LỊCH KHÁM ĐÃ BỊ HỦY"
             alertType == "MEDICAL_RECORD_UPDATED" -> "📋 HỒ SƠ BỆNH ÁN ĐƯỢC CẬP NHẬT"
+            alertType == "DEVICE_BATTERY_DEAD" -> "🪫 VÒNG ĐEO TAY ĐÃ CẠN PIN (0%)"
             alertType == "LOW_BATTERY" -> "🔋 CẢNH BÁO PIN ĐỒNG HỒ YẾU"
             alertType.startsWith("HOUSE_") -> "🏠 THÔNG BÁO GIA ĐÌNH"
             else -> "🔔 THÔNG BÁO TỪ SMARTCARE AI"
