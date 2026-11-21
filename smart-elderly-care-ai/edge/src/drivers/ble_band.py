@@ -50,10 +50,12 @@ class BLEBandDriver:
     HR_MEASUREMENT_UUID     = "00002a37-0000-1000-8000-00805f9b34fb"
     BATTERY_SERVICE_UUID    = "0000180f-0000-1000-8000-00805f9b34fb"
     BATTERY_LEVEL_UUID      = "00002a19-0000-1000-8000-00805f9b34fb"
+    HUAMI_HR_CTRL_UUID      = "00000004-0000-3512-2118-0009af100700"
 
     def __init__(self, config: dict):
         self.device_mac: str = config.get("device_mac", "")
         self.device_name: str = config.get("device_name", "")
+        self.auth_key: str = config.get("auth_key", "")
         self.service_uuid: str = config.get("service_uuid", self.HR_SERVICE_UUID)
         self.char_uuid: str = config.get(
             "characteristic_uuid", self.HR_MEASUREMENT_UUID
@@ -89,6 +91,14 @@ class BLEBandDriver:
             self._client = BleakClient(address)
             await self._client.connect()
             logger.info("[BLE] Đã kết nối: %s", address)
+
+            # Xác thực Huami BLE bằng Auth Key nếu có
+            if self.auth_key:
+                try:
+                    from scripts.stream_xiaomi_band7 import authenticate_huami_band
+                    await authenticate_huami_band(self._client, self.auth_key)
+                except Exception as aexc:
+                    logger.debug("[BLE] Huami auth skip: %s", aexc)
 
             # Đọc mức pin ban đầu
             try:
@@ -143,7 +153,15 @@ class BLEBandDriver:
 
         try:
             await self._client.start_notify(self.char_uuid, hr_notification_handler)
-            logger.info("[BLE] Notifications bắt đầu.")
+            logger.info("[BLE] Notifications bắt đầu (GATT 0x2A37).")
+
+            # Kích hoạt cảm biến PPG đo nhịp tim liên tục trên Xiaomi/Huami Band
+            try:
+                await self._client.write_gatt_char(
+                    self.HUAMI_HR_CTRL_UUID, b"\x15\x01\x01", response=False
+                )
+            except Exception:
+                pass
 
             while self._running:
                 if not self._client.is_connected:
@@ -154,6 +172,13 @@ class BLEBandDriver:
                         await self._client.start_notify(
                             self.char_uuid, hr_notification_handler
                         )
+                else:
+                    try:
+                        await self._client.write_gatt_char(
+                            self.HUAMI_HR_CTRL_UUID, b"\x16", response=False
+                        )
+                    except Exception:
+                        pass
                 await asyncio.sleep(self.poll_interval)
 
         except Exception as exc:  # noqa: BLE001

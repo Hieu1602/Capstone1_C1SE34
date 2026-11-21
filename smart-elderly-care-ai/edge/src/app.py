@@ -204,6 +204,19 @@ class EdgeApp:
             if connected:
                 await self.ble_band.start_notifications(on_vital)
             else:
+                try:
+                    from scripts.stream_xiaomi_band7 import fetch_xiaomi_cloud_vitals
+                    cloud_vitals = await asyncio.to_thread(fetch_xiaomi_cloud_vitals)
+                    if cloud_vitals.get("latest_hr"):
+                        on_vital(
+                            VitalReading(
+                                heart_rate=cloud_vitals["latest_hr"],
+                                spo2=cloud_vitals.get("latest_spo2") or 98,
+                                timestamp=float(cloud_vitals.get("latest_time") or time.time()),
+                            )
+                        )
+                except Exception as exc:
+                    logger.debug("[BLE] Cloud fallback skip: %s", exc)
                 await asyncio.sleep(self.config["ble"]["reconnect_interval_sec"])
 
     async def _heartbeat_loop(self) -> None:
