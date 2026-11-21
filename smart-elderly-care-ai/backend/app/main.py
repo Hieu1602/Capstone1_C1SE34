@@ -130,6 +130,8 @@ async def lifespan(app: FastAPI):
                             "video_clip_url": incident.video_clip_url,
                             "thumbnail_url": incident.thumbnail_url,
                             "device_id": str(incident.device_id),
+                            "notes": incident.notes,
+                            "patient_name": payload.get("patient_name"),
                             "escalation_seconds": DEFAULT_ESCALATION_DELAY_SECONDS if is_escalatable else None,
                         }
                         await manager.broadcast_to_device(str(incident.device_id), ws_data)
@@ -155,6 +157,8 @@ async def lifespan(app: FastAPI):
                                 "alert_type": incident.alert_type,
                                 "alert_level": incident.alert_level,
                                 "message": incident.message,
+                                "notes": incident.notes,
+                                "patient_name": payload.get("patient_name"),
                                 "video_clip_url": incident.video_clip_url,
                                 "thumbnail_url": incident.thumbnail_url,
                                 "created_at": incident.created_at.isoformat() if incident.created_at else None,
@@ -200,9 +204,10 @@ async def lifespan(app: FastAPI):
                                         cred_path = Path(__file__).resolve().parents[1] / cred_path
                                     if cred_path.is_file():
                                         fcm.initialize(str(cred_path))
+                                    fcm_title = f"🚨 CẢNH BÁO TÉ NGÃ: {payload.get('patient_name')}!" if payload.get('patient_name') else "🚨 CẢNH BÁO TÉ NGÃ KHẨN CẤP"
                                     fcm.send_alert(
                                         fcm_tokens=tokens,
-                                        title="🚨 CẢNH BÁO TÉ NGÃ KHẨN CẤP",
+                                        title=fcm_title,
                                         body=incident.message or "Phát hiện sự cố té ngã tại camera!",
                                         data={
                                             "type": "FALL_ALERT",

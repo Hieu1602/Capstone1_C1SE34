@@ -21,7 +21,7 @@ class CRUDIncident:
             existing = await self.get(db, event_id)
             if existing:
                 return existing
-        payload = {key: data[key] for key in ("device_id", "alert_type", "alert_level", "message", "confidence", "video_clip_url", "thumbnail_url") if key in data}
+        payload = {key: data[key] for key in ("device_id", "alert_type", "alert_level", "message", "confidence", "video_clip_url", "thumbnail_url", "notes") if key in data}
         if "device_id" in payload and not isinstance(payload["device_id"], UUID):
             try:
                 payload["device_id"] = UUID(str(payload["device_id"]))
