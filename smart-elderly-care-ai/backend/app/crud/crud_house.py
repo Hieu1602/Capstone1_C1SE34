@@ -337,7 +337,7 @@ class CRUDHouse:
             }
 
         member = await self.get_member_by_user(db, house_id=house.id, user_id=user.id)
-        if not member:
+        if not member or getattr(member, "status", "ACTIVE") != "ACTIVE":
             return {
                 "house_id": house.id,
                 "user_id": user.id,

@@ -4,6 +4,13 @@
 import type { IntercomPlatform } from "./intercomSession";
 
 /**
+ * Kiểm tra xem nền tảng hiện tại có hỗ trợ WebRTC hay không.
+ */
+export function isIntercomSupported(): boolean {
+    return typeof RTCPeerConnection !== "undefined";
+}
+
+/**
  * Tạo adapter web khi trình duyệt hỗ trợ WebRTC.
  * @returns Các hàm tạo peer, lấy mic và điều khiển phần tử audio.
  */

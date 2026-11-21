@@ -1,10 +1,16 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Platform } from 'react-native';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import type { Incident } from '../../../store/useAlertStore';
 
 let Video: any = null;
-if (Platform.OS !== 'web') {
+const isExpoGo =
+  Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
+  (Constants as any).appOwnership === 'expo';
+
+if (Platform.OS !== 'web' && !isExpoGo) {
   try { Video = require('react-native-video').default; } catch {}
 }
 
@@ -111,10 +117,35 @@ export const IncidentEvidenceViewer: React.FC<IncidentEvidenceViewerProps> = ({
       )
     ) : videoUrl ? (
       <View style={[styles.evidenceCard, { backgroundColor: '#000', borderColor: colors.border }]}>
-        {Platform.OS === 'web' || !Video ? (
+        {Platform.OS === 'web' ? (
           <video src={videoUrl} style={{ width: '100%', height: 230, borderRadius: 12, backgroundColor: '#000', objectFit: 'contain' }} controls autoPlay loop />
-        ) : (
+        ) : Video ? (
           <Video source={{ uri: videoUrl }} style={styles.video} controls resizeMode="contain" paused={false} />
+        ) : (
+          <WebView
+            source={{
+              html: `
+                <!DOCTYPE html>
+                <html>
+                  <head>
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                    <style>
+                      * { margin: 0; padding: 0; box-sizing: border-box; }
+                      body { background: #000; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+                      video { width: 100%; height: 100%; object-fit: contain; }
+                    </style>
+                  </head>
+                  <body>
+                    <video src="${videoUrl}" controls autoplay playsinline loop></video>
+                  </body>
+                </html>
+              `
+            }}
+            style={{ width: '100%', height: 230, backgroundColor: '#000', borderRadius: 12 }}
+            allowsInlineMediaPlayback
+            mediaPlaybackRequiresUserAction={false}
+            scrollEnabled={false}
+          />
         )}
         <View style={styles.videoOsdBar}>
           <View style={styles.recDot} />
