@@ -237,8 +237,8 @@ export default function DoctorPatientsScreen() {
   const handleOpenAppointmentModal = (patient: PatientCardData) => {
     setSelectedPatientForApt(patient);
     const d = new Date();
-    d.setHours(d.getHours() + 2);
-    setScheduledAt(d.toISOString().slice(0, 16));
+    d.setHours(d.getHours() + 2, 0, 0, 0);
+    setScheduledAt(d.toISOString());
     setLocation(patient.house_address || patient.house_name || 'Khám tại nhà');
     setAppointmentModalVisible(true);
   };
@@ -247,11 +247,14 @@ export default function DoctorPatientsScreen() {
     if (!selectedPatientForApt) return;
     try {
       setIsSubmittingApt(true);
+      const parsed = new Date(scheduledAt);
+      const finalIso = !isNaN(parsed.getTime()) ? parsed.toISOString() : new Date(Date.now() + 2 * 3600000).toISOString();
       await doctorApi.createAppointment({
         patient_id: selectedPatientForApt.id,
         patient_name: selectedPatientForApt.name,
-        scheduled_at: scheduledAt,
+        scheduled_at: finalIso,
         visit_type: visitType,
+        exam_type: examType,
         location: location,
         clinical_notes: examType,
         instructions: instructions,
@@ -261,8 +264,12 @@ export default function DoctorPatientsScreen() {
       });
       setAppointmentModalVisible(false);
       LocalizedAlert.alert('Thành công', 'Đã tạo lịch khám thành công cho bệnh nhân!');
-    } catch {
-      LocalizedAlert.alert('Lỗi', 'Không thể tạo lịch khám. Vui lòng thử lại sau.');
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      LocalizedAlert.alert(
+        err?.response?.status === 409 ? 'Trùng lịch khám' : 'Lỗi',
+        typeof detail === 'string' ? detail : 'Không thể tạo lịch khám. Vui lòng thử lại sau.'
+      );
     } finally {
       setIsSubmittingApt(false);
     }

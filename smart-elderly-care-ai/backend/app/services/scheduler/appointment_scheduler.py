@@ -20,6 +20,11 @@ from app.models.elderly_profile import ElderlyProfile
 from app.models.house import HouseMember
 from app.models.user import User
 from app.schemas.appointment import ReminderStatusEnum, ReminderTypeEnum
+from app.services.notification.appointment_notify import (
+    broadcast_alert_ws,
+    format_vn_dt,
+    send_appointment_fcm,
+)
 
 logger = logging.getLogger("appointment_scheduler")
 
@@ -104,16 +109,20 @@ class AppointmentSchedulerService:
             await db.commit()
             return
 
-        # Lấy tên bệnh nhân
+        # Lấy tên bệnh nhân & house_id
         patient_name = "Người cao tuổi"
-        p_stmt = select(ElderlyProfile.full_name).where(ElderlyProfile.id == apt.patient_id)
+        target_house_id = apt.house_id
+        p_stmt = select(ElderlyProfile.full_name, ElderlyProfile.house_id).where(ElderlyProfile.id == apt.patient_id)
         p_res = await db.execute(p_stmt)
-        p_name = p_res.scalar_one_or_none()
-        if p_name:
-            patient_name = p_name
+        p_row = p_res.first()
+        if p_row:
+            if p_row[0]:
+                patient_name = p_row[0]
+            if not target_house_id:
+                target_house_id = p_row[1]
 
         doctor_name = apt.doctor.full_name if apt.doctor else "Bác sĩ gia đình"
-        scheduled_str = apt.scheduled_at.strftime("%H:%M ngày %d/%m/%Y")
+        scheduled_str = format_vn_dt(apt.scheduled_at, "thời gian đã hẹn")
 
         if reminder.reminder_type == ReminderTypeEnum.BEFORE_24H.value:
             title = f"🗓️ Nhắc lịch khám ngày mai: {patient_name}"
@@ -126,6 +135,41 @@ class AppointmentSchedulerService:
             f"[NOTIFICATION DISPATCH] Reminder {reminder.id} | Type: {reminder.reminder_type} | "
             f"Title: '{title}' | Body: '{body}'"
         )
+
+        try:
+            await broadcast_alert_ws(
+                {
+                    "type": "APPOINTMENT_REMINDER",
+                    "alert_type": "APPOINTMENT_REMINDER",
+                    "appointment_id": str(apt.id),
+                    "patient_id": str(apt.patient_id),
+                    "house_id": str(target_house_id) if target_house_id else None,
+                    "data": {
+                        "id": str(reminder.id),
+                        "appointment_id": str(apt.id),
+                        "patient_id": str(apt.patient_id),
+                        "patient_name": patient_name,
+                        "reminder_type": reminder.reminder_type,
+                        "title": title,
+                        "message": body,
+                        "scheduled_at": apt.scheduled_at.isoformat() if apt.scheduled_at else None,
+                    },
+                }
+            )
+            await send_appointment_fcm(
+                db=db,
+                target_house_id=target_house_id,
+                doctor_id=apt.doctor_id,
+                title=title,
+                body=body,
+                data={
+                    "type": "APPOINTMENT_REMINDER",
+                    "appointment_id": str(apt.id),
+                    "patient_id": str(apt.patient_id),
+                },
+            )
+        except Exception as dispatch_err:
+            logger.warning("[NOTIFICATION DISPATCH] Lỗi gửi WS/FCM reminder %s: %s", reminder.id, dispatch_err)
 
         # Đánh dấu đã gửi
         reminder.status = ReminderStatusEnum.SENT.value

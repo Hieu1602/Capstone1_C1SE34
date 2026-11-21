@@ -18,14 +18,47 @@ interface NewAppointmentModalProps {
 
 const inputCls = 'w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-blue-500 focus:outline-hidden bg-white dark:border-slate-700/60 dark:bg-[#0F172A] dark:text-slate-100 dark:placeholder-slate-500';
 
-const toLocalDatetimeInput = (iso?: string): string => {
+const toLocalDatetimeInput = (iso?: string, isCreatePrefill = false): string => {
   const d = iso ? new Date(iso) : new Date();
-  if (!iso) {
-    d.setDate(d.getDate() + 1);
-    d.setHours(9, 0, 0, 0);
+  if (!iso || isNaN(d.getTime())) {
+    const fallback = new Date();
+    fallback.setDate(fallback.getDate() + 1);
+    fallback.setHours(9, 0, 0, 0);
+    return toLocalDatetimeInput(fallback.toISOString(), false);
   }
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const ymd = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  if (isCreatePrefill) {
+    // Tự động chọn khung giờ trống đầu tiên trong ngày nếu 09:00 đã có lịch UPCOMING
+    const existing = useDoctorDataStore
+      .getState()
+      .appointments.filter((a) => {
+        if (a.status !== 'UPCOMING' && a.status !== 'CONFIRMED') return false;
+        const ad = new Date(a.scheduled_at);
+        return (
+          !isNaN(ad.getTime()) &&
+          `${ad.getFullYear()}-${pad(ad.getMonth() + 1)}-${pad(ad.getDate())}` === ymd
+        );
+      })
+      .map((a) => {
+        const start = new Date(a.scheduled_at).getTime();
+        const dur = (a.duration_minutes || 30) * 60_000;
+        return [start, start + dur] as const;
+      });
+
+    const candidate = new Date(d);
+    for (let step = 0; step < 24; step++) {
+      const cStart = candidate.getTime();
+      const cEnd = cStart + 30 * 60_000;
+      const overlaps = existing.some(([s, e]) => s < cEnd && e > cStart);
+      if (!overlaps) break;
+      candidate.setMinutes(candidate.getMinutes() + 30);
+    }
+    return `${candidate.getFullYear()}-${pad(candidate.getMonth() + 1)}-${pad(candidate.getDate())}T${pad(candidate.getHours())}:${pad(candidate.getMinutes())}`;
+  }
+
+  return `${ymd}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
 export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
@@ -42,11 +75,24 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
   const [patientId, setPatientId] = useState(
     initialAppointment?.patient_id || initialPatientId || patients[0]?.id || ''
   );
-  const [visitType, setVisitType] = useState<'CLINIC' | 'HOME_VISIT'>(
-    initialAppointment?.visit_type === 'HOME_VISIT' ? 'HOME_VISIT' : 'CLINIC'
+  useEffect(() => {
+    if (!patientId && patients.length > 0) {
+      setPatientId(initialAppointment?.patient_id || initialPatientId || patients[0].id);
+    }
+  }, [patients, patientId, initialAppointment, initialPatientId]);
+
+  const [visitType, setVisitType] = useState<'CLINIC' | 'HOME_VISIT' | 'TELEHEALTH'>(
+    initialAppointment?.visit_type === 'HOME_VISIT' || initialAppointment?.visit_type === 'HOME'
+      ? 'HOME_VISIT'
+      : initialAppointment?.visit_type === 'TELEHEALTH'
+        ? 'TELEHEALTH'
+        : 'CLINIC'
   );
   const [scheduledAt, setScheduledAt] = useState(() =>
-    toLocalDatetimeInput(initialAppointment?.scheduled_at)
+    toLocalDatetimeInput(initialAppointment?.scheduled_at, !isReschedule && Boolean(initialAppointment?.scheduled_at))
+  );
+  const [durationMinutes, setDurationMinutes] = useState<number>(
+    initialAppointment?.duration_minutes || 30
   );
   const [location, setLocation] = useState(
     initialAppointment?.location || 'Phòng khám Bác sĩ Gia đình'
@@ -65,6 +111,12 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
       return;
     }
 
+    const parsedDt = new Date(scheduledAt);
+    if (isNaN(parsedDt.getTime())) {
+      setErrorMsg('Thời gian hẹn không hợp lệ.');
+      return;
+    }
+
     setSaving(true);
     setErrorMsg(null);
     try {
@@ -73,13 +125,16 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
       if (isReschedule && initialAppointment?.id) {
         const updated = await doctorApi.updateAppointment(initialAppointment.id, {
           visit_type: visitType,
-          scheduled_at: new Date(scheduledAt).toISOString(),
+          scheduled_at: parsedDt.toISOString(),
+          duration_minutes: durationMinutes,
           location: location.trim(),
           clinical_notes: clinicalNotes.trim(),
           enable_speaker_reminder: enableSpeaker,
         });
         store.setAppointments(
-          store.appointments.map((a) => (a.id === updated.id ? { ...a, ...updated, patient_name: p?.name || a.patient_name } : a))
+          store.appointments
+            .map((a) => (a.id === updated.id ? { ...a, ...updated, patient_name: p?.name || a.patient_name } : a))
+            .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
         );
       } else {
         const created = await doctorApi.createAppointment({
@@ -87,8 +142,8 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
           patient_name: p?.name,
           house_id: p?.house_id || undefined,
           visit_type: visitType,
-          scheduled_at: new Date(scheduledAt).toISOString(),
-          duration_minutes: 30,
+          scheduled_at: parsedDt.toISOString(),
+          duration_minutes: durationMinutes,
           location: location.trim(),
           clinical_notes: clinicalNotes.trim(),
           enable_speaker_reminder: enableSpeaker,
@@ -179,10 +234,12 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
               <select
                 value={visitType}
                 onChange={(e) => {
-                  const vt = e.target.value as 'CLINIC' | 'HOME_VISIT';
+                  const vt = e.target.value as 'CLINIC' | 'HOME_VISIT' | 'TELEHEALTH';
                   setVisitType(vt);
                   if (vt === 'CLINIC') {
                     setLocation('Phòng khám Bác sĩ Gia đình');
+                  } else if (vt === 'TELEHEALTH') {
+                    setLocation('Tư vấn trực tuyến (Telehealth)');
                   } else {
                     const p = patients.find((item) => item.id === patientId);
                     setLocation(p?.house_address || p?.house_name || 'Tại nhà riêng bệnh nhân');
@@ -192,12 +249,26 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
               >
                 <option value="CLINIC" className="dark:bg-[#0F172A] dark:text-slate-100">Khám tại Phòng khám</option>
                 <option value="HOME_VISIT" className="dark:bg-[#0F172A] dark:text-slate-100">Thăm khám Tại nhà</option>
+                <option value="TELEHEALTH" className="dark:bg-[#0F172A] dark:text-slate-100">Tư vấn Từ xa (Telehealth)</option>
               </select>
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Thời gian hẹn *</label>
-              <input type="datetime-local" required value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className={inputCls} />
+              <div className="flex gap-2">
+                <input type="datetime-local" required value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className={inputCls} />
+                <select
+                  value={durationMinutes}
+                  onChange={(e) => setDurationMinutes(Number(e.target.value))}
+                  aria-label="Thời lượng khám"
+                  className="w-24 shrink-0 rounded-xl border border-slate-200 px-2 py-2 text-xs focus:border-blue-500 focus:outline-hidden bg-white dark:border-slate-700/60 dark:bg-[#0F172A] dark:text-slate-100"
+                >
+                  <option value={15}>15 phút</option>
+                  <option value={30}>30 phút</option>
+                  <option value={45}>45 phút</option>
+                  <option value={60}>60 phút</option>
+                </select>
+              </div>
             </div>
           </div>
 

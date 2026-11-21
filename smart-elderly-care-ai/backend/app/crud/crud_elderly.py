@@ -371,7 +371,7 @@ class CRUDElderly:
         hospital_val = clinical_info.get("hospital") or (doc_user.workplace if doc_user and doc_user.workplace else "Hệ thống Y tế SECA AI")
         doc_avatar = clinical_info.get("doctor_avatar_url") or (doc_user.avatar_url if doc_user else None)
 
-        # 2. Lịch tái khám sắp tới (từ DB appointments hoặc _CLINICAL_STORE / _APPOINTMENT_STORE)
+        # 2. Lịch tái khám sắp tới (từ DB appointments hoặc _CLINICAL_STORE)
         next_appointment_str = ""
         try:
             from app.models.appointment import Appointment
@@ -393,20 +393,6 @@ class CRUDElderly:
                 next_appointment_str = parse_valid_upcoming_appointment(upcoming_apt.scheduled_at) or ""
         except Exception:
             pass
-
-        if not next_appointment_str:
-            try:
-                from app.crud.crud_doctor import _APPOINTMENT_STORE
-                pid_str = str(profile.id)
-                for apt in _APPOINTMENT_STORE:
-                    if str(getattr(apt, "patient_id", "")) == pid_str and getattr(apt, "status", "") == "UPCOMING":
-                        sch = getattr(apt, "scheduled_at", "")
-                        parsed_sch = parse_valid_upcoming_appointment(sch)
-                        if parsed_sch:
-                            next_appointment_str = parsed_sch
-                            break
-            except Exception:
-                pass
 
         if not next_appointment_str:
             raw_next = clinical_info.get("next_appointment") or ""

@@ -82,9 +82,10 @@ export const useDoctorDataStore = create<DoctorDataState>((set, get) => ({
   lastUpdated: initialTimestamp,
 
   fetchAllData: async (force = false) => {
-    // Nếu có request đang thực hiện, trả về request đó để tránh gọi trùng lặp
+    // Nếu có request đang thực hiện, đợi hoàn tất rồi chạy thêm 1 lượt nếu force=true
     if (inFlightFetchAll) {
-      return inFlightFetchAll;
+      if (!force) return inFlightFetchAll;
+      await inFlightFetchAll.catch(() => {});
     }
 
     const { patients, appointments, lastUpdated } = get();

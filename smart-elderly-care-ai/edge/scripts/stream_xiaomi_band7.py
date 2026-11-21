@@ -67,13 +67,87 @@ logger = logging.getLogger("XiaomiBand7")
 # GATT Standard UUIDs
 HR_SERVICE_UUID = "0000180d-0000-1000-8000-00805f9b34fb"
 HR_MEASUREMENT_UUID = "00002a37-0000-1000-8000-00805f9b34fb"
+HUAMI_HR_CTRL_UUID = "00002a39-0000-1000-8000-00805f9b34fb"
 BATTERY_SERVICE_UUID = "0000180f-0000-1000-8000-00805f9b34fb"
 BATTERY_LEVEL_UUID = "00002a19-0000-1000-8000-00805f9b34fb"
-HUAMI_HR_CTRL_UUID = "00000004-0000-3512-2118-0009af100700"
+HUAMI_BATTERY_UUID = "00000006-0000-3512-2118-0009af100700"
 
-# Huami Auth Characteristic UUIDs
+# Huami Auth & Zepp OS 2021 Chunked Transfer UUIDs
 HUAMI_AUTH_SERVICE_UUID = "0000fee1-0000-1000-8000-00805f9b34fb"
 HUAMI_AUTH_CHAR_UUID = "00000009-0000-3512-2118-0009af100700"
+ZEPPOS_CHUNK_WRITE_UUID = "00000016-0000-3512-2118-0009af100700"
+ZEPPOS_CHUNK_READ_UUID = "00000017-0000-3512-2118-0009af100700"
+
+# NIST B-163 (sect163r2) constants for Zepp OS / Huami 2021 ECDH handshake
+_B163_POLY = (1 << 163) | 0xC9
+_B163_GX = (0x00000003 << 160) | (0xF0EBA162 << 128) | (0x86A2D57E << 96) | (0xA0991168 << 64) | (0xD4994637 << 32) | 0xE8343E36
+_B163_GY = (0x00000000 << 160) | (0xD51FBC6C << 128) | (0x71A0094F << 96) | (0xA2CDD545 << 64) | (0xB11C5C0C << 32) | 0x797324F1
+
+
+def _gf2_mul(a: int, b: int) -> int:
+    res = 0
+    while b:
+        if b & 1:
+            res ^= a
+        a <<= 1
+        if a & (1 << 163):
+            a ^= _B163_POLY
+        b >>= 1
+    return res
+
+
+def _gf2_inv(a: int) -> int:
+    u, v, g1, g2 = a, _B163_POLY, 1, 0
+    while u != 1:
+        j = u.bit_length() - v.bit_length()
+        if j < 0:
+            u, v, g1, g2, j = v, u, g2, g1, -j
+        u ^= v << j
+        g1 ^= g2 << j
+    return g1
+
+
+def _b163_double(x: int, y: int) -> Tuple[int, int]:
+    if x == 0:
+        return (0, 0)
+    lam = x ^ _gf2_mul(y, _gf2_inv(x))
+    x3 = _gf2_mul(lam, lam) ^ lam ^ 1
+    return (x3, _gf2_mul(x, x) ^ _gf2_mul(lam ^ 1, x3))
+
+
+def _b163_add(x1: int, y1: int, x2: int, y2: int) -> Tuple[int, int]:
+    if x1 == 0 and y1 == 0:
+        return (x2, y2)
+    if x2 == 0 and y2 == 0:
+        return (x1, y1)
+    if x1 == x2:
+        return _b163_double(x1, y1) if y1 == y2 else (0, 0)
+    lam = _gf2_mul(y1 ^ y2, _gf2_inv(x1 ^ x2))
+    x3 = _gf2_mul(lam, lam) ^ lam ^ x1 ^ x2 ^ 1
+    return (x3, _gf2_mul(x1 ^ x3, lam) ^ x3 ^ y1)
+
+
+def _b163_mul(x: int, y: int, k: int) -> Tuple[int, int]:
+    rx, ry = 0, 0
+    for i in range(k.bit_length() - 1, -1, -1):
+        rx, ry = _b163_double(rx, ry)
+        if (k >> i) & 1:
+            rx, ry = _b163_add(rx, ry, x, y)
+    return (rx, ry)
+
+
+def ecdh_b163_public_key(priv_bytes: bytes) -> bytes:
+    k = int.from_bytes(priv_bytes, "little") & ((1 << 162) - 1)
+    px, py = _b163_mul(_B163_GX, _B163_GY, k)
+    return px.to_bytes(24, "little") + py.to_bytes(24, "little")
+
+
+def ecdh_b163_shared_secret(priv_bytes: bytes, remote_pub: bytes) -> bytes:
+    k = int.from_bytes(priv_bytes, "little") & ((1 << 162) - 1)
+    rx = int.from_bytes(remote_pub[:24], "little")
+    ry = int.from_bytes(remote_pub[24:48], "little")
+    sx, sy = _b163_mul(rx, ry, k)
+    return sx.to_bytes(24, "little") + sy.to_bytes(24, "little")
 
 DEFAULT_BACKEND_URL = os.environ.get("BACKEND_VITALS_URL", "http://localhost:8000/api/v1/vitals")
 
@@ -91,12 +165,15 @@ def load_config() -> Dict[str, Any]:
 
 def save_auth_key_to_config(auth_key: str, mac: Optional[str] = None):
     """Lưu Auth Key và MAC address vào file config.yaml."""
+    if not auth_key or not auth_key.strip():
+        logger.warning("Bỏ qua lưu config.yaml vì auth_key trống.")
+        return
     config = load_config()
     if "ble" not in config:
         config["ble"] = {}
-    config["ble"]["auth_key"] = auth_key
-    if mac:
-        config["ble"]["device_mac"] = mac
+    config["ble"]["auth_key"] = auth_key.strip()
+    if mac and mac.strip():
+        config["ble"]["device_mac"] = mac.strip()
     try:
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             yaml.dump(config, f, allow_unicode=True, default_flow_style=False)
@@ -139,16 +216,20 @@ def extract_key_from_oauth_url(oauth_url_or_code: str, format_type: str = "AMAZ_
     )
     with urllib.request.urlopen(req, timeout=10) as resp:
         result = json.loads(resp.read().decode("utf-8"))
+        logger.info("Phản hồi xiaomikey API: %s", json.dumps(result, ensure_ascii=False))
         if result.get("status") == "ready":
             devices = result.get("devices", [])
-            return [
-                {
-                    "name": d.get("name", "Xiaomi Band"),
-                    "mac": d.get("mac", ""),
-                    "auth_key": d.get("token", ""),
-                }
-                for d in devices
-            ]
+            parsed: List[Dict[str, str]] = []
+            for d in devices:
+                if isinstance(d, str):
+                    parts = [p.strip() for p in d.replace(",", ";").split(";") if p.strip()]
+                    parsed.append({"name": "Xiaomi Band", "mac": parts[0] if len(parts) > 1 else "", "auth_key": parts[-1] if parts else ""})
+                elif isinstance(d, dict):
+                    mac_val = d.get("mac") or d.get("macAddress") or d.get("mac_address") or d.get("address") or ""
+                    key_val = d.get("auth_key") or d.get("authKey") or d.get("key") or d.get("token") or d.get("secret") or ""
+                    name_val = d.get("name") or d.get("model") or d.get("deviceName") or "Xiaomi Band"
+                    parsed.append({"name": str(name_val), "mac": str(mac_val), "auth_key": str(key_val), "raw": json.dumps(d, ensure_ascii=False)})
+            return parsed
         else:
             err = result.get("error", "Không thể lấy Auth Key từ link xác thực")
             raise ValueError(f"{err} (Mã lỗi: {result.get('error_code', 'unknown')})")
@@ -357,23 +438,25 @@ async def authenticate_huami_band(client, auth_key_hex: str) -> bool:
     try:
         await client.start_notify(auth_char.uuid, auth_notification_handler)
 
-        # Gửi yêu cầu sinh số thử thách ngẫu nhiên từ vòng tay
-        logger.info("Gửi lệnh yêu cầu challenge (0x02 0x08)...")
-        await client.write_gatt_char(auth_char.uuid, b"\x02\x08", response=True)
+        # Gửi yêu cầu sinh số thử thách ngẫu nhiên (0x0009 dùng Write Without Response)
+        auth_flag = b"\x00"
+        logger.info("Gửi lệnh yêu cầu challenge (0x02 0x00)...")
+        await client.write_gatt_char(auth_char.uuid, b"\x02\x00", response=False)
 
         try:
-            await asyncio.wait_for(challenge_event.wait(), timeout=6.0)
+            await asyncio.wait_for(challenge_event.wait(), timeout=5.0)
         except asyncio.TimeoutError:
-            # Thử lại với flag 0x02 0x00
-            await client.write_gatt_char(auth_char.uuid, b"\x02\x00", response=True)
-            await asyncio.wait_for(challenge_event.wait(), timeout=4.0)
+            auth_flag = b"\x08"
+            logger.info("Thử lại yêu cầu challenge (0x02 0x08)...")
+            await client.write_gatt_char(auth_char.uuid, b"\x02\x08", response=False)
+            await asyncio.wait_for(challenge_event.wait(), timeout=5.0)
 
         # Mã hóa challenge với Auth Key
         encrypted_challenge = encrypt_huami_challenge(auth_key_hex, bytes(challenge_received))
 
         # Gửi phản hồi mã hóa trả lại cho vòng tay
-        logger.info("Gửi phản hồi challenge đã mã hóa (0x03 0x08 + AES-128)...")
-        await client.write_gatt_char(auth_char.uuid, b"\x03\x08" + encrypted_challenge, response=True)
+        logger.info("Gửi phản hồi challenge đã mã hóa (0x03 + AES-128)...")
+        await client.write_gatt_char(auth_char.uuid, b"\x03" + auth_flag + encrypted_challenge, response=False)
 
         await asyncio.wait_for(auth_success_event.wait(), timeout=6.0)
         return True
@@ -461,36 +544,60 @@ async def scan_ble_devices(timeout: float = 6.0):
     print()
 
 
+async def _zeppos_send_chunked(client, write_handle: int, ep: int, data: bytes, mtu: int = 247) -> int:
+    """Gửi gói dữ liệu phân mảnh theo chuẩn Huami 2021 / Zepp OS qua characteristic 0x0016."""
+    wh = (write_handle + 1) & 0xFF
+    remaining = len(data)
+    offset = 0
+    count = 0
+    header_size = 11
+    max_write = max(20, min(mtu - 3, 244))
+    while remaining > 0:
+        max_chunk = max(1, max_write - header_size)
+        n = min(remaining, max_chunk)
+        chunk = bytearray(header_size + n)
+        flags = 0x00
+        if count == 0:
+            flags |= 0x01
+            struct.pack_into("<IH", chunk, 5, len(data), ep)
+        if remaining <= max_chunk:
+            flags |= 0x02 | 0x04
+        chunk[0], chunk[1], chunk[2], chunk[3], chunk[4] = 0x03, flags, 0x00, wh, count
+        chunk[header_size:] = data[offset : offset + n]
+        await client.write_gatt_char(ZEPPOS_CHUNK_WRITE_UUID, bytes(chunk), response=False)
+        offset += n
+        remaining -= n
+        header_size = 5
+        count += 1
+    return wh
+
+
 async def run_stream(
     mac_address: str,
     backend_url: str,
-    device_name: str = "Xiaomi-Band-7",
+    device_name: str = "BLE_BAND_001",
     auth_key: Optional[str] = None,
 ):
-    """Kết nối và stream dữ liệu liên tục từ Xiaomi Band 7."""
-    from bleak import BleakClient
+    """Kết nối và stream dữ liệu nhịp tim thực liên tục từng giây qua BLE trực tiếp từ Xiaomi Band 7 (Zepp OS Huami 2021 + GATT 0x2A37)."""
+    from bleak import BleakClient, BleakScanner
 
-    logger.info("Khởi động kết nối tới Xiaomi Band: %s", mac_address)
+    logger.info("Khởi động kết nối BLE trực tiếp tới Xiaomi Band 7: %s (gắn thiết bị: %s)", mac_address or "AUTO", device_name)
     battery_level = None
     readings = 0
 
     def hr_callback(sender, data: bytearray):
         nonlocal readings
-        readings += 1
         if len(data) < 2:
             return
 
         flags = data[0]
-        hr_format = flags & 0x01
-        if hr_format == 0:
-            heart_rate = data[1]
-        else:
-            heart_rate = struct.unpack("<H", data[1:3])[0]
+        heart_rate = struct.unpack("<H", data[1:3])[0] if (flags & 0x01) else data[1]
+        if heart_rate <= 0:
+            return
 
+        readings += 1
         contact = (flags >> 1) & 0x03
         contact_str = "Đang đeo" if contact == 3 else ("Tháo vòng" if contact == 2 else "Đang đo")
-
-        # Phân loại mức cảnh báo
         if heart_rate < 50:
             status = "🚨 [NGUY HIỂM: NHỊP CHẬM <50 BPM]"
         elif heart_rate > 120:
@@ -500,84 +607,126 @@ async def run_stream(
 
         now_str = datetime.datetime.now().strftime("%H:%M:%S")
         print(
-            f"[{now_str}] #{readings:<4} ❤️ Nhịp tim: {heart_rate:>3} bpm | "
+            f"[{now_str}] #{readings:<4} 📡 [BLE LIVE ➔ {device_name}] ❤️ Nhịp tim: {heart_rate:>3} bpm | "
             f"Pin: {battery_level or '--':>2}% | Trạng thái: {contact_str} {status}",
             flush=True,
         )
-
-        # Đẩy dữ liệu lên backend
         asyncio.get_event_loop().run_in_executor(
-            None,
-            send_vitals_to_backend,
-            backend_url,
-            device_name,
-            heart_rate,
-            battery_level,
-            98,
+            None, send_vitals_to_backend, backend_url, device_name, heart_rate, battery_level, 98
         )
 
     while True:
         try:
-            logger.info("Đang kết nối tới %s...", mac_address)
-            async with BleakClient(mac_address, timeout=12.0) as client:
-                logger.info("✅ Đã kết nối thành công tới %s!", mac_address)
+            target_mac = mac_address
+            if not target_mac:
+                devs = await BleakScanner.discover(timeout=6.0, return_adv=True)
+                for addr, (d, adv) in devs.items():
+                    nm = (adv.local_name or d.name or "").lower()
+                    if "xiaomi smart band 7" in nm or "band 7" in nm:
+                        target_mac = addr
+                        logger.info("🎯 Tự động phát hiện %s (%s, RSSI %d)", adv.local_name or d.name, addr, adv.rssi)
+                        break
+            if not target_mac:
+                logger.warning("Chưa thấy Xiaomi Smart Band 7 phát sóng BLE. Thử lại sau 5s...")
+                await asyncio.sleep(5.0)
+                continue
 
-                # Xác thực Huami BLE nếu có Auth Key
-                if auth_key:
-                    await authenticate_huami_band(client, auth_key)
+            logger.info("Đang kết nối BLE tới %s...", target_mac)
+            async with BleakClient(target_mac, timeout=12.0) as client:
+                mtu = getattr(client, "mtu_size", 247) or 247
+                logger.info("✅ Đã kết nối BLE thành công tới %s (MTU=%d)!", target_mac, mtu)
 
-                # Đọc mức pin
-                try:
-                    raw_bat = await client.read_gatt_char(BATTERY_LEVEL_UUID)
-                    battery_level = raw_bat[0]
-                    logger.info("🔋 Mức pin Xiaomi Band: %d%%", battery_level)
-                except Exception:
-                    logger.debug("Không đọc được pin qua standard GATT battery.")
+                char_uuids = {c.uuid.lower() for s in client.services for c in s.characteristics}
+                has_zeppos = ZEPPOS_CHUNK_WRITE_UUID in char_uuids and ZEPPOS_CHUNK_READ_UUID in char_uuids
 
-                # Bắt đầu nhận notifications nhịp tim
-                try:
-                    await client.start_notify(HR_MEASUREMENT_UUID, hr_callback)
-                    logger.info("🚀 Đã đăng ký nhận stream nhịp tim trực tiếp (GATT 0x2A37).")
-
-                    # Kích hoạt cảm biến PPG phần cứng của Xiaomi/Huami
-                    try:
-                        await client.write_gatt_char(HUAMI_HR_CTRL_UUID, b"\x15\x01\x01", response=False)
-                        logger.info("✨ Đã gửi lệnh kích hoạt cảm biến đo liên tục tới vòng tay.")
-                    except Exception as hexc:
-                        logger.debug("Huami HR control init: %s", hexc)
-                except Exception as e:
-                    logger.error("Lỗi khi đăng ký nhận nhịp tim GATT 0x2A37: %s", e)
-                    logger.info("💡 Mẹo: Vào app Mi Fitness trên điện thoại > Thiết bị > Theo dõi sức khỏe > Bật 'Phát sóng nhịp tim' (Heart Rate Broadcast) hoặc chạy --get-token để nạp Auth Key.")
-                    return
-
-                # Duy trì kết nối và gửi heartbeat giữ cảm biến thức
-                ping_cycle = 0
-                while client.is_connected:
-                    await asyncio.sleep(2.0)
-                    ping_cycle += 1
-                    if ping_cycle % 5 == 0:
+                # Đọc mức pin (0x2A19 chuẩn GATT hoặc 0x0006 Huami)
+                for b_uuid, idx in ((BATTERY_LEVEL_UUID, 0), (HUAMI_BATTERY_UUID, 1)):
+                    if b_uuid in char_uuids:
                         try:
-                            await client.write_gatt_char(HUAMI_HR_CTRL_UUID, b"\x16", response=False)
+                            raw_bat = await client.read_gatt_char(b_uuid)
+                            if len(raw_bat) > idx:
+                                battery_level = raw_bat[idx]
+                                logger.info("🔋 Mức pin Xiaomi Band 7: %d%%", battery_level)
+                                break
                         except Exception:
                             pass
 
-            logger.warning("Mất kết nối tới vòng đeo tay! Tự động thử lại sau 5 giây...")
+                await client.start_notify(HR_MEASUREMENT_UUID, hr_callback)
+
+                if has_zeppos and auth_key:
+                    # Giao thức Zepp OS / Huami 2021: ECDH B-163 Auth (endpoint 0x0082) + Real-time HR (endpoint 0x001d)
+                    from Crypto.Cipher import AES
+
+                    clean_key = auth_key.strip().lower().removeprefix("0x")
+                    secret_key = bytes.fromhex(clean_key)
+                    priv_ec = os.urandom(24)
+                    pub_ec = ecdh_b163_public_key(priv_ec)
+                    state = {"wh": 0, "buf": bytearray(), "ep": 0, "ok": False}
+                    auth_done = asyncio.Event()
+
+                    async def _on_payload(ep: int, raw: bytes):
+                        if ep == 0x0082 and len(raw) >= 3 and raw[0] == 0x10:
+                            if raw[1] == 0x04 and raw[2] == 0x01 and len(raw) >= 67:
+                                rr, rpub = raw[3:19], raw[19:67]
+                                shared = ecdh_b163_shared_secret(priv_ec, rpub)
+                                sk = bytes(shared[i + 8] ^ secret_key[i] for i in range(16))
+                                e1 = AES.new(secret_key, AES.MODE_ECB).encrypt(rr)
+                                e2 = AES.new(sk, AES.MODE_ECB).encrypt(rr)
+                                state["wh"] = await _zeppos_send_chunked(client, state["wh"], 0x0082, b"\x05" + e1 + e2, mtu)
+                            elif raw[1] == 0x05:
+                                state["ok"] = raw[2] == 0x01
+                                if state["ok"]:
+                                    logger.info("🎉 Xác thực Zepp OS ECDH B-163 thành công!")
+                                else:
+                                    logger.error("❌ Sai Auth Key (mã 0x%02x). Cần lấy lại Auth Key mới sau khi ghép đôi lại đồng hồ.", raw[2])
+                                auth_done.set()
+
+                    def _on_chunk(sender, data: bytearray):
+                        if not data or data[0] != 0x03:
+                            return
+                        flags, handle, cnt = data[1], data[3], data[4]
+                        i = 5
+                        if flags & 0x01:
+                            _, state["ep"] = struct.unpack_from("<IH", data, 5)
+                            i = 11
+                            state["buf"] = bytearray()
+                        state["buf"].extend(data[i:])
+                        if flags & 0x04:
+                            asyncio.get_event_loop().create_task(
+                                client.write_gatt_char(ZEPPOS_CHUNK_READ_UUID, bytes([0x04, 0x00, handle, 0x01, cnt]), response=False)
+                            )
+                        if flags & 0x02:
+                            asyncio.get_event_loop().create_task(_on_payload(state["ep"], bytes(state["buf"])))
+
+                    await client.start_notify(ZEPPOS_CHUNK_READ_UUID, _on_chunk)
+                    state["wh"] = await _zeppos_send_chunked(client, state["wh"], 0x0082, bytes([0x04, 0x02, 0x00, 0x02]) + pub_ec, mtu)
+                    await asyncio.wait_for(auth_done.wait(), timeout=10.0)
+                    if not state["ok"]:
+                        return
+
+                    # Kích hoạt đo nhịp tim PPG liên tục thời gian thực trên endpoint 0x001d (ZeppOsHeartRateService)
+                    state["wh"] = await _zeppos_send_chunked(client, state["wh"], 0x001D, bytes([0x04, 0x01]), mtu)
+                    logger.info("🚀 Đã bật cảm biến PPG đo nhịp tim thực liên tục từng giây (endpoint 0x001d ➔ 0x2A37)!")
+
+                    while client.is_connected:
+                        await asyncio.sleep(1.0)
+                        state["wh"] = await _zeppos_send_chunked(client, state["wh"], 0x001D, bytes([0x04, 0x02]), mtu)
+                else:
+                    if auth_key:
+                        await authenticate_huami_band(client, auth_key)
+                    if HUAMI_HR_CTRL_UUID in char_uuids:
+                        for cmd in (b"\x15\x02\x00", b"\x15\x01\x00", b"\x15\x01\x01"):
+                            await client.write_gatt_char(HUAMI_HR_CTRL_UUID, cmd, response=True)
+                    ping_cycle = 0
+                    while client.is_connected:
+                        await asyncio.sleep(2.0)
+                        ping_cycle += 1
+                        if ping_cycle % 5 == 0 and HUAMI_HR_CTRL_UUID in char_uuids:
+                            await client.write_gatt_char(HUAMI_HR_CTRL_UUID, b"\x16", response=True)
+
+            logger.warning("Mất kết nối BLE tới vòng đeo tay! Tự động thử lại sau 5 giây...")
         except Exception as e:
-            logger.warning("BLE trực tiếp chưa phản hồi (%s) -> Đang đồng bộ dữ liệu thực từ Xiaomi Health Cloud...", e)
-            try:
-                cloud_data = fetch_xiaomi_cloud_vitals()
-                if cloud_data.get("latest_hr"):
-                    hr_val = cloud_data["latest_hr"]
-                    spo2_val = cloud_data.get("latest_spo2") or 98
-                    ts_str = datetime.datetime.fromtimestamp(cloud_data["latest_time"]).strftime("%H:%M:%S")
-                    print(
-                        f"[{ts_str}] (MI-CLOUD) ❤️ Nhịp tim: {hr_val:>3} bpm | "
-                        f"🩸 SpO2: {spo2_val}% | Thiết bị: Xiaomi Smart Band 7 (C1:BD:70:58:2D:F5) 🟢",
-                        flush=True,
-                    )
-                    send_vitals_to_backend(backend_url, device_name, hr_val, battery_level, spo2_val)
-            except Exception as ce:
-                logger.debug("Cloud fallback skip: %s", ce)
+            logger.warning("Chưa kết nối được BLE trực tiếp (%s). Thử lại sau 5s...", e)
 
         await asyncio.sleep(5.0)
 
@@ -777,14 +926,14 @@ def main():
     ble_config = config.get("ble", {})
     poll_interval = float(args.interval or ble_config.get("poll_interval_sec", 5.0))
 
-    if args.direct_ble:
-        target_mac = args.mac or ble_config.get("device_mac", "")
-        target_auth_key = args.auth_key or ble_config.get("auth_key", "")
-        asyncio.run(run_stream(target_mac, args.backend_url, auth_key=target_auth_key))
+    if args.cloud_sync or args.once:
+        asyncio.run(run_cloud_sync(args.backend_url, device_name=args.device_id, once=args.once, interval=poll_interval))
         return
 
-    # Mặc định: chỉ dùng chế độ Cloud Sync / Hybrid (Đồng hồ -> Điện thoại Mi Fitness -> Laptop/Mini PC) mỗi 5-10 giây
-    asyncio.run(run_cloud_sync(args.backend_url, device_name=args.device_id, once=args.once, interval=poll_interval))
+    # Mặc định: Stream BLE trực tiếp thời gian thực từng giây từ Xiaomi Smart Band 7 (Zepp OS ECDH B-163 + 0x001d -> 0x2A37)
+    target_mac = args.mac or ble_config.get("device_mac", "")
+    target_auth_key = args.auth_key or ble_config.get("auth_key", "")
+    asyncio.run(run_stream(target_mac, args.backend_url, device_name=args.device_id, auth_key=target_auth_key))
 
 
 if __name__ == "__main__":

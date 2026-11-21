@@ -19,17 +19,19 @@ function getMonday(d: Date): Date {
 }
 
 function getDayAppointmentFlags(appointments: AppointmentItem[], targetDate: Date) {
-  const targetStr = targetDate.toDateString();
+  const targetStr = toLocalIsoDate(targetDate);
   const dayApts = appointments.filter((apt) => {
+    if (apt.status === 'CANCELLED') return false;
     try {
-      return new Date(apt.scheduled_at).toDateString() === targetStr;
+      const dt = new Date(apt.scheduled_at);
+      return !isNaN(dt.getTime()) && toLocalIsoDate(dt) === targetStr;
     } catch {
       return false;
     }
   });
   return {
     count: dayApts.length,
-    hasUpcoming: dayApts.some((a) => a.status === 'UPCOMING'),
+    hasUpcoming: dayApts.some((a) => a.status === 'UPCOMING' || a.status === 'CONFIRMED'),
     hasCompleted: dayApts.some((a) => a.status === 'COMPLETED'),
   };
 }
@@ -64,6 +66,19 @@ export const AppointmentWeekStrip: React.FC<AppointmentWeekStripProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showMonthPicker]);
 
+  useEffect(() => {
+    if (!selectedDateStr) return;
+    const parts = selectedDateStr.split('-').map(Number);
+    if (parts.length === 3 && !parts.some(isNaN)) {
+      const targetDate = new Date(parts[0], parts[1] - 1, parts[2]);
+      const diffWeeks = Math.round(
+        (getMonday(targetDate).getTime() - getMonday(new Date()).getTime()) / (7 * 24 * 60 * 60 * 1000)
+      );
+      setWeekOffset(diffWeeks);
+      setPickerMonth({ year: targetDate.getFullYear(), month: targetDate.getMonth() });
+    }
+  }, [selectedDateStr]);
+
   const handlePickCalendarDate = (targetDate: Date, isoDate: string) => {
     const diffWeeks = Math.round(
       (getMonday(targetDate).getTime() - getMonday(new Date()).getTime()) / (7 * 24 * 60 * 60 * 1000)
@@ -78,7 +93,7 @@ export const AppointmentWeekStrip: React.FC<AppointmentWeekStripProps> = ({
     const firstDay = new Date(year, month, 1);
     const startOffset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayIso = toLocalIsoDate(new Date());
 
     const cells: Array<{
       day: number | null;
@@ -277,7 +292,7 @@ export const AppointmentWeekStrip: React.FC<AppointmentWeekStripProps> = ({
 
       <div className="grid grid-cols-7 gap-2 sm:gap-3">
         {weekDays.map((d) => {
-          const isActive = selectedDateStr === d.isoDate || (selectedDateStr === null && d.isToday);
+          const isActive = selectedDateStr === d.isoDate;
           return (
             <button
               key={d.isoDate}
@@ -285,7 +300,9 @@ export const AppointmentWeekStrip: React.FC<AppointmentWeekStripProps> = ({
               className={`group flex flex-col items-center justify-center rounded-2xl py-3.5 px-2 transition-all border cursor-pointer ${
                 isActive
                   ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/25 -translate-y-0.5'
-                  : 'bg-slate-50/70 text-slate-700 border-slate-200/70 hover:bg-blue-50/50 hover:border-blue-200 dark:bg-[#0F172A] dark:text-slate-300 dark:border-slate-800/80 dark:hover:bg-slate-800/70 dark:hover:border-slate-700'
+                  : d.isToday
+                    ? 'bg-blue-50/70 text-blue-700 border-blue-400 ring-1 ring-blue-400/50 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-500/60'
+                    : 'bg-slate-50/70 text-slate-700 border-slate-200/70 hover:bg-blue-50/50 hover:border-blue-200 dark:bg-[#0F172A] dark:text-slate-300 dark:border-slate-800/80 dark:hover:bg-slate-800/70 dark:hover:border-slate-700'
               }`}
             >
               <span

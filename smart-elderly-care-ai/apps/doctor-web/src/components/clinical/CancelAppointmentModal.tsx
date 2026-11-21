@@ -52,50 +52,16 @@ export const CancelAppointmentModal: React.FC<CancelAppointmentModalProps> = ({
   const [reason, setReason] = useState(QUICK_REASONS[0]);
   const [selectedChip, setSelectedChip] = useState(QUICK_REASONS[0]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       setReason(QUICK_REASONS[0]);
       setSelectedChip(QUICK_REASONS[0]);
       setIsSubmitting(false);
+      setErrorMsg(null);
     }
   }, [isOpen, appointment]);
-
-  if (!isOpen || !appointment) return null;
-
-  const handleSelectChip = (chip: string) => {
-    setSelectedChip(chip);
-    if (chip === 'Lý do khác') {
-      setReason('');
-    } else {
-      setReason(chip);
-    }
-  };
-
-  const handleTextChange = (val: string) => {
-    setReason(val);
-    if (QUICK_REASONS.includes(val)) {
-      setSelectedChip(val);
-    } else {
-      setSelectedChip('');
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const finalReason = reason.trim() || 'Thay đổi lịch khám từ Bác sĩ';
-    setIsSubmitting(true);
-    try {
-      await onConfirm(appointment.id, finalReason);
-      onClose();
-    } catch {
-      // lỗi được xử lý ở parent
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const isHomeVisit = appointment.visit_type === 'HOME_VISIT';
 
   useEffect(() => {
     if (!isOpen) return;
@@ -105,7 +71,48 @@ export const CancelAppointmentModal: React.FC<CancelAppointmentModalProps> = ({
     };
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !appointment) return null;
+
+  const handleSelectChip = (chip: string) => {
+    setSelectedChip(chip);
+    setErrorMsg(null);
+    if (chip === 'Lý do khác') {
+      setReason('');
+    } else {
+      setReason(chip);
+    }
+  };
+
+  const handleTextChange = (val: string) => {
+    setReason(val);
+    setErrorMsg(null);
+    if (QUICK_REASONS.includes(val)) {
+      setSelectedChip(val);
+    } else {
+      setSelectedChip('');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const finalReason = reason.trim();
+    if (finalReason.length < 3) {
+      setErrorMsg('Vui lòng nhập lý do hủy lịch tối thiểu 3 ký tự.');
+      return;
+    }
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      await onConfirm(appointment.id, finalReason);
+      onClose();
+    } catch (err: any) {
+      setErrorMsg(err?.response?.data?.detail || err?.message || 'Không thể hủy cuộc hẹn khám. Vui lòng thử lại.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const isHomeVisit = appointment.visit_type === 'HOME_VISIT' || appointment.visit_type === 'HOME';
 
   return createPortal(
     <div
@@ -173,6 +180,11 @@ export const CancelAppointmentModal: React.FC<CancelAppointmentModalProps> = ({
 
         {/* 3. Form lý do & chọn nhanh Pill Chips */}
         <form onSubmit={handleSubmit} className="space-y-3.5">
+          {errorMsg && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs font-medium text-rose-700 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-300">
+              {errorMsg}
+            </div>
+          )}
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
               Chọn nhanh lý do hủy:

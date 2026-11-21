@@ -187,7 +187,7 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
     const dayApts = appointments.filter((a) => {
       if (!a.scheduled_at) return false;
       const aptDate = new Date(a.scheduled_at);
-      return a.scheduled_at.startsWith(dayStr) || (!isNaN(aptDate.getTime()) && toLocalDateStr(aptDate) === dayStr);
+      return !isNaN(aptDate.getTime()) ? toLocalDateStr(aptDate) === dayStr : a.scheduled_at.startsWith(dayStr);
     });
     const dots: string[] = [];
     if (dayApts.some((a) => a.status === 'UPCOMING')) dots.push('#F59E0B');

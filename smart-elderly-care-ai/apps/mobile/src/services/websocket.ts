@@ -243,13 +243,15 @@ class AlertsWebSocket {
     if (event.alert_type === 'APPOINTMENT_CANCELLED' || event.type === 'APPOINTMENT_CANCELLED') {
       const aptId = event.appointment_id || event.data?.appointment_id;
       const reason = event.cancellation_reason || event.data?.cancellation_reason || 'Bác sĩ bận việc đột xuất';
-      const targetInc = store.incidents.find(
-        (i) =>
-          (aptId && i.note && (i.note === aptId || i.note.includes(aptId))) ||
+      const targetInc = store.incidents.find((i) => {
+        const noteStr = String((i as any).notes ?? (i as any).note ?? '');
+        return (
+          (aptId && noteStr && (noteStr === aptId || noteStr.includes(aptId))) ||
           i.id === event.incident_id ||
           i.id === event.data?.id ||
-          (i.alert_type === 'APPOINTMENT_SCHEDULED' && (!aptId || (i.note && i.note.includes(aptId))))
-      );
+          (i.alert_type === 'APPOINTMENT_SCHEDULED' && (!aptId || (noteStr && noteStr.includes(aptId))))
+        );
+      });
       if (targetInc) {
         store.acknowledgeIncident(targetInc.id, `Lịch khám đã bị hủy: ${reason}`);
       }
@@ -342,11 +344,23 @@ class AlertsWebSocket {
       return;
     }
 
+    // 0.2b. Lịch khám đổi giờ / hoàn tất / xóa -> bỏ qua còi báo động khẩn cấp
+    if (
+      ['APPOINTMENT_RESCHEDULED', 'APPOINTMENT_COMPLETED', 'APPOINTMENT_DELETED'].includes(
+        String(event.alert_type || event.type || '')
+      )
+    ) {
+      return;
+    }
+
     // 1. Cảnh báo té ngã / pin yếu / sự cố khẩn cấp mới (Feature 1)
     if (
       event.alert_type === 'LOW_BATTERY' ||
       event.alert_type === 'DEVICE_BATTERY_DEAD' ||
-      ((event.type === 'ALERT_NEW' && event.alert_type !== 'APPOINTMENT_SCHEDULED' && event.alert_type !== 'MEDICAL_RECORD_UPDATED') || event.alert_type === 'FALL_DETECTED')
+      ((event.type === 'ALERT_NEW' &&
+        !String(event.alert_type || '').startsWith('APPOINTMENT_') &&
+        event.alert_type !== 'MEDICAL_RECORD_UPDATED') ||
+        event.alert_type === 'FALL_DETECTED')
     ) {
       const incData = event.data || {};
       const incDevId = String(incData.device_id || event.device_id || '').toLowerCase();

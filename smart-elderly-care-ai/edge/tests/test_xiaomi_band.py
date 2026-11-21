@@ -104,5 +104,17 @@ def test_load_edge_config():
     """Kiểm tra đọc file config.yaml của Edge Hub."""
     config = load_config()
     assert "ble" in config
-    assert config["ble"]["device_mac"] == "C1:BD:70:58:2D:F5"
-    assert "auth_key" in config["ble"]
+    assert config["ble"]["device_mac"] == "FA:88:9E:79:77:13"
+    assert config["ble"]["auth_key"] == "2BC7D23FAA60E6E2F974B8420C56234B"
+
+
+def test_ecdh_b163_key_agreement():
+    """Kiểm tra tính giao hoán khóa chung ECDH NIST B-163 của Zepp OS / Huami 2021."""
+    from edge.scripts.stream_xiaomi_band7 import ecdh_b163_public_key, ecdh_b163_shared_secret
+
+    p1 = os.urandom(24)
+    p2 = os.urandom(24)
+    pub1 = ecdh_b163_public_key(p1)
+    pub2 = ecdh_b163_public_key(p2)
+    assert len(pub1) == 48 and len(pub2) == 48
+    assert ecdh_b163_shared_secret(p1, pub2) == ecdh_b163_shared_secret(p2, pub1)

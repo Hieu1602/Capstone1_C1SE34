@@ -229,9 +229,12 @@ export const DayAppointmentsModal: React.FC<DayAppointmentsModalProps> = ({
                           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
                             <span className="flex items-center gap-1 font-medium text-slate-700 dark:text-slate-300">
                               <FileText className="h-3.5 w-3.5 text-slate-400" />
-                              {apt.exam_type || apt.visit_type === 'HOME' || apt.visit_type === 'HOME_VISIT'
-                                ? 'Khám tại nhà'
-                                : 'Khám sức khỏe định kỳ'}
+                              {apt.exam_type ||
+                                (apt.visit_type === 'HOME' || apt.visit_type === 'HOME_VISIT'
+                                  ? 'Khám tại nhà'
+                                  : apt.visit_type === 'TELEHEALTH'
+                                    ? 'Tư vấn từ xa'
+                                    : 'Khám tại phòng khám')}
                             </span>
                             {apt.location && (
                               <span className="flex items-center gap-1">

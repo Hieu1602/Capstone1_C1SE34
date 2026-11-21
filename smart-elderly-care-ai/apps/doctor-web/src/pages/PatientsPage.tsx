@@ -38,6 +38,7 @@ export const PatientsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const {
     patients,
+    appointments: storeAppointments,
     isLoadingPatients,
     isRevalidating,
     fetchPatients: loadPatients,
@@ -83,6 +84,23 @@ export const PatientsPage: React.FC = () => {
   useEffect(() => {
     loadPatients();
   }, [loadPatients]);
+
+  useEffect(() => {
+    const idFromUrl = searchParams.get('id');
+    if (idFromUrl && idFromUrl !== selectedPatientId) {
+      handleSelectPatient(idFromUrl);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!selectedPatientId || storeAppointments.length === 0) return;
+    const synced = storeAppointments.filter((a) => a.patient_id === selectedPatientId);
+    setPatientAppointments(synced);
+    const cached = patientDrawerCache.get(selectedPatientId);
+    if (cached) {
+      cached.appointments = synced;
+    }
+  }, [selectedPatientId, storeAppointments]);
 
   const handleSelectPatient = async (patientId: string, forceRefresh = false) => {
     // 1. Mở Drawer tức thì (0ms) với dữ liệu có sẵn hoặc từ Cache
