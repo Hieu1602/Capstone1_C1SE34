@@ -154,7 +154,7 @@ def extract_key_from_oauth_url(oauth_url_or_code: str, format_type: str = "AMAZ_
             raise ValueError(f"{err} (Mã lỗi: {result.get('error_code', 'unknown')})")
 
 
-def _get_cached_xiaomi_client(region: str = "sg"):
+def _get_cached_xiaomi_client(region: str = "sg", force_refresh: bool = False):
     """Khởi tạo XiaomiClient từ phiên đăng nhập đã lưu (.xiaomi_lp_cache.json), tự làm mới serviceToken bằng passToken."""
     import base64
     import hashlib
@@ -179,8 +179,8 @@ def _get_cached_xiaomi_client(region: str = "sg"):
     user_id = str(cache.get("userId", ""))
     c_user_id = cache.get("cUserId", "")
 
-    # Nếu chưa có serviceToken nhưng có passToken thì tự động cấp mới
-    if (not stoken or not ssec) and cache.get("passToken"):
+    # Nếu chưa có serviceToken hoặc yêu cầu force_refresh thì tự động cấp mới bằng passToken
+    if (force_refresh or not stoken or not ssec) and cache.get("passToken"):
         headers = {"User-Agent": "Android-12-9.8.348i-google-Pixel 4"}
         cookies = {
             "userId": user_id,
@@ -230,7 +230,11 @@ def fetch_xiaomi_cloud_vitals(region: str = "sg") -> Dict[str, Any]:
 
     for key in ("heart_rate", "single_heart_rate", "single_spo2"):
         payload = {"start_time": 1700000000, "end_time": now + 86400, "key": key}
-        res = xc.request("POST", url, params={"data": json.dumps(payload, separators=(",", ":"))})
+        try:
+            res = xc.request("POST", url, params={"data": json.dumps(payload, separators=(",", ":"))})
+        except Exception:
+            xc, cache_file, cache = _get_cached_xiaomi_client(region=region, force_refresh=True)
+            res = xc.request("POST", url, params={"data": json.dumps(payload, separators=(",", ":"))})
         for item in res.get("result", {}).get("data_list") or []:
             val_raw = item.get("value", "{}")
             val = json.loads(val_raw) if isinstance(val_raw, str) else val_raw
@@ -578,12 +582,17 @@ async def run_cloud_sync(
     backend_url: str,
     device_name: str = "Xiaomi-Band-7",
     once: bool = False,
-    interval: float = 10.0,
+    interval: float = 5.0,
 ):
-    """Đồng bộ trực tiếp nhịp tim & SpO2 thực tế từ đám mây Mi Fitness (sg.hlth.io.mi.com)."""
-    logger.info("☁️ Bắt đầu đồng bộ dữ liệu thực tế Xiaomi Smart Band 7 từ Mi Fitness Cloud (sg.hlth.io.mi.com)...")
+    """Đồng bộ trực tiếp nhịp tim & SpO2 thực tế từ đám mây Mi Fitness (sg.hlth.io.mi.com) mỗi 5-10 giây."""
+    logger.info(
+        "☁️ Bắt đầu chế độ Cloud Sync liên tục (Đồng hồ ➔ Điện thoại Mi Fitness ➔ Laptop/Mini PC | chu kỳ %.1fs)...",
+        interval,
+    )
     seen_timestamps = set()
+    cycle = 0
     while True:
+        cycle += 1
         try:
             data = fetch_xiaomi_cloud_vitals(region="sg")
             hr_list = data.get("hr_records", [])
@@ -606,9 +615,10 @@ async def run_cloud_sync(
                 hr_val = data["latest_hr"]
                 ts = data["latest_time"]
                 now_str = datetime.datetime.now().strftime("%H:%M:%S")
+                is_new = "🆕 [BẢN GHI MỚI]" if (seen_timestamps and ts not in seen_timestamps) else "🟢 [ĐANG THEO DÕI]"
                 print(
-                    f"[{now_str}] ☁️ [LIVE CLOUD SYNC] ❤️ Nhịp tim mới nhất: {hr_val} bpm | "
-                    f"🩸 SpO2: {latest_spo2}% | MAC: C1:BD:70:58:2D:F5 | AuthKey: 0x6E589C3F5F214311AF5C56C8455BA211",
+                    f"[{now_str}] #{cycle:<4} ☁️ [CLOUD SYNC] ❤️ Nhịp tim: {hr_val:>3} bpm | "
+                    f"🩸 SpO2: {latest_spo2}% | MAC: C1:BD:70:58:2D:F5 | {is_new}",
                     flush=True,
                 )
                 send_vitals_to_backend(backend_url, device_name, hr_val, 100, latest_spo2)
@@ -713,7 +723,9 @@ def main():
     # huami-token integration options
     parser.add_argument("--get-token", action="store_true", help="Trợ lý lấy Auth Key từ đám mây Xiaomi / Zepp")
     parser.add_argument("--qr", action="store_true", help="Đăng nhập Xiaomi 1-click qua trình duyệt (Long-Polling)")
-    parser.add_argument("--cloud-sync", action="store_true", help="Đồng bộ dữ liệu nhịp tim & SpO2 thực từ Mi Fitness Cloud")
+    parser.add_argument("--cloud-sync", action="store_true", help="Đồng bộ dữ liệu nhịp tim & SpO2 thực từ Mi Fitness Cloud (Mặc định)")
+    parser.add_argument("--direct-ble", action="store_true", help="Chế độ chỉ kết nối BLE trực tiếp không qua Cloud")
+    parser.add_argument("--interval", type=float, default=5.0, help="Chu kỳ quét Cloud Sync tính bằng giây (mặc định: 5.0s)")
     parser.add_argument("--once", action="store_true", help="Chạy đồng bộ Cloud 1 lần rồi thoát")
     parser.add_argument("--oauth-url", type=str, default="", help="Link redirect OAuth (https://hm.xiaomi.com/watch.do?code=...) để trích xuất token")
     parser.add_argument("--method", choices=["xiaomi", "amazfit"], default="xiaomi", help="Phương thức đăng nhập (mặc định: xiaomi)")
@@ -722,10 +734,6 @@ def main():
     parser.add_argument("--auth-key", type=str, default="", help="Auth Key 16-byte hex (e.g. 0x1234...)")
 
     args = parser.parse_args()
-
-    if args.cloud_sync:
-        asyncio.run(run_cloud_sync(args.backend_url, once=args.once))
-        return
 
     if args.oauth_url:
         print("\n🔍 Đang trích xuất Auth Key từ link redirect OAuth...")
@@ -741,8 +749,8 @@ def main():
                     target_mac = d["mac"]
             if target_key:
                 save_auth_key_to_config(target_key, target_mac or None)
-                print("💾 Đã lưu Auth Key vào cấu hình! Bắt đầu kết nối...\n")
-                asyncio.run(run_stream(target_mac or args.mac, args.backend_url, auth_key=target_key))
+                print("💾 Đã lưu Auth Key vào cấu hình! Bắt đầu đồng bộ...\n")
+                asyncio.run(run_cloud_sync(args.backend_url, once=args.once, interval=args.interval))
         except Exception as e:
             print(f"❌ Lỗi: {e}")
         return
@@ -759,37 +767,18 @@ def main():
         asyncio.run(scan_ble_devices())
         return
 
-    # Nạp cấu hình từ config.yaml nếu không truyền trực tiếp
     config = load_config()
     ble_config = config.get("ble", {})
-    target_mac = args.mac or ble_config.get("device_mac", "")
-    target_auth_key = args.auth_key or ble_config.get("auth_key", "")
+    poll_interval = float(args.interval or ble_config.get("poll_interval_sec", 5.0))
 
-    if target_mac:
+    if args.direct_ble:
+        target_mac = args.mac or ble_config.get("device_mac", "")
+        target_auth_key = args.auth_key or ble_config.get("auth_key", "")
         asyncio.run(run_stream(target_mac, args.backend_url, auth_key=target_auth_key))
         return
 
-    if args.auto:
-        from bleak import BleakScanner
-
-        async def auto_connect():
-            logger.info("Đang tự động tìm kiếm Xiaomi Band 7...")
-            devices = await BleakScanner.discover(timeout=6.0, return_adv=True)
-            for address, (dev, adv) in devices.items():
-                name = adv.local_name or dev.name or ""
-                if any(k in name.lower() for k in ["xiaomi", "band 7", "mi band"]):
-                    logger.info("🎯 Tìm thấy: %s (%s)", name, address)
-                    await run_stream(address, args.backend_url, name, auth_key=target_auth_key)
-                    return
-            logger.warning("Không tự động tìm thấy Xiaomi Band. Hãy chạy với --scan để kiểm tra các thiết bị ở gần.")
-
-        asyncio.run(auto_connect())
-        return
-
-    # Nếu không có tham số, mặc định quét tìm
-    parser.print_help()
-    print("\nKhởi chạy quét mặc định:")
-    asyncio.run(scan_ble_devices())
+    # Mặc định: chỉ dùng chế độ Cloud Sync / Hybrid (Đồng hồ -> Điện thoại Mi Fitness -> Laptop/Mini PC) mỗi 5-10 giây
+    asyncio.run(run_cloud_sync(args.backend_url, once=args.once, interval=poll_interval))
 
 
 if __name__ == "__main__":

@@ -187,9 +187,12 @@ class EdgeApp:
             await asyncio.sleep(interval)
 
     async def _ble_loop(self) -> None:
-        """Vòng lặp kết nối BLE và đọc HR / SpO2."""
+        """Vòng lặp đồng bộ liên tục Nhịp tim & SpO2 qua Mi Fitness Cloud (Đồng hồ -> Điện thoại -> Mini PC mỗi 5-10s)."""
         if not self.config["ble"]["enabled"]:
             return
+
+        interval = float(self.config["ble"].get("poll_interval_sec", 5.0))
+        logger.info("[BLE Cloud Sync] Bắt đầu quét dữ liệu đồng hồ mỗi %.1f giây...", interval)
 
         def on_vital(reading: VitalReading) -> None:
             self._signals.heart_rate = reading.heart_rate
@@ -199,25 +202,22 @@ class EdgeApp:
                 "spo2":       reading.spo2,
             })
 
+        from scripts.stream_xiaomi_band7 import fetch_xiaomi_cloud_vitals
+
         while not self._shutdown_event.is_set():
-            connected = await self.ble_band.connect()
-            if connected:
-                await self.ble_band.start_notifications(on_vital)
-            else:
-                try:
-                    from scripts.stream_xiaomi_band7 import fetch_xiaomi_cloud_vitals
-                    cloud_vitals = await asyncio.to_thread(fetch_xiaomi_cloud_vitals)
-                    if cloud_vitals.get("latest_hr"):
-                        on_vital(
-                            VitalReading(
-                                heart_rate=cloud_vitals["latest_hr"],
-                                spo2=cloud_vitals.get("latest_spo2") or 98,
-                                timestamp=float(cloud_vitals.get("latest_time") or time.time()),
-                            )
+            try:
+                cloud_vitals = await asyncio.to_thread(fetch_xiaomi_cloud_vitals)
+                if cloud_vitals.get("latest_hr"):
+                    on_vital(
+                        VitalReading(
+                            heart_rate=cloud_vitals["latest_hr"],
+                            spo2=cloud_vitals.get("latest_spo2") or 98,
+                            timestamp=float(cloud_vitals.get("latest_time") or time.time()),
                         )
-                except Exception as exc:
-                    logger.debug("[BLE] Cloud fallback skip: %s", exc)
-                await asyncio.sleep(self.config["ble"]["reconnect_interval_sec"])
+                    )
+            except Exception as exc:
+                logger.warning("[BLE Cloud Sync] Lỗi đồng bộ: %s", exc)
+            await asyncio.sleep(interval)
 
     async def _heartbeat_loop(self) -> None:
         """Gửi heartbeat lên cloud mỗi 60 giây."""
