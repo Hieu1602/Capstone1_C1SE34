@@ -58,7 +58,7 @@ export default function PatientsListScreen({ navigation }: any) {
   const { userRole, role, permissions, viewRole, userPhone, phone_number, has_house, household_id } = useAuthStore();
   const ownerPhone = (userPhone || phone_number || '').trim();
   const isSpecialUser = userRole === 'admin' || userRole === 'doctor' || role === 'admin' || role === 'doctor';
-  const hasNoHouse = !isSpecialUser && !household_id && has_house === false;
+  const hasNoHouse = !isSpecialUser && (!household_id || has_house === false);
 
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');

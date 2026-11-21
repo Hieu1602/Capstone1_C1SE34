@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.media.Ringtone
 import android.media.RingtoneManager
 import android.net.Uri
@@ -40,6 +41,7 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
 
         private var activeVibrator: Vibrator? = null
         private var activeRingtone: Ringtone? = null
+        private var activeMediaPlayer: MediaPlayer? = null
         private var stopAlarmRunnable: Runnable? = null
         private val mainHandler = Handler(Looper.getMainLooper())
         private val activeNotificationIds = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
@@ -57,6 +59,12 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
             mainHandler.post {
                 try {
                     // Dừng chuông và rung cũ nếu có
+                    try {
+                        activeMediaPlayer?.stop()
+                        activeMediaPlayer?.release()
+                    } catch (_: Exception) {}
+                    activeMediaPlayer = null
+
                     activeRingtone?.stop()
                     activeRingtone = null
                     activeVibrator?.cancel()
@@ -64,18 +72,40 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                     stopAlarmRunnable?.let { mainHandler.removeCallbacks(it) }
                     stopAlarmRunnable = null
 
-                    // 1. Phát âm thanh chuông báo động
+                    // 1. Phát âm thanh chuông báo động (Ưu tiên MediaPlayer để lặp liên tục ở âm lượng tối đa)
                     val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
                         ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-                    val ringtone = RingtoneManager.getRingtone(context.applicationContext, soundUri)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                        ringtone.audioAttributes = AudioAttributes.Builder()
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                            .setUsage(AudioAttributes.USAGE_ALARM)
-                            .build()
+
+                    try {
+                        val player = MediaPlayer().apply {
+                            setAudioAttributes(
+                                AudioAttributes.Builder()
+                                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                                    .setUsage(AudioAttributes.USAGE_ALARM)
+                                    .build()
+                            )
+                            setDataSource(context.applicationContext, soundUri)
+                            isLooping = isCritical
+                            setVolume(1.0f, 1.0f)
+                            prepare()
+                            start()
+                        }
+                        activeMediaPlayer = player
+                    } catch (mpErr: Exception) {
+                        Log.w(TAG, "MediaPlayer khởi tạo lỗi, fallback sang Ringtone: ${mpErr.message}")
+                        val ringtone = RingtoneManager.getRingtone(context.applicationContext, soundUri)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                            ringtone.audioAttributes = AudioAttributes.Builder()
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                                .setUsage(AudioAttributes.USAGE_ALARM)
+                                .build()
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            ringtone.isLooping = isCritical
+                        }
+                        ringtone.play()
+                        activeRingtone = ringtone
                     }
-                    ringtone.play()
-                    activeRingtone = ringtone
 
                     // 2. Rung phần cứng điện thoại (Continuous Vibration nếu khẩn cấp)
                     val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -112,11 +142,11 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                     }
                     activeVibrator = vibrator
 
-                    // Tự động dừng sau 45s bảo vệ pin nếu không có tương tác
+                    // Tự động dừng sau 60s bảo vệ pin nếu không có tương tác
                     stopAlarmRunnable = Runnable {
                         stopAlarm(context)
                     }
-                    mainHandler.postDelayed(stopAlarmRunnable!!, 45000)
+                    mainHandler.postDelayed(stopAlarmRunnable!!, 60000)
                     Log.d(TAG, "Đã kích hoạt chuông và rung liên tục khẩn cấp thành công.")
                 } catch (e: Exception) {
                     Log.e(TAG, "Lỗi kích hoạt báo động: ${e.message}")
@@ -133,6 +163,13 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                 try {
                     activeVibrator?.cancel()
                     activeVibrator = null
+
+                    try {
+                        activeMediaPlayer?.stop()
+                        activeMediaPlayer?.release()
+                    } catch (_: Exception) {}
+                    activeMediaPlayer = null
+
                     activeRingtone?.stop()
                     activeRingtone = null
                     stopAlarmRunnable?.let { mainHandler.removeCallbacks(it) }

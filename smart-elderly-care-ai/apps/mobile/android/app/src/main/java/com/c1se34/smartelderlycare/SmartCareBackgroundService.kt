@@ -23,7 +23,7 @@ import kotlin.concurrent.thread
 class SmartCareBackgroundService : Service() {
 
     private var isRunning = false
-    private var serverBaseUrl: String = "http://16.178.128.42:8000/api/v1"
+    private var serverBaseUrl: String = "http://192.168.10.248:8000/api/v1"
     private var authToken: String? = null
     private var workerThread: Thread? = null
     private var lastNotifiedIncidentId: String? = null
@@ -92,7 +92,7 @@ class SmartCareBackgroundService : Service() {
             val notificationManager =
                 getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-            // Kênh thường trực chạy nền (yên lặng, không rung)
+            // 1. Kênh thường trực chạy nền (yên lặng, không rung)
             val serviceChannel = NotificationChannel(
                 SERVICE_CHANNEL_ID,
                 SERVICE_CHANNEL_NAME,
@@ -103,7 +103,27 @@ class SmartCareBackgroundService : Service() {
             }
             notificationManager.createNotificationChannel(serviceChannel)
 
-            // Kênh cảnh báo khẩn cấp (rung mạnh, chuông to, nổi bật trên màn hình)
+            // 2. Kênh thông báo thông thường (Lịch khám, Tin nhắn, Cập nhật bệnh án, Pin cạn -> Ting ting nhẹ nhàng)
+            val normalSoundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+            val normalAudioAttributes = android.media.AudioAttributes.Builder()
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION)
+                .build()
+            val normalChannel = NotificationChannel(
+                NativeNotificationModule.CHANNEL_ID,
+                NativeNotificationModule.CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Thông báo thông thường: lịch khám, tin nhắn, pin cạn"
+                enableLights(true)
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 200, 100, 200)
+                setSound(normalSoundUri, normalAudioAttributes)
+                lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
+            }
+            notificationManager.createNotificationChannel(normalChannel)
+
+            // 3. Kênh cảnh báo khẩn cấp (rung mạnh, chuông to, nổi bật trên màn hình)
             val soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
                 ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
             val audioAttributes = android.media.AudioAttributes.Builder()
@@ -112,8 +132,8 @@ class SmartCareBackgroundService : Service() {
                 .build()
 
             val alertChannel = NotificationChannel(
-                ALERT_CHANNEL_ID,
-                ALERT_CHANNEL_NAME,
+                NativeNotificationModule.EMERGENCY_CHANNEL_ID,
+                NativeNotificationModule.EMERGENCY_CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Cảnh báo sự cố té ngã, nhịp tim bất thường và nguy cấp"
@@ -122,6 +142,9 @@ class SmartCareBackgroundService : Service() {
                 vibrationPattern = longArrayOf(0, 1000, 400, 1000, 400, 1000, 800)
                 setSound(soundUri, audioAttributes)
                 lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
+                try {
+                    setBypassDnd(true)
+                } catch (_: Exception) {}
             }
             notificationManager.createNotificationChannel(alertChannel)
         }
