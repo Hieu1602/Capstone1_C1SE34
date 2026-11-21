@@ -123,12 +123,6 @@ export default function HomeScreen({ navigation }: any) {
     setIsRefreshing(true);
     try {
       await loadDashboardData(true);
-      Alert.alert(
-        '🔄 Đã làm mới',
-        hasLinkedHouse
-          ? 'Đã tải thành công dữ liệu ngôi nhà và thiết bị mới nhất.'
-          : 'Hiện tại tài khoản vẫn chưa được liên kết vào căn nhà nào. Hãy nhắc Chủ hộ thêm số điện thoại của bạn vào nhà nhé!'
-      );
     } finally {
       setIsRefreshing(false);
     }

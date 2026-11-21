@@ -1,5 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, TouchableOpacity, Modal, TextInput, Animated } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  Modal,
+  Animated,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  StatusBar,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LocalizedAlert, LocalizedText } from '../../../../i18n/LocalizedComponents';
 import { parseDeviceQr, ScannedDevice } from '../../utils/deviceQr';
@@ -15,10 +26,16 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
   onClose,
   onScan,
 }) => {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets?.top || 0, 16);
+  const bottomInset = Math.max(insets?.bottom || 0, 20);
+
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isFlashOn, setIsFlashOn] = useState(false);
   const [scanned, setScanned] = useState(false);
   const [manualCode, setManualCode] = useState('');
+  const [manualError, setManualError] = useState('');
   const [showManual, setShowManual] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -73,16 +90,45 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
     }
   };
 
+  const toggleFlash = async () => {
+    const nextState = !isFlashOn;
+    setIsFlashOn(nextState);
+    if (streamRef.current) {
+      const track = streamRef.current.getVideoTracks()[0];
+      if (track) {
+        try {
+          const capabilities = (track.getCapabilities ? track.getCapabilities() : {}) as any;
+          if (capabilities?.torch) {
+            await (track as any).applyConstraints({
+              advanced: [{ torch: nextState }],
+            });
+          }
+        } catch {
+          // torch not supported on this browser/hardware
+        }
+      }
+    }
+  };
+
+  const handleClose = () => {
+    setIsFlashOn(false);
+    stopCamera();
+    onClose();
+  };
+
   // Laser animation & Start/Stop camera theo visibility
   useEffect(() => {
     if (visible) {
       setScanned(false);
+      setManualCode('');
+      setManualError('');
+      setShowManual(false);
       startCamera();
 
-      const anim = Animated.loop(
+      const animation = Animated.loop(
         Animated.sequence([
           Animated.timing(laserAnim, {
-            toValue: 230,
+            toValue: 176,
             duration: 1800,
             useNativeDriver: false,
           }),
@@ -93,15 +139,16 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
           }),
         ])
       );
-      anim.start();
-      return () => anim.stop();
+      animation.start();
+      return () => animation.stop();
     } else {
+      setIsFlashOn(false);
       stopCamera();
       laserAnim.setValue(0);
     }
   }, [visible, laserAnim]);
 
-  // Quét thời gian thực qua BarcodeDetector API (Chrome, Edge, Opera, v.v.)
+  // Quét thời gian thực qua BarcodeDetector API (Chrome, Edge, Opera, Safari trên iOS/Android)
   useEffect(() => {
     if (!visible || !hasPermission || scanned) return;
 
@@ -109,7 +156,7 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
     if (typeof window !== 'undefined' && 'BarcodeDetector' in window) {
       try {
         detector = new (window as any).BarcodeDetector({
-          formats: ['code_128', 'code_39', 'qr_code', 'ean_13', 'ean_8', 'upc_a'],
+          formats: ['code_128', 'code_39', 'code_93', 'qr_code', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf'],
         });
       } catch (e) {
         // Fallback or formats not fully supported
@@ -147,109 +194,125 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
   const handleManualSubmit = () => {
     const trimmed = manualCode.trim();
     if (!trimmed) {
-      LocalizedAlert.alert(
-        'Chưa nhập mã camera',
-        'Vui lòng nhập mã vạch S/N hoặc địa chỉ MAC ở đáy camera.'
-      );
+      const msg = 'Vui lòng nhập mã vạch S/N hoặc địa chỉ MAC ở đáy camera.';
+      setManualError(msg);
+      LocalizedAlert.alert('Chưa nhập mã camera', msg);
       return;
     }
+
     const device = parseDeviceQr(trimmed);
     if (device) {
+      setManualError('');
       stopCamera();
       onScan(device.type, device.deviceId, device);
       onClose();
       return;
     }
-    LocalizedAlert.alert(
-      'Mã camera không hợp lệ',
-      'Hãy kiểm tra lại S/N hoặc địa chỉ MAC ở đáy camera (VD: 0C-EF-15-15-80-C5).'
-    );
+
+    const errorMsg = 'Hãy kiểm tra lại S/N hoặc địa chỉ MAC ở đáy camera (VD: 0C-EF-15-15-80-C5).';
+    setManualError(errorMsg);
+    LocalizedAlert.alert('Mã camera không hợp lệ', errorMsg);
   };
 
   return (
     <Modal
       visible={visible}
-      animationType="slide"
       transparent
-      onRequestClose={() => {
-        stopCamera();
-        onClose();
-      }}
+      animationType="slide"
+      onRequestClose={handleClose}
+      statusBarTranslucent
     >
-      <View style={styles.modalBackdrop}>
-        <View style={styles.modalContent}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Ionicons name="barcode-outline" size={20} color="#0284C7" style={{ marginRight: 6 }} />
-              <LocalizedText style={styles.headerTitle}>Quét mã vạch camera</LocalizedText>
-            </View>
+      <StatusBar barStyle="light-content" />
+      <View style={styles.qrModalContainer}>
+        {/* Fullscreen Video Element */}
+        {React.createElement('video', {
+          ref: (el: HTMLVideoElement | null) => {
+            videoRef.current = el;
+            if (el && streamRef.current && el.srcObject !== streamRef.current) {
+              el.srcObject = streamRef.current;
+              el.play().catch(() => {});
+            }
+          },
+          autoPlay: true,
+          playsInline: true,
+          muted: true,
+          style: {
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            zIndex: 0,
+            display: hasPermission ? 'block' : 'none',
+          },
+        })}
+
+        <KeyboardAvoidingView
+          style={styles.keyboardContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          {/* Header Scanner an toàn dưới tai thỏ */}
+          <View style={[styles.qrHeader, { paddingTop: topInset + 8 }]}>
             <TouchableOpacity
-              onPress={() => {
-                stopCamera();
-                onClose();
-              }}
-              style={styles.closeBtn}
+              style={styles.qrCloseBtn}
+              onPress={handleClose}
+              activeOpacity={0.7}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons name="close" size={24} color="#64748B" />
+              <Ionicons name="close" size={24} color="#FFF" />
+            </TouchableOpacity>
+            <LocalizedText style={styles.qrHeaderTitle}>Quét mã vạch camera</LocalizedText>
+            <TouchableOpacity
+              style={styles.qrFlashBtn}
+              onPress={toggleFlash}
+              activeOpacity={0.7}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons
+                name={isFlashOn ? 'flash' : 'flash-off'}
+                size={20}
+                color={isFlashOn ? '#FBBF24' : '#FFF'}
+              />
             </TouchableOpacity>
           </View>
 
-          {/* Viewfinder Khung quét qua Camera */}
-          <View style={styles.viewfinderWrapper}>
-            <View style={styles.viewfinder}>
-              {/* HTML5 Video element stream */}
-              {React.createElement('video', {
-                ref: (el: HTMLVideoElement | null) => {
-                  videoRef.current = el;
-                  if (el && streamRef.current && el.srcObject !== streamRef.current) {
-                    el.srcObject = streamRef.current;
-                    el.play().catch(() => {});
-                  }
-                },
-                autoPlay: true,
-                playsInline: true,
-                muted: true,
-                style: {
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  borderRadius: 16,
-                  display: hasPermission ? 'block' : 'none',
-                },
-              })}
+          {/* Mask Top */}
+          <View style={styles.maskTop} />
 
-              {/* Thông báo nếu chưa có quyền hoặc lỗi Camera */}
+          {/* Middle Row with Cutout */}
+          <View style={styles.middleRow}>
+            <View style={styles.maskSide} />
+            <View style={styles.qrViewfinder}>
               {!hasPermission && (
-                <View style={styles.permissionBox}>
-                  <Ionicons name="camera-outline" size={44} color="#94A3B8" />
-                  <LocalizedText style={styles.permissionTitle}>
-                    Cần cấp quyền truy cập Camera
+                <View style={styles.permissionMessage}>
+                  <Ionicons name="camera-outline" size={38} color="#94A3B8" />
+                  <LocalizedText style={styles.permissionText}>
+                    {cameraError || 'Cần quyền camera để quét mã thiết bị'}
                   </LocalizedText>
-                  <LocalizedText style={styles.permissionDesc}>
-                    {cameraError || 'Trình duyệt cần quyền truy cập webcam để quét mã vạch đáy camera.'}
-                  </LocalizedText>
-                  <TouchableOpacity style={styles.grantBtn} onPress={startCamera} activeOpacity={0.8}>
-                    <Ionicons name="videocam" size={16} color="#FFF" style={{ marginRight: 6 }} />
-                    <LocalizedText style={styles.grantBtnText}>Cấp quyền Camera</LocalizedText>
+                  <TouchableOpacity
+                    style={styles.permissionButton}
+                    onPress={startCamera}
+                    activeOpacity={0.8}
+                  >
+                    <LocalizedText style={styles.permissionButtonText}>
+                      Cho phép camera
+                    </LocalizedText>
                   </TouchableOpacity>
                 </View>
               )}
 
-              {/* 4 Góc khung ngắm */}
+              {/* 4 Góc khung quét */}
               <View style={[styles.corner, styles.cornerTL]} />
               <View style={[styles.corner, styles.cornerTR]} />
               <View style={[styles.corner, styles.cornerBL]} />
               <View style={[styles.corner, styles.cornerBR]} />
 
-              {/* Tia Laser quét */}
+              {/* Tia laser chạy lên xuống */}
               {hasPermission && (
                 <Animated.View
                   style={[
-                    styles.laserLine,
+                    styles.qrLaserLine,
                     {
                       transform: [{ translateY: laserAnim }],
                     },
@@ -257,22 +320,23 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
                 />
               )}
             </View>
+            <View style={styles.maskSide} />
           </View>
 
-          <LocalizedText style={styles.guideText}>
-            Hướng Camera vào mã vạch{' '}
-            <LocalizedText style={{ fontWeight: '700', color: '#0284C7' }}>S/N hoặc MAC ở đáy Camera</LocalizedText>{' '}
-            để tự động nhận diện thiết bị.
-          </LocalizedText>
+          {/* Mask Bottom */}
+          <View style={[styles.maskBottom, { paddingBottom: bottomInset + 12 }]}>
+            <LocalizedText style={styles.qrGuideText}>
+              Căn chỉnh mã vạch{' '}
+              <LocalizedText style={{ fontWeight: 'bold', color: '#38BDF8' }}>S/N hoặc MAC ở đáy Camera</LocalizedText> vào khung.
+            </LocalizedText>
 
-          {/* Fallback Nhập mã hoặc test nhanh */}
-          <View style={styles.footerControls}>
+            {/* Nhập mã thủ công */}
             <TouchableOpacity
               style={styles.toggleManualBtn}
               onPress={() => setShowManual(!showManual)}
-              activeOpacity={0.7}
+              activeOpacity={0.8}
             >
-              <Ionicons name={showManual ? 'chevron-up' : 'keypad-outline'} size={16} color="#0284C7" />
+              <Ionicons name={showManual ? 'chevron-up' : 'keypad-outline'} size={16} color="#38BDF8" style={{ marginRight: 6 }} />
               <LocalizedText style={styles.toggleManualText}>
                 {showManual ? 'Ẩn nhập thủ công' : 'Hoặc nhập mã thủ công'}
               </LocalizedText>
@@ -283,210 +347,226 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
                 <View style={styles.manualInputRow}>
                   <TextInput
                     value={manualCode}
-                    onChangeText={setManualCode}
+                    onChangeText={(text) => {
+                      setManualCode(text);
+                      if (manualError) setManualError('');
+                    }}
                     placeholder="VD: 0C-EF-15-15-80-C5 hoặc S/N..."
                     placeholderTextColor="#94A3B8"
-                    style={styles.input}
+                    style={[styles.input, manualError ? styles.inputError : null]}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
                   />
-                  <TouchableOpacity onPress={handleManualSubmit} style={styles.submitBtn}>
+                  <TouchableOpacity onPress={handleManualSubmit} style={styles.submitBtn} activeOpacity={0.8}>
                     <LocalizedText style={styles.submitBtnText}>Xác nhận</LocalizedText>
                   </TouchableOpacity>
                 </View>
+                {manualError ? (
+                  <LocalizedText style={styles.manualErrorText}>{manualError}</LocalizedText>
+                ) : null}
               </View>
             )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  modalBackdrop: {
+  qrModalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    width: '100%',
-    maxWidth: 440,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.25,
-    shadowRadius: 24,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  closeBtn: {
-    padding: 4,
-  },
-  viewfinderWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 6,
-  },
-  viewfinder: {
-    width: 280,
-    height: 250,
-    borderRadius: 18,
     backgroundColor: '#0F172A',
-    overflow: 'hidden',
-    position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
   },
-  permissionBox: {
-    alignItems: 'center',
-    paddingHorizontal: 20,
+  keyboardContainer: {
+    flex: 1,
   },
-  permissionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#F8FAFC',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  permissionDesc: {
-    fontSize: 12,
-    color: '#94A3B8',
-    textAlign: 'center',
-    marginTop: 4,
-    marginBottom: 12,
-    lineHeight: 16,
-  },
-  grantBtn: {
+  qrHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0284C7',
-    paddingVertical: 8,
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    borderRadius: 10,
+    paddingBottom: 12,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
   },
-  grantBtnText: {
+  qrCloseBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qrHeaderTitle: {
     color: '#FFF',
-    fontSize: 13,
+    fontSize: 17,
     fontWeight: '700',
+  },
+  qrFlashBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  maskTop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+  },
+  middleRow: {
+    flexDirection: 'row',
+    height: 180,
+    alignItems: 'center',
+  },
+  maskSide: {
+    flex: 1,
+    height: '100%',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+  },
+  qrViewfinder: {
+    width: 300,
+    height: 180,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(56, 189, 248, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden',
   },
   corner: {
     position: 'absolute',
-    width: 24,
-    height: 24,
+    width: 26,
+    height: 26,
     borderColor: '#38BDF8',
-    borderWidth: 3,
-    zIndex: 10,
   },
   cornerTL: {
-    top: 10,
-    left: 10,
-    borderBottomWidth: 0,
-    borderRightWidth: 0,
-    borderTopLeftRadius: 8,
+    top: 0,
+    left: 0,
+    borderTopWidth: 4,
+    borderLeftWidth: 4,
   },
   cornerTR: {
-    top: 10,
-    right: 10,
-    borderBottomWidth: 0,
-    borderLeftWidth: 0,
-    borderTopRightRadius: 8,
+    top: 0,
+    right: 0,
+    borderTopWidth: 4,
+    borderRightWidth: 4,
   },
   cornerBL: {
-    bottom: 10,
-    left: 10,
-    borderTopWidth: 0,
-    borderRightWidth: 0,
-    borderBottomLeftRadius: 8,
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 4,
+    borderLeftWidth: 4,
   },
   cornerBR: {
-    bottom: 10,
-    right: 10,
-    borderTopWidth: 0,
-    borderLeftWidth: 0,
-    borderBottomRightRadius: 8,
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
   },
-  laserLine: {
+  qrLaserLine: {
     position: 'absolute',
-    top: 10,
-    left: 16,
-    right: 16,
+    left: 0,
+    right: 0,
+    top: 0,
     height: 3,
     backgroundColor: '#38BDF8',
-    borderRadius: 2,
     shadowColor: '#38BDF8',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.9,
     shadowRadius: 8,
-    zIndex: 10,
   },
-  guideText: {
-    fontSize: 13,
-    color: '#64748B',
-    lineHeight: 18,
+  maskBottom: {
+    flex: 1.5,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    alignItems: 'center',
+    paddingTop: 18,
+    paddingHorizontal: 20,
+  },
+  permissionMessage: {
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  permissionText: {
+    color: '#CBD5E1',
+    fontSize: 12,
     textAlign: 'center',
-    marginTop: 12,
-    marginBottom: 8,
   },
-  footerControls: {
-    marginTop: 4,
+  permissionButton: {
+    backgroundColor: '#0284C7',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  permissionButtonText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  qrGuideText: {
+    color: '#CBD5E1',
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 12,
   },
   toggleManualBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    marginTop: 16,
     paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.3)',
   },
   toggleManualText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#0284C7',
+    color: '#38BDF8',
   },
   manualContainer: {
-    marginTop: 6,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    width: '100%',
+    marginTop: 12,
   },
   manualInputRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
-    marginBottom: 8,
   },
   input: {
     flex: 1,
+    backgroundColor: 'rgba(30, 41, 59, 0.9)',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: 'rgba(148, 163, 184, 0.3)',
     borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 9,
     fontSize: 13,
-    color: '#0F172A',
+    color: '#F8FAFC',
   },
   submitBtn: {
     backgroundColor: '#0284C7',
-    borderRadius: 10,
     paddingHorizontal: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
   },
   submitBtnText: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
+  manualErrorText: {
+    color: '#F87171',
+    fontSize: 12,
+    marginTop: 6,
+    paddingHorizontal: 4,
   },
 });

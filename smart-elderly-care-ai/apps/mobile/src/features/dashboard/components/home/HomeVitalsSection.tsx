@@ -38,22 +38,16 @@ export const HomeVitalsSection: React.FC<HomeVitalsSectionProps> = ({
   // Danh sách người cao tuổi trong gia đình
   const effectivePatientsList = (patientsList && patientsList.length > 0)
     ? patientsList
-    : (patientRecord
+    : (patientRecord && patientRecord.name && patientRecord.name.trim() !== ''
         ? [{
-            id: patientRecord.patient_id || 1,
-            full_name: patientRecord.name || 'Người cao tuổi',
-            name: patientRecord.name || 'Người cao tuổi',
+            id: patientRecord.patient_id || patientRecord.id,
+            full_name: patientRecord.name,
+            name: patientRecord.name,
             age: patientRecord.age,
             gender: patientRecord.gender,
             avatar_url: patientRecord.avatar_url,
           }]
-        : [{
-            id: 1,
-            full_name: 'Người cao tuổi',
-            name: 'Người cao tuổi',
-            age: 75,
-            gender: 'Nam',
-          }]);
+        : []);
 
   // Chuẩn hóa tên (bỏ dấu, chữ thường) để so sánh chính xác
   const normalizeStr = (s: any) =>

@@ -334,21 +334,21 @@ export const patientApi = {
   list: () => api.get<any[]>('/patients'),
   create: (data: any) => api.post('/patients', data),
   delete: (patientId: string | number) => api.delete(`/patients/${patientId}`),
-  getMedicalRecord: (patientId: number | string = 1, target_date?: string) =>
-    api.get(`/patients/${patientId}/medical-record`, { params: { target_date } }),
-  updateMedicalRecord: (patientId: number | string = 1, data: any) =>
+  getMedicalRecord: (patientId?: number | string | null, target_date?: string) =>
+    patientId ? api.get(`/patients/${patientId}/medical-record`, { params: { target_date } }) : Promise.resolve({ data: null } as any),
+  updateMedicalRecord: (patientId: number | string, data: any) =>
     api.put(`/patients/${patientId}/medical-record`, data),
-  getVitals: (patientId: number | string = 1, target_date?: string) =>
+  getVitals: (patientId: number | string, target_date?: string) =>
     api.get(`/patients/${patientId}/vitals`, { params: { target_date, limit: 300 } }),
   enrollFace: (patientId: number, formData: FormData) =>
     api.post(`/patients/${patientId}/face-enroll`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
-  getAppointments: (patientId: number | string = 1, status?: string) =>
-    api.get(`/patients/${patientId}/appointments`, { params: status ? { status } : undefined }),
+  getAppointments: (patientId?: number | string | null, status?: string) =>
+    patientId ? api.get(`/patients/${patientId}/appointments`, { params: status ? { status } : undefined }) : Promise.resolve({ data: [] } as any),
   confirmAppointment: (patientId: number | string, appointmentId: string) =>
     api.post(`/patients/${patientId}/appointments/${appointmentId}/confirm`),
-  requestAppointment: (patientId: number | string = 1, data: any) =>
+  requestAppointment: (patientId: number | string, data: any) =>
     api.post(`/patients/${patientId}/appointments`, data),
 };
 

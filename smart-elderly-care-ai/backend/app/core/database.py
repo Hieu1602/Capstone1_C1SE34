@@ -47,6 +47,7 @@ _parsed_db_url = _async_database_url(settings.DATABASE_URL)
 _connect_args: dict = {
     "timeout": 10,
     "command_timeout": 25,
+    "statement_cache_size": 0,
     "server_settings": {
         "application_name": "smartcare_ai_fastapi",
         "tcp_keepalives_idle": "30",
