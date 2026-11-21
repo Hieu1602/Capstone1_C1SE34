@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 import json
 from typing import List, Optional, Dict, Any
 
-SMARTBAND_STALE_SECONDS = 45
+SMARTBAND_STALE_SECONDS = 180
 
 
 def _parse_utc_dt(val: Any) -> Optional[datetime]:

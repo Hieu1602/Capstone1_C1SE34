@@ -203,7 +203,7 @@ class CRUDVital:
                         dev.is_online = (battery > 0)
                     else:
                         dev.is_online = True
-                    dev.last_heartbeat = datetime.now(timezone.utc)
+                    dev.last_heartbeat = func.now()
                     await db.flush()
 
                     # Nếu trạng thái thiết bị thay đổi (đặc biệt khi ngắt kết nối BLE) -> phát ngay WS DEVICE_STATUS cho cả Gia đình & Bác sĩ
@@ -977,7 +977,7 @@ class CRUDVital:
             # Chuẩn hóa timezone nếu cần
             v_time_tz = v_time if v_time.tzinfo else v_time.replace(tzinfo=timezone.utc)
             diff_seconds = abs((now_utc - v_time_tz).total_seconds())
-            if diff_seconds <= 45:
+            if diff_seconds <= 180:
                 is_fresh = True
 
         # Nếu quá 45s không có dữ liệu mới, cập nhật thiết bị sang offline và báo WS cho Bác sĩ & Gia đình

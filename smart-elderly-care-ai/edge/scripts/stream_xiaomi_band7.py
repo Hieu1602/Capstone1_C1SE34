@@ -389,29 +389,35 @@ def send_vitals_to_backend(
     battery: Optional[int] = None,
     spo2: Optional[int] = None,
 ):
-    """Gửi dữ liệu sinh hiệu lên FastAPI backend (không chặn event loop)."""
-    try:
-        payload = {
-            "device_id": device_id,
-            "heart_rate": heart_rate,
-            "spo2": spo2 or 98,
-            "skin_temp_max": 36.6,
-            "fall_detected": False,
-        }
-        if battery is not None:
-            payload["battery_level"] = battery
+    """Gửi dữ liệu sinh hiệu đồng thời lên cả AWS EC2 Backend và Local FastAPI Backend."""
+    payload = {
+        "device_id": device_id,
+        "heart_rate": heart_rate,
+        "spo2": spo2 or 98,
+        "skin_temp_max": 36.6,
+        "fall_detected": False,
+    }
+    if battery is not None:
+        payload["battery_level"] = battery
 
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            backend_url,
-            data=data,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=1.5) as resp:
-            pass
-    except Exception as e:
-        logger.debug("[Backend] Gửi sinh hiệu lỗi (server có thể đang tắt): %s", e)
+    data = json.dumps(payload).encode("utf-8")
+    target_urls = [backend_url]
+    ec2_url = "http://16.178.128.42:8000/api/v1/vitals"
+    if ec2_url not in target_urls and "localhost" in backend_url:
+        target_urls.append(ec2_url)
+
+    for url in target_urls:
+        try:
+            req = urllib.request.Request(
+                url,
+                data=data,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=8.0) as resp:
+                pass
+        except Exception as e:
+            logger.debug("[Backend %s] Gửi sinh hiệu lỗi: %s", url, e)
 
 
 async def scan_ble_devices(timeout: float = 6.0):
@@ -580,13 +586,14 @@ async def run_stream(
 
 async def run_cloud_sync(
     backend_url: str,
-    device_name: str = "Xiaomi-Band-7",
+    device_name: str = "BLE_BAND_001",
     once: bool = False,
     interval: float = 5.0,
 ):
     """Đồng bộ trực tiếp nhịp tim & SpO2 thực tế từ đám mây Mi Fitness (sg.hlth.io.mi.com) mỗi 5-10 giây."""
     logger.info(
-        "☁️ Bắt đầu chế độ Cloud Sync liên tục (Đồng hồ ➔ Điện thoại Mi Fitness ➔ Laptop/Mini PC | chu kỳ %.1fs)...",
+        "☁️ Bắt đầu chế độ Cloud Sync liên tục tới hồ sơ Nguyễn Văn A [%s] (Đồng hồ ➔ Điện thoại Mi Fitness ➔ Laptop/Mini PC | chu kỳ %.1fs)...",
+        device_name,
         interval,
     )
     seen_timestamps = set()
@@ -617,7 +624,7 @@ async def run_cloud_sync(
                 now_str = datetime.datetime.now().strftime("%H:%M:%S")
                 is_new = "🆕 [BẢN GHI MỚI]" if (seen_timestamps and ts not in seen_timestamps) else "🟢 [ĐANG THEO DÕI]"
                 print(
-                    f"[{now_str}] #{cycle:<4} ☁️ [CLOUD SYNC] ❤️ Nhịp tim: {hr_val:>3} bpm | "
+                    f"[{now_str}] #{cycle:<4} ☁️ [CLOUD SYNC ➔ Nguyễn Văn A ({device_name})] ❤️ Nhịp tim: {hr_val:>3} bpm | "
                     f"🩸 SpO2: {latest_spo2}% | MAC: C1:BD:70:58:2D:F5 | {is_new}",
                     flush=True,
                 )
@@ -717,6 +724,7 @@ def main():
     parser.add_argument("--scan", action="store_true", help="Quét tìm thiết bị Bluetooth LE")
     parser.add_argument("--auto", action="store_true", help="Tự động tìm và kết nối tới Xiaomi Band 7")
     parser.add_argument("--mac", type=str, default="", help="Địa chỉ MAC hoặc UUID của Xiaomi Band 7")
+    parser.add_argument("--device-id", type=str, default="BLE_BAND_001", help="Mã thiết bị trên Backend gắn với Nguyễn Văn A (mặc định: BLE_BAND_001)")
     parser.add_argument("--backend-url", type=str, default=DEFAULT_BACKEND_URL, help="URL nhận POST vitals của backend")
     parser.add_argument("--simulate", action="store_true", help="Chạy chế độ mô phỏng dữ liệu")
 
@@ -778,7 +786,7 @@ def main():
         return
 
     # Mặc định: chỉ dùng chế độ Cloud Sync / Hybrid (Đồng hồ -> Điện thoại Mi Fitness -> Laptop/Mini PC) mỗi 5-10 giây
-    asyncio.run(run_cloud_sync(args.backend_url, once=args.once, interval=poll_interval))
+    asyncio.run(run_cloud_sync(args.backend_url, device_name=args.device_id, once=args.once, interval=poll_interval))
 
 
 if __name__ == "__main__":
