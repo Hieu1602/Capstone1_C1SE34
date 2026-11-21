@@ -161,54 +161,128 @@ async def get_active_sessions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> List[Dict[str, Any]]:
-    """Trả về danh sách phiên làm việc từ Redis và danh sách người dùng đăng nhập gần nhất."""
+    """Trả về danh sách phiên làm việc thực tế từ Redis và bản ghi thiết bị thật (user_terminals)."""
     sessions = await redis_service.get_active_sessions()
 
-    # Bổ sung từ người dùng có thời gian hoạt động gần nhất trong DB
+    # Truy vấn phiên thực tế từ bảng user_terminals và users
     try:
-        res = await db.execute(
-            select(User)
-            .where(User.is_active == True)
-            .order_by(desc(User.last_login_at or User.updated_at))
-            .limit(6)
-        )
-        users = res.scalars().all()
+        from app.models.user_terminal import UserTerminal
 
-        # Author: DuongVanHieu - Khử trùng lặp session ID và user ID để đảm bảo tính duy nhất của phiên hoạt động
+        now = datetime.now(timezone.utc)
+        stmt = (
+            select(UserTerminal, User)
+            .join(User, User.id == UserTerminal.user_id)
+            .where(UserTerminal.is_active == True)
+            .order_by(desc(UserTerminal.last_active_at))
+            .limit(20)
+        )
+        res = await db.execute(stmt)
+        terminal_pairs = res.all()
+
         existing_user_ids = {s.get("user_id") for s in sessions if s.get("user_id")}
         existing_session_ids = {s.get("id") for s in sessions if s.get("id")}
 
-        for idx, u in enumerate(users):
+        for terminal, u in terminal_pairs:
             user_id_str = str(u.id)
-            sess_id = f"sess-{user_id_str[:8]}"
-            if user_id_str not in existing_user_ids and sess_id not in existing_session_ids:
-                existing_user_ids.add(user_id_str)
+            sess_id = f"sess-{str(terminal.id)[:8]}"
+            if sess_id not in existing_session_ids:
                 existing_session_ids.add(sess_id)
                 role_label = (
                     "Quản trị viên"
                     if u.role == "admin"
-                    else ("Bác sĩ chuyên khoa" if u.role == "doctor" else "Người thân / Gia đình")
+                    else ("Bác sĩ chuyên khoa" if u.role == "doctor" else ("Chủ nhà (Owner)" if u.role == "owner" else "Người thân / Gia đình"))
                 )
                 login_time = (
-                    u.last_login_at.strftime("%Y-%m-%d %H:%M:%S")
-                    if u.last_login_at
-                    else u.updated_at.strftime("%Y-%m-%d %H:%M:%S")
+                    terminal.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                    if terminal.created_at
+                    else (u.last_login_at.strftime("%Y-%m-%d %H:%M:%S") if u.last_login_at else "Chưa có")
+                )
+
+                # Tính toán thời gian hoạt động thực tế từ last_active_at
+                last_active_time = terminal.last_active_at or terminal.created_at or u.last_login_at
+                if last_active_time:
+                    if last_active_time.tzinfo is None:
+                        last_active_time = last_active_time.replace(tzinfo=timezone.utc)
+                    diff_seconds = max(0, int((now - last_active_time).total_seconds()))
+                    if diff_seconds < 60:
+                        last_active_str = "Vừa xong"
+                    elif diff_seconds < 3600:
+                        last_active_str = f"{diff_seconds // 60} phút trước"
+                    elif diff_seconds < 86400:
+                        last_active_str = f"{diff_seconds // 3600} giờ trước"
+                    else:
+                        last_active_str = f"{diff_seconds // 86400} ngày trước"
+
+                    # Phân loại trạng thái: quá 10 giờ là warning, quá 7 ngày là expired, còn lại là active
+                    if diff_seconds >= 86400 * 7:
+                        sess_status = "expired"
+                    elif diff_seconds >= 3600 * 10:
+                        sess_status = "warning"
+                    else:
+                        sess_status = "active"
+                else:
+                    last_active_str = "Chưa ghi nhận"
+                    sess_status = "active"
+
+                real_device = terminal.device_name or terminal.browser or ("SECA Mobile App" if terminal.device_type == "mobile" else "Trình duyệt Web")
+                real_ip = terminal.ip_address if terminal.ip_address and terminal.ip_address != "127.0.0.1" else ("127.0.0.1 (Localhost)" if terminal.ip_address == "127.0.0.1" else "Không xác định")
+
+                sessions.append({
+                    "id": sess_id,
+                    "terminal_id": str(terminal.id),
+                    "user_id": user_id_str,
+                    "user_name": f"{u.full_name or u.phone} ({u.phone or 'Chưa có SĐT'})",
+                    "role": role_label,
+                    "ip_address": real_ip,
+                    "device": real_device,
+                    "login_time": login_time,
+                    "last_active": last_active_str,
+                    "status": sess_status if u.is_active else "expired",
+                })
+
+        # Nếu chưa có bản ghi terminal nào, lấy người dùng có last_login_at thực tế
+        if not sessions:
+            res_users = await db.execute(
+                select(User)
+                .where(User.is_active == True, User.last_login_at.isnot(None))
+                .order_by(desc(User.last_login_at))
+                .limit(6)
+            )
+            users_with_login = res_users.scalars().all()
+            for u in users_with_login:
+                user_id_str = str(u.id)
+                sess_id = f"sess-{user_id_str[:8]}"
+                login_dt = u.last_login_at if u.last_login_at.tzinfo else u.last_login_at.replace(tzinfo=timezone.utc)
+                diff_sec = max(0, int((now - login_dt).total_seconds()))
+                if diff_sec < 60:
+                    last_str = "Vừa xong"
+                elif diff_sec < 3600:
+                    last_str = f"{diff_sec // 60} phút trước"
+                elif diff_sec < 86400:
+                    last_str = f"{diff_sec // 3600} giờ trước"
+                else:
+                    last_str = f"{diff_sec // 86400} ngày trước"
+
+                role_label = (
+                    "Quản trị viên"
+                    if u.role == "admin"
+                    else ("Bác sĩ chuyên khoa" if u.role == "doctor" else ("Chủ nhà (Owner)" if u.role == "owner" else "Người thân / Gia đình"))
                 )
                 sessions.append({
                     "id": sess_id,
                     "user_id": user_id_str,
-                    "user_name": f"{u.full_name} ({u.phone})",
+                    "user_name": f"{u.full_name or u.phone} ({u.phone or 'Chưa có SĐT'})",
                     "role": role_label,
-                    "ip_address": "127.0.0.1 (Localhost)" if idx == 0 else f"192.168.1.{10 + idx}",
-                    "device": "Chrome 129 / Windows 11" if u.role == "admin" else ("Web Bác Sĩ (:3001) / Clinical Chrome" if u.role == "doctor" else "SECA Mobile / Android 14"),
-                    "login_time": login_time,
-                    "last_active": "Vừa xong" if idx == 0 else f"{idx * 15} phút trước",
-                    "status": "active" if u.is_active else "expired",
+                    "ip_address": "127.0.0.1 (Localhost)",
+                    "device": "Web Admin (Trình duyệt)" if u.role == "admin" else ("Cổng Web Bác sĩ" if u.role == "doctor" else "SECA Mobile App"),
+                    "login_time": u.last_login_at.strftime("%Y-%m-%d %H:%M:%S"),
+                    "last_active": last_str,
+                    "status": "warning" if diff_sec >= 3600 * 10 else "active",
                 })
-    except Exception:
-        pass
+    except Exception as err:
+        logger.warning("[get_active_sessions] Lỗi đọc phiên thực tế: %s", err)
 
-    # Author: DuongVanHieu - Chuẩn hóa danh sách phiên duy nhất theo id tránh lỗi trùng key ở frontend
+    # Khử trùng lặp session ID
     unique_sessions: List[Dict[str, Any]] = []
     seen_ids = set()
     for s in sessions:
@@ -226,8 +300,31 @@ async def revoke_session(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Thu hồi phiên làm việc JWT và đưa vào danh sách đen (Blacklist)."""
+    """Thu hồi phiên làm việc JWT, vô hiệu hóa terminal và đưa vào danh sách đen (Blacklist)."""
     await redis_service.revoke_session(session_id)
+
+    # Vô hiệu hóa terminal và tăng token_version trong DB để JWT bị từ chối ngay lập tức
+    try:
+        prefix = session_id.replace("sess-", "")
+        await db.execute(
+            text("""
+                UPDATE user_terminals
+                SET is_active = FALSE
+                WHERE CAST(id AS TEXT) LIKE :pref OR CAST(user_id AS TEXT) LIKE :pref
+            """),
+            {"pref": f"{prefix}%"},
+        )
+        await db.execute(
+            text("""
+                UPDATE users
+                SET token_version = COALESCE(token_version, 1) + 1
+                WHERE CAST(id AS TEXT) LIKE :pref
+            """),
+            {"pref": f"{prefix}%"},
+        )
+        await db.commit()
+    except Exception as exc:
+        logger.warning("[revoke_session] Lỗi cập nhật terminal/token_version: %s", exc)
 
     # Ghi nhận nhật ký bảo mật
     try:
@@ -237,7 +334,7 @@ async def revoke_session(
                 VALUES ('THU HỒI PHIÊN LÀM VIỆC (REVOKE)', :user, '127.0.0.1', 'medium', :details)
             """),
             {
-                "user": current_user.full_name,
+                "user": current_user.full_name or current_user.phone or "Admin",
                 "details": f"Đã thu hồi phiên [{session_id}] và vô hiệu hóa JWT Access Token liên kết.",
             },
         )
