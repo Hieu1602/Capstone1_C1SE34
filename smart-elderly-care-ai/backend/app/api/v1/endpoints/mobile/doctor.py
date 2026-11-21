@@ -340,8 +340,12 @@ async def create_doctor_appointment(
     db: AsyncSession = Depends(get_db),
 ):
     """Bác sĩ lên lịch tái khám mới và tự động kích hoạt nhắc nhở FCM trước giờ hẹn 24h & 2h."""
-    doctor_id = current_user.id if current_user and current_user.role == "doctor" else None
-    created_by = current_user.id if current_user else None
+    doctor_id = (
+        current_user.id
+        if current_user and current_user.role == "doctor"
+        else uuid.UUID("b3333333-b4e1-4b08-b2d3-d949a0eb075c")
+    )
+    created_by = current_user.id if current_user else doctor_id
 
     try:
         root_apt, created_count, reminders_count = await crud_appointment.create_appointment_series(

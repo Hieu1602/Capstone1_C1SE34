@@ -300,7 +300,18 @@ export const AppointmentsPage: React.FC = () => {
       {showCreateModal && (
         <NewAppointmentModal
           patients={patients}
-          initialAppointment={reschedulingApt}
+          initialAppointment={
+            reschedulingApt ||
+            (selectedDateStr
+              ? ({
+                  id: '',
+                  patient_id: '',
+                  patient_name: '',
+                  scheduled_at: `${selectedDateStr}T09:00:00`,
+                  status: 'UPCOMING',
+                } as AppointmentItem)
+              : null)
+          }
           onClose={() => {
             setShowCreateModal(false);
             setReschedulingApt(null);

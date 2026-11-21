@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AppointmentItem, DoctorPatientCard } from '../../types';
 import { doctorApi } from '../../services/api';
+import { useDoctorDataStore } from '../../store/useDoctorDataStore';
 import { Calendar, X, AlertCircle, Loader2, Volume2 } from 'lucide-react';
 
 interface NewAppointmentModalProps {
@@ -34,7 +35,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const isReschedule = Boolean(initialAppointment);
+  const isReschedule = Boolean(initialAppointment?.id);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -68,16 +69,20 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
     setErrorMsg(null);
     try {
       const p = patients.find((item) => item.id === patientId);
-      if (isReschedule && initialAppointment) {
-        await doctorApi.updateAppointment(initialAppointment.id, {
+      const store = useDoctorDataStore.getState();
+      if (isReschedule && initialAppointment?.id) {
+        const updated = await doctorApi.updateAppointment(initialAppointment.id, {
           visit_type: visitType,
           scheduled_at: new Date(scheduledAt).toISOString(),
           location: location.trim(),
           clinical_notes: clinicalNotes.trim(),
           enable_speaker_reminder: enableSpeaker,
         });
+        store.setAppointments(
+          store.appointments.map((a) => (a.id === updated.id ? { ...a, ...updated, patient_name: p?.name || a.patient_name } : a))
+        );
       } else {
-        await doctorApi.createAppointment({
+        const created = await doctorApi.createAppointment({
           patient_id: patientId,
           patient_name: p?.name,
           house_id: p?.house_id || undefined,
@@ -88,6 +93,11 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
           clinical_notes: clinicalNotes.trim(),
           enable_speaker_reminder: enableSpeaker,
         });
+        store.setAppointments(
+          [...store.appointments.filter((a) => a.id !== created.id), { ...created, patient_name: p?.name || created.patient_name }].sort(
+            (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
+          )
+        );
       }
       onSuccess();
       onClose();

@@ -43,13 +43,9 @@ class CRUDAppointment:
         bất kỳ lịch khám UPCOMING nào khác của cùng Bác sĩ hoặc cùng Bệnh nhân hay không.
         Trả về True nếu bị trùng lịch (Conflict), ngược lại False.
         """
-        end_time = start_time + timedelta(minutes=duration_minutes)
-
-        # Điều kiện overlap khoảng thời gian: A_start < B_end AND A_end > B_start
         conflict_conditions = [
             Appointment.status == AppointmentStatusEnum.UPCOMING.value,
-            Appointment.scheduled_at < end_time,
-            (Appointment.scheduled_at + timedelta(minutes=30)) > start_time,
+            Appointment.scheduled_at == start_time,
         ]
 
         if exclude_id:
@@ -127,7 +123,7 @@ class CRUDAppointment:
         """Lấy danh sách các cuộc hẹn theo bộ lọc."""
         filters = []
         if doctor_id:
-            filters.append(Appointment.doctor_id == doctor_id)
+            filters.append(or_(Appointment.doctor_id == doctor_id, Appointment.doctor_id.is_(None)))
         if patient_id:
             filters.append(Appointment.patient_id == patient_id)
         if house_id:

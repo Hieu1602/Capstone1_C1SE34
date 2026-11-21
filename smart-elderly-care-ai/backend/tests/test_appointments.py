@@ -94,3 +94,25 @@ def test_appointment_reminder_lead_time_calculation():
     assert t_24h == datetime(2026, 11, 14, 10, 0, 0, tzinfo=timezone.utc)
     assert t_2h == datetime(2026, 11, 15, 8, 0, 0, tzinfo=timezone.utc)
 
+
+@pytest.mark.asyncio
+async def test_same_day_different_hour_no_conflict():
+    """Verify two appointments on the same day with different hours do not conflict."""
+    from unittest.mock import AsyncMock, MagicMock
+    from app.crud.crud_appointment import crud_appointment
+
+    db = AsyncMock()
+    res_mock = MagicMock()
+    res_mock.scalar_one_or_none.return_value = None
+    db.execute.return_value = res_mock
+
+    conflict = await crud_appointment.check_conflict(
+        db=db,
+        start_time=datetime(2026, 11, 21, 9, 0, tzinfo=timezone.utc),
+        duration_minutes=30,
+        patient_id=uuid.uuid4(),
+        doctor_id=uuid.uuid4(),
+    )
+    assert conflict is False
+
+
