@@ -395,9 +395,17 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
 
     @ReactMethod
     fun startBackgroundMonitor(serverUrl: String) {
+        startBackgroundMonitorWithToken(serverUrl, null)
+    }
+
+    @ReactMethod
+    fun startBackgroundMonitorWithToken(serverUrl: String, authToken: String?) {
         try {
             val intent = Intent(reactContext, SmartCareBackgroundService::class.java).apply {
                 putExtra("SERVER_URL", serverUrl)
+                if (!authToken.isNullOrBlank()) {
+                    putExtra("AUTH_TOKEN", authToken)
+                }
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 reactContext.startForegroundService(intent)

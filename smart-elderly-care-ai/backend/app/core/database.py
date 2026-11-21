@@ -193,6 +193,9 @@ async def init_db() -> None:
                 );
             """))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_audit_logs_timestamp ON audit_logs(timestamp DESC);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_audit_logs_event ON audit_logs(event);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_audit_logs_ip ON audit_logs(ip_address);"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_audit_logs_severity ON audit_logs(severity);"))
             await conn.execute(text("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS admin_id UUID;"))
             await conn.execute(text("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS action VARCHAR(100);"))
             await conn.execute(text("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS target_type VARCHAR(50);"))

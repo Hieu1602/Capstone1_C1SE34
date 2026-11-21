@@ -146,10 +146,20 @@ export const securityApi = {
     const res = await api.delete(`/security/sessions/${id}`);
     return res.data;
   },
-  getAuditLogs: async (severity?: string, search?: string, limit?: number): Promise<import('../types').SecurityAuditLog[]> => {
+  getAuditLogs: async (
+    severity?: string,
+    search?: string,
+    limit?: number,
+    page?: number,
+    pageSize?: number
+  ): Promise<any> => {
     const res = await api.get('/security/audit-logs', {
-      params: { severity, search, limit },
+      params: { severity, search, limit, page, page_size: pageSize },
     });
+    return res.data;
+  },
+  cleanupOldAuditLogs: async (days: number = 30) => {
+    const res = await api.post(`/security/audit-logs/retention-cleanup?days=${days}`);
     return res.data;
   },
   getAbnormalAccess: async () => {

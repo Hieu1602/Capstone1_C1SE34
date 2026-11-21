@@ -272,36 +272,29 @@ class XiaomiSession:
             )
 
         nonce = self._nonce
-        urls_to_try: list[str] = []
         if nonce is not None:
             nonce_str = str(nonce)
             sign_input = f"nonce={nonce_str}&{self._ssecurity}"
             client_sign = base64.b64encode(
                 hashlib.sha1(sign_input.encode()).digest()
             ).decode()
-            urls_to_try.append(location + "&clientSign=" + urllib.parse.quote(client_sign))
-        urls_to_try.append(location)
+            url = location + "&clientSign=" + urllib.parse.quote(client_sign)
+        else:
+            url = location
 
         headers = XIAOMI_HEADERS.SERVICE_LOGIN.value
         service_token = None
-        for url in urls_to_try:
-            for attempt in range(4):
-                try:
-                    s = requests.Session()
-                    if hasattr(self, "_http") and hasattr(self._http, "cookies"):
-                        s.cookies.update(self._http.cookies)
-                    response = s.get(url, headers=headers, allow_redirects=False, timeout=10)
-                    service_token = response.cookies.get("serviceToken") or s.cookies.get("serviceToken")
-                    if not service_token:
-                        response = s.get(url, headers=headers, allow_redirects=True, timeout=10)
-                        service_token = response.cookies.get("serviceToken") or s.cookies.get("serviceToken")
-                    if service_token:
-                        break
-                except Exception as exc:
-                    logger.warning(f"Attempt {attempt+1} to fetch serviceToken failed: {exc}")
-                    time.sleep(1.5)
-            if service_token:
+        for attempt in range(4):
+            try:
+                response = requests.get(url, headers=headers, allow_redirects=False, timeout=10)
+                service_token = response.cookies.get("serviceToken")
+                if not service_token:
+                    response = requests.get(url, headers=headers, timeout=10)
+                    service_token = response.cookies.get("serviceToken")
                 break
+            except requests.RequestException as exc:
+                logger.warning(f"Attempt {attempt+1} to fetch serviceToken failed: {exc}")
+                time.sleep(1.0)
 
         if not service_token:
             raise AuthenticationError(

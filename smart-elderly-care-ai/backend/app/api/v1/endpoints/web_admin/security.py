@@ -9,10 +9,11 @@ Bao gồm:
 """
 
 from datetime import datetime, timezone
+import logging
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import desc, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +21,8 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.user import User
 from app.services.redis.redis_service import redis_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -255,51 +258,116 @@ async def revoke_session(
 
 @router.get("/audit-logs", summary="Lấy danh sách nhật ký kiểm toán bảo mật")
 async def get_audit_logs(
+    response: Response,
     severity: Optional[str] = Query(default=None, description="Lọc theo mức độ: low, medium, high, critical"),
     search: Optional[str] = Query(default=None, description="Từ khóa tìm kiếm"),
-    limit: int = Query(default=50, le=200),
+    hours: Optional[int] = Query(default=24, description="Lấy nhật ký trong vòng số giờ qua (mặc định 24h = 1 ngày)"),
+    limit: Optional[int] = Query(default=None, description="Giới hạn số bản ghi"),
+    page: Optional[int] = Query(default=None, ge=1, description="Số trang (nếu muốn phân trang server)"),
+    page_size: Optional[int] = Query(default=50, ge=1, le=500, description="Kích thước mỗi trang"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> List[Dict[str, Any]]:
-    """Trả về danh sách nhật ký an ninh hệ thống và sự kiện đăng nhập."""
+) -> Any:
+    """Trả về danh sách nhật ký an ninh hệ thống trong 24 giờ qua (1 ngày), hỗ trợ phân trang và đếm tổng."""
     try:
-        query_sql = "SELECT id, timestamp, event, user_name, ip_address, severity, details FROM audit_logs"
-        params: Dict[str, Any] = {"limit": limit}
+        from datetime import datetime, timezone, timedelta
+        import math
+
+        actual_hours = hours if isinstance(hours, int) else (24 if hours is None or not hasattr(hours, "default") else 24)
+        actual_limit = limit if isinstance(limit, int) else None
+        actual_severity = severity if isinstance(severity, str) else None
+        actual_search = search if isinstance(search, str) else None
+
+        params: Dict[str, Any] = {}
         where_clauses = []
 
-        if severity and severity.upper() != "ALL":
+        if actual_hours and actual_hours > 0:
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=actual_hours)
+            where_clauses.append("timestamp >= :cutoff")
+            params["cutoff"] = cutoff
+
+        if actual_severity and actual_severity.upper() != "ALL":
             where_clauses.append("LOWER(severity) = LOWER(:sev)")
-            params["sev"] = severity
+            params["sev"] = actual_severity
 
-        if search:
+        if actual_search:
             where_clauses.append("(event ILIKE :kw OR user_name ILIKE :kw OR details ILIKE :kw OR ip_address ILIKE :kw)")
-            params["kw"] = f"%{search}%"
+            params["kw"] = f"%{actual_search}%"
 
-        if where_clauses:
-            query_sql += " WHERE " + " AND ".join(where_clauses)
+        where_stmt = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
-        query_sql += " ORDER BY timestamp DESC LIMIT :limit;"
+        # Lớp 1 & 2: Đếm tổng số bản ghi trong khoảng thời gian để phân trang và thống kê
+        count_sql = f"SELECT COUNT(*) FROM audit_logs{where_stmt};"
+        total_res = await db.execute(text(count_sql), params)
+        total_count = total_res.scalar() or 0
+        response.headers["X-Total-Count"] = str(total_count)
+
+        query_sql = f"SELECT id, timestamp, event, user_name, ip_address, severity, details FROM audit_logs{where_stmt} ORDER BY timestamp DESC"
+
+        if page is not None and isinstance(page, int) and page >= 1:
+            p_size = page_size if isinstance(page_size, int) else 50
+            offset = (page - 1) * p_size
+            query_sql += " LIMIT :page_size OFFSET :offset"
+            params["page_size"] = p_size
+            params["offset"] = offset
+        elif actual_limit and actual_limit > 0:
+            query_sql += " LIMIT :limit"
+            params["limit"] = actual_limit
+        query_sql += ";"
 
         res = await db.execute(text(query_sql), params)
         rows = res.fetchall()
-        if rows:
-            return [
-                {
-                    "id": str(r[0]),
-                    "timestamp": r[1].strftime("%Y-%m-%d %H:%M:%S") if hasattr(r[1], "strftime") else str(r[1]),
-                    "event": r[2],
-                    "user": r[3],
-                    "ip": r[4],
-                    "severity": r[5],
-                    "details": r[6],
-                }
-                for r in rows
-            ]
-    except Exception:
-        pass
+        items = [
+            {
+                "id": str(r[0]),
+                "timestamp": r[1].strftime("%Y-%m-%d %H:%M:%S") if hasattr(r[1], "strftime") else str(r[1]),
+                "event": r[2],
+                "user": r[3],
+                "ip": r[4],
+                "severity": r[5],
+                "details": r[6],
+            }
+            for r in (rows or [])
+        ]
 
-    # Fallback dữ liệu mẫu nếu CSDL chưa có
-    return []
+        if page is not None and isinstance(page, int) and page >= 1:
+            p_size = page_size if isinstance(page_size, int) else 50
+            return {
+                "items": items,
+                "total": total_count,
+                "page": page,
+                "page_size": p_size,
+                "total_pages": math.ceil(total_count / p_size) if p_size > 0 else 1,
+            }
+
+        return items
+    except Exception as err:
+        logger.warning("[get_audit_logs] Lỗi truy vấn audit logs: %s", err)
+        return []
+
+
+@router.post("/audit-logs/retention-cleanup", summary="Dọn dẹp nhật ký kiểm toán cũ hơn N ngày (Lớp 4: Data Retention)")
+async def cleanup_old_audit_logs(
+    days: int = Query(default=30, ge=7, description="Số ngày lưu trữ log nóng"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Chính sách retention: giữ log nóng 30 ngày, xóa log cũ hơn để DB luôn gọn gàng và truy vấn nhanh."""
+    try:
+        from datetime import datetime, timezone, timedelta
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        res = await db.execute(text("DELETE FROM audit_logs WHERE timestamp < :cutoff"), {"cutoff": cutoff})
+        await db.commit()
+        deleted_count = res.rowcount
+        return {
+            "status": "success",
+            "message": f"Đã dọn dẹp {deleted_count} bản ghi nhật ký kiểm toán cũ hơn {days} ngày.",
+            "deleted_count": deleted_count,
+            "retention_days": days,
+        }
+    except Exception as exc:
+        logger.warning("[cleanup_old_audit_logs] Lỗi dọn dẹp log: %s", exc)
+        return {"status": "error", "message": str(exc), "deleted_count": 0}
 
 
 # ==============================================================================
