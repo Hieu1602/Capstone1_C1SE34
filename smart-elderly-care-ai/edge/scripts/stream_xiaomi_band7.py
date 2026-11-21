@@ -584,7 +584,7 @@ def parse_huami_battery_info(raw: bytes) -> Dict[str, Any]:
     """Giải mã gói thông tin pin chi tiết 20-byte từ characteristic 0x0006 hoặc ZeppOS 0x0029."""
     if not raw or len(raw) < 2:
         return {}
-    info: Dict[str, Any] = {"battery_level": int(raw[1])}
+    info: Dict[str, Any] = {"battery_level": raw[1]}
     if len(raw) >= 3:
         info["battery_state"] = "Đang sạc ⚡" if raw[2] == 1 else "Đang dùng pin 🔋"
     if len(raw) >= 18:
@@ -593,7 +593,7 @@ def parse_huami_battery_info(raw: bytes) -> Dict[str, Any]:
         if 2020 <= yr <= 2035 and 1 <= mo <= 12 and 1 <= dy <= 31:
             info["last_charge_time"] = f"{yr:04d}-{mo:02d}-{dy:02d} {hh:02d}:{mm:02d}:{ss:02d}"
     if len(raw) >= 20:
-        info["last_charge_level"] = int(raw[19])
+        info["last_charge_level"] = raw[19]
     return info
 
 
@@ -888,7 +888,7 @@ async def run_stream(
                     try:
                         raw_bat = await client.read_gatt_char(BATTERY_LEVEL_UUID)
                         if len(raw_bat) > 0:
-                            telemetry["battery_level"] = int(raw_bat[0])
+                            telemetry["battery_level"] = raw_bat[0]
                     except Exception:
                         pass
 
@@ -1076,7 +1076,7 @@ async def run_stream(
                                 try:
                                     raw_b = await client.read_gatt_char(BATTERY_LEVEL_UUID)
                                     if len(raw_b) > 0:
-                                        telemetry["battery_level"] = int(raw_b[0])
+                                        telemetry["battery_level"] = raw_b[0]
                                 except Exception:
                                     pass
                 else:

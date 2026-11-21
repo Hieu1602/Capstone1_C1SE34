@@ -195,7 +195,7 @@ class CRUDVital:
 
                 dev = await db.get(Device, uuid_val)
                 if dev:
-                    prev_online = bool(dev.is_online)
+                    prev_online = dev.is_online
                     if bracelet_connected_flag is False:
                         dev.is_online = False
                     elif battery is not None:
@@ -207,14 +207,14 @@ class CRUDVital:
                     await db.flush()
 
                     # Nếu trạng thái thiết bị thay đổi (đặc biệt khi ngắt kết nối BLE) -> phát ngay WS DEVICE_STATUS cho cả Gia đình & Bác sĩ
-                    if prev_online != bool(dev.is_online):
+                    if prev_online != dev.is_online:
                         try:
                             import json as _json
                             status_payload = _json.dumps({
                                 "type": "DEVICE_STATUS",
                                 "device_id": str(dev.id),
-                                "is_online": bool(dev.is_online),
-                                "bracelet_connected": bool(dev.is_online),
+                                "is_online": dev.is_online,
+                                "bracelet_connected": dev.is_online,
                                 "elderly_id": str(dev.elderly_id) if dev.elderly_id else None,
                             }, ensure_ascii=False)
                             for c_ws in list(alert_clients):
@@ -277,6 +277,10 @@ class CRUDVital:
                     sample_time = sample_time.replace(tzinfo=timezone.utc)
 
                 is_stale = False
+                age_seconds = 0.0
+                hr = obj.heart_rate
+                hr_high_limit = 100
+                hr_low_limit = 50
                 if sample_time:
                     age_seconds = (datetime.now(timezone.utc) - sample_time).total_seconds()
                     # Mẫu cũ hơn 3 phút (180s) -> Xem như dữ liệu đồng bộ lịch sử, không kích hoạt cảnh báo thời gian thực
@@ -291,7 +295,6 @@ class CRUDVital:
                 elif is_battery_dead or is_worn is False:
                     logger.info(f"[CRUDVital] Vòng tay {dev_name} đang tháo ra hoặc hết pin -> Bỏ qua toàn bộ cảnh báo sinh tồn giả.")
                 else:
-                    hr = obj.heart_rate
                     spo2 = obj.spo2
                     temp = obj.skin_temp_max
                     activity = str(data.get("activity_state") or data.get("activity") or "").lower()
@@ -465,21 +468,22 @@ class CRUDVital:
                 if alerts_to_create:
                     types_in_alerts = [a[0] for a in alerts_to_create]
                     # Nếu vừa có nhịp tim cao vừa có nhảy vọt đột ngột -> Gộp lại thành 1 thông báo duy nhất
+                    hr_val = hr or 0
                     if "HIGH_HEART_RATE" in types_in_alerts and "SUDDEN_HR_SPIKE" in types_in_alerts:
                         spike_alert = next((a for a in alerts_to_create if a[0] == "SUDDEN_HR_SPIKE"), None)
-                        merged_msg = f"Cảnh báo: Nhịp tim đo được từ {dev_name} tăng cao ({hr} bpm)! Vượt ngưỡng an toàn ({hr_high_limit} bpm)."
+                        merged_msg = f"Cảnh báo: Nhịp tim đo được từ {dev_name} tăng cao ({hr_val} bpm)! Vượt ngưỡng an toàn ({hr_high_limit} bpm)."
                         if spike_alert and "➔" in spike_alert[2]:
                             merged_msg = spike_alert[2].replace("Cảnh báo loạn nhịp:", "Cảnh báo khẩn cấp:") + f" Vượt ngưỡng an toàn ({hr_high_limit} bpm)."
                         alerts_to_create = [a for a in alerts_to_create if a[0] not in ("HIGH_HEART_RATE", "SUDDEN_HR_SPIKE")]
-                        alerts_to_create.insert(0, ("HIGH_HEART_RATE", "CRITICAL" if hr >= 120 else "HIGH", merged_msg, 5))
+                        alerts_to_create.insert(0, ("HIGH_HEART_RATE", "CRITICAL" if hr_val >= 120 else "HIGH", merged_msg, 5))
 
                     if "LOW_HEART_RATE" in types_in_alerts and "SUDDEN_HR_DROP" in types_in_alerts:
                         drop_alert = next((a for a in alerts_to_create if a[0] == "SUDDEN_HR_DROP"), None)
-                        merged_msg = f"Cảnh báo: Nhịp tim đo được từ {dev_name} quá thấp ({hr} bpm)! Dưới ngưỡng an toàn ({hr_low_limit} bpm)."
+                        merged_msg = f"Cảnh báo: Nhịp tim đo được từ {dev_name} quá thấp ({hr_val} bpm)! Dưới ngưỡng an toàn ({hr_low_limit} bpm)."
                         if drop_alert and "➔" in drop_alert[2]:
                             merged_msg = drop_alert[2].replace("Cảnh báo loạn nhịp:", "Cảnh báo khẩn cấp:") + f" Dưới ngưỡng an toàn ({hr_low_limit} bpm)."
                         alerts_to_create = [a for a in alerts_to_create if a[0] not in ("LOW_HEART_RATE", "SUDDEN_HR_DROP")]
-                        alerts_to_create.insert(0, ("LOW_HEART_RATE", "CRITICAL" if hr < 45 else "HIGH", merged_msg, 5))
+                        alerts_to_create.insert(0, ("LOW_HEART_RATE", "CRITICAL" if hr_val < 45 else "HIGH", merged_msg, 5))
 
                     # Ưu tiên sự cố khẩn cấp (té ngã và hội chứng đa chỉ số luôn được ưu tiên cao nhất)
                     ALERT_PRIORITY = {
@@ -841,7 +845,7 @@ class CRUDVital:
             if not uuid_val:
                 return []
 
-        safe_days = max(1, min(int(days), 90))
+        safe_days = max(1, min(days, 90))
         where_clauses = [f"time >= NOW() - INTERVAL '{safe_days} days'"]
         params: dict = {}
         if uuid_val:
