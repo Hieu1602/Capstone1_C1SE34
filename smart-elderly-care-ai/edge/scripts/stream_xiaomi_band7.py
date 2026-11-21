@@ -64,13 +64,26 @@ logging.basicConfig(
 )
 logger = logging.getLogger("XiaomiBand7")
 
-# GATT Standard UUIDs
+# GATT Standard & Huami / Zepp OS UUIDs
 HR_SERVICE_UUID = "0000180d-0000-1000-8000-00805f9b34fb"
 HR_MEASUREMENT_UUID = "00002a37-0000-1000-8000-00805f9b34fb"
 HUAMI_HR_CTRL_UUID = "00002a39-0000-1000-8000-00805f9b34fb"
 BATTERY_SERVICE_UUID = "0000180f-0000-1000-8000-00805f9b34fb"
 BATTERY_LEVEL_UUID = "00002a19-0000-1000-8000-00805f9b34fb"
 HUAMI_BATTERY_UUID = "00000006-0000-3512-2118-0009af100700"
+HUAMI_REALTIME_STEPS_UUID = "00000007-0000-3512-2118-0009af100700"
+HUAMI_RAW_SENSOR_CTRL_UUID = "00000001-0000-3512-2118-0009af100700"
+HUAMI_RAW_SENSOR_DATA_UUID = "00000002-0000-3512-2118-0009af100700"
+HUAMI_DEVICEEVENT_UUID = "00000010-0000-3512-2118-0009af100700"
+HUAMI_ACTIVITY_CTRL_UUID = "00000004-0000-3512-2118-0009af100700"
+HUAMI_ACTIVITY_DATA_UUID = "00000005-0000-3512-2118-0009af100700"
+
+# Device Information Service (0x180A)
+GATT_SERIAL_NUMBER_UUID = "00002a25-0000-1000-8000-00805f9b34fb"
+GATT_FIRMWARE_REV_UUID = "00002a26-0000-1000-8000-00805f9b34fb"
+GATT_HARDWARE_REV_UUID = "00002a27-0000-1000-8000-00805f9b34fb"
+GATT_SOFTWARE_REV_UUID = "00002a28-0000-1000-8000-00805f9b34fb"
+GATT_MANUFACTURER_UUID = "00002a29-0000-1000-8000-00805f9b34fb"
 
 # Huami Auth & Zepp OS 2021 Chunked Transfer UUIDs
 HUAMI_AUTH_SERVICE_UUID = "0000fee1-0000-1000-8000-00805f9b34fb"
@@ -471,17 +484,26 @@ def send_vitals_to_backend(
     heart_rate: int,
     battery: Optional[int] = None,
     spo2: Optional[int] = None,
+    extra: Optional[Dict[str, Any]] = None,
 ):
-    """Gửi dữ liệu sinh hiệu đồng thời lên cả AWS EC2 Backend và Local FastAPI Backend."""
-    payload = {
+    """Gửi toàn bộ dữ liệu sinh hiệu & cảm biến đồng hồ đồng thời lên cả AWS EC2 Backend và Local FastAPI Backend."""
+    ext = extra or {}
+    payload: Dict[str, Any] = {
         "device_id": device_id,
         "heart_rate": heart_rate,
-        "spo2": spo2 or 98,
-        "skin_temp_max": 36.6,
-        "fall_detected": False,
+        "spo2": spo2 or ext.get("spo2") or 98,
+        "skin_temp_max": ext.get("skin_temp_max", 36.6),
+        "fall_detected": bool(ext.get("fall_detected", False)),
+        "is_worn": bool(ext.get("is_worn", True)),
+        "activity_state": ext.get("activity_state", "Đang đeo"),
+        "raw_payload": ext,
     }
+    for k in ("steps", "distance_m", "calories_kcal", "accel_x", "accel_y", "accel_z", "accel_g", "battery_state"):
+        if ext.get(k) is not None:
+            payload[k] = ext[k]
     if battery is not None:
         payload["battery_level"] = battery
+        payload["bracelet_battery"] = battery
 
     data = json.dumps(payload).encode("utf-8")
     ec2_url = "http://16.178.128.42:8000/api/v1/vitals"
@@ -544,10 +566,110 @@ async def scan_ble_devices(timeout: float = 6.0):
     print()
 
 
-async def _zeppos_send_chunked(client, write_handle: int, ep: int, data: bytes, mtu: int = 247) -> int:
-    """Gửi gói dữ liệu phân mảnh theo chuẩn Huami 2021 / Zepp OS qua characteristic 0x0016."""
+def parse_realtime_steps_payload(raw: bytes) -> Dict[str, int]:
+    """Giải mã gói bước chân, quãng đường (m) và năng lượng tiêu thụ (kcal) từ characteristic 0x0007 hoặc ZeppOS 0x0016."""
+    if not raw or len(raw) < 3:
+        return {}
+    out: Dict[str, int] = {}
+    if len(raw) >= 13:
+        out["steps"] = int.from_bytes(raw[1:5], "little")
+        out["distance_m"] = int.from_bytes(raw[5:9], "little")
+        out["calories_kcal"] = int.from_bytes(raw[9:13], "little")
+    elif len(raw) >= 3:
+        out["steps"] = int.from_bytes(raw[1:3], "little")
+    return out
+
+
+def parse_huami_battery_info(raw: bytes) -> Dict[str, Any]:
+    """Giải mã gói thông tin pin chi tiết 20-byte từ characteristic 0x0006 hoặc ZeppOS 0x0029."""
+    if not raw or len(raw) < 2:
+        return {}
+    info: Dict[str, Any] = {"battery_level": int(raw[1])}
+    if len(raw) >= 3:
+        info["battery_state"] = "Đang sạc ⚡" if raw[2] == 1 else "Đang dùng pin 🔋"
+    if len(raw) >= 18:
+        yr = int.from_bytes(raw[10:12], "little")
+        mo, dy, hh, mm, ss = raw[12], raw[13], raw[14], raw[15], raw[16]
+        if 2020 <= yr <= 2035 and 1 <= mo <= 12 and 1 <= dy <= 31:
+            info["last_charge_time"] = f"{yr:04d}-{mo:02d}-{dy:02d} {hh:02d}:{mm:02d}:{ss:02d}"
+    if len(raw) >= 20:
+        info["last_charge_level"] = int(raw[19])
+    return info
+
+
+def parse_raw_sensor_accel(raw: bytes) -> Optional[Dict[str, Any]]:
+    """Giải mã cảm biến gia tốc 3 trục (G-Sensor x, y, z) từ characteristic 0x0002."""
+    if not raw or len(raw) < 8 or raw[0] != 0x00 or (len(raw) - 2) % 6 != 0:
+        return None
+    scale = 4100.0
+    g_const = -9.81
+    samples = []
+    max_g = 0.0
+    min_g = 99.0
+    for i in range(2, len(raw), 6):
+        rx, ry, rz = struct.unpack_from("<hhh", raw, i)
+        gx = round((rx * g_const) / scale, 2)
+        gy = round((ry * g_const) / scale, 2)
+        gz = round((rz * g_const) / scale, 2)
+        mag_g = round(((rx * rx + ry * ry + rz * rz) ** 0.5) / scale, 2)
+        max_g = max(max_g, mag_g)
+        min_g = min(min_g, mag_g)
+        samples.append((gx, gy, gz, mag_g))
+    if not samples:
+        return None
+    lx, ly, lz, lg = samples[-1]
+    fall_detected = max_g >= 2.8 and min_g <= 0.45
+    if fall_detected:
+        act = "Té ngã khẩn cấp"
+    elif max_g >= 1.55:
+        act = "Vận động mạnh"
+    elif max_g >= 1.15:
+        act = "Đi bộ / Sinh hoạt"
+    else:
+        act = "Nghỉ ngơi"
+    return {
+        "accel_x": lx,
+        "accel_y": ly,
+        "accel_z": lz,
+        "accel_g": round(max_g, 2),
+        "sample_count": len(samples),
+        "activity_state": act,
+        "fall_detected": fall_detected,
+    }
+
+
+async def _zeppos_send_chunked(
+    client,
+    write_handle: int,
+    ep: int,
+    data: bytes,
+    mtu: int = 247,
+    encrypt: bool = False,
+    session_key: Optional[bytes] = None,
+    seq_nr: int = 0,
+) -> Tuple[int, int]:
+    """Gửi gói dữ liệu phân mảnh theo chuẩn Huami 2021 / Zepp OS qua characteristic 0x0016 (hỗ trợ cả Plaintext và AES-128 Encrypted)."""
+    import zlib
+    from Crypto.Cipher import AES
+
     wh = (write_handle + 1) & 0xFF
-    remaining = len(data)
+    orig_len = len(data)
+    data_to_send = data
+    if encrypt and session_key and len(session_key) == 16:
+        msg_key = bytes(session_key[i] ^ wh for i in range(16))
+        enc_len = orig_len + 8
+        rem = enc_len % 16
+        if rem > 0:
+            enc_len += 16 - rem
+        buf = bytearray(enc_len)
+        buf[:orig_len] = data
+        struct.pack_into("<I", buf, orig_len, seq_nr & 0xFFFFFFFF)
+        crc = zlib.crc32(bytes(buf[: orig_len + 4])) & 0xFFFFFFFF
+        struct.pack_into("<I", buf, orig_len + 4, crc)
+        seq_nr = (seq_nr + 1) & 0xFFFFFFFF
+        data_to_send = AES.new(msg_key, AES.MODE_ECB).encrypt(bytes(buf))
+
+    remaining = len(data_to_send)
     offset = 0
     count = 0
     header_size = 11
@@ -556,20 +678,20 @@ async def _zeppos_send_chunked(client, write_handle: int, ep: int, data: bytes, 
         max_chunk = max(1, max_write - header_size)
         n = min(remaining, max_chunk)
         chunk = bytearray(header_size + n)
-        flags = 0x00
+        flags = 0x08 if (encrypt and session_key) else 0x00
         if count == 0:
             flags |= 0x01
-            struct.pack_into("<IH", chunk, 5, len(data), ep)
+            struct.pack_into("<IH", chunk, 5, orig_len, ep)
         if remaining <= max_chunk:
             flags |= 0x02 | 0x04
         chunk[0], chunk[1], chunk[2], chunk[3], chunk[4] = 0x03, flags, 0x00, wh, count
-        chunk[header_size:] = data[offset : offset + n]
+        chunk[header_size:] = data_to_send[offset : offset + n]
         await client.write_gatt_char(ZEPPOS_CHUNK_WRITE_UUID, bytes(chunk), response=False)
         offset += n
         remaining -= n
         header_size = 5
         count += 1
-    return wh
+    return wh, seq_nr
 
 
 async def run_stream(
@@ -578,42 +700,140 @@ async def run_stream(
     device_name: str = "BLE_BAND_001",
     auth_key: Optional[str] = None,
 ):
-    """Kết nối và stream dữ liệu nhịp tim thực liên tục từng giây qua BLE trực tiếp từ Xiaomi Band 7 (Zepp OS Huami 2021 + GATT 0x2A37)."""
+    """Kết nối và stream TOÀN BỘ dữ liệu cảm biến thực liên tục từng giây qua BLE trực tiếp từ Xiaomi Band 7."""
     from bleak import BleakClient, BleakScanner
 
-    logger.info("Khởi động kết nối BLE trực tiếp tới Xiaomi Band 7: %s (gắn thiết bị: %s)", mac_address or "AUTO", device_name)
-    battery_level = None
+    logger.info("Khởi động kết nối BLE đa cảm biến tới Xiaomi Band 7: %s (gắn thiết bị: %s)", mac_address or "AUTO", device_name)
+    telemetry: Dict[str, Any] = {
+        "heart_rate": 0,
+        "spo2": 98,
+        "battery_level": None,
+        "battery_state": "Đang dùng pin 🔋",
+        "last_charge_time": None,
+        "last_charge_level": None,
+        "steps": 0,
+        "distance_m": 0,
+        "calories_kcal": 0,
+        "accel_x": 0.0,
+        "accel_y": 0.0,
+        "accel_z": -9.81,
+        "accel_g": 1.0,
+        "activity_state": "Đang đeo",
+        "contact_state": "Đang đo",
+        "is_worn": True,
+        "fall_detected": False,
+        "serial_number": None,
+        "fw_version": None,
+        "hw_version": None,
+        "sw_version": None,
+        "manufacturer": "Xiaomi / Huami",
+    }
+    # Nạp SpO2 thực gần nhất từ bộ nhớ đệm đám mây nếu có
+    try:
+        cloud_info = fetch_xiaomi_cloud_vitals(region="sg")
+        if cloud_info.get("latest_spo2"):
+            telemetry["spo2"] = int(cloud_info["latest_spo2"])
+    except Exception:
+        pass
+
     readings = 0
 
-    def hr_callback(sender, data: bytearray):
+    def _emit_telemetry(trigger_source: str = "HR"):
         nonlocal readings
-        if len(data) < 2:
+        hr = int(telemetry.get("heart_rate") or 0)
+        if hr <= 0:
             return
-
-        flags = data[0]
-        heart_rate = struct.unpack("<H", data[1:3])[0] if (flags & 0x01) else data[1]
-        if heart_rate <= 0:
-            return
-
         readings += 1
-        contact = (flags >> 1) & 0x03
-        contact_str = "Đang đeo" if contact == 3 else ("Tháo vòng" if contact == 2 else "Đang đo")
-        if heart_rate < 50:
+        if telemetry.get("fall_detected"):
+            status = "🚨 [CẢNH BÁO TÉ NGÃ KHẨN CẤP!]"
+        elif hr < 50:
             status = "🚨 [NGUY HIỂM: NHỊP CHẬM <50 BPM]"
-        elif heart_rate > 120:
+        elif hr > 120:
             status = "🚨 [NGUY HIỂM: NHỊP NHANH >120 BPM]"
         else:
             status = "🟢 [Bình thường]"
 
         now_str = datetime.datetime.now().strftime("%H:%M:%S")
+        bat_str = f"{telemetry['battery_level']}%" if telemetry.get("battery_level") is not None else "--%"
+        charge_extra = f", sạc cuối: {telemetry['last_charge_time']}" if telemetry.get("last_charge_time") else ""
+        fw_str = telemetry.get("fw_version") or telemetry.get("sw_version") or "2.2.1.1"
         print(
-            f"[{now_str}] #{readings:<4} 📡 [BLE LIVE ➔ {device_name}] ❤️ Nhịp tim: {heart_rate:>3} bpm | "
-            f"Pin: {battery_level or '--':>2}% | Trạng thái: {contact_str} {status}",
+            f"[{now_str}] #{readings:<4} 📡 [{device_name}] "
+            f"❤️ HR: {hr:>3} bpm | 🩸 SpO2: {telemetry['spo2']}% | "
+            f"👣 Bước: {telemetry['steps']:<5} ({telemetry['distance_m']}m • {telemetry['calories_kcal']} kcal) | "
+            f"🏃 Vận động: {telemetry['activity_state']} | "
+            f"🔋 Pin: {bat_str} ({telemetry['battery_state']}{charge_extra}) | "
+            f"⌚ {telemetry['contact_state']} (FW {fw_str}) {status}",
             flush=True,
         )
+        snapshot = dict(telemetry)
         asyncio.get_event_loop().run_in_executor(
-            None, send_vitals_to_backend, backend_url, device_name, heart_rate, battery_level, 98
+            None,
+            send_vitals_to_backend,
+            backend_url,
+            device_name,
+            hr,
+            telemetry.get("battery_level"),
+            telemetry.get("spo2"),
+            snapshot,
         )
+        if telemetry.get("fall_detected"):
+            telemetry["fall_detected"] = False
+
+    def hr_callback(sender, data: bytearray):
+        if len(data) < 2:
+            return
+        flags = data[0]
+        heart_rate = struct.unpack("<H", data[1:3])[0] if (flags & 0x01) else data[1]
+        if heart_rate <= 0:
+            return
+        contact = (flags >> 1) & 0x03
+        telemetry["heart_rate"] = heart_rate
+        telemetry["is_worn"] = contact != 2
+        telemetry["contact_state"] = "Đang đeo" if contact == 3 else ("Tháo vòng" if contact == 2 else "Đang đo")
+        _emit_telemetry("HR")
+
+    last_steps_val = None
+    last_steps_ts = 0.0
+
+    def _update_steps_and_cadence(parsed: Dict[str, int]):
+        nonlocal last_steps_val, last_steps_ts
+        if not parsed:
+            return
+        now_t = time.time()
+        new_steps = parsed.get("steps")
+        if new_steps is not None and last_steps_val is not None and now_t > last_steps_ts:
+            delta_s = new_steps - last_steps_val
+            if delta_s > 0:
+                telemetry["activity_state"] = "Đang đi bộ 🚶" if delta_s < 8 else "Vận động nhanh 🏃"
+            elif now_t - last_steps_ts >= 6.0 and "đi bộ" in str(telemetry.get("activity_state", "")).lower():
+                telemetry["activity_state"] = "Nghỉ ngơi / Sinh hoạt"
+        if new_steps is not None:
+            if last_steps_val is None or new_steps != last_steps_val:
+                last_steps_val = new_steps
+                last_steps_ts = now_t
+        telemetry.update(parsed)
+
+    def steps_callback(sender, data: bytearray):
+        _update_steps_and_cadence(parse_realtime_steps_payload(bytes(data)))
+
+    def battery_callback(sender, data: bytearray):
+        parsed = parse_huami_battery_info(bytes(data))
+        if parsed:
+            telemetry.update(parsed)
+
+    def raw_sensor_callback(sender, data: bytearray):
+        parsed = parse_raw_sensor_accel(bytes(data))
+        if parsed:
+            was_fall = parsed.get("fall_detected", False)
+            telemetry["accel_x"] = parsed["accel_x"]
+            telemetry["accel_y"] = parsed["accel_y"]
+            telemetry["accel_z"] = parsed["accel_z"]
+            telemetry["accel_g"] = parsed["accel_g"]
+            telemetry["activity_state"] = parsed["activity_state"]
+            if was_fall:
+                telemetry["fall_detected"] = True
+                _emit_telemetry("FALL")
 
     while True:
         try:
@@ -639,29 +859,90 @@ async def run_stream(
                 char_uuids = {c.uuid.lower() for s in client.services for c in s.characteristics}
                 has_zeppos = ZEPPOS_CHUNK_WRITE_UUID in char_uuids and ZEPPOS_CHUNK_READ_UUID in char_uuids
 
-                # Đọc mức pin (0x2A19 chuẩn GATT hoặc 0x0006 Huami)
-                for b_uuid, idx in ((BATTERY_LEVEL_UUID, 0), (HUAMI_BATTERY_UUID, 1)):
-                    if b_uuid in char_uuids:
+                # 1. Đọc thông tin phần cứng / Firmware từ GATT 0x180A
+                for uuid_key, field_name in (
+                    (GATT_SERIAL_NUMBER_UUID, "serial_number"),
+                    (GATT_FIRMWARE_REV_UUID, "fw_version"),
+                    (GATT_HARDWARE_REV_UUID, "hw_version"),
+                    (GATT_SOFTWARE_REV_UUID, "sw_version"),
+                    (GATT_MANUFACTURER_UUID, "manufacturer"),
+                ):
+                    if uuid_key in char_uuids:
                         try:
-                            raw_bat = await client.read_gatt_char(b_uuid)
-                            if len(raw_bat) > idx:
-                                battery_level = raw_bat[idx]
-                                logger.info("🔋 Mức pin Xiaomi Band 7: %d%%", battery_level)
-                                break
+                            val = (await client.read_gatt_char(uuid_key)).decode("utf-8", errors="ignore").strip("\x00 ")
+                            if val:
+                                telemetry[field_name] = val
                         except Exception:
                             pass
+                if not telemetry.get("fw_version") and telemetry.get("sw_version"):
+                    telemetry["fw_version"] = telemetry["sw_version"]
 
+                # 2. Đọc thông tin Pin chi tiết (0x0006 Huami Battery Info + 0x2A19 chuẩn GATT)
+                if HUAMI_BATTERY_UUID in char_uuids:
+                    try:
+                        raw_bat6 = bytes(await client.read_gatt_char(HUAMI_BATTERY_UUID))
+                        telemetry.update(parse_huami_battery_info(raw_bat6))
+                    except Exception:
+                        pass
+                if BATTERY_LEVEL_UUID in char_uuids and telemetry.get("battery_level") is None:
+                    try:
+                        raw_bat = await client.read_gatt_char(BATTERY_LEVEL_UUID)
+                        if len(raw_bat) > 0:
+                            telemetry["battery_level"] = int(raw_bat[0])
+                    except Exception:
+                        pass
+
+                # 3. Đọc & đăng ký nhận Bước chân + Quãng đường + Calo thời gian thực (0x0007)
+                if HUAMI_REALTIME_STEPS_UUID in char_uuids:
+                    try:
+                        raw_steps = bytes(await client.read_gatt_char(HUAMI_REALTIME_STEPS_UUID))
+                        telemetry.update(parse_realtime_steps_payload(raw_steps))
+                    except Exception:
+                        pass
+                    try:
+                        await client.start_notify(HUAMI_REALTIME_STEPS_UUID, steps_callback)
+                    except Exception:
+                        pass
+
+                if HUAMI_BATTERY_UUID in char_uuids:
+                    try:
+                        await client.start_notify(HUAMI_BATTERY_UUID, battery_callback)
+                    except Exception:
+                        pass
+
+                logger.info(
+                    "📋 Thông tin đồng hồ: Serial=%s | FW=%s | HW=%s | Pin=%s%% (%s, sạc gần nhất: %s) | Bước chân=%d (%dm, %d kcal)",
+                    telemetry.get("serial_number") or "N/A",
+                    telemetry.get("fw_version") or "N/A",
+                    telemetry.get("hw_version") or "N/A",
+                    telemetry.get("battery_level") or "--",
+                    telemetry.get("battery_state"),
+                    telemetry.get("last_charge_time") or "N/A",
+                    telemetry.get("steps", 0),
+                    telemetry.get("distance_m", 0),
+                    telemetry.get("calories_kcal", 0),
+                )
+
+                # 4. Đăng ký nhận nhịp tim GATT 0x2A37
                 await client.start_notify(HR_MEASUREMENT_UUID, hr_callback)
 
                 if has_zeppos and auth_key:
-                    # Giao thức Zepp OS / Huami 2021: ECDH B-163 Auth (endpoint 0x0082) + Real-time HR (endpoint 0x001d)
                     from Crypto.Cipher import AES
 
                     clean_key = auth_key.strip().lower().removeprefix("0x")
                     secret_key = bytes.fromhex(clean_key)
                     priv_ec = os.urandom(24)
                     pub_ec = ecdh_b163_public_key(priv_ec)
-                    state = {"wh": 0, "buf": bytearray(), "ep": 0, "ok": False}
+                    state: Dict[str, Any] = {
+                        "wh": 0,
+                        "buf": bytearray(),
+                        "ep": 0,
+                        "orig_len": 0,
+                        "enc": False,
+                        "ok": False,
+                        "sk": None,
+                        "seq": 0,
+                    }
                     auth_done = asyncio.Event()
 
                     async def _on_payload(ep: int, raw: bytes):
@@ -669,17 +950,48 @@ async def run_stream(
                             if raw[1] == 0x04 and raw[2] == 0x01 and len(raw) >= 67:
                                 rr, rpub = raw[3:19], raw[19:67]
                                 shared = ecdh_b163_shared_secret(priv_ec, rpub)
+                                state["seq"] = int.from_bytes(shared[:4], "little")
                                 sk = bytes(shared[i + 8] ^ secret_key[i] for i in range(16))
+                                state["sk"] = sk
                                 e1 = AES.new(secret_key, AES.MODE_ECB).encrypt(rr)
                                 e2 = AES.new(sk, AES.MODE_ECB).encrypt(rr)
-                                state["wh"] = await _zeppos_send_chunked(client, state["wh"], 0x0082, b"\x05" + e1 + e2, mtu)
+                                state["wh"], state["seq"] = await _zeppos_send_chunked(
+                                    client, state["wh"], 0x0082, b"\x05" + e1 + e2, mtu
+                                )
                             elif raw[1] == 0x05:
                                 state["ok"] = raw[2] == 0x01
                                 if state["ok"]:
                                     logger.info("🎉 Xác thực Zepp OS ECDH B-163 thành công!")
                                 else:
-                                    logger.error("❌ Sai Auth Key (mã 0x%02x). Cần lấy lại Auth Key mới sau khi ghép đôi lại đồng hồ.", raw[2])
+                                    logger.error("❌ Sai Auth Key (mã 0x%02x).", raw[2])
                                 auth_done.set()
+                        elif ep == 0x0000 and len(raw) >= 3 and raw[0] == 0x04:
+                            num_srv = int.from_bytes(raw[1:3], "little")
+                            eps = []
+                            for idx in range(num_srv):
+                                pos = 3 + idx * 3
+                                if pos + 3 <= len(raw):
+                                    ep_id = int.from_bytes(raw[pos : pos + 2], "little")
+                                    eps.append(f"0x{ep_id:04x}")
+                            telemetry["zeppos_services_count"] = num_srv
+                            logger.info("🧩 Đồng hồ hỗ trợ %d dịch vụ Zepp OS: %s", num_srv, ", ".join(eps[:15]))
+                        elif ep == 0x0016 and raw:
+                            # ZeppOsStepsService: 0x04 (CMD_REPLY, 15 bytes) hoặc 0x07 (CMD_REALTIME_NOTIFICATION, 14 bytes)
+                            if raw[0] == 0x04 and len(raw) >= 15:
+                                _update_steps_and_cadence(parse_realtime_steps_payload(raw[2:15]))
+                            elif raw[0] == 0x07 and len(raw) >= 14:
+                                _update_steps_and_cadence(parse_realtime_steps_payload(raw[1:14]))
+                        elif ep == 0x0029 and len(raw) >= 3 and raw[0] == 0x04:
+                            # ZeppOsBatteryService: 0x04 + 20-byte HuamiBatteryInfo
+                            b_info = parse_huami_battery_info(raw[1:])
+                            telemetry.update(b_info)
+                            logger.info(
+                                "🔋 Chi tiết Pin ZeppOS (0x0029): %s%% | %s | Sạc gần nhất: %s (%s%%)",
+                                telemetry.get("battery_level"),
+                                telemetry.get("battery_state"),
+                                telemetry.get("last_charge_time") or "N/A",
+                                telemetry.get("last_charge_level") or "--",
+                            )
 
                     def _on_chunk(sender, data: bytearray):
                         if not data or data[0] != 0x03:
@@ -687,30 +999,86 @@ async def run_stream(
                         flags, handle, cnt = data[1], data[3], data[4]
                         i = 5
                         if flags & 0x01:
-                            _, state["ep"] = struct.unpack_from("<IH", data, 5)
+                            orig_len, state["ep"] = struct.unpack_from("<IH", data, 5)
+                            state["orig_len"] = orig_len
+                            state["enc"] = bool(flags & 0x08)
                             i = 11
                             state["buf"] = bytearray()
                         state["buf"].extend(data[i:])
                         if flags & 0x04:
                             asyncio.get_event_loop().create_task(
-                                client.write_gatt_char(ZEPPOS_CHUNK_READ_UUID, bytes([0x04, 0x00, handle, 0x01, cnt]), response=False)
+                                client.write_gatt_char(
+                                    ZEPPOS_CHUNK_READ_UUID, bytes([0x04, 0x00, handle, 0x01, cnt]), response=False
+                                )
                             )
                         if flags & 0x02:
-                            asyncio.get_event_loop().create_task(_on_payload(state["ep"], bytes(state["buf"])))
+                            payload_bytes = bytes(state["buf"])
+                            if state.get("enc") and state.get("sk") and len(payload_bytes) % 16 == 0:
+                                try:
+                                    msg_key = bytes(state["sk"][j] ^ handle for j in range(16))
+                                    dec = AES.new(msg_key, AES.MODE_ECB).decrypt(payload_bytes)
+                                    payload_bytes = dec[: state["orig_len"]]
+                                except Exception:
+                                    pass
+                            asyncio.get_event_loop().create_task(_on_payload(state["ep"], payload_bytes))
 
                     await client.start_notify(ZEPPOS_CHUNK_READ_UUID, _on_chunk)
-                    state["wh"] = await _zeppos_send_chunked(client, state["wh"], 0x0082, bytes([0x04, 0x02, 0x00, 0x02]) + pub_ec, mtu)
+                    state["wh"], state["seq"] = await _zeppos_send_chunked(
+                        client, state["wh"], 0x0082, bytes([0x04, 0x02, 0x00, 0x02]) + pub_ec, mtu
+                    )
                     await asyncio.wait_for(auth_done.wait(), timeout=10.0)
                     if not state["ok"]:
                         return
 
-                    # Kích hoạt đo nhịp tim PPG liên tục thời gian thực trên endpoint 0x001d (ZeppOsHeartRateService)
-                    state["wh"] = await _zeppos_send_chunked(client, state["wh"], 0x001D, bytes([0x04, 0x01]), mtu)
-                    logger.info("🚀 Đã bật cảm biến PPG đo nhịp tim thực liên tục từng giây (endpoint 0x001d ➔ 0x2A37)!")
+                    # 5. Bật toàn bộ dịch vụ Zepp OS & cảm biến thời gian thực:
+                    # 5a. Truy vấn danh sách dịch vụ Zepp OS (endpoint 0x0000: CMD_GET_LIST=0x03)
+                    state["wh"], state["seq"] = await _zeppos_send_chunked(client, state["wh"], 0x0000, bytes([0x03]), mtu)
 
+                    # 5b. Bật Realtime Steps / Distance / Calories (endpoint 0x0016: CMD_GET=0x03, CMD_ENABLE_REALTIME=0x05 0x01)
+                    state["wh"], state["seq"] = await _zeppos_send_chunked(client, state["wh"], 0x0016, bytes([0x03]), mtu)
+                    state["wh"], state["seq"] = await _zeppos_send_chunked(client, state["wh"], 0x0016, bytes([0x05, 0x01]), mtu)
+
+                    # 5c. Truy vấn thông tin Pin chi tiết qua ZeppOsBatteryService (endpoint 0x0029, encrypted=True)
+                    state["wh"], state["seq"] = await _zeppos_send_chunked(
+                        client, state["wh"], 0x0029, bytes([0x03]), mtu, encrypt=True, session_key=state["sk"], seq_nr=state["seq"]
+                    )
+
+                    # 5d. Lắng nghe sự kiện thiết bị trực tiếp trên 0x0010 (DeviceEvent: đeo/tháo, ngủ/thức, mục tiêu bước chân)
+                    if HUAMI_DEVICEEVENT_UUID in char_uuids:
+                        try:
+                            def _dev_evt_cb(sender, data: bytearray):
+                                telemetry["last_device_event_hex"] = bytes(data).hex()
+                            await client.start_notify(HUAMI_DEVICEEVENT_UUID, _dev_evt_cb)
+                        except Exception:
+                            pass
+
+                    # 5e. Kích hoạt đo nhịp tim PPG liên tục từng giây trên endpoint 0x001d (ZeppOsHeartRateService)
+                    state["wh"], state["seq"] = await _zeppos_send_chunked(client, state["wh"], 0x001D, bytes([0x04, 0x01]), mtu)
+                    logger.info("🚀 Đã bật FULL STREAM toàn bộ dữ liệu từ Xiaomi Band 7 (HR 1s + SpO2 + Bước chân + Quãng đường + Calo + Pin chi tiết + Trạng thái vận động)!")
+
+                    tick = 0
                     while client.is_connected:
                         await asyncio.sleep(1.0)
-                        state["wh"] = await _zeppos_send_chunked(client, state["wh"], 0x001D, bytes([0x04, 0x02]), mtu)
+                        tick += 1
+                        # Duy trì đo nhịp tim thực mỗi 1 giây
+                        state["wh"], state["seq"] = await _zeppos_send_chunked(client, state["wh"], 0x001D, bytes([0x04, 0x02]), mtu)
+
+                        # Mỗi 3 giây truy vấn lại Bước chân / Quãng đường / Calo thời gian thực qua ZeppOsStepsService (0x0016)
+                        if tick % 3 == 0:
+                            state["wh"], state["seq"] = await _zeppos_send_chunked(client, state["wh"], 0x0016, bytes([0x03]), mtu)
+
+                        # Mỗi 30 giây cập nhật lại thông tin Pin chi tiết qua ZeppOsBatteryService (0x0029) & GATT 0x2A19
+                        if tick % 30 == 0:
+                            state["wh"], state["seq"] = await _zeppos_send_chunked(
+                                client, state["wh"], 0x0029, bytes([0x03]), mtu, encrypt=True, session_key=state["sk"], seq_nr=state["seq"]
+                            )
+                            if BATTERY_LEVEL_UUID in char_uuids:
+                                try:
+                                    raw_b = await client.read_gatt_char(BATTERY_LEVEL_UUID)
+                                    if len(raw_b) > 0:
+                                        telemetry["battery_level"] = int(raw_b[0])
+                                except Exception:
+                                    pass
                 else:
                     if auth_key:
                         await authenticate_huami_band(client, auth_key)

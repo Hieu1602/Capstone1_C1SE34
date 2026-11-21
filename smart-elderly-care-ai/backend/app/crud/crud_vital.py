@@ -167,7 +167,7 @@ class CRUDVital:
             except (ValueError, TypeError):
                 battery = None
 
-        data.pop("raw_payload", None)
+        raw_payload = data.pop("raw_payload", None)
         bracelet_connected_flag = data.pop("bracelet_connected", None)
         data.pop("edge_hub_connected", None)
 
@@ -716,10 +716,25 @@ class CRUDVital:
                 logger.warning("[CRUDVital] Lỗi kiểm tra sự cố & pin thiết bị: %s", e)
 
         # 1. Cập nhật Redis Cache tức thời (bất đồng bộ, không chặn luồng chính)
+        extra_telemetry = {}
+        if isinstance(raw_payload, dict):
+            for k in (
+                "steps", "distance_m", "calories_kcal",
+                "accel_x", "accel_y", "accel_z", "accel_g",
+                "battery_state", "last_charge_level", "last_charge_time",
+                "serial_number", "fw_version", "hw_version", "sw_version",
+                "is_worn", "contact_state",
+            ):
+                if raw_payload.get(k) is not None:
+                    extra_telemetry[k] = raw_payload[k]
+        for k in ("steps", "distance_m", "calories_kcal", "accel_x", "accel_y", "accel_z", "accel_g", "battery_state", "is_worn"):
+            if data.get(k) is not None:
+                extra_telemetry[k] = data[k]
+
         try:
             from app.services.redis import redis_service
             dev_str = str(data.get("device_id", obj.device_id))
-            act_state = data.get("activity_state") or data.get("activity") or "Sinh hoạt"
+            act_state = data.get("activity_state") or data.get("activity") or (raw_payload.get("activity_state") if isinstance(raw_payload, dict) else None) or "Sinh hoạt"
             payload = {
                 "heart_rate": obj.heart_rate,
                 "spo2": obj.spo2,
@@ -729,6 +744,8 @@ class CRUDVital:
                 "bracelet_connected": (battery > 0) if battery is not None else True,
                 "activity_state": act_state,
                 "time": obj.time.isoformat() if obj.time else datetime.now(timezone.utc).isoformat(),
+                **extra_telemetry,
+                "raw_payload": raw_payload,
             }
             await redis_service.set_latest_vitals(dev_str, payload)
         except Exception as exc:
@@ -739,7 +756,7 @@ class CRUDVital:
             from app.api.websockets.vitals_ws import manager
             dev_str = str(data.get("device_id", obj.device_id))
             serial_str = str(raw_dev) if raw_dev else dev_str
-            act_state = data.get("activity_state") or data.get("activity") or "Sinh hoạt"
+            act_state = data.get("activity_state") or data.get("activity") or (raw_payload.get("activity_state") if isinstance(raw_payload, dict) else None) or "Sinh hoạt"
             ws_data = {
                 "type": "vital_update",
                 "device_id": serial_str,
@@ -752,6 +769,8 @@ class CRUDVital:
                 "bracelet_connected": (battery > 0) if battery is not None else True,
                 "activity_state": act_state,
                 "timestamp": int(obj.time.timestamp() * 1000) if obj.time else int(datetime.now().timestamp() * 1000),
+                **extra_telemetry,
+                "raw_payload": raw_payload,
             }
             await manager.broadcast_to_device(dev_str, ws_data)
             if serial_str != dev_str:
