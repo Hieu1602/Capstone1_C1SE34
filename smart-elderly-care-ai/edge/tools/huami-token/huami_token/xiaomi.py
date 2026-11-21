@@ -51,6 +51,9 @@ class XiaomiSession:
         self._user_id: str | None = None
         self._c_user_id: str | None = None
         self._nonce: int | None = None
+        self._location: str | None = None
+        self._pass_token: str | None = None
+        self._http: Any = None
         self._time_diff: int = 0
 
     @property
@@ -83,6 +86,71 @@ class XiaomiSession:
         self._authenticate(sign, qs, callback)
         self._get_service_token()
         logger.info(f"Logged in! User id: {self._user_id}")
+
+    def login_qr(self) -> None:
+        """Authenticate via Xiaomi Long-Polling / QR Login URL (bypasses 2FA blocks)."""
+        import time
+
+        http = requests.Session()
+        _, qs, callback = self._get_login_page_params()
+        lp_params = {
+            "_qrsize": "480",
+            "qs": qs,
+            "callback": callback,
+            "_hasLogo": "false",
+            "sid": "miothealth",
+            "serviceParam": "",
+            "_locale": "en_US",
+            "_dc": str(int(time.time() * 1000)),
+        }
+        resp = http.get("https://account.xiaomi.com/longPolling/loginUrl", params=lp_params)
+        data = _parse_xiaomi_json(resp.text)
+        login_url = data.get("loginUrl")
+        lp_url = data.get("lp")
+        timeout_sec = int(data.get("timeout", 180))
+        if not login_url or not lp_url:
+            raise AuthenticationError(code="qr-init-failed", message="Could not obtain loginUrl from Xiaomi")
+
+        print("\n" + "=" * 72, flush=True)
+        print("🔑 XÁC NHẬN ĐĂNG NHẬP XIAOMI CLOUD (1 CLICK TRÊN TRÌNH DUYỆT)", flush=True)
+        print("=" * 72, flush=True)
+        print("👉 Bấm vào đường link dưới đây và nhấn nút 'Confirm / Xác nhận':", flush=True)
+        print(f"\n   {login_url}\n", flush=True)
+        print("⏳ Hệ thống đang tự động chờ bạn bấm xác nhận...", flush=True)
+
+        start = time.time()
+        lp_resp = None
+        while time.time() - start < timeout_sec:
+            try:
+                r = http.get(lp_url, timeout=12)
+                if r.status_code == 200 and r.text:
+                    lp_resp = _parse_xiaomi_json(r.text)
+                    if lp_resp.get("ssecurity") and lp_resp.get("location"):
+                        break
+            except requests.exceptions.Timeout:
+                continue
+            except Exception as exc:
+                logger.debug(f"Long polling retry: {exc}")
+                time.sleep(1)
+
+        if not lp_resp or not lp_resp.get("ssecurity"):
+            raise AuthenticationError(code="qr-timeout", message="Timed out waiting for Xiaomi browser confirmation")
+
+        self._ssecurity = lp_resp.get("ssecurity")
+        self._nonce = lp_resp.get("nonce")
+        self._user_id = str(lp_resp.get("userId", ""))
+        self._c_user_id = lp_resp.get("cUserId")
+        self._location = lp_resp.get("location")
+        self._pass_token = lp_resp.get("passToken")
+        self._http = http
+        try:
+            with open(".xiaomi_lp_cache.json", "w", encoding="utf-8") as cf:
+                json.dump(lp_resp, cf)
+        except Exception:
+            pass
+        logger.info(f"QR confirmed! userId={self._user_id}, location={self._location}")
+        self._get_service_token()
+        logger.info(f"Logged in via QR/Link! User id: {self._user_id}")
 
     def _get_login_page_params(self) -> tuple[str, str, str]:
         """Step 1: GET serviceLogin to obtain _sign, qs, and callback parameters."""
@@ -194,29 +262,39 @@ class XiaomiSession:
 
     def _get_service_token(self) -> None:
         """Step 3: Follow location URL to obtain serviceToken from cookies."""
-        nonce = self._nonce
-        if nonce is None:
+        import time
+
+        location = self._location
+        if not location:
             raise AuthenticationError(
-                code="missing-nonce",
-                message="No nonce from authentication step",
+                code="missing-location",
+                message="No location URL from authentication step",
             )
 
-        # Compute clientSign: base64(SHA1("nonce=" + nonce + "&" + ssecurity))
-        nonce_str = str(nonce)
-        sign_input = f"nonce={nonce_str}&{self._ssecurity}"
-        client_sign = base64.b64encode(
-            hashlib.sha1(sign_input.encode()).digest()
-        ).decode()
+        nonce = self._nonce
+        if nonce is not None:
+            nonce_str = str(nonce)
+            sign_input = f"nonce={nonce_str}&{self._ssecurity}"
+            client_sign = base64.b64encode(
+                hashlib.sha1(sign_input.encode()).digest()
+            ).decode()
+            url = location + "&clientSign=" + urllib.parse.quote(client_sign)
+        else:
+            url = location
 
-        url = self._location + "&clientSign=" + urllib.parse.quote(client_sign)
-
-        response = requests.get(url, allow_redirects=False)
-        # The server may respond with a redirect or 200; either way, cookies are set
-        service_token = response.cookies.get("serviceToken")
-        if not service_token:
-            # Try following redirects
-            response = requests.get(url)
-            service_token = response.cookies.get("serviceToken")
+        headers = XIAOMI_HEADERS.SERVICE_LOGIN.value
+        service_token = None
+        for attempt in range(4):
+            try:
+                response = requests.get(url, headers=headers, allow_redirects=False, timeout=10)
+                service_token = response.cookies.get("serviceToken")
+                if not service_token:
+                    response = requests.get(url, headers=headers, timeout=10)
+                    service_token = response.cookies.get("serviceToken")
+                break
+            except requests.RequestException as exc:
+                logger.warning(f"Attempt {attempt+1} to fetch serviceToken failed: {exc}")
+                time.sleep(1.0)
 
         if not service_token:
             raise AuthenticationError(
@@ -273,9 +351,9 @@ class XiaomiClient:
         headers = self._build_headers()
 
         if method.upper() == "GET":
-            response = requests.get(url, params=encrypted, cookies=cookies, headers=headers)
+            response = requests.get(url, params=encrypted, cookies=cookies, headers=headers, timeout=10)
         else:
-            response = requests.post(url, data=encrypted, cookies=cookies, headers=headers)
+            response = requests.post(url, data=encrypted, cookies=cookies, headers=headers, timeout=10)
 
         body = response.text
         decrypted = mi_decrypt_response(body, nonce_b64, self.session.ssecurity)

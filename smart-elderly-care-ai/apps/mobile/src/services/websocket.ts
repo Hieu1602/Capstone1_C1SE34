@@ -441,7 +441,7 @@ class AlertsWebSocket {
         useEscalationStore.getState().triggerEscalation({
           incidentId: newIncident.id,
           alertType,
-          patientName: incData.patient_name || incData.elderly_name || 'Cụ Nguyễn Văn A',
+          patientName: incData.patient_name || incData.elderly_name || '',
           location: incData.location || incData.house_address || 'Nhà riêng đang giám sát',
           message: newIncident.message,
           thumbnailUrl: newIncident.thumbnail_url,
@@ -475,7 +475,7 @@ class AlertsWebSocket {
           useEscalationStore.getState().triggerEscalation({
             incidentId: newIncident.id,
             alertType,
-            patientName: incData.patient_name || incData.elderly_name || 'Cụ Nguyễn Văn A',
+            patientName: incData.patient_name || incData.elderly_name || '',
             location: incData.location || incData.house_address || 'Nhà riêng đang giám sát',
             message: newIncident.message,
             thumbnailUrl: newIncident.thumbnail_url,

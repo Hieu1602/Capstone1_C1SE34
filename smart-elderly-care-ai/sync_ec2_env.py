@@ -7,7 +7,7 @@ AWS_RDS_DATABASE_URL = "postgresql+asyncpg://postgres:Seca2026@seca.cdeea4mcuj3h
 
 REQUIRED_VARS = {
     "DATABASE_URL": AWS_RDS_DATABASE_URL,
-    "CAMERA_SERVICE_URL": "https://brought-alliance-yeast-dome.trycloudflare.com",
+    "CAMERA_SERVICE_URL": "https://albuquerque-precise-gained-italiano.trycloudflare.com",
     "CAMERA_HTTP_USERNAME": "viewer",
     "CAMERA_HTTP_PASSWORD": "123456",
     "OTP_MODE": "esms",
@@ -29,6 +29,11 @@ def main():
                 if "=" in stripped and not stripped.startswith("#"):
                     k = stripped.split("=", 1)[0].strip()
                     if k.startswith("SUPABASE_"):
+                        continue
+                    if k == "CAMERA_SERVICE_URL":
+                        # Giữ nguyên URL tunnel hiện tại đã cấu hình trong .env
+                        lines.append(line)
+                        existing_keys.add(k)
                         continue
                     if k in REQUIRED_VARS:
                         lines.append(f"{k}={REQUIRED_VARS[k]}\n")

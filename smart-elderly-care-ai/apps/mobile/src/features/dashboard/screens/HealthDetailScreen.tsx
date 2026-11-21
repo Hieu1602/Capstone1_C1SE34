@@ -58,7 +58,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     route?.params?.patientId ||
     activePatientId ||
     (patientsList && patientsList[0]?.id) ||
-    1;
+    undefined;
   const [selectedPatientId, setSelectedPatientId] = useState<any>(initialPatientId);
 
   useEffect(() => {
@@ -77,7 +77,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     currentPatient?.full_name ||
     currentPatient?.name ||
     route?.params?.patientName ||
-    'Người cao tuổi';
+    '';
 
   // Chuẩn hóa tên (bỏ dấu tiếng Việt, chữ thường)
   const normalizeStr = (s: any) =>

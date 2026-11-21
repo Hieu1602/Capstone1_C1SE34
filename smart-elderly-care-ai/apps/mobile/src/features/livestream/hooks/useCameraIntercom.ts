@@ -2,10 +2,11 @@
  * Điều phối phiên nghe, giữ để nói và Voice Call; đồng bộ trạng thái mic/loa với UI.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert } from "react-native";
 import axios from "axios";
 import { cameraApi } from "../../../services/camera";
 import { useCameraConnection } from "./useCameraConnection";
-import { createIntercomPlatform } from "../services/intercomPlatform";
+import { createIntercomPlatform, isIntercomSupported } from "../services/intercomPlatform";
 import { IntercomSession, IntercomState } from "../services/intercomSession";
 
 type Mode = "listen" | "ptt" | "call";
@@ -74,6 +75,17 @@ export function useCameraIntercom(
             if (nextMode !== "listen" && !connection.status?.can_control) {
                 setState("error");
                 setError("Bạn cần quyền quản lý thiết bị để đàm thoại.");
+                return;
+            }
+            if (!isIntercomSupported()) {
+                setState("error");
+                const msg = "Âm thanh camera & đàm thoại cần bản Development Build có WebRTC native. Expo Go không hỗ trợ.";
+                setError(msg);
+                Alert.alert(
+                    "Chưa hỗ trợ trên Expo Go",
+                    "Tính năng âm thanh & đàm thoại 2 chiều sử dụng WebRTC native, chỉ hoạt động khi cài đặt bản APK / Development Build. Trên Expo Go chỉ hỗ trợ xem hình ảnh trực tiếp.",
+                    [{ text: "Đã hiểu" }]
+                );
                 return;
             }
             try {

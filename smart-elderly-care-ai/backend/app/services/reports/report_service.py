@@ -384,17 +384,7 @@ class ReportService:
                 )
                 elderly = p_res.scalar_one_or_none()
             except (ValueError, TypeError):
-                p_res = await db.execute(
-                    select(ElderlyProfile).options(selectinload(ElderlyProfile.devices))
-                )
-                all_elders = p_res.scalars().all()
-                if all_elders:
-                    try:
-                        idx = int(patient_id) - 1
-                        if 0 <= idx < len(all_elders):
-                            elderly = all_elders[idx]
-                    except ValueError:
-                        elderly = all_elders[0]
+                elderly = None
 
             if elderly and elderly.devices:
                 for d in elderly.devices:
@@ -448,25 +438,6 @@ class ReportService:
                 device = res_any_house.scalar_one_or_none()
 
             if device and device.elderly:
-                elderly = device.elderly
-
-        # 4. Fallback: Nếu tài khoản chưa gán trực tiếp thiết bị và không chọn cụ thể người cao tuổi,
-        # tự động liên kết với Smartband sẵn có của hệ thống
-        if not device and not patient_id:
-            res_default_band = await db.execute(
-                select(Device)
-                .options(selectinload(Device.elderly))
-                .where(
-                    or_(
-                        Device.device_id == "BLE_BAND_001",
-                        Device.device_type == DeviceType.SMARTBAND,
-                    )
-                )
-                .order_by(Device.created_at.desc())
-                .limit(1)
-            )
-            device = res_default_band.scalar_one_or_none()
-            if device and device.elderly and not elderly:
                 elderly = device.elderly
 
         return device, elderly

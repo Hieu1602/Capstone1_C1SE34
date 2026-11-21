@@ -245,20 +245,9 @@ class CRUDElderly:
                 .order_by(ElderlyProfile.created_at.asc())
             )
             profile = res_house.scalars().first()
-        elif not profile:
-            res_first = await db.execute(
-                select(ElderlyProfile)
-                .options(selectinload(ElderlyProfile.devices))
-                .order_by(ElderlyProfile.created_at.asc())
-                .limit(1)
-            )
-            profile = res_first.scalars().first()
-
-
 
         if not profile or not profile.full_name or not profile.full_name.strip():
-
-            return PatientMedicalRecordOut(id=patient_id_or_serial)
+            return PatientMedicalRecordOut(id=str(patient_id_or_serial))
 
 
 

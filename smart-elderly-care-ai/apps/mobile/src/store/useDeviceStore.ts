@@ -113,6 +113,7 @@ export interface IoTDeviceItem {
   ipAddress?: string;
   elderly_id?: string | number;
   wearer_name?: string;
+  house_id?: string;
 }
 interface DeviceState {
   activeDevice: Device | null;
@@ -234,9 +235,15 @@ export const useDeviceStore = create<DeviceState>()(
       addIoTDevice: async (device) => {
         set((state) => ({ iotDevices: [device, ...state.iotDevices] }));
         const isCam = device.type === "camera";
+        const targetHouseId =
+          (device as any).house_id ||
+          (device as any).houseId ||
+          get().house?.id ||
+          undefined;
         try {
           const res = await devicesApi.createDevice({
             device_id: device.id,
+            house_id: targetHouseId,
             name: device.name,
             sub_title: device.sub,
             device_type: isCam ? "CAMERA" : "SMARTBAND",
@@ -260,6 +267,7 @@ export const useDeviceStore = create<DeviceState>()(
               location: dev.location || "Chưa nhóm",
               streamUrl: dev.config?.stream_url || undefined,
               macAddress: dev.mac_address || undefined,
+              house_id: dev.house_id || targetHouseId,
             };
             set((state) => ({
               iotDevices: state.iotDevices.map((d) => (d.id === device.id ? canonical : d)),
@@ -550,6 +558,7 @@ export const useDeviceStore = create<DeviceState>()(
                 macAddress: dev.mac_address || undefined,
                 elderly_id: dev.elderly_id,
                 wearer_name: dev.wearer_name,
+                house_id: dev.house_id || undefined,
               };
             });
             set({ iotDevices: mapped });

@@ -1,7 +1,21 @@
 /**
  * Adapter WebRTC native; chỉ nạp module khi bắt đầu audio để vẫn xem video bằng Expo Go.
  */
+import { NativeModules } from "react-native";
+import Constants, { ExecutionEnvironment } from "expo-constants";
 import type { IntercomPlatform } from "./intercomSession";
+
+/**
+ * Kiểm tra xem nền tảng hiện tại có hỗ trợ WebRTC native hay không.
+ * Expo Go không đóng gói react-native-webrtc nên sẽ trả về false.
+ */
+export function isIntercomSupported(): boolean {
+    const isExpoGo =
+        Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
+        (Constants as any).appOwnership === "expo";
+    if (isExpoGo) return false;
+    return Boolean(NativeModules.WebRTCModule);
+}
 
 /**
  * Tạo adapter WebRTC cho development/native build.
@@ -9,6 +23,11 @@ import type { IntercomPlatform } from "./intercomSession";
  * @remarks Tác động: Nạp module native; ném lỗi hướng dẫn nếu module không có trong bản build.
  */
 export function createIntercomPlatform(): IntercomPlatform {
+    if (!isIntercomSupported()) {
+        throw new Error(
+            "Đàm thoại cần development build có react-native-webrtc; Expo Go không hỗ trợ.",
+        );
+    }
     // Nạp khi người dùng gọi; Expo Go vẫn xem video được khi thiếu module native.
     let rtc: typeof import("react-native-webrtc");
     try {

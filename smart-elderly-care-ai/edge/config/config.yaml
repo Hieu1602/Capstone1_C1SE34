@@ -76,7 +76,7 @@ ble:
   enabled: true
   device_name: "Xiaomi Smart Band 7 2DF5"  # Tên thiết bị Xiaomi Band 7 thực tế
   device_mac: "C1:BD:70:58:2D:F5"          # MAC address thực tế đã phát hiện
-  auth_key: ""                            # 16-byte hex Auth Key (lấy từ huami-token: python edge/scripts/stream_xiaomi_band7.py --get-token)
+  auth_key: "6E589C3F5F214311AF5C56C8455BA211"  # 16-byte hex Auth Key thực tế từ sg.hlth.io.mi.com
   service_uuid: "0000180d-0000-1000-8000-00805f9b34fb"   # Heart Rate Service
   characteristic_uuid: "00002a37-0000-1000-8000-00805f9b34fb"
   reconnect_interval_sec: 10

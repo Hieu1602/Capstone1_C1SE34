@@ -154,26 +154,161 @@ def extract_key_from_oauth_url(oauth_url_or_code: str, format_type: str = "AMAZ_
             raise ValueError(f"{err} (Mã lỗi: {result.get('error_code', 'unknown')})")
 
 
-def fetch_huami_tokens(method: str, email: str, password: str) -> List[Dict[str, str]]:
+def _get_cached_xiaomi_client(region: str = "sg", force_refresh: bool = False):
+    """Khởi tạo XiaomiClient từ phiên đăng nhập đã lưu (.xiaomi_lp_cache.json), tự làm mới serviceToken bằng passToken."""
+    import base64
+    import hashlib
+    import urllib.parse
+    import requests
+    from huami_token.xiaomi import XiaomiClient, XiaomiSession, _parse_xiaomi_json
+
+    cache_paths = [
+        os.path.join(CURRENT_DIR, "..", "config", ".xiaomi_lp_cache.json"),
+        os.path.join(CURRENT_DIR, "..", "..", "..", ".xiaomi_lp_cache.json"),
+        ".xiaomi_lp_cache.json",
+    ]
+    cache_file = next((p for p in cache_paths if os.path.exists(p)), None)
+    if not cache_file:
+        raise FileNotFoundError("Chưa có bộ nhớ đệm phiên Xiaomi (.xiaomi_lp_cache.json). Hãy chạy --qr trước.")
+
+    with open(cache_file, "r", encoding="utf-8") as f:
+        cache = json.load(f)
+
+    ssec = cache.get("ssecurity")
+    stoken = cache.get("serviceToken")
+    user_id = str(cache.get("userId", ""))
+    c_user_id = cache.get("cUserId", "")
+
+    # Nếu chưa có serviceToken hoặc yêu cầu force_refresh thì tự động cấp mới bằng passToken
+    if (force_refresh or not stoken or not ssec) and cache.get("passToken"):
+        headers = {"User-Agent": "Android-12-9.8.348i-google-Pixel 4"}
+        cookies = {
+            "userId": user_id,
+            "cUserId": c_user_id,
+            "passToken": cache["passToken"],
+            "deviceId": "an_" + hashlib.md5(user_id.encode()).hexdigest(),
+        }
+        r1 = requests.get(
+            "https://account.xiaomi.com/pass/serviceLogin",
+            params={"_json": "true", "sid": "miothealth", "_locale": "en_US"},
+            headers=headers,
+            cookies=cookies,
+            timeout=8,
+        )
+        d1 = _parse_xiaomi_json(r1.text)
+        if d1.get("location") and d1.get("ssecurity"):
+            ssec = d1["ssecurity"]
+            nonce = d1["nonce"]
+            sign_input = f"nonce={nonce}&{ssec}"
+            client_sign = base64.b64encode(hashlib.sha1(sign_input.encode()).digest()).decode()
+            url = d1["location"] + "&clientSign=" + urllib.parse.quote(client_sign)
+            r_sts = requests.get(url, headers=headers, allow_redirects=False, timeout=8)
+            stoken = r_sts.cookies.get("serviceToken")
+            if stoken:
+                cache["ssecurity"] = ssec
+                cache["serviceToken"] = stoken
+                with open(cache_file, "w", encoding="utf-8") as wf:
+                    json.dump(cache, wf)
+
+    xs = XiaomiSession("user", "pass")
+    xs._ssecurity = ssec
+    xs._service_token = stoken
+    xs._user_id = user_id
+    xs._c_user_id = c_user_id
+    return XiaomiClient(xs, region=region), cache_file, cache
+
+
+def fetch_xiaomi_cloud_vitals(region: str = "sg") -> Dict[str, Any]:
+    """Lấy dữ liệu nhịp tim (BPM) và SpO2 thực tế của Xiaomi Band 7 đồng bộ trên đám mây Mi Fitness."""
+    xc, cache_file, cache = _get_cached_xiaomi_client(region=region)
+    now = int(time.time())
+    host = f"https://{region}.hlth.io.mi.com" if region else "https://hlth.io.mi.com"
+    url = f"{host}/app/v1/data/get_fitness_data_by_time"
+
+    hr_records = []
+    spo2_records = []
+
+    for key in ("heart_rate", "single_heart_rate", "single_spo2"):
+        payload = {"start_time": 1700000000, "end_time": now + 86400, "key": key}
+        try:
+            res = xc.request("POST", url, params={"data": json.dumps(payload, separators=(",", ":"))})
+        except Exception:
+            xc, cache_file, cache = _get_cached_xiaomi_client(region=region, force_refresh=True)
+            res = xc.request("POST", url, params={"data": json.dumps(payload, separators=(",", ":"))})
+        for item in res.get("result", {}).get("data_list") or []:
+            val_raw = item.get("value", "{}")
+            val = json.loads(val_raw) if isinstance(val_raw, str) else val_raw
+            ts = int(item.get("time") or val.get("time") or 0)
+            sid = item.get("sid", "")
+            if "bpm" in val:
+                hr_records.append({"time": ts, "bpm": int(val["bpm"]), "sid": sid, "key": key})
+            if "spo2" in val:
+                spo2_records.append({"time": ts, "spo2": int(val["spo2"]), "sid": sid, "key": key})
+
+    hr_records.sort(key=lambda x: x["time"])
+    spo2_records.sort(key=lambda x: x["time"])
+
+    latest_hr = hr_records[-1]["bpm"] if hr_records else None
+    latest_spo2 = spo2_records[-1]["spo2"] if spo2_records else None
+    latest_time = max(
+        (hr_records[-1]["time"] if hr_records else 0),
+        (spo2_records[-1]["time"] if spo2_records else 0),
+    )
+    return {
+        "latest_hr": latest_hr,
+        "latest_spo2": latest_spo2,
+        "latest_time": latest_time,
+        "hr_records": hr_records,
+        "spo2_records": spo2_records,
+    }
+
+
+def fetch_huami_tokens(method: str, email: str = "", password: str = "", use_qr: bool = False) -> List[Dict[str, str]]:
     """Truy vấn máy chủ Xiaomi / Zepp để lấy danh sách thiết bị và Auth Key tương ứng."""
     results = []
     if method == "xiaomi":
         from huami_token.xiaomi import XiaomiClient, XiaomiSession
 
-        logger.info("Đang đăng nhập vào máy chủ Xiaomi Mi Fitness...")
-        session = XiaomiSession(username=email, password=password)
-        session.login()
-        client = XiaomiClient(session)
-        source_data = client.get_source_list()
-        sources = source_data.get("result", {}).get("list") or []
-        for src in sources:
-            name = src.get("name", "Xiaomi Wearable").strip()
-            detail = src.get("detail", {})
-            if isinstance(detail, str):
-                detail = json.loads(detail)
-            mac = detail.get("mac", src.get("mac", ""))
-            auth_key = detail.get("auth_key", "")
-            results.append({"name": name, "mac": mac, "auth_key": auth_key})
+        session = XiaomiSession(username=email or "xiaomi_user", password=password or "")
+        if use_qr:
+            logger.info("Khởi tạo đăng nhập Xiaomi Cloud bằng Link xác nhận nhanh (QR/Long-Polling)...")
+            session.login_qr()
+        else:
+            logger.info("Đang đăng nhập vào máy chủ Xiaomi Mi Fitness...")
+            session.login()
+
+        seen_keys = set()
+        for reg in ["sg", "i2", "ru", "us", "de", ""]:
+            client = XiaomiClient(session, region=reg or "sg")
+            host = f"https://{reg}.hlth.io.mi.com" if reg else "https://hlth.io.mi.com"
+            url = f"{host}/app/v1/source/get_source_list"
+            for st in (1, 2):
+                try:
+                    data_str = json.dumps({"page_size": 50, "status": st}, separators=(",", ":"))
+                    source_data = client.request("POST", url, params={"data": data_str}, path_prefix="")
+                    logger.info("Kết quả vùng %s (status=%d): %s", reg or "cn", st, json.dumps(source_data)[:300])
+                    sources = source_data.get("result", {}).get("list") or []
+                    for src in sources:
+                        name = src.get("name", "Xiaomi Wearable").strip()
+                        detail = src.get("detail", {})
+                        if isinstance(detail, str):
+                            try:
+                                detail = json.loads(detail)
+                            except Exception:
+                                detail = {}
+                        mac = detail.get("mac", src.get("mac", ""))
+                        auth_key = (
+                            detail.get("auth_key")
+                            or detail.get("encrypt_key")
+                            or detail.get("token")
+                            or src.get("auth_key", "")
+                        )
+                        uniq = (mac, auth_key, name)
+                        if (mac or auth_key) and uniq not in seen_keys:
+                            seen_keys.add(uniq)
+                            results.append({"name": f"{name} [{reg or 'cn'}]", "mac": mac, "auth_key": auth_key})
+                except Exception as exc:
+                    logger.debug("Region %s (status=%d) skip: %s", reg or "base", st, exc)
     else:
         from huami_token.zepp import ZeppClient, ZeppSession
 
@@ -254,29 +389,33 @@ def send_vitals_to_backend(
     battery: Optional[int] = None,
     spo2: Optional[int] = None,
 ):
-    """Gửi dữ liệu sinh hiệu lên FastAPI backend (không chặn event loop)."""
-    try:
-        payload = {
-            "device_id": device_id,
-            "heart_rate": heart_rate,
-            "spo2": spo2 or 98,
-            "skin_temp_max": 36.6,
-            "fall_detected": False,
-        }
-        if battery is not None:
-            payload["battery_level"] = battery
+    """Gửi dữ liệu sinh hiệu đồng thời lên cả AWS EC2 Backend và Local FastAPI Backend."""
+    payload = {
+        "device_id": device_id,
+        "heart_rate": heart_rate,
+        "spo2": spo2 or 98,
+        "skin_temp_max": 36.6,
+        "fall_detected": False,
+    }
+    if battery is not None:
+        payload["battery_level"] = battery
 
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            backend_url,
-            data=data,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=1.5) as resp:
-            pass
-    except Exception as e:
-        logger.debug("[Backend] Gửi sinh hiệu lỗi (server có thể đang tắt): %s", e)
+    data = json.dumps(payload).encode("utf-8")
+    ec2_url = "http://16.178.128.42:8000/api/v1/vitals"
+    target_urls = [ec2_url, backend_url] if (ec2_url != backend_url and "localhost" in backend_url) else [backend_url]
+
+    for url in target_urls:
+        try:
+            req = urllib.request.Request(
+                url,
+                data=data,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=8.0) as resp:
+                pass
+        except Exception as e:
+            logger.debug("[Backend %s] Gửi sinh hiệu lỗi: %s", url, e)
 
 
 async def scan_ble_devices(timeout: float = 6.0):
@@ -424,9 +563,77 @@ async def run_stream(
 
             logger.warning("Mất kết nối tới vòng đeo tay! Tự động thử lại sau 5 giây...")
         except Exception as e:
-            logger.warning("Lỗi kết nối (%s). Thử lại sau 5 giây...", e)
+            logger.warning("BLE trực tiếp chưa phản hồi (%s) -> Đang đồng bộ dữ liệu thực từ Xiaomi Health Cloud...", e)
+            try:
+                cloud_data = fetch_xiaomi_cloud_vitals()
+                if cloud_data.get("latest_hr"):
+                    hr_val = cloud_data["latest_hr"]
+                    spo2_val = cloud_data.get("latest_spo2") or 98
+                    ts_str = datetime.datetime.fromtimestamp(cloud_data["latest_time"]).strftime("%H:%M:%S")
+                    print(
+                        f"[{ts_str}] (MI-CLOUD) ❤️ Nhịp tim: {hr_val:>3} bpm | "
+                        f"🩸 SpO2: {spo2_val}% | Thiết bị: Xiaomi Smart Band 7 (C1:BD:70:58:2D:F5) 🟢",
+                        flush=True,
+                    )
+                    send_vitals_to_backend(backend_url, device_name, hr_val, battery_level, spo2_val)
+            except Exception as ce:
+                logger.debug("Cloud fallback skip: %s", ce)
 
         await asyncio.sleep(5.0)
+
+
+async def run_cloud_sync(
+    backend_url: str,
+    device_name: str = "BLE_BAND_001",
+    once: bool = False,
+    interval: float = 5.0,
+):
+    """Đồng bộ trực tiếp nhịp tim & SpO2 thực tế từ đám mây Mi Fitness (sg.hlth.io.mi.com) mỗi 5-10 giây."""
+    logger.info(
+        "☁️ Bắt đầu chế độ Cloud Sync liên tục tới hồ sơ Nguyễn Văn A [%s] (Đồng hồ ➔ Điện thoại Mi Fitness ➔ Laptop/Mini PC | chu kỳ %.1fs)...",
+        device_name,
+        interval,
+    )
+    seen_timestamps = set()
+    cycle = 0
+    while True:
+        cycle += 1
+        try:
+            data = fetch_xiaomi_cloud_vitals(region="sg")
+            hr_list = data.get("hr_records", [])
+            spo2_list = data.get("spo2_records", [])
+            latest_spo2 = data.get("latest_spo2") or 98
+
+            if not seen_timestamps:
+                print("\n" + "=" * 75, flush=True)
+                print("📊 DỮ LIỆU ĐO THỰC TẾ TỪ XIAOMI SMART BAND 7 (C1:BD:70:58:2D:F5 | Serial: 39869/AAABF23VM03922):", flush=True)
+                print("=" * 75, flush=True)
+                for rec in hr_list:
+                    dt_str = datetime.datetime.fromtimestamp(rec["time"]).strftime("%Y-%m-%d %H:%M:%S")
+                    print(f"  • [{dt_str}] ❤️ Nhịp tim ({rec['key']}): {rec['bpm']} bpm", flush=True)
+                for srec in spo2_list:
+                    dt_str = datetime.datetime.fromtimestamp(srec["time"]).strftime("%Y-%m-%d %H:%M:%S")
+                    print(f"  • [{dt_str}] 🩸 Nồng độ Oxy máu ({srec['key']}): {srec['spo2']}%", flush=True)
+                print("=" * 75 + "\n", flush=True)
+
+            if data.get("latest_hr"):
+                hr_val = data["latest_hr"]
+                ts = data["latest_time"]
+                now_str = datetime.datetime.now().strftime("%H:%M:%S")
+                is_new = "🆕 [BẢN GHI MỚI]" if (seen_timestamps and ts not in seen_timestamps) else "🟢 [ĐANG THEO DÕI]"
+                print(
+                    f"[{now_str}] #{cycle:<4} ☁️ [CLOUD SYNC ➔ Nguyễn Văn A ({device_name})] ❤️ Nhịp tim: {hr_val:>3} bpm | "
+                    f"🩸 SpO2: {latest_spo2}% | MAC: C1:BD:70:58:2D:F5 | {is_new}",
+                    flush=True,
+                )
+                send_vitals_to_backend(backend_url, device_name, hr_val, 100, latest_spo2)
+                seen_timestamps.add(ts)
+        except Exception as exc:
+            logger.error("Lỗi đồng bộ Xiaomi Cloud: %s", exc)
+
+        if once:
+            break
+        await asyncio.sleep(interval)
 
 
 async def run_simulation(backend_url: str, device_name: str = "Xiaomi-Band-7-Sim"):
@@ -468,44 +675,46 @@ def handle_get_token(args):
     print("chuỗi 32-ký tự Auth Key đã được gán khi ghép nối vòng tay.\n")
 
     method = args.method
+    use_qr = getattr(args, "qr", False)
     email = args.email
     password = args.password
 
-    if not email:
-        email = input("Nhập email hoặc số điện thoại tài khoản (Mi Fitness/Zepp): ").strip()
-    if not password:
-        password = getpass.getpass("Nhập mật khẩu tài khoản: ")
+    if not use_qr:
+        if not email:
+            email = input("Nhập email hoặc số điện thoại tài khoản (Mi Fitness/Zepp): ").strip()
+        if not password:
+            password = getpass.getpass("Nhập mật khẩu tài khoản: ")
 
     try:
-        devices = fetch_huami_tokens(method=method, email=email, password=password)
+        devices = fetch_huami_tokens(method=method, email=email, password=password, use_qr=use_qr)
         if not devices:
             print("⚠️ Không tìm thấy thiết bị nào được liên kết với tài khoản này.")
             return
 
-        print(f"\n🎉 Tìm thấy {len(devices)} thiết bị liên kết:")
+        print(f"\n🎉 Tìm thấy {len(devices)} thiết bị liên kết:", flush=True)
         target_device = None
         for i, dev in enumerate(devices):
             mac = dev.get("mac", "??")
             name = dev.get("name", "Unknown")
             key = dev.get("auth_key", "")
-            print(f" [{i+1}] Tên: {name} | MAC: {mac}")
+            print(f" [{i+1}] Tên: {name} | MAC: {mac}", flush=True)
             if key:
-                print(f"     👉 Auth Key: 0x{key}")
+                print(f"     👉 Auth Key: 0x{key}", flush=True)
                 if not target_device or "band 7" in name.lower():
                     target_device = dev
             else:
-                print("     👉 Auth Key: (chưa sẵn sàng)")
+                print("     👉 Auth Key: (chưa sẵn sàng)", flush=True)
 
         if target_device and target_device.get("auth_key"):
             key_val = target_device["auth_key"]
             mac_val = target_device.get("mac")
-            print(f"\n✅ Đã chọn thiết bị: {target_device.get('name')} ({mac_val})")
+            print(f"\n✅ Đã chọn thiết bị: {target_device.get('name')} ({mac_val})", flush=True)
             save_auth_key_to_config(key_val, mac_val)
-            print(f"Để bắt đầu stream ngay, hãy chạy:")
-            print(f"  python edge/scripts/stream_xiaomi_band7.py --mac {mac_val}")
+            print("Để bắt đầu stream ngay, hãy chạy:", flush=True)
+            print(f"  python edge/scripts/stream_xiaomi_band7.py --mac {mac_val}", flush=True)
     except Exception as e:
-        print(f"\n❌ Lỗi khi lấy token: {e}")
-        print("💡 Lưu ý: Đảm bảo tài khoản đăng nhập bằng Email/Password (không dùng đăng nhập mạng xã hội).")
+        print(f"\n❌ Lỗi khi lấy token: {e}", flush=True)
+        print("💡 Lưu ý: Đảm bảo tài khoản đăng nhập bằng Email/Password (không dùng đăng nhập mạng xã hội).", flush=True)
 
 
 def main():
@@ -513,11 +722,17 @@ def main():
     parser.add_argument("--scan", action="store_true", help="Quét tìm thiết bị Bluetooth LE")
     parser.add_argument("--auto", action="store_true", help="Tự động tìm và kết nối tới Xiaomi Band 7")
     parser.add_argument("--mac", type=str, default="", help="Địa chỉ MAC hoặc UUID của Xiaomi Band 7")
+    parser.add_argument("--device-id", type=str, default="BLE_BAND_001", help="Mã thiết bị trên Backend gắn với Nguyễn Văn A (mặc định: BLE_BAND_001)")
     parser.add_argument("--backend-url", type=str, default=DEFAULT_BACKEND_URL, help="URL nhận POST vitals của backend")
     parser.add_argument("--simulate", action="store_true", help="Chạy chế độ mô phỏng dữ liệu")
 
     # huami-token integration options
     parser.add_argument("--get-token", action="store_true", help="Trợ lý lấy Auth Key từ đám mây Xiaomi / Zepp")
+    parser.add_argument("--qr", action="store_true", help="Đăng nhập Xiaomi 1-click qua trình duyệt (Long-Polling)")
+    parser.add_argument("--cloud-sync", action="store_true", help="Đồng bộ dữ liệu nhịp tim & SpO2 thực từ Mi Fitness Cloud (Mặc định)")
+    parser.add_argument("--direct-ble", action="store_true", help="Chế độ chỉ kết nối BLE trực tiếp không qua Cloud")
+    parser.add_argument("--interval", type=float, default=5.0, help="Chu kỳ quét Cloud Sync tính bằng giây (mặc định: 5.0s)")
+    parser.add_argument("--once", action="store_true", help="Chạy đồng bộ Cloud 1 lần rồi thoát")
     parser.add_argument("--oauth-url", type=str, default="", help="Link redirect OAuth (https://hm.xiaomi.com/watch.do?code=...) để trích xuất token")
     parser.add_argument("--method", choices=["xiaomi", "amazfit"], default="xiaomi", help="Phương thức đăng nhập (mặc định: xiaomi)")
     parser.add_argument("-e", "--email", type=str, default="", help="Email tài khoản")
@@ -540,13 +755,13 @@ def main():
                     target_mac = d["mac"]
             if target_key:
                 save_auth_key_to_config(target_key, target_mac or None)
-                print("💾 Đã lưu Auth Key vào cấu hình! Bắt đầu kết nối...\n")
-                asyncio.run(run_stream(target_mac or args.mac, args.backend_url, auth_key=target_key))
+                print("💾 Đã lưu Auth Key vào cấu hình! Bắt đầu đồng bộ...\n")
+                asyncio.run(run_cloud_sync(args.backend_url, once=args.once, interval=args.interval))
         except Exception as e:
             print(f"❌ Lỗi: {e}")
         return
 
-    if args.get_token:
+    if args.get_token or args.qr:
         handle_get_token(args)
         return
 
@@ -558,37 +773,18 @@ def main():
         asyncio.run(scan_ble_devices())
         return
 
-    # Nạp cấu hình từ config.yaml nếu không truyền trực tiếp
     config = load_config()
     ble_config = config.get("ble", {})
-    target_mac = args.mac or ble_config.get("device_mac", "")
-    target_auth_key = args.auth_key or ble_config.get("auth_key", "")
+    poll_interval = float(args.interval or ble_config.get("poll_interval_sec", 5.0))
 
-    if target_mac:
+    if args.direct_ble:
+        target_mac = args.mac or ble_config.get("device_mac", "")
+        target_auth_key = args.auth_key or ble_config.get("auth_key", "")
         asyncio.run(run_stream(target_mac, args.backend_url, auth_key=target_auth_key))
         return
 
-    if args.auto:
-        from bleak import BleakScanner
-
-        async def auto_connect():
-            logger.info("Đang tự động tìm kiếm Xiaomi Band 7...")
-            devices = await BleakScanner.discover(timeout=6.0, return_adv=True)
-            for address, (dev, adv) in devices.items():
-                name = adv.local_name or dev.name or ""
-                if any(k in name.lower() for k in ["xiaomi", "band 7", "mi band"]):
-                    logger.info("🎯 Tìm thấy: %s (%s)", name, address)
-                    await run_stream(address, args.backend_url, name, auth_key=target_auth_key)
-                    return
-            logger.warning("Không tự động tìm thấy Xiaomi Band. Hãy chạy với --scan để kiểm tra các thiết bị ở gần.")
-
-        asyncio.run(auto_connect())
-        return
-
-    # Nếu không có tham số, mặc định quét tìm
-    parser.print_help()
-    print("\nKhởi chạy quét mặc định:")
-    asyncio.run(scan_ble_devices())
+    # Mặc định: chỉ dùng chế độ Cloud Sync / Hybrid (Đồng hồ -> Điện thoại Mi Fitness -> Laptop/Mini PC) mỗi 5-10 giây
+    asyncio.run(run_cloud_sync(args.backend_url, device_name=args.device_id, once=args.once, interval=poll_interval))
 
 
 if __name__ == "__main__":
