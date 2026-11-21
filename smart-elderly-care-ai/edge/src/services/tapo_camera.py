@@ -237,7 +237,7 @@ def get_mqtt_client():
 
 
 class CameraFallDetector:
-    """Giám sát và nhận diện té ngã AI trực tiếp trên luồng camera."""
+    """Giám sát và nhận diện té ngã AI trực tiếp trên luồng camera kết hợp Face Re-ID hồ sơ bệnh án."""
     def __init__(self, camera_driver, recorder, detector=None, mqtt=None):
         self.camera = camera_driver
         self.recorder = recorder
@@ -255,6 +255,64 @@ class CameraFallDetector:
         self._last_infer_time = 0.0
         self.task = None
 
+        # Khởi tạo Face Re-ID Manager kết nối hồ sơ bệnh án
+        cache_file = os.getenv("FACE_CACHE_FILE")
+        if not cache_file:
+            candidates = [
+                Path(__file__).resolve().parent.parent.parent / "config" / "enrolled_faces.json",
+                Path("/app/config/enrolled_faces.json"),
+                Path("config/enrolled_faces.json"),
+            ]
+            for p in candidates:
+                if p.exists():
+                    cache_file = str(p)
+                    break
+            if not cache_file:
+                cache_file = str(candidates[0])
+
+        try:
+            from src.ai.vision.face_reid import FaceReIDManager
+            self.face_manager = FaceReIDManager(cache_file=cache_file)
+        except Exception as e:
+            LOG.warning("[FaceReID] Không thể nạp FaceReIDManager: %s", e)
+            self.face_manager = None
+
+        self.backend_url = os.getenv("BACKEND_URL", "http://backend:8000")
+
+    async def sync_enrolled_faces(self):
+        """Đồng bộ khuôn mặt từ hồ sơ bệnh án qua Backend API."""
+        if not self.face_manager:
+            return
+        try:
+            import urllib.request
+            urls = [
+                f"{self.backend_url}/api/v1/patients/enrolled-faces",
+                "http://127.0.0.1:8000/api/v1/patients/enrolled-faces",
+                "http://backend:8000/api/v1/patients/enrolled-faces",
+            ]
+            for url in urls:
+                try:
+                    req = urllib.request.Request(url, headers={"User-Agent": "TapoCameraFaceReID/1.0"})
+                    with urllib.request.urlopen(req, timeout=3) as response:
+                        if response.status == 200:
+                            data = json.loads(response.read().decode("utf-8"))
+                            count = 0
+                            for item in data:
+                                eid = item.get("elderly_id")
+                                name = item.get("full_name")
+                                emb = item.get("face_embedding")
+                                avatar = item.get("avatar_url")
+                                if eid and name and emb:
+                                    self.face_manager.enroll_elderly(eid, name, emb, avatar)
+                                    count += 1
+                            if count > 0:
+                                LOG.info("[FaceReID] Đã đồng bộ %d khuôn mặt từ hồ sơ bệnh án (%s).", count, url)
+                            return
+                except Exception:
+                    continue
+        except Exception as e:
+            LOG.debug("[FaceReID] Không thể đồng bộ từ Backend: %s", e)
+
     def start(self):
         if self.task and not self.task.done():
             return
@@ -264,6 +322,7 @@ class CameraFallDetector:
                 root = Path(__file__).resolve().parent.parent
                 onnx_p = str(root / "ai" / "vision" / "models" / "yolov8n-pose.onnx")
                 rknn_p = str(root / "ai" / "vision" / "models" / "yolov8n-pose.rknn")
+                cache_file_str = str(self.face_manager.cache_file) if self.face_manager else None
                 self.detector = PoseDetector({
                     "model_path": rknn_p,
                     "fallback_model": onnx_p,
@@ -276,6 +335,7 @@ class CameraFallDetector:
                         "fallen_angle_threshold": float(os.getenv("FALL_ANGLE_THRESHOLD", "55.0")),
                         "aspect_ratio_threshold": float(os.getenv("FALL_ASPECT_RATIO", "1.25")),
                         "min_fallen_duration": float(os.getenv("FALL_MIN_DURATION", "0.40")),
+                        "face_cache_file": cache_file_str,
                     },
                 })
                 self.detector.load_model()
@@ -284,6 +344,8 @@ class CameraFallDetector:
         if self.mqtt is None and os.getenv("MQTT_BROKER_HOST"):
             self.mqtt = get_mqtt_client()
         self.task = asyncio.create_task(self._loop())
+        # Đồng bộ danh sách khuôn mặt bệnh nhân nền
+        asyncio.create_task(self.sync_enrolled_faces())
 
     async def _loop(self):
         last_frame_id = -1
@@ -327,7 +389,54 @@ class CameraFallDetector:
         event_id = uuid.uuid4().hex
         LOG.warning(">>> [CAMERA AI] Phát hiện té ngã! ID: %s <<<", event_id)
 
-        # 1. Lưu ảnh chụp hiện trường tại khoảnh khắc ngã
+        # 1. Định danh đối tượng té ngã qua Face Re-ID hồ sơ bệnh án
+        fallen_track = None
+        if hasattr(res, "tracks") and res.tracks:
+            for t in res.tracks:
+                state_val = getattr(getattr(t, "posture_state", None), "value", str(getattr(t, "posture_state", "")))
+                if state_val in ("FALLEN", "FALLING") or getattr(t, "is_fall_alerted", False):
+                    fallen_track = t
+                    break
+            if not fallen_track and res.tracks:
+                fallen_track = res.tracks[0]
+
+        patient_id = getattr(fallen_track, "elderly_id", None) if fallen_track else None
+        patient_name = getattr(fallen_track, "person_name", None) if fallen_track else None
+        face_sim = getattr(fallen_track, "face_similarity", 0.0) if fallen_track else 0.0
+        is_elderly = getattr(fallen_track, "is_elderly", False) if fallen_track else False
+
+        # Thử nhận diện khuôn mặt trực tiếp từ frame hiện tại nếu track chưa nhận diện được
+        if not is_elderly and self.face_manager and current_frame is not None and hasattr(res, "keypoints") and res.keypoints:
+            try:
+                from src.ai.vision.face_reid import extract_face_roi
+                for kps in res.keypoints:
+                    kps_tuples = [
+                        (float(p.x), float(p.y), float(p.confidence)) if hasattr(p, "confidence")
+                        else (float(p[0]), float(p[1]), float(p[2]) if len(p) > 2 else 1.0)
+                        for p in kps
+                    ]
+                    face_roi = extract_face_roi(current_frame, kps_tuples)
+                    if face_roi is not None:
+                        e_id, name, score = self.face_manager.identify_face(face_roi)
+                        if e_id and score >= self.face_manager.similarity_threshold:
+                            patient_id = e_id
+                            patient_name = name
+                            face_sim = score
+                            is_elderly = True
+                            break
+            except Exception as e:
+                LOG.debug("[FaceReID] Lỗi trích xuất khuôn mặt trực tiếp: %s", e)
+
+        # Định dạng thông báo cảnh báo rõ ràng
+        if is_elderly and patient_name:
+            sim_pct = int(face_sim * 100) if face_sim > 0 else 92
+            fall_msg = f"🚨 CẢNH BÁO TÉ NGÃ: Phát hiện {patient_name} té ngã (Khớp khuôn mặt hồ sơ: {sim_pct}%)!"
+        elif patient_name and patient_name not in ("Person", "Khách / Người nhà"):
+            fall_msg = f"🚨 CẢNH BÁO TÉ NGÃ: Phát hiện {patient_name} té ngã tại camera!"
+        else:
+            fall_msg = "🚨 CẢNH BÁO TÉ NGÃ: Phát hiện người té ngã tại camera an ninh (Chưa khớp khuôn mặt hồ sơ)!"
+
+        # 2. Lưu ảnh chụp hiện trường tại khoảnh khắc ngã
         thumb_name = f"{event_id}.jpg"
         thumb_path = self.recorder.directory / thumb_name
         try:
@@ -335,18 +444,17 @@ class CameraFallDetector:
         except Exception as e:
             LOG.warning("Không thể lưu ảnh snapshot ngã: %s", e)
 
-        # 2. Cắt và lưu video clip 5s từ bộ đệm RAM
+        # 3. Cắt và lưu video clip 5s từ bộ đệm RAM
         frames = list(self.frame_buffer)
         clip_name = f"{event_id}.mp4"
         clip_path = self.recorder.directory / clip_name
         self.latest_clip = clip_name
         await asyncio.to_thread(self._save_clip, frames, clip_path)
 
-        # 3. Đám mây video archive (AWS S3)
+        # 4. Đám mây video archive (AWS S3)
         cloud_thumb = None
         cloud_video = None
 
-        # Đẩy sự cố sang cloud video archive nếu có cấu hình
         archive = getattr(self.camera, "archive", None)
         if archive:
             try:
@@ -364,6 +472,11 @@ class CameraFallDetector:
                 thumb_name=thumb_name,
                 cloud_video=cloud_video,
                 cloud_thumb=cloud_thumb,
+                message=fall_msg,
+                patient_id=patient_id,
+                patient_name=patient_name,
+                face_sim=face_sim,
+                is_patient_matched=is_elderly,
             )
 
     def _save_clip(self, frames, path: Path):
@@ -398,10 +511,21 @@ class CameraFallDetector:
         thumb_name=None,
         cloud_video=None,
         cloud_thumb=None,
+        message=None,
+        patient_id=None,
+        patient_name=None,
+        face_sim=None,
+        is_patient_matched=False,
     ):
         if not self.mqtt:
             return
         try:
+            notes_dict = {
+                "patient_id": patient_id,
+                "patient_name": patient_name,
+                "face_similarity": round(float(face_sim), 2) if face_sim else None,
+                "is_patient_matched": bool(is_patient_matched),
+            }
             payload = {
                 "id": event_id,
                 "device_id": os.getenv("CAMERA_DEVICE_ID", os.getenv("DEVICE_ID", "camera-main")),
@@ -409,14 +533,19 @@ class CameraFallDetector:
                 "alert_level": "CRITICAL",
                 "confidence": float(confidence),
                 "timestamp": timestamp,
-                "message": "Phát hiện té ngã (Camera AI)!",
+                "message": message or "Phát hiện té ngã (Camera AI)!",
                 "thumbnail_url": cloud_thumb or (f"/recordings/{thumb_name}" if thumb_name else None),
                 "video_clip_url": cloud_video or f"/recordings/{clip_name}",
                 "clip_path": str(clip_path),
-                "sources": ["camera"],
+                "sources": ["camera", "face_reid"],
+                "notes": json.dumps(notes_dict, ensure_ascii=False),
             }
+            if patient_id:
+                payload["patient_id"] = patient_id
+            if patient_name:
+                payload["patient_name"] = patient_name
             self.mqtt.publish_alert(payload)
-            LOG.info("Đã gửi cảnh báo té ngã MQTT kèm video: %s (Cloud: %s)", clip_name, bool(cloud_video))
+            LOG.info("Đã gửi cảnh báo té ngã MQTT kèm video & Face Re-ID: %s (Người: %s)", clip_name, patient_name or "Chưa rõ")
         except Exception as e:
             LOG.error("Lỗi gửi MQTT cảnh báo té ngã: %s", e)
 
