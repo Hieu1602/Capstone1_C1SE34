@@ -14,6 +14,103 @@ export interface NotificationPayload {
 
 class NotificationService {
   private isInitialized = false;
+  private webAudioCtx: any = null;
+  private webAlarmTimer: any = null;
+  private webVibTimer: any = null;
+  private webIsAlarmPlaying = false;
+
+  private _getAudioContext(): any {
+    if (typeof window === 'undefined') return null;
+    const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return null;
+    if (!this.webAudioCtx || this.webAudioCtx.state === 'closed') {
+      this.webAudioCtx = new AudioCtx();
+    }
+    if (this.webAudioCtx.state === 'suspended') {
+      this.webAudioCtx.resume().catch(() => {});
+    }
+    return this.webAudioCtx;
+  }
+
+  private _startWebAlarm(): void {
+    if (typeof window === 'undefined') return;
+    this._stopWebAlarm();
+    this.webIsAlarmPlaying = true;
+
+    // 1. Rung lặp lại liên tục trên Web Mobile (Chrome / Firefox Android)
+    if ('vibrate' in navigator) {
+      try {
+        navigator.vibrate([0, 1000, 400, 1000, 400, 1000, 800]);
+        this.webVibTimer = setInterval(() => {
+          if (this.webIsAlarmPlaying && 'vibrate' in navigator) {
+            navigator.vibrate([0, 1000, 400, 1000, 400, 1000, 800]);
+          }
+        }, 4600);
+      } catch (_) {}
+    }
+
+    // 2. Chuông còi hú báo động liên tục (Web Audio Siren)
+    try {
+      const ctx = this._getAudioContext();
+      if (!ctx) return;
+
+      let isHigh = true;
+      const playBeep = () => {
+        if (!this.webIsAlarmPlaying) return;
+        try {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(isHigh ? 960 : 720, ctx.currentTime);
+          gain.gain.setValueAtTime(0.35, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.35);
+          isHigh = !isHigh;
+        } catch (_) {}
+      };
+
+      playBeep();
+      this.webAlarmTimer = setInterval(playBeep, 380);
+    } catch (_) {}
+  }
+
+  private _playWebChime(): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const ctx = this._getAudioContext();
+      if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1150, ctx.currentTime);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.28);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.28);
+    } catch (_) {}
+  }
+
+  private _stopWebAlarm(): void {
+    this.webIsAlarmPlaying = false;
+    if (this.webAlarmTimer) {
+      clearInterval(this.webAlarmTimer);
+      this.webAlarmTimer = null;
+    }
+    if (this.webVibTimer) {
+      clearInterval(this.webVibTimer);
+      this.webVibTimer = null;
+    }
+    if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate(0);
+      } catch (_) {}
+    }
+  }
 
   async init(): Promise<void> {
     if (this.isInitialized) return;
@@ -160,7 +257,6 @@ class NotificationService {
       'EXERTION_HYPOXIA',
       'HIGH_FEVER',
       'FEVER_TACHYCARDIA',
-      'DEVICE_BATTERY_DEAD',
     ];
 
     if (emergencyTypes.includes(alertType)) {
@@ -183,6 +279,7 @@ class NotificationService {
       'HOUSE_INVITE_REJECTED',
       'MEDICATION_REMINDER',
       'LOW_BATTERY',
+      'DEVICE_BATTERY_DEAD',
     ];
 
     if (normalTypes.includes(alertType)) {
@@ -264,22 +361,36 @@ class NotificationService {
       }
     }
 
-    // 4. Web hoặc fallback: Hiển thị browser notification nếu được cấp quyền
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      if (Notification.permission === 'granted') {
-        new Notification(title, { body, icon: '/favicon.png' });
-      } else if (Notification.permission !== 'denied') {
-        Notification.requestPermission().then((permission) => {
-          if (permission === 'granted') {
-            new Notification(title, { body, icon: '/favicon.png' });
-          }
-        });
+    // 4. Web hoặc fallback: Hiển thị browser notification & kích hoạt chuông/rung Web
+    if (typeof window !== 'undefined') {
+      if ('Notification' in window) {
+        if (Notification.permission === 'granted') {
+          new Notification(title, { body, icon: '/favicon.png' });
+        } else if (Notification.permission !== 'denied') {
+          Notification.requestPermission().then((permission) => {
+            if (permission === 'granted') {
+              new Notification(title, { body, icon: '/favicon.png' });
+            }
+          });
+        }
+      }
+
+      // Kích hoạt chuông còi & rung liên tục trên Web
+      if (isCritical) {
+        this._startWebAlarm();
+      } else {
+        this._playWebChime();
+        if ('vibrate' in navigator) {
+          try {
+            navigator.vibrate([0, 150]);
+          } catch (_) {}
+        }
       }
     }
   }
 
   /**
-   * Dừng chuông báo động và ngắt rung liên tục
+   * Dừng chuông báo động và ngắt rung liên tục lập tức (0ms)
    */
   stopEmergencyAlarm(): void {
     if (Platform.OS !== 'web') {
@@ -296,6 +407,9 @@ class NotificationService {
         }
       }
     }
+
+    // Web: Ngắt còi hú và dừng rung tức thì (0ms)
+    this._stopWebAlarm();
   }
 }
 

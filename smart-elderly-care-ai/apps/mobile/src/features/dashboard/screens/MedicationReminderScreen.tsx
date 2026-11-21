@@ -44,14 +44,17 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
     activePatientId,
     setActivePatientId,
   } = usePatientStore();
-  const { userRole, role, permissions, fetchMyPermissions } = useAuthStore();
+  const { userRole, role, permissions, fetchMyPermissions, has_house, household_id } = useAuthStore();
   const [checkingPerms, setCheckingPerms] = useState(true);
+  const isSpecialUser = userRole === 'admin' || userRole === 'doctor' || role === 'admin' || role === 'doctor';
+  const hasNoHouse = !isSpecialUser && !household_id && has_house === false;
 
-  const initialPatientId =
-    route?.params?.patientId ||
-    activePatientId ||
-    (patientsList && patientsList[0]?.id) ||
-    1;
+  const initialPatientId = hasNoHouse
+    ? undefined
+    : (route?.params?.patientId ||
+       activePatientId ||
+       (patientsList && patientsList[0]?.id) ||
+       undefined);
   const [selectedPatientId, setSelectedPatientId] = useState<any>(initialPatientId);
 
   useEffect(() => {
@@ -66,23 +69,25 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
   }, [route?.params?.patientId]);
 
   useEffect(() => {
+    if (hasNoHouse) return;
     if (selectedPatientId) {
       fetchReminders(selectedPatientId);
     } else {
       fetchReminders();
     }
-  }, [selectedPatientId]);
+  }, [selectedPatientId, hasNoHouse]);
 
-  const currentPatient =
+  const currentPatient = hasNoHouse ? null : (
     (patientsList || []).find(
       (p: any) => p.id == selectedPatientId || p.elderly_id == selectedPatientId
-    ) || (patientsList && patientsList.length > 0 ? patientsList[0] : null);
+    ) || (patientsList && patientsList.length > 0 ? patientsList[0] : null)
+  );
 
   const patientDisplayName =
     currentPatient?.full_name ||
     currentPatient?.name ||
-    route?.params?.patientName ||
-    'Người cao tuổi';
+    (hasNoHouse ? '' : route?.params?.patientName) ||
+    '';
 
   const isOwnerOrAdmin =
     userRole === 'admin' ||
@@ -441,62 +446,80 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* 1.2. Thẻ tóm tắt thông tin người cao tuổi đang theo dõi */}
-        <View style={[styles.patientHeroCard, { backgroundColor: bgCard, borderColor: borderCol }]}>
-          <View style={styles.patientHeroRow}>
-            {(() => {
-              const rawAvatar =
-                currentPatient?.avatar_url ||
-                (patientDisplayName.includes('Nguyễn Văn A')
-                  ? '/static/faces/fc51dc68-3ea2-4394-ac4b-906364ae425d.jpg'
-                  : null);
-              const resolvedUri = rawAvatar ? resolveAvatarUrl(rawAvatar) : null;
-              return (
-                <View style={[styles.patientAvatarCircle, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF', overflow: 'hidden', marginRight: 12 }]}>
-                  {resolvedUri ? (
-                    <Image source={{ uri: resolvedUri }} style={{ width: 44, height: 44, borderRadius: 22 }} resizeMode="cover" />
-                  ) : (
-                    <Ionicons name="person" size={24} color="#2563EB" />
-                  )}
-                </View>
-              );
-            })()}
-            <View style={{ flex: 1 }}>
-              <LocalizedText style={[styles.patientHeroName, { color: textTitle }]}>
-                {patientDisplayName} {currentPatient?.age ? `(${currentPatient.age} tuổi)` : ''}
-              </LocalizedText>
-              <LocalizedText style={[styles.patientHeroMeta, { color: textSub }]}>
-                {currentPatient?.gender ? `Giới tính: ${formatGenderVN(currentPatient.gender)} • ` : ''}
-                {currentPatient?.blood_type ? `Nhóm máu: ${currentPatient.blood_type}` : 'Đang theo dõi cữ thuốc & đơn điều trị'}
-              </LocalizedText>
+        {!currentPatient ? (
+          <View style={[styles.patientHeroCard, { backgroundColor: bgCard, borderColor: borderCol, alignItems: 'center', paddingVertical: 28 }]}>
+            <View style={[styles.patientAvatarCircle, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', marginBottom: 12, marginRight: 0, width: 56, height: 56, borderRadius: 28 }]}>
+              <Ionicons name="people-outline" size={28} color="#94A3B8" />
             </View>
+            <LocalizedText style={[styles.patientHeroName, { color: textTitle, textAlign: 'center', marginBottom: 6 }]}>
+              Chưa có người cao tuổi trong nhà
+            </LocalizedText>
+            <LocalizedText style={[styles.patientHeroMeta, { color: textSub, textAlign: 'center', lineHeight: 18, paddingHorizontal: 16, marginBottom: 16 }]}>
+              Vui lòng tham gia căn nhà hoặc thêm hồ sơ người cao tuổi để quản lý lịch uống thuốc và dinh dưỡng.
+            </LocalizedText>
+            <TouchableOpacity
+              style={styles.emptyAddBtn}
+              onPress={() => navigation.navigate('PatientsList')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add-circle" size={18} color="#FFFFFF" />
+              <LocalizedText style={styles.emptyAddBtnText}>Quản lý hồ sơ người cao tuổi</LocalizedText>
+            </TouchableOpacity>
           </View>
+        ) : (
+          <View style={[styles.patientHeroCard, { backgroundColor: bgCard, borderColor: borderCol }]}>
+            <View style={styles.patientHeroRow}>
+              {(() => {
+                const rawAvatar = currentPatient?.avatar_url || null;
+                const resolvedUri = rawAvatar ? resolveAvatarUrl(rawAvatar) : null;
+                return (
+                  <View style={[styles.patientAvatarCircle, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF', overflow: 'hidden', marginRight: 12 }]}>
+                    {resolvedUri ? (
+                      <Image source={{ uri: resolvedUri }} style={{ width: 44, height: 44, borderRadius: 22 }} resizeMode="cover" />
+                    ) : (
+                      <Ionicons name="person" size={24} color="#2563EB" />
+                    )}
+                  </View>
+                );
+              })()}
+              <View style={{ flex: 1 }}>
+                <LocalizedText style={[styles.patientHeroName, { color: textTitle }]}>
+                  {patientDisplayName} {currentPatient?.age ? `(${currentPatient.age} tuổi)` : ''}
+                </LocalizedText>
+                <LocalizedText style={[styles.patientHeroMeta, { color: textSub }]}>
+                  {currentPatient?.gender ? `Giới tính: ${formatGenderVN(currentPatient.gender)} • ` : ''}
+                  {currentPatient?.blood_type ? `Nhóm máu: ${currentPatient.blood_type}` : 'Đang theo dõi cữ thuốc & đơn điều trị'}
+                </LocalizedText>
+              </View>
+            </View>
 
-          {/* Thanh tiến độ cữ thuốc */}
-          <View style={[styles.patientProgressWrap, { borderTopColor: borderCol }]}>
-            <View style={styles.patientProgressRow}>
-              <LocalizedText style={[styles.patientProgressText, { color: textSub }]}>
-                Tiến độ cữ thuốc hôm nay
-              </LocalizedText>
-              <LocalizedText style={[styles.patientProgressPercent, { color: Colors.primary }]}>
-                {medications.length > 0
-                  ? `${medications.filter((m) => m.taken).length}/${medications.length} cữ (${Math.round((medications.filter((m) => m.taken).length / medications.length) * 100)}%)`
-                  : 'Chưa có cữ thuốc'}
-              </LocalizedText>
-            </View>
-            <View style={[styles.progressBarTrack, isDarkMode && { backgroundColor: '#334155' }]}>
-              <View
-                style={[
-                  styles.progressBarFill,
-                  {
-                    width: medications.length > 0
-                      ? `${Math.round((medications.filter((m) => m.taken).length / medications.length) * 100)}%`
-                      : '0%',
-                  },
-                ]}
-              />
+            {/* Thanh tiến độ cữ thuốc */}
+            <View style={[styles.patientProgressWrap, { borderTopColor: borderCol }]}>
+              <View style={styles.patientProgressRow}>
+                <LocalizedText style={[styles.patientProgressText, { color: textSub }]}>
+                  Tiến độ cữ thuốc hôm nay
+                </LocalizedText>
+                <LocalizedText style={[styles.patientProgressPercent, { color: Colors.primary }]}>
+                  {medications.length > 0
+                    ? `${medications.filter((m) => m.taken).length}/${medications.length} cữ (${Math.round((medications.filter((m) => m.taken).length / medications.length) * 100)}%)`
+                    : 'Chưa có cữ thuốc'}
+                </LocalizedText>
+              </View>
+              <View style={[styles.progressBarTrack, isDarkMode && { backgroundColor: '#334155' }]}>
+                <View
+                  style={[
+                    styles.progressBarFill,
+                    {
+                      width: medications.length > 0
+                        ? `${Math.round((medications.filter((m) => m.taken).length / medications.length) * 100)}%`
+                        : '0%',
+                    },
+                  ]}
+                />
+              </View>
             </View>
           </View>
-        </View>
+        )}
 
         {/* 1.3. Khối Đơn thuốc điều trị từ Bác sĩ (nếu có) */}
         {todayReminders?.doctor_prescriptions && todayReminders.doctor_prescriptions.length > 0 && (
@@ -1619,5 +1642,19 @@ const styles = StyleSheet.create({
   modalPatientBannerSub: {
     fontSize: 10.5,
     marginTop: 1,
+  },
+  emptyAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  emptyAddBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
