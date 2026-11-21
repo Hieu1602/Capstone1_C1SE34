@@ -401,10 +401,8 @@ def send_vitals_to_backend(
         payload["battery_level"] = battery
 
     data = json.dumps(payload).encode("utf-8")
-    target_urls = [backend_url]
     ec2_url = "http://16.178.128.42:8000/api/v1/vitals"
-    if ec2_url not in target_urls and "localhost" in backend_url:
-        target_urls.append(ec2_url)
+    target_urls = [ec2_url, backend_url] if (ec2_url != backend_url and "localhost" in backend_url) else [backend_url]
 
     for url in target_urls:
         try:
