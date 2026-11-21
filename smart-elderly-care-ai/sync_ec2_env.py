@@ -30,6 +30,11 @@ def main():
                     k = stripped.split("=", 1)[0].strip()
                     if k.startswith("SUPABASE_"):
                         continue
+                    if k == "CAMERA_SERVICE_URL":
+                        # Giữ nguyên URL tunnel hiện tại đã cấu hình trong .env
+                        lines.append(line)
+                        existing_keys.add(k)
+                        continue
                     if k in REQUIRED_VARS:
                         lines.append(f"{k}={REQUIRED_VARS[k]}\n")
                         existing_keys.add(k)
