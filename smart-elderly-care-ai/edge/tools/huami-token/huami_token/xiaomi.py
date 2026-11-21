@@ -51,6 +51,9 @@ class XiaomiSession:
         self._user_id: str | None = None
         self._c_user_id: str | None = None
         self._nonce: int | None = None
+        self._location: str | None = None
+        self._pass_token: str | None = None
+        self._http: Any = None
         self._time_diff: int = 0
 
     @property
@@ -261,16 +264,23 @@ class XiaomiSession:
         """Step 3: Follow location URL to obtain serviceToken from cookies."""
         import time
 
+        location = self._location
+        if not location:
+            raise AuthenticationError(
+                code="missing-location",
+                message="No location URL from authentication step",
+            )
+
         nonce = self._nonce
-        urls_to_try = []
+        urls_to_try: list[str] = []
         if nonce is not None:
             nonce_str = str(nonce)
             sign_input = f"nonce={nonce_str}&{self._ssecurity}"
             client_sign = base64.b64encode(
                 hashlib.sha1(sign_input.encode()).digest()
             ).decode()
-            urls_to_try.append(self._location + "&clientSign=" + urllib.parse.quote(client_sign))
-        urls_to_try.append(self._location)
+            urls_to_try.append(location + "&clientSign=" + urllib.parse.quote(client_sign))
+        urls_to_try.append(location)
 
         headers = XIAOMI_HEADERS.SERVICE_LOGIN.value
         service_token = None
