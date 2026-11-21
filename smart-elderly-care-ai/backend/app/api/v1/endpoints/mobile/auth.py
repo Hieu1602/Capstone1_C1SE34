@@ -508,6 +508,33 @@ async def _record_login_background(
                 },
             )
             await session.commit()
+
+            # Đồng bộ phiên vào Redis (TTL 24 giờ)
+            try:
+                from app.services.redis.redis_service import redis_service
+                sess_id = f"sess-{str(user_id)[:8]}"
+                role_label = (
+                    "Quản trị viên"
+                    if user_role == "admin"
+                    else ("Bác sĩ chuyên khoa" if user_role == "doctor" else ("Chủ nhà (Owner)" if user_role == "owner" else "Người thân / Gia đình"))
+                )
+                device_desc = client_platform or (user_agent[:40] if user_agent else "Trình duyệt Web")
+                await redis_service.record_session(
+                    session_id=sess_id,
+                    session_data={
+                        "id": sess_id,
+                        "user_id": str(user_id),
+                        "user_name": f"{user_name}",
+                        "role": role_label,
+                        "ip_address": client_ip,
+                        "device": device_desc,
+                        "login_time": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+                        "last_active": "Vừa xong",
+                        "status": "active",
+                    }
+                )
+            except Exception as r_err:
+                logger.warning("[_record_login_background] Lỗi lưu session Redis: %s", r_err)
         except Exception as err:
             logger.warning("[_record_login_background] Lỗi ghi nhận nền: %s", err)
             await session.rollback()

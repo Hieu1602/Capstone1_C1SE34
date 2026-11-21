@@ -316,7 +316,13 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
 
           <View style={styles.row}>
             <Text style={[styles.rowLabel, { color: colors.textMuted }]}>Vị trí cảm biến</Text>
-            <Text style={[styles.rowValue, { color: colors.textPrimary }]}>{incident.device_id ? `Thiết bị: ${incident.device_id}` : 'Cảm biến giám sát'}</Text>
+            <Text
+              style={[styles.rowValue, { color: colors.textPrimary }]}
+              numberOfLines={1}
+              ellipsizeMode="middle"
+            >
+              {incident.device_id ? `Thiết bị: ${incident.device_id}` : 'Cảm biến giám sát'}
+            </Text>
           </View>
 
           {incident.is_acknowledged && (
@@ -324,7 +330,9 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
               <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
               <View style={styles.row}>
                 <Text style={[styles.rowLabel, { color: colors.textMuted }]}>Người xử lý</Text>
-                <Text style={[styles.rowValue, { color: '#16A34A', fontWeight: '700' }]}>{handlerDisplayName}</Text>
+                <Text style={[styles.rowValue, { color: '#16A34A', fontWeight: '700' }]} numberOfLines={1} ellipsizeMode="tail">
+                  {handlerDisplayName}
+                </Text>
               </View>
               {incident.acknowledged_at && (
                 <View style={styles.row}>
@@ -418,9 +426,9 @@ const styles = StyleSheet.create({
   typeLabel: { color: '#F8FAFC', fontSize: 22, fontWeight: '700' },
   message: { color: '#94A3B8', fontSize: 15, lineHeight: 22 },
   infoCard: { padding: 16, borderRadius: 14 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
-  rowLabel: { color: '#64748B', fontSize: 14 },
-  rowValue: { color: '#F8FAFC', fontSize: 14, fontWeight: '600' },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4, gap: 12 },
+  rowLabel: { color: '#64748B', fontSize: 14, flexShrink: 0 },
+  rowValue: { color: '#F8FAFC', fontSize: 14, fontWeight: '600', flexShrink: 1, textAlign: 'right' },
   rowDivider: { height: 1, marginVertical: 8 },
   ackBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#3B82F6', borderRadius: 12, padding: 16, gap: 8, marginTop: 8, shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
   ackBtnText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
