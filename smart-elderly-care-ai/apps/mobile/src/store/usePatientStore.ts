@@ -118,7 +118,7 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
     try {
       const authState = require('./useAuthStore').useAuthStore.getState();
       const isSpecial = authState.userRole === 'admin' || authState.userRole === 'doctor' || authState.role === 'admin' || authState.role === 'doctor';
-      if (!isSpecial && !authState.household_id && authState.has_house === false) {
+      if (!isSpecial && (!authState.household_id || authState.has_house === false)) {
         set({ patientsList: [], activePatientId: null, patientRecord: null, isLoadingList: false });
         return [];
       }
@@ -131,7 +131,7 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
         try {
           const currentAuth = require('./useAuthStore').useAuthStore.getState();
           const currentIsSpecial = currentAuth.userRole === 'admin' || currentAuth.userRole === 'doctor' || currentAuth.role === 'admin' || currentAuth.role === 'doctor';
-          if (!currentIsSpecial && !currentAuth.household_id && currentAuth.has_house === false) {
+          if (!currentIsSpecial && (!currentAuth.household_id || currentAuth.has_house === false)) {
             set({ patientsList: [], activePatientId: null, patientRecord: null, isLoadingList: false });
             return [];
           }
@@ -203,7 +203,7 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
     try {
       const authState = require('./useAuthStore').useAuthStore.getState();
       const isSpecial = authState.userRole === 'admin' || authState.userRole === 'doctor' || authState.role === 'admin' || authState.role === 'doctor';
-      if (!isSpecial && !authState.household_id && authState.has_house === false) {
+      if (!isSpecial && (!authState.household_id || authState.has_house === false)) {
         set({
           todayReminders: {
             date: new Date().toISOString().split('T')[0],
@@ -360,7 +360,7 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
     try {
       const authState = require('./useAuthStore').useAuthStore.getState();
       const isSpecial = authState.userRole === 'admin' || authState.userRole === 'doctor' || authState.role === 'admin' || authState.role === 'doctor';
-      if (!isSpecial && !authState.household_id && authState.has_house === false) {
+      if (!isSpecial && (!authState.household_id || authState.has_house === false)) {
         set({ patientRecord: null, isLoadingPatient: false });
         return null;
       }

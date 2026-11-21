@@ -47,7 +47,7 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
   const { userRole, role, permissions, fetchMyPermissions, has_house, household_id } = useAuthStore();
   const [checkingPerms, setCheckingPerms] = useState(true);
   const isSpecialUser = userRole === 'admin' || userRole === 'doctor' || role === 'admin' || role === 'doctor';
-  const hasNoHouse = !isSpecialUser && !household_id && has_house === false;
+  const hasNoHouse = !isSpecialUser && (!household_id || has_house === false);
 
   const initialPatientId = hasNoHouse
     ? undefined
