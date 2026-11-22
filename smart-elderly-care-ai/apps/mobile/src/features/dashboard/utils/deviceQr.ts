@@ -17,22 +17,10 @@ export const parseDeviceQr = (data: string, barcodeType = 'qr'): ScannedDevice |
   const raw = data.trim();
   const upper = raw.toUpperCase().replace(/^(S\/N|SN|MAC)[:\s-]+/, '');
 
-  // 1. Kiểm tra nếu là địa chỉ MAC (0C-EF-15-15-80-C5 hoặc 0C:EF:15:15:80:C5 hoặc 0CEF151580C5)
+  // 1. Kiểm tra nếu là địa chỉ MAC -> Từ chối, chỉ dùng mã S/N làm định danh duy nhất (Zero Risk)
   const cleanMac = upper.replace(/[:-]/g, '');
   if (/^[0-9A-F]{12}$/.test(cleanMac)) {
-    const formattedMac = cleanMac.match(/.{1,2}/g)?.join(':') || upper;
-    const isTpLink = TP_LINK_OUIS.some((oui) => cleanMac.startsWith(oui));
-    const brand = isTpLink ? 'TP-Link Tapo' : 'Camera IP';
-    const suggestedName = isTpLink ? 'Camera Tapo C200C' : `Camera (${cleanMac.slice(-4)})`;
-    return {
-      deviceId: `CAM_MAC_${cleanMac}`,
-      type: 'camera',
-      brand,
-      mac: formattedMac,
-      suggestedName,
-      username: 'admin123',
-      password: 'admin123',
-    };
+    return null;
   }
 
   // 2. Kiểm tra nếu là Serial Number (Code 128 / Code 39 / Code 93 / EAN 13 / QR)

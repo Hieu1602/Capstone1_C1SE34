@@ -188,33 +188,42 @@ export default function AddDeviceScreen({ navigation, route }: any) {
       location: deviceData.location,
       streamUrl: deviceData.streamUrl,
       ipAddress: deviceData.ip,
+      macAddress: activeScannedData?.mac || scannedData?.mac,
     };
 
-    const createdId = await addIoTDevice(newDevice);
-    const finalId = createdId || newDevice.id;
-    setCreatedCameraDeviceId(finalId);
+    try {
+      const createdId = await addIoTDevice(newDevice);
+      const finalId = createdId || newDevice.id;
+      setCreatedCameraDeviceId(finalId);
 
-    if (deviceData.isDefault && setCameraDefault) {
-      setCameraDefault({
-        id: finalId,
+      if (deviceData.isDefault && setCameraDefault) {
+        setCameraDefault({
+          id: finalId,
+          name: newDevice.name,
+          room: newDevice.location || 'Phòng khách',
+          streamUrl: newDevice.streamUrl || '',
+          isOnline: true,
+        });
+      }
+
+      setSuccessInfo({
         name: newDevice.name,
-        room: newDevice.location || 'Phòng khách',
-        streamUrl: newDevice.streamUrl || '',
-        isOnline: true,
+        type: `Camera An Ninh (${deviceData.brand})`,
+        protocol: 'RTSP (Cổng 554)',
+        details: deviceData.streamUrl,
+        location: deviceData.location,
+        icon: 'videocam',
+        color: '#0284C7',
       });
+
+      setCurrentStep('SETUP_SUCCESS');
+    } catch (err: any) {
+      LocalizedAlert.alert(
+        'Thông báo liên kết thiết bị',
+        err?.message || 'Không thể liên kết camera. Vui lòng kiểm tra lại.',
+        [{ text: 'Đã hiểu' }]
+      );
     }
-
-    setSuccessInfo({
-      name: newDevice.name,
-      type: `Camera An Ninh (${deviceData.brand})`,
-      protocol: 'RTSP (Cổng 554)',
-      details: deviceData.streamUrl,
-      location: deviceData.location,
-      icon: 'videocam',
-      color: '#0284C7',
-    });
-
-    setCurrentStep('SETUP_SUCCESS');
   };
 
   // -------------------------------------------------------------
