@@ -437,7 +437,7 @@ class AlertsWebSocket {
         });
         store.setSirenActive(true);
 
-        // Kích hoạt Modal Đếm ngược Khẩn cấp Tự động (Auto-Escalation 45s)
+        // Kích hoạt Modal Đếm ngược Khẩn cấp Tự động (Auto-Escalation 30s)
         useEscalationStore.getState().triggerEscalation({
           incidentId: newIncident.id,
           alertType,
@@ -445,7 +445,7 @@ class AlertsWebSocket {
           location: incData.location || incData.house_address || 'Nhà riêng đang giám sát',
           message: newIncident.message,
           thumbnailUrl: newIncident.thumbnail_url,
-          delaySeconds: incData.escalation_seconds,
+          delaySeconds: incData.escalation_seconds || 30,
           createdAt: newIncident.created_at,
         });
 
@@ -458,6 +458,16 @@ class AlertsWebSocket {
       } else {
         // Cảnh báo sinh hiệu: Nhịp tim, SpO2, Sốt cao, Loạn nhịp
         let alertTitle = '⚠️ CẢNH BÁO SINH TỒN BẤT THƯỜNG';
+        const isCriticalVital =
+          alertType === 'HIGH_HEART_RATE' ||
+          alertType === 'LOW_HEART_RATE' ||
+          alertType === 'LOW_SPO2' ||
+          alertType === 'CRITICAL_TRIAD' ||
+          alertType === 'CARDIO_COLLAPSE' ||
+          alertType === 'EXERTION_HYPOXIA' ||
+          alertType === 'FEVER_TACHYCARDIA' ||
+          Boolean(incData.escalation_seconds);
+
         if (alertType === 'HIGH_HEART_RATE') {
           alertTitle = '💓 CẢNH BÁO NHỊP TIM CAO BẤT THƯỜNG';
           store.setSirenActive(true);
@@ -469,9 +479,14 @@ class AlertsWebSocket {
         } else if (alertType === 'LOW_SPO2') {
           alertTitle = '⚠️ CẢNH BÁO OXY MÁU (SPO2) TỤT SÂU';
           store.setSirenActive(true);
-        } else if (alertType === 'CRITICAL_TRIAD' || alertType === 'CARDIO_COLLAPSE' || Boolean(incData.escalation_seconds)) {
+        } else if (alertType === 'CRITICAL_TRIAD' || alertType === 'CARDIO_COLLAPSE') {
           alertTitle = '🚨 BÁO ĐỘNG ĐỎ: TÌNH TRẠNG NGUY KỊCH';
           store.setSirenActive(true);
+        } else if (alertType === 'HIGH_FEVER' || alertType === 'FEVER_TACHYCARDIA') {
+          alertTitle = '🌡️ CẢNH BÁO THÂN NHIỆT SỐT CAO';
+        }
+
+        if (isCriticalVital) {
           useEscalationStore.getState().triggerEscalation({
             incidentId: newIncident.id,
             alertType,
@@ -479,11 +494,9 @@ class AlertsWebSocket {
             location: incData.location || incData.house_address || 'Nhà riêng đang giám sát',
             message: newIncident.message,
             thumbnailUrl: newIncident.thumbnail_url,
-            delaySeconds: incData.escalation_seconds,
+            delaySeconds: incData.escalation_seconds || 30,
             createdAt: newIncident.created_at,
           });
-        } else if (alertType === 'HIGH_FEVER' || alertType === 'FEVER_TACHYCARDIA') {
-          alertTitle = '🌡️ CẢNH BÁO THÂN NHIỆT SỐT CAO';
         }
 
         notificationService.triggerEmergencyNotification({

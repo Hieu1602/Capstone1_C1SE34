@@ -30,7 +30,7 @@ const resolveMediaUrl = (raw?: string | null): string | null => {
 
 export const CriticalEscalationModal: React.FC = () => {
   const { activeEscalation, autoCallEnabled, markEscalated, clearEscalation } = useEscalationStore();
-  const [secondsLeft, setSecondsLeft] = useState<number>(45);
+  const [secondsLeft, setSecondsLeft] = useState<number>(30);
   const [hasAutoCalled, setHasAutoCalled] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
 
@@ -41,7 +41,7 @@ export const CriticalEscalationModal: React.FC = () => {
       setHasAutoCalled(false);
       return;
     }
-    setSecondsLeft(activeEscalation.delaySeconds || 45);
+    setSecondsLeft(activeEscalation.delaySeconds || 30);
     setHasAutoCalled(false);
   }, [activeEscalation?.incidentId]);
 
