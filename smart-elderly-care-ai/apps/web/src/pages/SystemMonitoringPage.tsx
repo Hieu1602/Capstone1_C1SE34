@@ -60,7 +60,7 @@ interface SystemIncident {
   id: string;
   timestamp: string;
   service: string;
-  type: 'ERROR' | 'WARNING' | 'CRITICAL';
+  type: 'INFO' | 'ERROR' | 'WARNING' | 'CRITICAL';
   message: string;
   resolved: boolean;
 }
@@ -179,7 +179,7 @@ export const SystemMonitoringPage: React.FC = () => {
     );
     const totalMem = services.reduce((acc, curr) => acc + curr.memory_usage, 0);
     const onlineDevs = devices.filter((d) => d.is_online).length;
-    const unresolvedInc = incidents.filter((i) => !i.resolved).length;
+    const unresolvedInc = incidents.filter((i) => !i.resolved && i.type !== 'INFO').length;
     return { avgCpu, totalMem, onlineDevs, unresolvedInc };
   }, [services, devices, incidents]);
 
@@ -386,13 +386,19 @@ export const SystemMonitoringPage: React.FC = () => {
             <span className="font-mono text-2xl font-black text-slate-900 dark:text-[#F5F6F8]">
               {metrics.unresolvedInc}
             </span>
-            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-              0 Chưa xử lý
+            <span
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                metrics.unresolvedInc === 0
+                  ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800'
+                  : 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800'
+              }`}
+            >
+              {metrics.unresolvedInc === 0 ? '0 Chưa xử lý' : `${metrics.unresolvedInc} Chưa xử lý`}
             </span>
           </div>
           <div className="mt-3 pt-2.5 border-t border-[#C8AD8A]/40 dark:border-[#454A53] px-1 relative z-10">
             <p className="text-[11px] text-slate-600 dark:text-slate-400 truncate">
-              Hệ thống vận hành an toàn
+              {metrics.unresolvedInc === 0 ? 'Hệ thống vận hành an toàn' : 'Có cảnh báo vận hành cần kiểm tra'}
             </p>
           </div>
         </div>
@@ -728,7 +734,12 @@ export const SystemMonitoringPage: React.FC = () => {
                   <span className="text-[11px] font-mono text-slate-400 dark:text-[#727984]">
                     {inc.timestamp}
                   </span>
-                  {inc.resolved ? (
+                  {inc.type === 'INFO' ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-600 dark:text-sky-400">
+                      <Check className="w-3.5 h-3.5" />
+                      Hoạt động ổn định
+                    </span>
+                  ) : inc.resolved ? (
                     <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
                       <Check className="w-3.5 h-3.5" />
                       Đã khắc phục

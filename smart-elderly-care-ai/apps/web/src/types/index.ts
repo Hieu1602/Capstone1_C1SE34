@@ -91,7 +91,7 @@ export interface SystemIncident {
   id: string;
   timestamp: string;
   service: string;
-  type: 'ERROR' | 'WARNING' | 'CRITICAL';
+  type: 'INFO' | 'ERROR' | 'WARNING' | 'CRITICAL';
   message: string;
   resolved: boolean;
   incident_status?: 'NEW' | 'ACKNOWLEDGED' | 'INVESTIGATING' | 'RESOLVED';
