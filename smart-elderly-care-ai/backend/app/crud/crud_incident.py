@@ -264,15 +264,18 @@ class CRUDIncident:
         incident.is_acknowledged = True
         existing_notes = incident.notes or ""
         import re
+        preserved_tags = []
         user_tag_match = re.search(r'(USER:[0-9a-fA-F-]+)', existing_notes)
+        apt_tag_match = re.search(r'(APT:[0-9a-fA-F-]+)', existing_notes)
         if user_tag_match:
-            user_tag = user_tag_match.group(1)
-            if notes and not notes.startswith("USER:"):
-                incident.notes = f"{user_tag} | {notes}"
-            elif notes:
-                incident.notes = notes
-        elif notes:
-            incident.notes = notes
+            preserved_tags.append(user_tag_match.group(1))
+        if apt_tag_match:
+            preserved_tags.append(apt_tag_match.group(1))
+        if "APPOINTMENT_REQUESTED" in existing_notes:
+            preserved_tags.append("APPOINTMENT_REQUESTED")
+        if notes:
+            missing = [tag for tag in preserved_tags if tag not in notes]
+            incident.notes = f"{'|'.join(missing)} | {notes}" if missing else notes
         incident.acknowledged_at = datetime.now(timezone.utc)
         if acknowledged_by:
             incident.acknowledged_by = acknowledged_by
@@ -333,20 +336,20 @@ class CRUDIncident:
                 user_house_ids = [row[0] for row in user_house_ids_res.fetchall()]
 
                 if not user_house_ids:
-                    stmt = stmt.where(Incident.notes == f"USER:{current_user_id}")
+                    stmt = stmt.where(Incident.notes.contains(f"USER:{current_user_id}"))
                 else:
                     dev_res = await db.execute(select(Device.id).where(Device.house_id.in_(user_house_ids)))
                     user_device_ids = [row[0] for row in dev_res.fetchall()]
 
-                    conditions = [Incident.notes == f"USER:{current_user_id}"]
+                    conditions = [Incident.notes.contains(f"USER:{current_user_id}")]
                     if user_device_ids:
                         conditions.append(
                             and_(
                                 Incident.device_id.in_(user_device_ids),
                                 or_(
                                     Incident.notes.is_(None),
-                                    ~Incident.notes.startswith("USER:"),
-                                    Incident.notes == f"USER:{current_user_id}",
+                                    ~Incident.notes.contains("USER:"),
+                                    Incident.notes.contains(f"USER:{current_user_id}"),
                                 ),
                             )
                         )

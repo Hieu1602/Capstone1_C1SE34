@@ -49,7 +49,16 @@ export const DoctorLayout: React.FC = () => {
     useDoctorDataStore.getState().fetchAllData();
 
     const unsubscribe = doctorWebSocket.subscribe((event) => {
-      if (event && (event.type === 'ALERT_NEW' || event.message || event.heart_rate || event.spo2)) {
+      if (!event) return;
+      const alertType = event.alert_type || event.type || '';
+      const isAppointmentEvent = alertType.startsWith('APPOINTMENT_') || alertType === 'MEDICAL_RECORD_UPDATED';
+
+      if (isAppointmentEvent) {
+        useDoctorDataStore.getState().fetchAllData(true);
+        return;
+      }
+
+      if (event.type === 'ALERT_NEW' || event.message || event.heart_rate || event.spo2) {
         // Revalidate background data khi nhận cảnh báo lâm sàng mới
         useDoctorDataStore.getState().fetchAllData(true);
 
@@ -57,7 +66,7 @@ export const DoctorLayout: React.FC = () => {
           event.alert_type === 'FALL_DETECTED' || event.alert_type === 'AI_FALL_DETECTED'
             ? '🚨 BÁO ĐỘNG ĐỎ: PHÁT HIỆN TÉ NGÃ!'
             : '⚠️ CẢNH BÁO LÂM SÀNG KHẨN CẤP';
-        const alertBody = event.message || 'Phát hiện bất thường sinh hiệu hoặc sự cố nguy kịch!';
+        const alertBody = event.message || event.data?.message || 'Phát hiện bất thường sinh hiệu hoặc sự cố nguy kịch!';
 
         // 1. Luôn phát âm thanh còi y tế báo động nếu là cảnh báo khẩn cấp
         playEmergencyAlarmSound(4);

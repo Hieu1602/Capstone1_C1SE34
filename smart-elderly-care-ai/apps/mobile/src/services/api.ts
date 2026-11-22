@@ -377,6 +377,7 @@ export interface AppointmentItem {
   patient_name: string;
   house_id?: string;
   visit_type?: string;
+  exam_type?: string;
   scheduled_at: string;
   duration_minutes?: number;
   location: string;
@@ -397,6 +398,7 @@ export interface AppointmentCreateData {
   scheduled_at: string;
   duration_minutes?: number;
   visit_type?: string;
+  exam_type?: string;
   location?: string;
   clinical_notes?: string;
   instructions?: string;
@@ -409,6 +411,7 @@ export interface AppointmentUpdateData {
   scheduled_at?: string;
   duration_minutes?: number;
   visit_type?: string;
+  exam_type?: string;
   location?: string;
   status?: string;
   clinical_notes?: string;

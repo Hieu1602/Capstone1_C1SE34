@@ -104,5 +104,51 @@ def test_load_edge_config():
     """Kiểm tra đọc file config.yaml của Edge Hub."""
     config = load_config()
     assert "ble" in config
-    assert config["ble"]["device_mac"] == "C1:BD:70:58:2D:F5"
-    assert "auth_key" in config["ble"]
+    assert config["ble"]["device_mac"] == "FA:88:9E:79:77:13"
+    assert config["ble"]["auth_key"] == "2BC7D23FAA60E6E2F974B8420C56234B"
+
+
+def test_ecdh_b163_key_agreement():
+    """Kiểm tra tính giao hoán khóa chung ECDH NIST B-163 của Zepp OS / Huami 2021."""
+    from edge.scripts.stream_xiaomi_band7 import ecdh_b163_public_key, ecdh_b163_shared_secret
+
+    p1 = os.urandom(24)
+    p2 = os.urandom(24)
+    pub1 = ecdh_b163_public_key(p1)
+    pub2 = ecdh_b163_public_key(p2)
+    assert len(pub1) == 48 and len(pub2) == 48
+    assert ecdh_b163_shared_secret(p1, pub2) == ecdh_b163_shared_secret(p2, pub1)
+
+
+def test_parse_multi_sensor_payloads():
+    """Kiểm tra giải mã Bước chân/Quãng đường/Calo (0x0007), Pin chi tiết (0x0006) và Gia tốc 3 trục (0x0002)."""
+    from edge.scripts.stream_xiaomi_band7 import (
+        parse_huami_battery_info,
+        parse_raw_sensor_accel,
+        parse_realtime_steps_payload,
+    )
+
+    steps_pkt = b"\x0c" + struct.pack("<III", 3450, 2410, 138)
+    s_res = parse_realtime_steps_payload(steps_pkt)
+    assert s_res == {"steps": 3450, "distance_m": 2410, "calories_kcal": 138}
+
+    bat_pkt = bytearray(20)
+    bat_pkt[0] = 0x0F
+    bat_pkt[1] = 91
+    bat_pkt[2] = 0
+    struct.pack_into("<H", bat_pkt, 10, 2026)
+    bat_pkt[12], bat_pkt[13], bat_pkt[14], bat_pkt[15], bat_pkt[16] = 11, 21, 8, 30, 0
+    bat_pkt[19] = 100
+    b_res = parse_huami_battery_info(bytes(bat_pkt))
+    assert b_res["battery_level"] == 91
+    assert "Đang dùng pin" in b_res["battery_state"]
+    assert b_res["last_charge_time"] == "2026-11-21 08:30:00"
+    assert b_res["last_charge_level"] == 100
+
+    # Raw 3-axis accelerometer packet (type 0x00, seq 0x01, 1 sample of 1G on Z axis: 4100)
+    accel_pkt = bytes([0x00, 0x01]) + struct.pack("<hhh", 0, 0, 4100)
+    a_res = parse_raw_sensor_accel(accel_pkt)
+    assert a_res is not None
+    assert a_res["accel_g"] == 1.0
+    assert a_res["accel_z"] == -9.81
+    assert a_res["fall_detected"] is False

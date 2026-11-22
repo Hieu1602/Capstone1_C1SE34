@@ -224,8 +224,9 @@ export const DashboardPage: React.FC = () => {
   const selectedMonthStr = `${chartAnchorDate.getFullYear()}-${String(chartAnchorDate.getMonth() + 1).padStart(2, '0')}`;
 
   const nextAppointment = useMemo(() => {
+    const nowMs = Date.now() - 15 * 60_000;
     const upcomingList = appointments
-      .filter((a) => a.status === 'UPCOMING')
+      .filter((a) => (a.status === 'UPCOMING' || a.status === 'CONFIRMED') && new Date(a.scheduled_at).getTime() >= nowMs)
       .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
     return upcomingList[0] || null;
   }, [appointments]);
@@ -238,8 +239,11 @@ export const DashboardPage: React.FC = () => {
   const [tableSearch, setTableSearch] = useState('');
   const [tableFilter, setTableFilter] = useState<'ALL' | 'ALERT' | 'STABLE'>('ALL');
 
-  // Mini Calendar month state & selected date
-  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  // Mini Calendar month state & selected date (Local YYYY-MM-DD)
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -326,8 +330,9 @@ export const DashboardPage: React.FC = () => {
         const liveHr = data.heart_rate ? Number(data.heart_rate) : undefined;
         const liveSpo2 = data.spo2 ? Number(data.spo2) : undefined;
         if (liveHr || liveSpo2) {
+          const curPatients = useDoctorDataStore.getState().patients;
           setPatients(
-            patients.map((p, idx) =>
+            curPatients.map((p, idx) =>
               idx === 0
                 ? {
                     ...p,
@@ -352,7 +357,7 @@ export const DashboardPage: React.FC = () => {
       unsub();
       clearInterval(statusTicker);
     };
-  }, [fetchAllData, patients, setPatients]);
+  }, [fetchAllData, setPatients]);
 
   const handleRespondInvite = async (inviteId: string, action: 'accept' | 'reject') => {
     try {
@@ -367,11 +372,17 @@ export const DashboardPage: React.FC = () => {
   const warningPatients = patients.filter(
     (p) => p.health_status === 'WARNING' || p.health_status === 'DANGER'
   );
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const toLocalYMD = (iso?: string): string => {
+    if (!iso) return '';
+    const dt = new Date(iso);
+    if (isNaN(dt.getTime())) return '';
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  };
+  const todayStr = toLocalYMD(new Date().toISOString());
   const todayAppointments = appointments.filter(
-    (a) => a.scheduled_at?.slice(0, 10) === todayStr && a.status !== 'CANCELLED'
+    (a) => toLocalYMD(a.scheduled_at) === todayStr && a.status !== 'CANCELLED'
   );
-  const upcomingAppointments = appointments.filter((a) => a.status === 'UPCOMING');
+  const upcomingAppointments = appointments.filter((a) => a.status === 'UPCOMING' || a.status === 'CONFIRMED');
   const onlineCount = patients.filter((p) => p.is_online).length;
 
   // Mini Calendar grid calculation chuẩn tuần Việt Nam (T2 -> CN)
@@ -381,7 +392,7 @@ export const DashboardPage: React.FC = () => {
     const rawFirstDay = new Date(year, month, 1).getDay(); // 0 is CN
     const firstDayIdx = rawFirstDay === 0 ? 6 : rawFirstDay - 1; // 0 is T2, 6 is CN
     const totalDays = new Date(year, month + 1, 0).getDate();
-    const todayDateStr = new Date().toISOString().slice(0, 10);
+    const todayDateStr = todayStr;
 
     const cells: MiniCalendarCell[] = [];
     for (let i = 0; i < firstDayIdx; i++) {
@@ -390,19 +401,7 @@ export const DashboardPage: React.FC = () => {
 
     for (let d = 1; d <= totalDays; d++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const dayApts = appointments.filter((a) => {
-        if (!a.scheduled_at) return false;
-        if (a.scheduled_at.startsWith(dateStr)) return true;
-        try {
-          const dt = new Date(a.scheduled_at);
-          const y = dt.getFullYear();
-          const m = String(dt.getMonth() + 1).padStart(2, '0');
-          const day = String(dt.getDate()).padStart(2, '0');
-          return `${y}-${m}-${day}` === dateStr;
-        } catch {
-          return false;
-        }
-      });
+      const dayApts = appointments.filter((a) => toLocalYMD(a.scheduled_at) === dateStr);
       let dotStatus: 'COMPLETED' | 'UPCOMING' | 'CRITICAL' | null = null;
       if (dayApts.some((a) => a.status === 'UPCOMING' || a.status === 'CONFIRMED')) {
         dotStatus = 'UPCOMING';
@@ -421,24 +420,14 @@ export const DashboardPage: React.FC = () => {
       });
     }
     return cells;
-  }, [calendarMonth, appointments, selectedDate]);
+  }, [calendarMonth, appointments, selectedDate, todayStr]);
 
-  // Selected date appointments for preview (Khớp chính xác cả UTC và local date)
+  // Selected date appointments for preview (theo ngày địa phương, sắp xếp tăng dần theo giờ)
   const selectedDateApts = useMemo(() => {
     if (!selectedDate) return [];
-    return appointments.filter((a) => {
-      if (!a.scheduled_at) return false;
-      if (a.scheduled_at.startsWith(selectedDate)) return true;
-      try {
-        const d = new Date(a.scheduled_at);
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${y}-${m}-${day}` === selectedDate;
-      } catch {
-        return false;
-      }
-    });
+    return appointments
+      .filter((a) => toLocalYMD(a.scheduled_at) === selectedDate)
+      .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
   }, [appointments, selectedDate]);
 
   // Filtered patients for Tier 4 Table

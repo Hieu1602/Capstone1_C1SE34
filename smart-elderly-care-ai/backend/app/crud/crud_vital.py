@@ -167,7 +167,7 @@ class CRUDVital:
             except (ValueError, TypeError):
                 battery = None
 
-        data.pop("raw_payload", None)
+        raw_payload = data.pop("raw_payload", None)
         bracelet_connected_flag = data.pop("bracelet_connected", None)
         data.pop("edge_hub_connected", None)
 
@@ -195,7 +195,7 @@ class CRUDVital:
 
                 dev = await db.get(Device, uuid_val)
                 if dev:
-                    prev_online = bool(dev.is_online)
+                    prev_online = dev.is_online
                     if bracelet_connected_flag is False:
                         dev.is_online = False
                     elif battery is not None:
@@ -207,14 +207,14 @@ class CRUDVital:
                     await db.flush()
 
                     # Nếu trạng thái thiết bị thay đổi (đặc biệt khi ngắt kết nối BLE) -> phát ngay WS DEVICE_STATUS cho cả Gia đình & Bác sĩ
-                    if prev_online != bool(dev.is_online):
+                    if prev_online != dev.is_online:
                         try:
                             import json as _json
                             status_payload = _json.dumps({
                                 "type": "DEVICE_STATUS",
                                 "device_id": str(dev.id),
-                                "is_online": bool(dev.is_online),
-                                "bracelet_connected": bool(dev.is_online),
+                                "is_online": dev.is_online,
+                                "bracelet_connected": dev.is_online,
                                 "elderly_id": str(dev.elderly_id) if dev.elderly_id else None,
                             }, ensure_ascii=False)
                             for c_ws in list(alert_clients):
@@ -277,6 +277,10 @@ class CRUDVital:
                     sample_time = sample_time.replace(tzinfo=timezone.utc)
 
                 is_stale = False
+                age_seconds = 0.0
+                hr = obj.heart_rate
+                hr_high_limit = 100
+                hr_low_limit = 50
                 if sample_time:
                     age_seconds = (datetime.now(timezone.utc) - sample_time).total_seconds()
                     # Mẫu cũ hơn 3 phút (180s) -> Xem như dữ liệu đồng bộ lịch sử, không kích hoạt cảnh báo thời gian thực
@@ -291,7 +295,6 @@ class CRUDVital:
                 elif is_battery_dead or is_worn is False:
                     logger.info(f"[CRUDVital] Vòng tay {dev_name} đang tháo ra hoặc hết pin -> Bỏ qua toàn bộ cảnh báo sinh tồn giả.")
                 else:
-                    hr = obj.heart_rate
                     spo2 = obj.spo2
                     temp = obj.skin_temp_max
                     activity = str(data.get("activity_state") or data.get("activity") or "").lower()
@@ -465,21 +468,22 @@ class CRUDVital:
                 if alerts_to_create:
                     types_in_alerts = [a[0] for a in alerts_to_create]
                     # Nếu vừa có nhịp tim cao vừa có nhảy vọt đột ngột -> Gộp lại thành 1 thông báo duy nhất
+                    hr_val = hr or 0
                     if "HIGH_HEART_RATE" in types_in_alerts and "SUDDEN_HR_SPIKE" in types_in_alerts:
                         spike_alert = next((a for a in alerts_to_create if a[0] == "SUDDEN_HR_SPIKE"), None)
-                        merged_msg = f"Cảnh báo: Nhịp tim đo được từ {dev_name} tăng cao ({hr} bpm)! Vượt ngưỡng an toàn ({hr_high_limit} bpm)."
+                        merged_msg = f"Cảnh báo: Nhịp tim đo được từ {dev_name} tăng cao ({hr_val} bpm)! Vượt ngưỡng an toàn ({hr_high_limit} bpm)."
                         if spike_alert and "➔" in spike_alert[2]:
                             merged_msg = spike_alert[2].replace("Cảnh báo loạn nhịp:", "Cảnh báo khẩn cấp:") + f" Vượt ngưỡng an toàn ({hr_high_limit} bpm)."
                         alerts_to_create = [a for a in alerts_to_create if a[0] not in ("HIGH_HEART_RATE", "SUDDEN_HR_SPIKE")]
-                        alerts_to_create.insert(0, ("HIGH_HEART_RATE", "CRITICAL" if hr >= 120 else "HIGH", merged_msg, 5))
+                        alerts_to_create.insert(0, ("HIGH_HEART_RATE", "CRITICAL" if hr_val >= 120 else "HIGH", merged_msg, 5))
 
                     if "LOW_HEART_RATE" in types_in_alerts and "SUDDEN_HR_DROP" in types_in_alerts:
                         drop_alert = next((a for a in alerts_to_create if a[0] == "SUDDEN_HR_DROP"), None)
-                        merged_msg = f"Cảnh báo: Nhịp tim đo được từ {dev_name} quá thấp ({hr} bpm)! Dưới ngưỡng an toàn ({hr_low_limit} bpm)."
+                        merged_msg = f"Cảnh báo: Nhịp tim đo được từ {dev_name} quá thấp ({hr_val} bpm)! Dưới ngưỡng an toàn ({hr_low_limit} bpm)."
                         if drop_alert and "➔" in drop_alert[2]:
                             merged_msg = drop_alert[2].replace("Cảnh báo loạn nhịp:", "Cảnh báo khẩn cấp:") + f" Dưới ngưỡng an toàn ({hr_low_limit} bpm)."
                         alerts_to_create = [a for a in alerts_to_create if a[0] not in ("LOW_HEART_RATE", "SUDDEN_HR_DROP")]
-                        alerts_to_create.insert(0, ("LOW_HEART_RATE", "CRITICAL" if hr < 45 else "HIGH", merged_msg, 5))
+                        alerts_to_create.insert(0, ("LOW_HEART_RATE", "CRITICAL" if hr_val < 45 else "HIGH", merged_msg, 5))
 
                     # Ưu tiên sự cố khẩn cấp (té ngã và hội chứng đa chỉ số luôn được ưu tiên cao nhất)
                     ALERT_PRIORITY = {
@@ -716,10 +720,25 @@ class CRUDVital:
                 logger.warning("[CRUDVital] Lỗi kiểm tra sự cố & pin thiết bị: %s", e)
 
         # 1. Cập nhật Redis Cache tức thời (bất đồng bộ, không chặn luồng chính)
+        extra_telemetry = {}
+        if isinstance(raw_payload, dict):
+            for k in (
+                "steps", "distance_m", "calories_kcal",
+                "accel_x", "accel_y", "accel_z", "accel_g",
+                "battery_state", "last_charge_level", "last_charge_time",
+                "serial_number", "fw_version", "hw_version", "sw_version",
+                "is_worn", "contact_state",
+            ):
+                if raw_payload.get(k) is not None:
+                    extra_telemetry[k] = raw_payload[k]
+        for k in ("steps", "distance_m", "calories_kcal", "accel_x", "accel_y", "accel_z", "accel_g", "battery_state", "is_worn"):
+            if data.get(k) is not None:
+                extra_telemetry[k] = data[k]
+
         try:
             from app.services.redis import redis_service
             dev_str = str(data.get("device_id", obj.device_id))
-            act_state = data.get("activity_state") or data.get("activity") or "Sinh hoạt"
+            act_state = data.get("activity_state") or data.get("activity") or (raw_payload.get("activity_state") if isinstance(raw_payload, dict) else None) or "Sinh hoạt"
             payload = {
                 "heart_rate": obj.heart_rate,
                 "spo2": obj.spo2,
@@ -729,6 +748,8 @@ class CRUDVital:
                 "bracelet_connected": (battery > 0) if battery is not None else True,
                 "activity_state": act_state,
                 "time": obj.time.isoformat() if obj.time else datetime.now(timezone.utc).isoformat(),
+                **extra_telemetry,
+                "raw_payload": raw_payload,
             }
             await redis_service.set_latest_vitals(dev_str, payload)
         except Exception as exc:
@@ -739,7 +760,7 @@ class CRUDVital:
             from app.api.websockets.vitals_ws import manager
             dev_str = str(data.get("device_id", obj.device_id))
             serial_str = str(raw_dev) if raw_dev else dev_str
-            act_state = data.get("activity_state") or data.get("activity") or "Sinh hoạt"
+            act_state = data.get("activity_state") or data.get("activity") or (raw_payload.get("activity_state") if isinstance(raw_payload, dict) else None) or "Sinh hoạt"
             ws_data = {
                 "type": "vital_update",
                 "device_id": serial_str,
@@ -752,6 +773,8 @@ class CRUDVital:
                 "bracelet_connected": (battery > 0) if battery is not None else True,
                 "activity_state": act_state,
                 "timestamp": int(obj.time.timestamp() * 1000) if obj.time else int(datetime.now().timestamp() * 1000),
+                **extra_telemetry,
+                "raw_payload": raw_payload,
             }
             await manager.broadcast_to_device(dev_str, ws_data)
             if serial_str != dev_str:
@@ -822,7 +845,7 @@ class CRUDVital:
             if not uuid_val:
                 return []
 
-        safe_days = max(1, min(int(days), 90))
+        safe_days = max(1, min(days, 90))
         where_clauses = [f"time >= NOW() - INTERVAL '{safe_days} days'"]
         params: dict = {}
         if uuid_val:

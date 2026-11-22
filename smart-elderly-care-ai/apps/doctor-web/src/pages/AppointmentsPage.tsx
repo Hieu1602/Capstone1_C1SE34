@@ -2,8 +2,10 @@
 // Quản lý Lịch khám & Tái khám định kỳ dành cho Bác sĩ gia đình
 
 import React, { useEffect, useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { doctorApi } from '../services/api';
 import { useDoctorDataStore } from '../store/useDoctorDataStore';
+import { removeVietnameseTones } from '../utils/text';
 import { AppointmentItem } from '../types';
 import { NewAppointmentModal } from '../components/clinical/NewAppointmentModal';
 import { CancelAppointmentModal } from '../components/clinical/CancelAppointmentModal';
@@ -31,13 +33,19 @@ export const AppointmentsPage: React.FC = () => {
     fetchAllData,
   } = useDoctorDataStore();
 
+  const [searchParams] = useSearchParams();
   const [statusFilter, setStatusFilter] = useState<'UPCOMING' | 'COMPLETED' | 'CANCELLED' | 'ALL'>('UPCOMING');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [reschedulingApt, setReschedulingApt] = useState<AppointmentItem | null>(null);
   const [cancellingApt, setCancellingApt] = useState<AppointmentItem | null>(null);
-  const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
+  const [selectedDateStr, setSelectedDateStr] = useState<string | null>(() => searchParams.get('date'));
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    const dateParam = searchParams.get('date');
+    if (dateParam) setSelectedDateStr(dateParam);
+  }, [searchParams]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -50,7 +58,13 @@ export const AppointmentsPage: React.FC = () => {
 
   const handleComplete = async (apt: AppointmentItem) => {
     try {
-      await doctorApi.completeAppointment(apt.id, apt.clinical_notes || 'Hoàn tất ca khám');
+      const updated = await doctorApi.completeAppointment(apt.id, apt.clinical_notes || 'Hoàn tất ca khám');
+      const store = useDoctorDataStore.getState();
+      store.setAppointments(
+        store.appointments.map((a) =>
+          a.id === apt.id ? { ...a, ...updated, status: 'COMPLETED', patient_name: apt.patient_name || updated?.patient_name } : a
+        )
+      );
       showToast(`Đã hoàn tất ca khám cho bệnh nhân ${apt.patient_name || ''}`);
       fetchAllData(true);
     } catch {
@@ -60,11 +74,20 @@ export const AppointmentsPage: React.FC = () => {
 
   const handleConfirmCancel = async (aptId: string, reason: string) => {
     try {
-      await doctorApi.cancelAppointment(aptId, reason);
+      const cancelled = await doctorApi.cancelAppointment(aptId, reason);
+      const store = useDoctorDataStore.getState();
+      store.setAppointments(
+        store.appointments.map((a) =>
+          a.id === aptId
+            ? { ...a, ...cancelled, status: 'CANCELLED', cancellation_reason: reason, patient_name: a.patient_name || cancelled?.patient_name }
+            : a
+        )
+      );
       showToast('Đã hủy lịch hẹn khám và gửi thông báo tới gia đình.');
       fetchAllData(true);
-    } catch {
+    } catch (err) {
       showToast('Không thể hủy cuộc hẹn khám. Vui lòng thử lại.');
+      throw err;
     }
   };
 
@@ -87,24 +110,33 @@ export const AppointmentsPage: React.FC = () => {
     [appointments]
   );
 
-  const q = searchQuery.toLowerCase();
-  const filteredAppointments = appointments.filter((apt) => {
-    const matchesSearch =
-      apt.patient_name?.toLowerCase().includes(q) ||
-      apt.clinical_notes?.toLowerCase().includes(q) ||
-      apt.location?.toLowerCase().includes(q);
-    const matchesStatus = statusFilter === 'ALL' ? true : apt.status === statusFilter;
-    const matchesDate = !selectedDateStr
-      ? true
-      : (() => {
-          try {
-            return toLocalIsoDate(new Date(apt.scheduled_at)) === selectedDateStr;
-          } catch {
-            return true;
-          }
-        })();
-    return matchesSearch && matchesStatus && matchesDate;
-  });
+  const q = removeVietnameseTones(searchQuery.trim());
+  const filteredAppointments = appointments
+    .filter((apt) => {
+      const matchesSearch =
+        !q ||
+        removeVietnameseTones(apt.patient_name || '').includes(q) ||
+        removeVietnameseTones(apt.clinical_notes || '').includes(q) ||
+        removeVietnameseTones(apt.location || '').includes(q);
+      const matchesStatus =
+        statusFilter === 'ALL'
+          ? true
+          : statusFilter === 'UPCOMING'
+            ? apt.status === 'UPCOMING' || apt.status === 'CONFIRMED'
+            : apt.status === statusFilter;
+      const matchesDate = !selectedDateStr
+        ? true
+        : (() => {
+            try {
+              const dt = new Date(apt.scheduled_at);
+              return !isNaN(dt.getTime()) && toLocalIsoDate(dt) === selectedDateStr;
+            } catch {
+              return false;
+            }
+          })();
+      return matchesSearch && matchesStatus && matchesDate;
+    })
+    .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
 
   const filterTabs = [
     { key: 'UPCOMING' as const, label: 'Sắp tới', icon: CalendarClock, count: counts.UPCOMING },
@@ -113,9 +145,11 @@ export const AppointmentsPage: React.FC = () => {
     { key: 'ALL' as const, label: 'Tất cả', icon: Layers, count: counts.ALL },
   ];
 
-  const completionRate =
-    counts.ALL > 0 ? Math.round((counts.COMPLETED / Math.max(1, counts.ALL - counts.CANCELLED)) * 100) : 85;
-  const hubEnabledCount = appointments.filter((a) => a.enable_speaker_reminder !== false).length;
+  const activeTotal = counts.ALL - counts.CANCELLED;
+  const completionRate = activeTotal > 0 ? Math.round((counts.COMPLETED / activeTotal) * 100) : 0;
+  const hubEnabledCount = appointments.filter(
+    (a) => a.status !== 'CANCELLED' && a.enable_speaker_reminder !== false
+  ).length;
 
   return (
     <div className="space-y-6">

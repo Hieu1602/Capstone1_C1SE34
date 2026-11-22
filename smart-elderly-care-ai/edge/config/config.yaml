@@ -1,145 +1,113 @@
-# ============================================================
-# Edge Hub Configuration - Orange Pi 5
-# Smart Elderly Care AI System
-# ============================================================
-
-device:
-  id: "hub-orangepi5-001"
-  name: "Living Room Hub"
-  location: "Living Room"
-  timezone: "Asia/Ho_Chi_Minh"
-
-# ---- Camera Configuration ----
-camera:
-  source: 0  # USB fallback; TAPO_HOST + Camera Account env override this
-  fps: 15
-  resolution:
-    width: 1920
-    height: 1080
-  reconnect_interval_sec: 5
-
-# ---- AI Model Paths ----
 ai:
+  audio:
+    alert_classes:
+    - Screaming
+    - Crying
+    - Glass shatter
+    - Thud
+    alert_confidence_threshold: 0.75
+    chunk_duration_sec: 1.0
+    model_path: src/ai/audio/models/yamnet.tflite
+    sample_rate: 16000
   vision:
-    model_path: "src/ai/vision/models/yolov8n-pose.rknn"  # RKNN for NPU
-    fallback_model: "src/ai/vision/models/yolov8n-pose.onnx"
-    confidence_threshold: 0.60
-    face_blurring: true  # Làm mờ mặt thời gian thực bảo vệ quyền riêng tư người già
-    fall_detection:
-      enabled: true
-      classifier_model: "src/ai/vision/models/fall_classifier.pkl"
-      # Tỷ lệ chiều cao/rộng bounding box khi ngã (nằm ngang)
-      horizontal_ratio_threshold: 0.5
-      aspect_ratio_threshold: 1.25
-      fallen_angle_threshold: 55.0        # Góc nghiêng cột sống > 55°
-      drop_velocity_threshold: 0.55       # Vận tốc rơi hông (chiều cao/giây)
-      min_fallen_duration: 0.40           # Thời gian duy trì tư thế thấp (giây)
-      immobility_alert_sec: 15.0          # Bất động > 15s sau ngã -> Cảnh báo đột quỵ/hôn mê
-      motion_energy_threshold: 8.0        # Ngưỡng dịch chuyển keypoint
-      # Multi-person Tracking & Causal Stitching
-      tracker_iou_threshold: 0.30
-      max_missed_frames: 15               # 1s tại 15fps
-      stitching_distance_threshold: 120.0 # Khoảng cách ghép track khi ngã (pixels)
-      consecutive_frames: 5
-    # Giám sát sinh hoạt thường nhật (ADL - Activities of Daily Living)
     adl_monitoring:
       enabled: true
-      sedentary_alert_sec: 3600.0        # Cảnh báo ngồi liên tục quá 60 phút
-
-  audio:
-    model_path: "src/ai/audio/models/yamnet.tflite"
-    sample_rate: 16000
-    chunk_duration_sec: 1.0
-    alert_classes:
-      - "Screaming"
-      - "Crying"
-      - "Glass shatter"
-      - "Thud"
-    alert_confidence_threshold: 0.75
-
-# ---- Sensor Thresholds (Ngưỡng cảnh báo) ----
-thresholds:
-  heart_rate:
-    min: 50   # bpm - Nhịp tim chậm bất thường
-    max: 120  # bpm - Nhịp tim nhanh bất thường
-  spo2:
-    min: 90   # % - SpO2 nguy hiểm < 90%
-    warning: 94  # % - SpO2 cảnh báo
-  temperature:
-    skin_max: 38.5  # °C - Nhiệt độ da (AMG8833)
-    skin_min: 35.0  # °C - Hạ thân nhiệt
-  presence:
-    timeout_minutes: 30  # Không phát hiện chuyển động sau N phút -> alert
-
-# ---- BLE Smart Band (Xiaomi Smart Band 7 / Mi Band / HW706) ----
+      sedentary_alert_sec: 3600.0
+    confidence_threshold: 0.6
+    face_blurring: true
+    fall_detection:
+      aspect_ratio_threshold: 1.25
+      classifier_model: src/ai/vision/models/fall_classifier.pkl
+      consecutive_frames: 5
+      drop_velocity_threshold: 0.55
+      enabled: true
+      fallen_angle_threshold: 55.0
+      horizontal_ratio_threshold: 0.5
+      immobility_alert_sec: 15.0
+      max_missed_frames: 15
+      min_fallen_duration: 0.4
+      motion_energy_threshold: 8.0
+      stitching_distance_threshold: 120.0
+      tracker_iou_threshold: 0.3
+    fallback_model: src/ai/vision/models/yolov8n-pose.onnx
+    model_path: src/ai/vision/models/yolov8n-pose.rknn
 ble:
+  auth_key: 2BC7D23FAA60E6E2F974B8420C56234B
+  characteristic_uuid: 00002a37-0000-1000-8000-00805f9b34fb
+  device_mac: FA:88:9E:79:77:13
+  device_name: Xiaomi Smart Band 7 7713
   enabled: true
-  device_name: "Xiaomi Smart Band 7 2DF5"  # Tên thiết bị Xiaomi Band 7 thực tế
-  device_mac: "C1:BD:70:58:2D:F5"          # MAC address thực tế đã phát hiện
-  auth_key: "6E589C3F5F214311AF5C56C8455BA211"  # 16-byte hex Auth Key thực tế từ sg.hlth.io.mi.com
-  service_uuid: "0000180d-0000-1000-8000-00805f9b34fb"   # Heart Rate Service
-  characteristic_uuid: "00002a37-0000-1000-8000-00805f9b34fb"
-  reconnect_interval_sec: 10
   poll_interval_sec: 5
-
-# ---- Thermal Camera AMG8833 ----
-thermal:
-  enabled: true
-  i2c_bus: 1
-  i2c_address: 0x69  # hoặc 0x68
-  poll_interval_sec: 2
-
-# ---- MQTT Broker (EMQX) ----
+  reconnect_interval_sec: 10
+  service_uuid: 0000180d-0000-1000-8000-00805f9b34fb
+camera:
+  fps: 15
+  reconnect_interval_sec: 5
+  resolution:
+    height: 1080
+    width: 1920
+  source: 0
+device:
+  id: hub-orangepi5-001
+  location: Living Room
+  name: Living Room Hub
+  timezone: Asia/Ho_Chi_Minh
+fusion:
+  alert_clip_after_sec: 2
+  alert_debounce_sec: 30
+  fall_detection_min_sources: 2
+  ring_buffer_duration_sec: 5
+logging:
+  backup_count: 5
+  file: logs/edge.log
+  level: INFO
+  max_bytes: 10485760
 mqtt:
-  broker_host: "emqx.yourdomain.com"
+  broker_host: emqx.yourdomain.com
   broker_port: 1883
   broker_tls_port: 8883
-  use_tls: false
-  username: "edge_hub"
-  password: "CHANGE_ME_IN_ENV"
-  client_id: "hub-orangepi5-001"
+  client_id: hub-orangepi5-001
   keepalive: 60
+  password: CHANGE_ME_IN_ENV
   qos: 1
   topics:
-    telemetry: "care/{device_id}/telemetry"
-    alert:     "care/{device_id}/alert"
-    command:   "care/{device_id}/command"
-    heartbeat: "care/{device_id}/heartbeat"
-
-# ---- Sensor Fusion / Decision Matrix ----
-fusion:
-  # Tối thiểu N nguồn phải đồng thuận để kích hoạt alert
-  fall_detection_min_sources: 2
-  # Thời gian debounce (giây) tránh spam alert
-  alert_debounce_sec: 30
-  # Thời gian lưu ring buffer video (giây)
-  ring_buffer_duration_sec: 5
-  alert_clip_after_sec: 2  # Clip thêm 2s sau sự kiện
-
-# ---- Local Speaker ----
+    alert: care/{device_id}/alert
+    command: care/{device_id}/command
+    heartbeat: care/{device_id}/heartbeat
+    telemetry: care/{device_id}/telemetry
+  use_tls: false
+  username: edge_hub
 speaker:
+  device: default
   enabled: true
-  device: "default"
-  volume: 0.85
-  language: "vi"
+  language: vi
   reminder_schedule:
-    - time: "08:00"
-      message: "Chào buổi sáng! Đã đến giờ uống thuốc buổi sáng."
-    - time: "12:30"
-      message: "Đã đến giờ ăn trưa và uống thuốc."
-    - time: "21:00"
-      message: "Đã đến giờ uống thuốc buổi tối. Chúc ngủ ngon!"
-
-# ---- Local Streaming ----
+  - message: Chào buổi sáng! Đã đến giờ uống thuốc buổi sáng.
+    time: 08:00
+  - message: Đã đến giờ ăn trưa và uống thuốc.
+    time: '12:30'
+  - message: Đã đến giờ uống thuốc buổi tối. Chúc ngủ ngon!
+    time: '21:00'
+  volume: 0.85
 streaming:
   enabled: true
-  protocol: "rtsp"   # rtsp | webrtc
+  protocol: rtsp
   rtsp_port: 8554
   webrtc_signaling_port: 8080
-
-# ---- Logging ----
-logging:
-  level: "INFO"   # DEBUG | INFO | WARNING | ERROR
-  file: "logs/edge.log"
-  max_bytes: 10485760  # 10 MB
-  backup_count: 5
+thermal:
+  enabled: true
+  i2c_address: 105
+  i2c_bus: 1
+  poll_interval_sec: 2
+thresholds:
+  heart_rate:
+    max: 120
+    min: 50
+  presence:
+    timeout_minutes: 30
+  spo2:
+    min: 90
+    warning: 94
+  temperature:
+    skin_max: 38.5
+    skin_min: 35.0
