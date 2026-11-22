@@ -15,6 +15,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -38,6 +39,8 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
         const val EMERGENCY_CHANNEL_ID = "emergency_alerts_v5"
         const val CHANNEL_NAME = "Thông báo thường SmartCare AI"
         const val EMERGENCY_CHANNEL_NAME = "Cảnh báo khẩn cấp SmartCare AI"
+        const val DEFAULT_EMERGENCY_PHONE = "0898230852"
+        const val DEFAULT_AUTO_CALL_DELAY_MS = 30000L // 30s reo chuông khẩn cấp trước khi tự động quay số
 
         private var activeVibrator: Vibrator? = null
         private var activeRingtone: Ringtone? = null
@@ -52,10 +55,17 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
         }
 
         /**
-         * Phát chuông báo động và kích hoạt rung liên tục cho thông báo khẩn cấp
+         * Phát chuông báo động và kích hoạt rung liên tục cho thông báo khẩn cấp.
+         * Nếu người dùng không xử lý (không tắt chuông) sau khi chuông reo xong (30s),
+         * hệ thống sẽ TỰ ĐỘNG GỌI ĐIỆN THOẠI KHẨN CẤP ngay lập tức mà không cần chạm vào app.
          */
         @JvmStatic
-        fun triggerAlarm(context: Context, isCritical: Boolean) {
+        fun triggerAlarm(
+            context: Context,
+            isCritical: Boolean,
+            emergencyPhone: String = DEFAULT_EMERGENCY_PHONE,
+            autoCallDelayMs: Long = DEFAULT_AUTO_CALL_DELAY_MS
+        ) {
             mainHandler.post {
                 try {
                     // Dừng chuông và rung cũ nếu có
@@ -71,6 +81,16 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                     activeVibrator = null
                     stopAlarmRunnable?.let { mainHandler.removeCallbacks(it) }
                     stopAlarmRunnable = null
+
+                    // Đánh thức CPU và màn hình để đếm giờ và gọi điện kể cả khi điện thoại tắt màn hình / khóa phím
+                    try {
+                        val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+                        val wakeLock = pm?.newWakeLock(
+                            PowerManager.FULL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.ON_AFTER_RELEASE,
+                            "smartcare:emergency_alarm_wakelock"
+                        )
+                        wakeLock?.acquire(autoCallDelayMs + 5000L)
+                    } catch (_: Exception) {}
 
                     // 1. Phát âm thanh chuông báo động (Ưu tiên MediaPlayer để lặp liên tục ở âm lượng tối đa)
                     val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
@@ -142,12 +162,24 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                     }
                     activeVibrator = vibrator
 
-                    // Tự động dừng sau 60s bảo vệ pin nếu không có tương tác
-                    stopAlarmRunnable = Runnable {
-                        stopAlarm(context)
+                    // 3. TỰ ĐỘNG GỌI ĐIỆN THOẠI KHẨN CẤP NẾU REO XONG CHUÔNG MÀ KHÔNG AI XỬ LÝ (TẮT CHUÔNG)
+                    if (isCritical) {
+                        stopAlarmRunnable = Runnable {
+                            Log.w(TAG, "[AutoCall] Đã reo xong chuông sau ${autoCallDelayMs / 1000}s nhưng người dùng không bấm tắt chuông -> Tự động gọi khẩn cấp ngay tới $emergencyPhone (không cần nhấn vào app)!")
+                            // Tắt chuông và rung để giải phóng luồng thoại cho cuộc gọi
+                            stopAlarm(context)
+                            // Tự động gọi trực tiếp qua ACTION_CALL / ACTION_DIAL
+                            performEmergencyCall(context, emergencyPhone)
+                        }
+                        mainHandler.postDelayed(stopAlarmRunnable!!, autoCallDelayMs)
+                        Log.d(TAG, "Đã kích hoạt còi hú và hẹn giờ tự động gọi điện sau ${autoCallDelayMs / 1000}s nếu không xử lý tắt chuông.")
+                    } else {
+                        // Thông báo thường tự dừng chuông sau 15s
+                        stopAlarmRunnable = Runnable {
+                            stopAlarm(context)
+                        }
+                        mainHandler.postDelayed(stopAlarmRunnable!!, 15000L)
                     }
-                    mainHandler.postDelayed(stopAlarmRunnable!!, 60000)
-                    Log.d(TAG, "Đã kích hoạt chuông và rung liên tục khẩn cấp thành công.")
                 } catch (e: Exception) {
                     Log.e(TAG, "Lỗi kích hoạt báo động: ${e.message}")
                 }
@@ -189,6 +221,37 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                 } catch (e: Exception) {
                     Log.e(TAG, "Lỗi khi dừng báo động: ${e.message}")
                 }
+            }
+        }
+
+        /**
+         * Thực hiện quay số khẩn cấp tự động trực tiếp trên tầng Native Android.
+         * Ưu tiên dùng ACTION_CALL nếu đã được cấp quyền CALL_PHONE (tự động bấm gọi luôn không cần tương tác).
+         * Fallback sang ACTION_DIAL nếu chưa được cấp quyền gọi trực tiếp.
+         */
+        @JvmStatic
+        fun performEmergencyCall(context: Context, phone: String = DEFAULT_EMERGENCY_PHONE): String {
+            return try {
+                val sanitized = phone.trim().ifEmpty { DEFAULT_EMERGENCY_PHONE }
+                val telUri = Uri.parse("tel:$sanitized")
+                val hasCallPermission = ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.CALL_PHONE
+                ) == PackageManager.PERMISSION_GRANTED
+
+                val intent = Intent(
+                    if (hasCallPermission) Intent.ACTION_CALL else Intent.ACTION_DIAL,
+                    telUri
+                ).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+                val mode = if (hasCallPermission) "CALLED" else "DIALED"
+                Log.d(TAG, "performEmergencyCall($sanitized) thành công qua mode: $mode")
+                mode
+            } catch (e: Exception) {
+                Log.e(TAG, "Lỗi performEmergencyCall: ${e.message}", e)
+                "ERROR"
             }
         }
     }
@@ -290,13 +353,47 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
 
     @ReactMethod
     fun triggerEmergencyAlarm(title: String, message: String, isCritical: Boolean) {
-        showNotificationInternal(title, message, isEmergency = true, isCritical = isCritical)
+        showNotificationInternal(
+            title = title,
+            message = message,
+            isEmergency = true,
+            isCritical = isCritical,
+            emergencyPhone = DEFAULT_EMERGENCY_PHONE,
+            autoCallDelayMs = DEFAULT_AUTO_CALL_DELAY_MS
+        )
+    }
+
+    @ReactMethod
+    fun triggerEmergencyAlarmWithConfig(
+        title: String,
+        message: String,
+        isCritical: Boolean,
+        emergencyPhone: String,
+        autoCallSeconds: Double
+    ) {
+        val phone = if (emergencyPhone.isNotBlank()) emergencyPhone.trim() else DEFAULT_EMERGENCY_PHONE
+        val delayMs = if (autoCallSeconds > 0) (autoCallSeconds * 1000).toLong() else DEFAULT_AUTO_CALL_DELAY_MS
+        showNotificationInternal(
+            title = title,
+            message = message,
+            isEmergency = true,
+            isCritical = isCritical,
+            emergencyPhone = phone,
+            autoCallDelayMs = delayMs
+        )
     }
 
     @ReactMethod
     fun showNotification(title: String, message: String) {
         // Thông báo thông thường (Lịch khám, Tin nhắn, Cập nhật bệnh án): Không hú còi, không rung liên tục
-        showNotificationInternal(title, message, isEmergency = false, isCritical = false)
+        showNotificationInternal(
+            title = title,
+            message = message,
+            isEmergency = false,
+            isCritical = false,
+            emergencyPhone = DEFAULT_EMERGENCY_PHONE,
+            autoCallDelayMs = DEFAULT_AUTO_CALL_DELAY_MS
+        )
     }
 
     @ReactMethod
@@ -308,7 +405,9 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
         title: String,
         message: String,
         isEmergency: Boolean,
-        isCritical: Boolean
+        isCritical: Boolean,
+        emergencyPhone: String = DEFAULT_EMERGENCY_PHONE,
+        autoCallDelayMs: Long = DEFAULT_AUTO_CALL_DELAY_MS
     ) {
         try {
             val manager =
@@ -423,7 +522,7 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
             // CHỈ PHÁT CHUÔNG BÁO ĐỘNG VÀ RUNG LIÊN TỤC NẾU LÀ BÁO ĐỘNG NGUY HIỂM
             // Thông báo thường (Lịch khám, Tin nhắn) chỉ phát tiếng ting ting nhẹ nhàng của hệ thống
             if (isEmergency) {
-                triggerAlarm(reactContext, isCritical = isCritical)
+                triggerAlarm(reactContext, isCritical = isCritical, emergencyPhone = emergencyPhone, autoCallDelayMs = autoCallDelayMs)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Lỗi khi gửi thông báo: ${e.message}", e)
@@ -535,31 +634,7 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
      */
     @ReactMethod
     fun placeEmergencyCall(phone: String, promise: Promise) {
-        try {
-            val sanitized = phone.trim()
-            if (sanitized.isEmpty()) {
-                promise.resolve("INVALID")
-                return
-            }
-            val telUri = Uri.parse("tel:$sanitized")
-            val hasCallPermission = ContextCompat.checkSelfPermission(
-                reactContext,
-                Manifest.permission.CALL_PHONE
-            ) == PackageManager.PERMISSION_GRANTED
-
-            val intent = Intent(
-                if (hasCallPermission) Intent.ACTION_CALL else Intent.ACTION_DIAL,
-                telUri
-            ).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            reactContext.startActivity(intent)
-            val mode = if (hasCallPermission) "CALLED" else "DIALED"
-            Log.d(TAG, "placeEmergencyCall($sanitized) -> $mode")
-            promise.resolve(mode)
-        } catch (e: Exception) {
-            Log.e(TAG, "Lỗi placeEmergencyCall: ${e.message}", e)
-            promise.resolve("ERROR")
-        }
+        val mode = performEmergencyCall(reactContext, phone)
+        promise.resolve(mode)
     }
 }

@@ -262,8 +262,10 @@ class SmartCareBackgroundService : Service() {
                         NativeNotificationModule.stopAlarm(this)
                     } else if (id != lastNotifiedIncidentId && id.isNotBlank()) {
                         lastNotifiedIncidentId = id
+                        val contactPhone = latest.optString("emergency_contact_phone", "").takeIf { it.isNotBlank() }
+                            ?: NativeNotificationModule.DEFAULT_EMERGENCY_PHONE
                         if (isEmergency) {
-                            triggerHighPriorityAlarm(id, alertType, alertLevel, message)
+                            triggerHighPriorityAlarm(id, alertType, alertLevel, message, contactPhone)
                         } else {
                             triggerRoutineNotification(id, alertType, message)
                         }
@@ -281,7 +283,8 @@ class SmartCareBackgroundService : Service() {
         incidentId: String,
         alertType: String,
         alertLevel: String,
-        message: String
+        message: String,
+        emergencyPhone: String = NativeNotificationModule.DEFAULT_EMERGENCY_PHONE
     ) {
         val title = when {
             alertType == "FALL_DETECTED" -> "🚨 PHÁT HIỆN SỰ CỐ TÉ NGÃ KHẨN CẤP!"
@@ -378,7 +381,13 @@ class SmartCareBackgroundService : Service() {
         }
 
         // Kích hoạt chuông báo động và rung phần cứng tập trung qua NativeNotificationModule
-        NativeNotificationModule.triggerAlarm(this, isCritical = true)
+        // Sau 30s reo chuông mà không ai xử lý -> Tự động gọi điện thoại khẩn cấp (không cần mở app)
+        NativeNotificationModule.triggerAlarm(
+            context = this,
+            isCritical = true,
+            emergencyPhone = emergencyPhone,
+            autoCallDelayMs = NativeNotificationModule.DEFAULT_AUTO_CALL_DELAY_MS
+        )
     }
 
     private fun triggerRoutineNotification(

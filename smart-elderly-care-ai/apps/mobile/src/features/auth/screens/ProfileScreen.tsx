@@ -509,7 +509,7 @@ export default function ProfileScreen({ navigation, route }: any) {
         onPickFromCamera={mgr.pickAvatarFromCamera}
         onPickFromLibrary={mgr.pickAvatarFromLibrary}
         onChangePasswordPress={() => mgr.setChangePasswordVisible(true)}
-        onLogoutPress={() => mgr.setLogoutConfirmVisible(true)}
+        onLogoutPress={mgr.performLogout}
         onSaveName={mgr.handleSaveName}
         onSavePhone={mgr.handleSavePhone}
       />

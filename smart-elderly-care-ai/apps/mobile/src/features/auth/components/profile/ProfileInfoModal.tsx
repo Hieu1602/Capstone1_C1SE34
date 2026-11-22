@@ -12,6 +12,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../../theme/colors";
 import { SlideRightModal } from "../settings/SlideRightModal";
+import { LogoutConfirmModal } from "./LogoutConfirmModal";
 import { ProfileEditNameModal } from "./ProfileEditNameModal";
 import { ProfileEditPhoneModal } from "./ProfileEditPhoneModal";
 import { ViewAvatarModal } from "./ViewAvatarModal";
@@ -50,6 +51,7 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
     const [isAvatarPickerVisible, setIsAvatarPickerVisible] = useState(false);
     const [isViewingAvatar, setIsViewingAvatar] = useState(false);
     const [isEditingName, setIsEditingName] = useState(false);
+    const [isLogoutConfirmVisible, setIsLogoutConfirmVisible] = useState(false);
     const [draftName, setDraftName] = useState(displayName);
     const [isSavingName, setIsSavingName] = useState(false);
     const [nameError, setNameError] = useState<string | null>(null);
@@ -349,7 +351,7 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
                     <TouchableOpacity
                         style={styles.logoutButton}
                         activeOpacity={0.9}
-                        onPress={onLogoutPress}
+                        onPress={() => setIsLogoutConfirmVisible(true)}
                     >
                         <Text style={styles.logoutButtonText}>Đăng xuất</Text>
                     </TouchableOpacity>
@@ -468,6 +470,18 @@ export const ProfileInfoModal: React.FC<ProfileInfoModalProps> = ({
                             </Pressable>
                         </Pressable>
                     )}
+
+                    {/* Modal xác nhận Đăng xuất hiển thị trực tiếp ngay trên giao diện Hồ sơ cá nhân (không bị thoát ra Menu) */}
+                    <LogoutConfirmModal
+                        visible={isLogoutConfirmVisible}
+                        isDarkMode={isDarkMode}
+                        useModal={false}
+                        onClose={() => setIsLogoutConfirmVisible(false)}
+                        onConfirm={() => {
+                            setIsLogoutConfirmVisible(false);
+                            onLogoutPress();
+                        }}
+                    />
                 </Pressable>
             </Pressable>
         </SlideRightModal>

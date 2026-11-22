@@ -24,11 +24,16 @@ class MainActivity : ReactActivity() {
     super.onCreate(null)
     hideSystemNavigationBar()
 
-    // Tự động kiểm tra và yêu cầu cấp quyền hiển thị thông báo trên thanh thông báo Android 13+ (API 33+)
-    if (Build.VERSION.SDK_INT >= 33) {
-      if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-        requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
-      }
+    // Tự động kiểm tra và yêu cầu cấp quyền thông báo và quyền gọi khẩn cấp tự động CALL_PHONE
+    val permsToRequest = mutableListOf<String>()
+    if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+      permsToRequest.add(android.Manifest.permission.POST_NOTIFICATIONS)
+    }
+    if (checkSelfPermission(android.Manifest.permission.CALL_PHONE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+      permsToRequest.add(android.Manifest.permission.CALL_PHONE)
+    }
+    if (permsToRequest.isNotEmpty()) {
+      requestPermissions(permsToRequest.toTypedArray(), 101)
     }
   }
 

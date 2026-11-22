@@ -14,6 +14,7 @@ interface LogoutConfirmModalProps {
     isDarkMode: boolean;
     onClose: () => void;
     onConfirm: () => void;
+    useModal?: boolean;
 }
 
 export const LogoutConfirmModal: React.FC<LogoutConfirmModalProps> = ({
@@ -21,90 +22,111 @@ export const LogoutConfirmModal: React.FC<LogoutConfirmModalProps> = ({
     isDarkMode,
     onClose,
     onConfirm,
+    useModal = true,
 }) => {
-    return (
-        <Modal
-            transparent
-            visible={visible}
-            animationType="fade"
-            onRequestClose={onClose}
+    if (!visible) return null;
+
+    const content = (
+        <Pressable
+            style={styles.confirmModalOverlay}
+            onPress={onClose}
         >
-            <Pressable style={styles.confirmModalOverlay} onPress={onClose}>
-                <Pressable
+            <Pressable
+                style={[
+                    styles.confirmModalCard,
+                    isDarkMode && {
+                        backgroundColor: "#1E293B",
+                        borderColor: "#334155",
+                        borderWidth: 1,
+                    },
+                ]}
+                onPress={(e) => e.stopPropagation()}
+            >
+                <View style={styles.confirmModalIconCircle}>
+                    <Ionicons
+                        name="log-out-outline"
+                        size={32}
+                        color="#EF4444"
+                    />
+                </View>
+                <Text
                     style={[
-                        styles.confirmModalCard,
-                        isDarkMode && {
-                            backgroundColor: "#1E293B",
-                            borderColor: "#334155",
-                            borderWidth: 1,
-                        },
+                        styles.confirmModalTitle,
+                        isDarkMode && { color: "#F8FAFC" },
                     ]}
-                    onPress={() => {}}
                 >
-                    <View style={styles.confirmModalIconCircle}>
-                        <Ionicons
-                            name="log-out-outline"
-                            size={32}
-                            color="#EF4444"
-                        />
-                    </View>
-                    <Text
+                    Đăng xuất tài khoản
+                </Text>
+                <Text
+                    style={[
+                        styles.confirmModalMessage,
+                        isDarkMode && { color: "#94A3B8" },
+                    ]}
+                >
+                    Bạn có chắc chắn muốn đăng xuất khỏi hệ thống giám sát Smart Elderly Care?
+                </Text>
+                <View style={styles.confirmModalButtonRow}>
+                    <TouchableOpacity
                         style={[
-                            styles.confirmModalTitle,
-                            isDarkMode && { color: "#F8FAFC" },
+                            styles.confirmModalCancelBtn,
+                            isDarkMode && {
+                                backgroundColor: "#0F172A",
+                                borderColor: "#334155",
+                                borderWidth: 1,
+                            },
                         ]}
+                        onPress={onClose}
+                        activeOpacity={0.7}
                     >
-                        Đăng xuất tài khoản
-                    </Text>
-                    <Text
-                        style={[
-                            styles.confirmModalMessage,
-                            isDarkMode && { color: "#94A3B8" },
-                        ]}
-                    >
-                        Bạn có chắc chắn muốn đăng xuất khỏi hệ thống giám sát Smart Elderly Care?
-                    </Text>
-                    <View style={styles.confirmModalButtonRow}>
-                        <TouchableOpacity
+                        <Text
                             style={[
-                                styles.confirmModalCancelBtn,
-                                isDarkMode && {
-                                    backgroundColor: "#0F172A",
-                                    borderColor: "#334155",
-                                    borderWidth: 1,
-                                },
+                                styles.confirmModalCancelText,
+                                isDarkMode && { color: "#94A3B8" },
                             ]}
-                            onPress={onClose}
-                            activeOpacity={0.7}
                         >
-                            <Text
-                                style={[
-                                    styles.confirmModalCancelText,
-                                    isDarkMode && { color: "#94A3B8" },
-                                ]}
-                            >
-                                Hủy
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.confirmModalLogoutBtn}
-                            onPress={onConfirm}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={styles.confirmModalLogoutText}>
-                                Đăng xuất
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                </Pressable>
+                            Hủy
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.confirmModalLogoutBtn}
+                        onPress={onConfirm}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={styles.confirmModalLogoutText}>
+                            Đăng xuất
+                        </Text>
+                    </TouchableOpacity>
+                </View>
             </Pressable>
-        </Modal>
+        </Pressable>
     );
+
+    if (useModal) {
+        return (
+            <Modal
+                transparent
+                visible={visible}
+                animationType="fade"
+                onRequestClose={onClose}
+            >
+                {content}
+            </Modal>
+        );
+    }
+
+    return content;
 };
 
 const styles = StyleSheet.create({
     confirmModalOverlay: {
         flex: 1,
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 9999,
+        elevation: 9999,
         backgroundColor: "rgba(15, 23, 42, 0.65)",
         justifyContent: "center",
         alignItems: "center",
