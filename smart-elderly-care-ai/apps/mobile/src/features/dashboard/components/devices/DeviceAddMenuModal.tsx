@@ -77,7 +77,7 @@ export const DeviceAddMenuModal: React.FC<DeviceAddMenuModalProps> = ({
                   Quét mã vạch camera
                 </LocalizedText>
                 <LocalizedText style={[styles.menuItemDesc, isDarkMode && { color: colors.textSecondary }]}>
-                  Mã vạch S/N hoặc MAC ở đáy camera
+                  Mã vạch S/N ở đáy camera
                 </LocalizedText>
               </View>
               <Ionicons name="chevron-forward" size={16} color={isDarkMode ? '#64748B' : '#CBD5E1'} />

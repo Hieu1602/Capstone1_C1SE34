@@ -72,13 +72,6 @@ async def register_device(
     Đăng ký thiết bị IoT mới (thêm thủ công hoặc qua quét mã QR).
     Tự động liên kết vào căn nhà mặc định của người dùng nếu chưa chỉ định.
     """
-    existing = await crud_device.get_by_device_id(db, device_id=device_in.device_id)
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Mã thiết bị '{device_in.device_id}' đã được đăng ký trên hệ thống.",
-        )
-
     if device_in.house_id:
         house = await crud_house.get_by_id(db, id=device_in.house_id)
         if not house:
@@ -96,13 +89,80 @@ async def register_device(
             )
         device_in.house_id = house.id
 
-    if house.owner_id != current_user.id:
-        permissions = await crud_house.get_user_permissions(db, house=house, user=current_user)
-        if not permissions.get("can_manage_devices", False):
+    is_house_owner = (house.owner_id == current_user.id)
+    permissions = await crud_house.get_user_permissions(db, house=house, user=current_user) if not is_house_owner else {}
+    can_manage = is_house_owner or bool(permissions.get("can_manage_devices", False))
+
+    existing = await crud_device.get_by_device_id_or_mac(
+        db, device_id=device_in.device_id, mac_address=device_in.mac_address
+    )
+    if existing:
+        # Trường hợp 1: Thiết bị đã thuộc chính căn nhà này
+        if existing.house_id == house.id:
+            if device_in.mac_address and not existing.mac_address:
+                existing.mac_address = device_in.mac_address
+            if can_manage:
+                update_data = DeviceUpdate(
+                    name=device_in.name or existing.name,
+                    sub_title=device_in.sub_title or existing.sub_title,
+                    location=device_in.location or existing.location,
+                    ip_address=device_in.ip_address or existing.ip_address,
+                    is_online=True,
+                    status_text="Trực tuyến",
+                )
+                if device_in.config:
+                    await crud_device.update_config(db, device=existing, config_in=device_in.config)
+                return await crud_device.update(db, device=existing, obj_in=update_data)
+            # Thành viên có quyền xem camera trong nhà: trả về thiết bị để app đồng bộ và xem được ngay
+            return existing
+
+        # Trường hợp 2: Thiết bị đang thuộc căn nhà khác
+        old_house = await crud_house.get_by_id(db, id=existing.house_id) if existing.house_id else None
+        old_house_name = old_house.name if old_house else "căn nhà khác"
+
+        # 2a. Nếu chính người dùng hiện tại sở hữu thiết bị ở nhà cũ, cho phép chuyển sang nhà mới
+        if existing.owner_id == current_user.id:
+            existing.house_id = house.id
+            if device_in.name:
+                existing.name = device_in.name
+            if device_in.location:
+                existing.location = device_in.location
+            if device_in.ip_address:
+                existing.ip_address = device_in.ip_address
+            existing.is_online = True
+            existing.status_text = "Trực tuyến"
+            if device_in.config:
+                await crud_device.update_config(db, device=existing, config_in=device_in.config)
+            await db.flush()
+            await db.commit()
+            refreshed = await crud_device.get_by_id(db, existing.id)
+            return refreshed or existing
+
+        # 2b. Kiểm tra xem người dùng có đang là thành viên trong căn nhà cũ không
+        is_member_old = False
+        if existing.house_id:
+            member_old = await crud_house.get_member_by_user(db, house_id=existing.house_id, user_id=current_user.id)
+            is_member_old = bool(member_old and member_old.status == "ACTIVE")
+
+        if is_member_old:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Bạn không có quyền thêm thiết bị vào căn nhà này.",
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Camera này đã có trong căn nhà '{old_house_name}' mà bạn đang tham gia. Hãy chuyển sang căn nhà '{old_house_name}' để xem camera trực tiếp.",
             )
+
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Camera này đã được liên kết với căn nhà '{old_house_name}'. "
+                "Nếu bạn là người nhà, vui lòng nhờ chủ hộ thêm bạn vào danh sách thành viên của căn nhà để cùng giám sát camera."
+            ),
+        )
+
+    if not can_manage:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn không có quyền thêm thiết bị vào căn nhà này.",
+        )
 
     # Đảm bảo quy tắc 1-1: Mỗi người cao tuổi chỉ gán tối đa 1 đồng hồ thông minh
     if device_in.elderly_id and device_in.device_type == DeviceType.SMARTBAND:

@@ -398,7 +398,7 @@ export const StepCameraRtspConfig: React.FC<StepCameraRtspConfigProps> = ({
         >
           <Ionicons name="barcode-outline" size={20} color="#0284C7" style={{ marginRight: 8 }} />
           <LocalizedText style={[localStyles.scanBarcodeBtnText, isDarkMode && { color: '#38BDF8' }]}>
-            {scannedData ? 'Quét lại mã vạch camera' : 'Quét mã vạch S/N hoặc MAC ở đáy camera'}
+            {scannedData ? 'Quét lại mã vạch camera' : 'Quét mã vạch S/N ở đáy camera'}
           </LocalizedText>
         </TouchableOpacity>
       )}
@@ -585,7 +585,7 @@ export const StepCameraRtspConfig: React.FC<StepCameraRtspConfigProps> = ({
           >
             <Ionicons name="wifi" size={16} color="#0284C7" style={{ marginRight: 8 }} />
             <LocalizedText style={localStyles.scanNetworkButtonText}>
-              📡 Dò tìm camera trong mạng WiFi
+              Dò tìm camera trong mạng WiFi
             </LocalizedText>
           </TouchableOpacity>
         )}

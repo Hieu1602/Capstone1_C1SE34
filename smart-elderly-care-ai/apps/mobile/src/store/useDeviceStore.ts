@@ -249,6 +249,7 @@ export const useDeviceStore = create<DeviceState>()(
             device_type: isCam ? "CAMERA" : "SMARTBAND",
             location: device.location || "Phòng khách",
             ip_address: (device as any).ipAddress,
+            mac_address: (device as any).macAddress,
             config: isCam && device.streamUrl ? { stream_url: device.streamUrl } : undefined,
           });
           if (res?.data?.id) {
@@ -274,11 +275,21 @@ export const useDeviceStore = create<DeviceState>()(
             }));
             return String(dev.id);
           }
-        } catch (err) {
+        } catch (err: any) {
+          const status = err?.response?.status;
+          const detail = err?.response?.data?.detail;
           console.log(
-            "[DeviceStore] Thiết bị lưu local cache, đồng bộ backend sau:",
-            err,
+            "[DeviceStore] Lỗi đăng ký thiết bị:",
+            status,
+            detail || err?.message,
           );
+          if (status === 409 || status === 403 || status === 400) {
+            // Hoàn tác thiết bị đã thêm tạm vào local state
+            set((state) => ({
+              iotDevices: state.iotDevices.filter((d) => d.id !== device.id),
+            }));
+            throw new Error(detail || "Không thể đăng ký thiết bị trên hệ thống.");
+          }
           return undefined;
         }
         return device.id;

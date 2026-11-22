@@ -64,6 +64,35 @@ class CRUDDevice:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_device_id_or_mac(
+        self, db: AsyncSession, device_id: str, mac_address: Optional[str] = None
+    ) -> Optional[Device]:
+        """Tra cứu thiết bị theo device_id hoặc đối soát chéo theo địa chỉ MAC."""
+        conditions = [Device.device_id == device_id]
+        if mac_address:
+            clean_mac = mac_address.replace(":", "").replace("-", "").upper()
+            conditions.append(Device.mac_address == mac_address)
+            conditions.append(Device.device_id == f"CAM_MAC_{clean_mac}")
+            if len(clean_mac) == 12:
+                formatted_colon = ":".join(clean_mac[i:i+2] for i in range(0, 12, 2))
+                formatted_dash = "-".join(clean_mac[i:i+2] for i in range(0, 12, 2))
+                conditions.append(Device.mac_address == formatted_colon)
+                conditions.append(Device.mac_address == formatted_dash)
+
+        if device_id.startswith("CAM_MAC_"):
+            raw_mac = device_id.replace("CAM_MAC_", "").replace(":", "").replace("-", "").upper()
+            conditions.append(Device.mac_address == raw_mac)
+            if len(raw_mac) == 12:
+                formatted_colon = ":".join(raw_mac[i:i+2] for i in range(0, 12, 2))
+                formatted_dash = "-".join(raw_mac[i:i+2] for i in range(0, 12, 2))
+                conditions.append(Device.mac_address == formatted_colon)
+                conditions.append(Device.mac_address == formatted_dash)
+
+        result = await db.execute(
+            select(Device).options(*DEVICE_EAGER_LOADS).where(or_(*conditions))
+        )
+        return result.scalar_one_or_none()
+
     async def get_by_id_or_device_id(
         self, db: AsyncSession, id_or_device_id: str
     ) -> Optional[Device]:
