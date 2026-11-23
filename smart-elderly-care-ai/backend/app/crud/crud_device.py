@@ -6,7 +6,7 @@ và cập nhật nhịp tim định kỳ (heartbeat) thời gian thực.
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
 
 from sqlalchemy import and_, or_, select
@@ -16,7 +16,12 @@ from sqlalchemy.orm import selectinload
 from app.models.device import Device
 from app.models.device_config import DeviceConfig
 from app.models.house import HouseMember
-from app.schemas.device import DeviceConfigUpdate, DeviceCreate, DeviceUpdate
+from app.schemas.device import (
+    DeviceConfigBase,
+    DeviceConfigUpdate,
+    DeviceCreate,
+    DeviceUpdate,
+)
 
 # Cấu hình nạp quan hệ liên kết mặc định cho Device (DRY)
 DEVICE_EAGER_LOADS = (
@@ -233,7 +238,10 @@ class CRUDDevice:
         return refreshed or device
 
     async def update_config(
-        self, db: AsyncSession, device: Device, config_in: DeviceConfigUpdate
+        self,
+        db: AsyncSession,
+        device: Device,
+        config_in: Union[DeviceConfigUpdate, DeviceConfigBase, Dict[str, Any]],
     ) -> DeviceConfig:
         config = device.config
         if not config:
@@ -241,9 +249,14 @@ class CRUDDevice:
             db.add(config)
             await db.flush()
 
-        update_data = config_in.model_dump(exclude_unset=True)
+        if isinstance(config_in, dict):
+            update_data = config_in
+        else:
+            update_data = config_in.model_dump(exclude_unset=True)
+
         for field, value in update_data.items():
-            setattr(config, field, value)
+            if hasattr(config, field):
+                setattr(config, field, value)
 
         await db.flush()
         await db.refresh(config)
