@@ -63,27 +63,47 @@ class CRUDVital:
         # Tự động tạo bản ghi Device riêng biệt để đáp ứng ràng buộc khóa ngoại (Foreign Key)
         try:
             from app.models.house import House
+            from app.models.user import User
+            from app.models.elderly_profile import ElderlyProfile
+
             house_res = await db.execute(select(House.id, House.owner_id).limit(1))
             house_row = house_res.first()
-            is_band = any(k in clean_str.lower() for k in ["band", "watch", "ble", "miband", "mi_band", "hw706", "coospo"])
-            new_dev = Device(
-                device_id=clean_str,
-                name=f"Vòng đeo tay {clean_str}" if is_band else f"Thiết bị {clean_str}",
-                device_type=DeviceType.SMARTBAND if is_band else DeviceType.CAMERA,
-                sub_title="Kết nối qua App Bridge / Đồng hồ ảo",
-                status="ONLINE",
-                is_online=True,
-                house_id=house_row[0] if house_row else None,
-                owner_id=house_row[1] if house_row else None,
-            )
-            db.add(new_dev)
-            await db.flush()
-            await db.refresh(new_dev)
-            logger.info("[CRUDVital] Tự động khởi tạo Device riêng '%s' (UUID: %s)", clean_str, new_dev.id)
-            return new_dev.id
+            owner_id = house_row[1] if house_row and house_row[1] else None
+            house_id = house_row[0] if house_row else None
+
+            if not owner_id:
+                user_res = await db.execute(select(User.id).limit(1))
+                owner_id = user_res.scalar_one_or_none()
+
+            eld_id = None
+            if house_id:
+                eld_res = await db.execute(select(ElderlyProfile.id).where(ElderlyProfile.house_id == house_id).limit(1))
+                eld_id = eld_res.scalar_one_or_none()
+            if not eld_id:
+                eld_res_any = await db.execute(select(ElderlyProfile.id).limit(1))
+                eld_id = eld_res_any.scalar_one_or_none()
+
+            if owner_id:
+                is_band = any(k in clean_str.lower() for k in ["band", "watch", "ble", "miband", "mi_band", "hw706", "coospo"])
+                new_dev = Device(
+                    device_id=clean_str,
+                    name=f"Vòng đeo tay {clean_str}" if is_band else f"Thiết bị {clean_str}",
+                    device_type=DeviceType.SMARTBAND if is_band else DeviceType.CAMERA,
+                    sub_title="Kết nối qua App Bridge / Đồng hồ ảo",
+                    status_text="Trực tuyến",
+                    is_online=True,
+                    house_id=house_id,
+                    owner_id=owner_id,
+                    elderly_id=eld_id,
+                )
+                db.add(new_dev)
+                await db.flush()
+                await db.refresh(new_dev)
+                logger.info("[CRUDVital] Tự động khởi tạo Device riêng '%s' (UUID: %s)", clean_str, new_dev.id)
+                return new_dev.id
         except Exception as err:
             logger.warning("[CRUDVital] Không thể tự động tạo Device '%s': %s", clean_str, err)
-            return None
+        return None
 
     async def get_latest(
         self, db: AsyncSession, device_id: Union[str, UUID]
@@ -153,8 +173,7 @@ class CRUDVital:
         uuid_val = None
         if raw_dev:
             uuid_val = await self.resolve_device_uuid(db, raw_dev)
-            if uuid_val:
-                data["device_id"] = uuid_val
+            data["device_id"] = uuid_val
 
         # Tách các trường pin và phụ trợ không thuộc bảng vital_signs
         b1 = data.pop("bracelet_battery", None)
