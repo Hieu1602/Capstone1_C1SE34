@@ -54,10 +54,25 @@ services:
       timeout: 5s
       start_period: 20s
   camera-tunnel:
-    image: cloudflare/cloudflared:latest
+    image: alpine:latest
     container_name: elderly_care_camera_tunnel
     restart: unless-stopped
-    command: tunnel --no-autoupdate --url http://tapo-camera:8090
+    volumes:
+      - ~/.ssh/elderly-care-new:/key:ro
+    entrypoint:
+      - sh
+      - -c
+      - |
+        apk add --no-cache openssh-client
+        mkdir -p /root/.ssh
+        cp /key /root/.ssh/id_ed25519
+        chmod 600 /root/.ssh/id_ed25519
+        while true; do
+          echo "[Tunnel] Connecting to EC2 16.178.128.42..."
+          ssh -i /root/.ssh/id_ed25519 -N -R 0.0.0.0:8090:tapo-camera:8090 -R 0.0.0.0:1984:tapo-audio:1984 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no ubuntu@16.178.128.42
+          echo "[Tunnel] Disconnected. Reconnecting in 5s..."
+          sleep 5
+        done
     networks:
       - elderly_care_net
 volumes:
