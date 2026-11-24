@@ -220,7 +220,7 @@ class TapoControl:
                         target_host,
                         target_user,
                         target_pass,
-                        cloudPassword=os.getenv("TAPO_CLOUD_PASSWORD", ""),
+                        cloudPassword=os.getenv("TAPO_CLOUD_PASSWORD") or target_pass,
                         printDebugInformation=False,
                     )
                 return getattr(self._client, method)(*args)
@@ -229,3 +229,24 @@ class TapoControl:
                 if method == "moveMotor" and len(args) >= 2:
                     return onvif_move(target_host, target_user, target_pass, args[0], args[1])
                 raise
+
+    def get_client(self):
+        """Khởi tạo và trả về client pytapo với cloudPassword để trích xuất thẻ nhớ."""
+        with self._lock:
+            if self._client is None:
+                target_host = self.host or os.environ.get("TAPO_HOST", "").strip()
+                if not target_host or not is_port_open(target_host, 443, timeout=0.5):
+                    discovered = discover_tapo_host()
+                    if discovered:
+                        target_host = discovered
+                target_user = os.getenv("TAPO_CONTROL_USERNAME") or self.user or os.environ.get("TAPO_USERNAME", "")
+                target_pass = os.getenv("TAPO_CONTROL_PASSWORD") or self.password or os.environ.get("TAPO_PASSWORD", "")
+                from pytapo import Tapo
+                self._client = Tapo(
+                    target_host,
+                    target_user,
+                    target_pass,
+                    cloudPassword=os.getenv("TAPO_CLOUD_PASSWORD") or target_pass,
+                    printDebugInformation=False,
+                )
+            return self._client

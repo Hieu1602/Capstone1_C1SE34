@@ -346,12 +346,6 @@ export function useCameraConnection(
             const res = await cameraApi.setFallDetection(next, cameraId);
             const actual = res.data?.enabled ?? next;
             setFallDetection(actual);
-            LocalizedAlert.alert(
-                "Chăm sóc AI",
-                actual
-                    ? "Đã BẬT tính năng phát hiện té ngã AI trên camera."
-                    : "Đã TẮT tính năng phát hiện té ngã AI trên camera.",
-            );
             return actual;
         } catch (err) {
             LocalizedAlert.alert("Chăm sóc AI", errorMessage(err));
