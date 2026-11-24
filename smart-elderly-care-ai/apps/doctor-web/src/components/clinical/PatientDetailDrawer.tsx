@@ -51,6 +51,8 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
   isLoadingAnalytics = false,
   isLoadingPrescriptions = false,
   isLoadingAppointments = false,
+  vitalFilter,
+  onVitalFilterChange,
   onTabChange,
   onClose,
   onOpenRecordModal,
@@ -123,13 +125,17 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
               patientDetail={patientDetail}
               activeBloodType={activeBloodType}
               activeBmi={activeBmi}
-              activeBp={activeBp}
               onOpenRecordModal={onOpenRecordModal}
             />
           )}
 
           {activeTab === 'VITALS' && (
-            <PatientDrawerVitalsTab analytics={analytics} isLoading={isLoadingAnalytics} />
+            <PatientDrawerVitalsTab
+              analytics={analytics}
+              isLoading={isLoadingAnalytics}
+              vitalFilter={vitalFilter}
+              onVitalFilterChange={onVitalFilterChange}
+            />
           )}
 
           {activeTab === 'PRESCRIPTIONS' && (

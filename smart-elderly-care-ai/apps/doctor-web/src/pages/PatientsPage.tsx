@@ -73,7 +73,7 @@ export const PatientsPage: React.FC = () => {
   const [isLoadingPrescriptions, setIsLoadingPrescriptions] = useState(false);
   const [isLoadingAppointments, setIsLoadingAppointments] = useState(false);
   const [vitalFilter, setVitalFilter] = useState<VitalFilterState>(() =>
-    computeVitalFilter('WEEK', getTodayYMD())
+    computeVitalFilter('DAY', getTodayYMD())
   );
 
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);

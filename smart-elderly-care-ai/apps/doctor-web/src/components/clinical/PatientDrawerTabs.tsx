@@ -1,7 +1,26 @@
 import React from 'react';
-import { Activity, FileText, Pill, Calendar, Plus, LucideIcon } from 'lucide-react';
+import {
+  Activity,
+  FileText,
+  Pill,
+  Calendar,
+  Plus,
+  LucideIcon,
+  ChevronLeft,
+  ChevronRight,
+  Calendar as CalendarIcon,
+} from 'lucide-react';
 import { PrescriptionItem, AppointmentItem, AnalyticsData } from '../../types';
 import { VitalsTrendChart } from './VitalsTrendChart';
+import {
+  VitalFilterState,
+  VitalRangeMode,
+  computeVitalFilter,
+  getTodayYMD,
+  formatDMY,
+  formatYMD,
+  parseYMD,
+} from '../../utils/dateFilter';
 
 export type DrawerTabKey = 'RECORD' | 'VITALS' | 'PRESCRIPTIONS' | 'APPOINTMENTS';
 
@@ -66,21 +85,175 @@ export const PatientDrawerTabBar: React.FC<PatientDrawerTabBarProps> = ({
 interface PatientDrawerVitalsTabProps {
   analytics: AnalyticsData | null;
   isLoading: boolean;
+  vitalFilter?: VitalFilterState;
+  onVitalFilterChange?: (next: VitalFilterState) => void;
 }
 
 export const PatientDrawerVitalsTab: React.FC<PatientDrawerVitalsTabProps> = ({
   analytics,
   isLoading,
+  vitalFilter,
+  onVitalFilterChange,
 }) => {
-  if (isLoading && !analytics) {
-    return (
-      <div className="space-y-4 animate-pulse">
-        <div className="h-6 w-48 rounded-lg bg-slate-200 dark:bg-slate-800" />
-        <div className="h-64 w-full rounded-2xl bg-slate-100 dark:bg-[#0F172A] border border-slate-200/70 dark:border-slate-800" />
+  const currentMode: VitalRangeMode = vitalFilter?.mode || 'DAY';
+  const currentDateStr: string = vitalFilter?.selectedDate || getTodayYMD();
+  const todayStr = getTodayYMD();
+  const isToday = currentDateStr === todayStr;
+
+  const handleModeChange = (newMode: VitalRangeMode) => {
+    if (onVitalFilterChange) {
+      onVitalFilterChange(computeVitalFilter(newMode, currentDateStr));
+    }
+  };
+
+  const handlePrevDay = () => {
+    const cur = parseYMD(currentDateStr);
+    cur.setDate(cur.getDate() - 1);
+    const prevStr = formatYMD(cur);
+    if (onVitalFilterChange) {
+      onVitalFilterChange(computeVitalFilter('DAY', prevStr));
+    }
+  };
+
+  const handleNextDay = () => {
+    if (isToday) return;
+    const cur = parseYMD(currentDateStr);
+    cur.setDate(cur.getDate() + 1);
+    const nextStr = formatYMD(cur);
+    if (onVitalFilterChange) {
+      onVitalFilterChange(computeVitalFilter('DAY', nextStr));
+    }
+  };
+
+  const handleDateSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (val && onVitalFilterChange) {
+      onVitalFilterChange(computeVitalFilter('DAY', val));
+    }
+  };
+
+  const handleChartDrillDown = (clickedDateYmdOrDm: string) => {
+    let targetYmd = clickedDateYmdOrDm;
+    if (clickedDateYmdOrDm.includes('/')) {
+      const parts = clickedDateYmdOrDm.split('/');
+      const y = new Date().getFullYear();
+      targetYmd = `${y}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+    if (onVitalFilterChange) {
+      onVitalFilterChange(computeVitalFilter('DAY', targetYmd));
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Thanh điều khiển dải thời gian & Điều hướng từng ngày chi tiết */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5 pb-0.5">
+        {/* Bộ chọn chế độ xem */}
+        <div className="inline-flex items-center rounded-xl bg-slate-100 p-1 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+          <button
+            type="button"
+            onClick={() => handleModeChange('DAY')}
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
+              currentMode === 'DAY'
+                ? 'bg-white shadow-xs text-blue-600 dark:bg-blue-600 dark:text-white'
+                : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+            }`}
+          >
+            Theo Ngày (24h)
+          </button>
+          <button
+            type="button"
+            onClick={() => handleModeChange('WEEK')}
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
+              currentMode === 'WEEK'
+                ? 'bg-white shadow-xs text-blue-600 dark:bg-blue-600 dark:text-white'
+                : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+            }`}
+          >
+            7 ngày qua
+          </button>
+          <button
+            type="button"
+            onClick={() => handleModeChange('MONTH')}
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
+              currentMode === 'MONTH'
+                ? 'bg-white shadow-xs text-blue-600 dark:bg-blue-600 dark:text-white'
+                : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+            }`}
+          >
+            30 ngày qua
+          </button>
+        </div>
+
+        {/* Bộ điều hướng xem chi tiết từng ngày */}
+        {currentMode === 'DAY' && (
+          <div className="flex items-center space-x-1.5">
+            <button
+              type="button"
+              onClick={handlePrevDay}
+              title="Xem ngày trước"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 cursor-pointer shadow-2xs"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+
+            <label className="relative flex items-center space-x-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-800 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 shadow-2xs">
+              <CalendarIcon className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+              <span>{formatDMY(parseYMD(currentDateStr))}</span>
+              {isToday && (
+                <span className="rounded-md bg-blue-100 px-1.5 py-0.2 text-[10px] font-extrabold text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                  Hôm nay
+                </span>
+              )}
+              <input
+                type="date"
+                max={todayStr}
+                value={currentDateStr}
+                onChange={handleDateSelect}
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+              />
+            </label>
+
+            <button
+              type="button"
+              onClick={handleNextDay}
+              disabled={isToday}
+              title={isToday ? 'Đã là ngày mới nhất' : 'Xem ngày sau'}
+              className={`flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 shadow-2xs ${
+                isToday
+                  ? 'opacity-40 cursor-not-allowed'
+                  : 'hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer'
+              }`}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        )}
       </div>
-    );
-  }
-  return <VitalsTrendChart data={analytics?.daily_trends || []} days={7} />;
+
+      {isLoading && !analytics ? (
+        <div className="space-y-4 animate-pulse">
+          <div className="h-6 w-48 rounded-lg bg-slate-200 dark:bg-slate-800" />
+          <div className="h-64 w-full rounded-2xl bg-slate-100 dark:bg-[#0F172A] border border-slate-200/70 dark:border-slate-800" />
+        </div>
+      ) : (
+        <VitalsTrendChart
+          data={analytics?.daily_trends || []}
+          days={currentMode === 'DAY' ? 1 : currentMode === 'WEEK' ? 7 : 30}
+          isSingleDay={currentMode === 'DAY'}
+          title={
+            vitalFilter?.titleOverride ||
+            (currentMode === 'DAY'
+              ? `Chi tiết Sinh hiệu ngày ${formatDMY(parseYMD(currentDateStr))}`
+              : currentMode === 'WEEK'
+              ? 'Xu hướng Sinh hiệu 7 ngày gần nhất'
+              : 'Xu hướng Sinh hiệu 30 ngày qua')
+          }
+          onSelectDate={handleChartDrillDown}
+        />
+      )}
+    </div>
+  );
 };
 
 interface TabListSectionProps {
