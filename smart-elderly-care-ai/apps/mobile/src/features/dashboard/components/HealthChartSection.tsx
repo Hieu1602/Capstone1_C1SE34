@@ -50,7 +50,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
   const [containerWidth, setContainerWidth] = useState(SCREEN_WIDTH - 64);
 
   const chartHeight = 150;
-  const pointSpacing = 28;
+  const pointSpacing = 36;
   const safeChartData = useMemo(
     () =>
       (chartData || []).filter(
@@ -60,7 +60,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
   );
   const hasData = safeChartData.length > 0;
   const svgWidth = hasData
-    ? Math.max(containerWidth, Math.min(containerWidth * 2.2, safeChartData.length * pointSpacing))
+    ? Math.max(containerWidth, safeChartData.length * pointSpacing)
     : containerWidth;
 
   const padLeft = 24;
@@ -125,8 +125,75 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
     };
   }, [safeChartData, hasData, usableW, usableH, bottomY]);
 
+  // 1. Tìm DUY NHẤT 1 điểm gần nhất với mốc thời gian đang tua (active/closest)
+  const closestIndex = useMemo(() => {
+    if (!coords || coords.length === 0) return -1;
+    // Khớp chính xác ID nếu có
+    if (closestVital?.id) {
+      const match = coords.findIndex((c) => c.id === closestVital.id);
+      if (match !== -1) return match;
+    }
+    // Tìm điểm gần nhất với scrubberMinutes
+    if (scrubberMinutes !== undefined) {
+      let bestIdx = -1;
+      let minDiff = 999999;
+      for (let i = 0; i < coords.length; i++) {
+        const ptMin = coords[i].minute;
+        if (ptMin !== undefined && ptMin >= 0) {
+          const diff = Math.abs(ptMin - scrubberMinutes);
+          if (diff < minDiff) {
+            minDiff = diff;
+            bestIdx = i;
+          }
+        }
+      }
+      if (bestIdx !== -1) return bestIdx;
+    }
+    return coords.length - 1;
+  }, [closestVital, coords, scrubberMinutes]);
+
+  // 2. Lọc thông minh nhãn trục hoành (X-axis) để KHÔNG BAO GIỜ bị đè chữ
+  const visibleXLabelIndices = useMemo(() => {
+    if (!coords || coords.length === 0) return new Set<number>();
+    const visible = new Set<number>();
+    let lastX = -999;
+    let lastLabel = '';
+    const minGap = 56; // Tối thiểu 56px giữa 2 nhãn giờ
+
+    coords.forEach((pt, idx) => {
+      const isFirst = idx === 0;
+      const isClosestPt = idx === closestIndex;
+      const dist = pt.x - lastX;
+      const labelChanged = pt.label !== lastLabel;
+
+      if (isFirst || isClosestPt || (dist >= minGap && labelChanged)) {
+        visible.add(idx);
+        lastX = pt.x;
+        lastLabel = pt.label;
+      }
+    });
+
+    if (coords.length > 1) {
+      const lastIdx = coords.length - 1;
+      const lastPt = coords[lastIdx];
+      if (lastPt.x - lastX >= 36) {
+        visible.add(lastIdx);
+      }
+    }
+
+    return visible;
+  }, [coords, closestIndex]);
+
   return (
-    <View style={[styles.chartCard, isDarkMode && { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}>
+    <View
+      style={[styles.chartCard, isDarkMode && { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        if (w > 0 && Math.abs(w - 32 - containerWidth) > 5) {
+          setContainerWidth(w - 32);
+        }
+      }}
+    >
       <View style={styles.chartCardHeader}>
         <View style={{ flex: 1, marginRight: 8 }}>
           <Text style={[styles.chartCardTitle, isDarkMode && { color: colors.textPrimary }]}>{chartTitle}</Text>
@@ -193,15 +260,12 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
 
               {/* Các điểm đo và nhãn */}
               {coords.map((pt, idx) => {
-                const isClosest = Boolean(
-                  closestVital &&
-                  scrubberMinutes !== undefined &&
-                  (pt.id === closestVital.id ||
-                    (pt.minute !== undefined && Math.abs(pt.minute - scrubberMinutes) < 45))
-                );
+                const isClosest = idx === closestIndex;
+                const showXLabel = visibleXLabelIndices.has(idx) || isClosest;
 
                 return (
                   <React.Fragment key={`pt_${idx}`}>
+                    {/* Chỉ vẽ đường gióng đứng cho DUY NHẤT điểm đang tua */}
                     {isClosest && (
                       <Line
                         x1={pt.x}
@@ -215,53 +279,47 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
                       />
                     )}
 
+                    {/* Chấm tròn biểu thị điểm đo */}
                     <Circle
                       cx={pt.x}
                       cy={pt.y}
-                      r={isClosest ? 5.5 : 3.5}
+                      r={isClosest ? 5.5 : 3.2}
                       fill={isClosest ? '#2563EB' : isDarkMode ? '#38BDF8' : '#2563EB'}
                       stroke="#FFFFFF"
                       strokeWidth={1.5}
                     />
 
-                    {isClosest ? (
+                    {/* Giá trị nhịp tim: CHỈ hiển thị trên điểm đang tua (isClosest) để tránh chồng đè chữ */}
+                    {isClosest && (
                       <SvgText
                         x={pt.x}
-                        y={pt.y - 12}
+                        y={Math.max(padTop - 6, pt.y - 10)}
                         textAnchor="middle"
-                        fontSize={11}
+                        fontSize={11.5}
                         fontWeight="800"
                         fill={isDarkMode ? '#60A5FA' : '#1D4ED8'}
                       >
                         {pt.hr} bpm
                       </SvgText>
-                    ) : (
-                    <SvgText
-                      x={pt.x}
-                      y={pt.y - 8}
-                      textAnchor="middle"
-                      fontSize={9.5}
-                      fontWeight="600"
-                      fill={isDarkMode ? '#94A3B8' : '#64748B'}
-                    >
-                      {pt.hr}
-                    </SvgText>
-                  )}
+                    )}
 
-                  <SvgText
-                    x={pt.x}
-                    y={bottomY + 18}
-                    textAnchor="middle"
-                    fontSize={9.5}
-                    fontWeight={isClosest ? '800' : '500'}
-                    fill={isClosest ? (isDarkMode ? '#60A5FA' : '#2563EB') : isDarkMode ? '#64748B' : '#94A3B8'}
-                  >
-                    {pt.label}
-                  </SvgText>
-                </React.Fragment>
-              );
-            })}
-          </Svg>
+                    {/* Nhãn mốc thời gian trục hoành: giãn cách tối thiểu 56px để chống va chạm */}
+                    {showXLabel && (
+                      <SvgText
+                        x={pt.x}
+                        y={bottomY + 18}
+                        textAnchor="middle"
+                        fontSize={9.5}
+                        fontWeight={isClosest ? '800' : '500'}
+                        fill={isClosest ? (isDarkMode ? '#60A5FA' : '#2563EB') : isDarkMode ? '#64748B' : '#94A3B8'}
+                      >
+                        {pt.label}
+                      </SvgText>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </Svg>
           </View>
         </ScrollView>
       ) : (
