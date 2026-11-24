@@ -20,11 +20,9 @@ export interface SmartbandVitalsCardsProps {
 export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
   hrValue,
   spo2Value,
-  tempValue,
   batteryLevel,
   hasHR,
   hasSpO2,
-  hasTemp,
   hrTimeline = [],
   colors = {},
   isDarkMode = false,

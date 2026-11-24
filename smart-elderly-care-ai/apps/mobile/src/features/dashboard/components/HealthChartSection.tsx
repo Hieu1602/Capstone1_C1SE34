@@ -19,7 +19,7 @@
 //   - Nạp và hiển thị đầy đủ và trung thực dữ liệu sinh hiệu thực tế từ CSDL.
 // ==============================================================================
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Rect, Circle, Line, Text as SvgText } from 'react-native-svg';
@@ -66,11 +66,10 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
   closestVital,
   scrubberMinutes,
   isDarkMode = false,
-  colors = {},
   isToday = false,
   selectedRange = 'DAY',
 }) => {
-  const [containerWidth, setContainerWidth] = useState(SCREEN_WIDTH - 64);
+  const containerWidth = SCREEN_WIDTH - 64;
   const scrollRef = useRef<any>(null);
 
   const chartHeight = 165;
@@ -200,7 +199,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
     : (activePoint ? `Ngày: ${activePoint.label}` : chartTitle);
 
   // Giới hạn trục Y và ĐẢM BẢO ĐƯỜNG MAX VÀ MIN KHÔNG ĐÈ LÊN NHAU
-  const { yMinLimit, yMaxLimit, yRange, yUpperRef, yLowerRef } = useMemo(() => {
+  const { yMinLimit, yRange, yUpperRef, yLowerRef } = useMemo(() => {
     const minScale = Math.max(30, minHR - 6);
     const maxScale = Math.max(minScale + 40, maxHR + 8);
     const range = Math.max(30, maxScale - minScale);
@@ -217,7 +216,6 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
 
     return {
       yMinLimit: minScale,
-      yMaxLimit: maxScale,
       yRange: range,
       yUpperRef: _yUpper,
       yLowerRef: _yLower,
