@@ -289,7 +289,7 @@ export const systemApi = {
 export const vitalsApi = {
   getCurrent: () => api.get('/vitals/current'),
   getLatest: (deviceId: string) => api.get(`/vitals/${deviceId}/latest`),
-  getHistory: (deviceId: string = 'BLE_BAND_001', limit = 100, target_date?: string) =>
+  getHistory: (deviceId: string = 'BLE_BAND_001', limit = 3000, target_date?: string) =>
     api.get('/vitals/history', { params: { device_id: deviceId, limit, target_date } }),
   getDailySummary: (days = 30, deviceId?: string) =>
     api.get('/vitals/daily-summary', { params: { days, device_id: deviceId } }),
