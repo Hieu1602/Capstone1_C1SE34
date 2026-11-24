@@ -484,7 +484,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   const chartDataForDay = useMemo(() => {
     if (!parsedDayVitals || parsedDayVitals.length === 0) return [];
 
-    const step = Math.max(1, Math.ceil(parsedDayVitals.length / 30));
+    const step = Math.max(1, Math.ceil(parsedDayVitals.length / 80));
     const sampled: any[] = [];
     for (let i = 0; i < parsedDayVitals.length; i += step) {
       sampled.push(parsedDayVitals[i]);
