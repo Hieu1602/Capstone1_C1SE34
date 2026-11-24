@@ -262,11 +262,9 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
 
   const hasHR = typeof currentVitals.heart_rate === 'number';
   const hasSpO2 = typeof currentVitals.spo2 === 'number';
-  const hasTemp = typeof currentVitals.skin_temp_max === 'number';
 
   const hrValue: string | number = currentVitals.heart_rate != null ? currentVitals.heart_rate : '--';
   const spo2Value: string | number = currentVitals.spo2 != null ? currentVitals.spo2 : '--';
-  const tempValue: string | number = currentVitals.skin_temp_max != null ? currentVitals.skin_temp_max : '--';
 
   return (
     <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
@@ -323,11 +321,9 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
         <SmartbandVitalsCards
           hrValue={hrValue}
           spo2Value={spo2Value}
-          tempValue={tempValue}
           batteryLevel={currentVitals.bracelet_battery ?? device?.battery_level ?? null}
           hasHR={hasHR}
           hasSpO2={hasSpO2}
-          hasTemp={hasTemp}
           colors={colors}
           isDarkMode={isDarkMode}
         />

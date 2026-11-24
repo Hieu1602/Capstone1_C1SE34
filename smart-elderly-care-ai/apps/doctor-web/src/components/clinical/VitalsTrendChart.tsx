@@ -1,7 +1,7 @@
 // src/components/clinical/VitalsTrendChart.tsx
 // Biểu đồ xu hướng sinh hiệu chuỗi thời gian (Recharts) cho Bác sĩ
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   ResponsiveContainer,
   LineChart,
@@ -46,33 +46,55 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
     isSingleDay || (data.length === 1 && data[0]?.hourly_records && data[0].hourly_records.length > 0)
   );
 
-  // Định dạng dữ liệu hiển thị (theo mốc giờ nếu xem 1 ngày, theo ngày nếu xem tuần/tháng)
-  const chartData =
-    isHourlyView && data[0]?.hourly_records && data[0].hourly_records.length > 0
-      ? data[0].hourly_records.map((h) => ({
-          date: h.time,
-          heartRate: h.heart_rate ?? null,
-          spo2: h.spo2 ?? null,
-          minSpo2: h.spo2 ?? null,
-        }))
-      : data.map((item) => {
-          let dateLabel = item.date;
-          try {
-            const parts = item.date.split('-');
-            if (parts.length === 3) {
-              dateLabel = `${parts[2]}/${parts[1]}`;
-            }
-          } catch {
-            // fallback
-          }
+  // Định dạng dữ liệu hiển thị (theo mốc giờ nếu xem 1 ngày, theo từng ngày nếu xem tuần/tháng)
+  const chartData = useMemo(() => {
+    if (isHourlyView && data[0]?.hourly_records && data[0].hourly_records.length > 0) {
+      return data[0].hourly_records.map((h) => ({
+        date: h.time,
+        heartRate: h.heart_rate ?? null,
+        spo2: h.spo2 ?? null,
+        minSpo2: h.spo2 ?? null,
+      }));
+    }
 
-          return {
-            date: dateLabel,
-            heartRate: item.avg_heart_rate ? Math.round(item.avg_heart_rate) : null,
-            spo2: item.avg_spo2 ? Math.round(item.avg_spo2 * 10) / 10 : null,
-            minSpo2: item.min_spo2 ? Math.round(item.min_spo2 * 10) / 10 : null,
-          };
-        });
+    // Chế độ nhiều ngày (mặc định 7 ngày hoặc 30 ngày):
+    // Tạo đầy đủ các ngày liên tiếp theo lịch để không bị co rút thành 2 đầu
+    const totalDays = Math.max(1, days || 7);
+    const result: any[] = [];
+    const now = new Date();
+
+    for (let i = totalDays - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const ymd = `${d.getFullYear()}-${mm}-${dd}`;
+      const dateLabel = `${dd}/${mm}`;
+
+      const match = data.find((item) => {
+        if (!item || !item.date) return false;
+        if (item.date === ymd || item.date === dateLabel) return true;
+        if (item.date.startsWith(ymd)) return true;
+        const parts = item.date.split(/[-/]/);
+        if (parts.length === 3) {
+          if (parts[0].length === 4) {
+            return parts[0] === String(d.getFullYear()) && parts[1].padStart(2, '0') === mm && parts[2].padStart(2, '0') === dd;
+          }
+          return parts[0].padStart(2, '0') === dd && parts[1].padStart(2, '0') === mm;
+        }
+        return false;
+      });
+
+      result.push({
+        date: dateLabel,
+        heartRate: match && match.avg_heart_rate ? Math.round(match.avg_heart_rate) : null,
+        spo2: match && match.avg_spo2 ? Math.round(match.avg_spo2 * 10) / 10 : null,
+        minSpo2: match && match.min_spo2 ? Math.round(match.min_spo2 * 10) / 10 : null,
+      });
+    }
+
+    return result;
+  }, [data, isHourlyView, days]);
 
   return (
     <div className="space-y-4">
@@ -101,7 +123,7 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
       {/* Chart container */}
       <div className="h-72 w-full rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs dark:border-slate-800/80 dark:bg-[#0F172A]">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <LineChart data={chartData} margin={{ top: 10, right: 25, left: 15, bottom: 6 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} vertical={false} />
             <XAxis
               dataKey="date"
@@ -109,11 +131,13 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
               fontSize={11}
               tickLine={false}
               axisLine={{ stroke: '#475569' }}
-              interval={isHourlyView ? 1 : 0}
+              interval={0}
+              dy={4}
             />
-            {/* Trục trái: Nhịp tim (40 - 140) */}
+            {/* Trục trái: Nhịp tim (50 - 130) */}
             <YAxis
               yAxisId="left"
+              width={68}
               domain={[50, 130]}
               stroke="#3B82F6"
               fontSize={11}
@@ -121,9 +145,10 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
               axisLine={false}
               unit=" bpm"
             />
-            {/* Trục phải: SpO2 (80 - 100) */}
+            {/* Trục phải: SpO2 (85 - 100) */}
             <YAxis
               yAxisId="right"
+              width={48}
               orientation="right"
               domain={[85, 100]}
               stroke="#10B981"

@@ -7,11 +7,9 @@ import { LocalizedText } from '../../../../i18n/LocalizedComponents';
 export interface SmartbandVitalsCardsProps {
   hrValue?: string | number | null;
   spo2Value?: string | number | null;
-  tempValue?: string | number | null;
   batteryLevel?: number | null;
   hasHR: boolean;
   hasSpO2: boolean;
-  hasTemp: boolean;
   hrTimeline?: { time: string; hr: number; note: string }[];
   colors?: any;
   isDarkMode?: boolean;
