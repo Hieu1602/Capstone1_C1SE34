@@ -170,7 +170,7 @@ export const HomeVitalsSection: React.FC<HomeVitalsSectionProps> = ({
     return {
       patientDevice,
       vitals: currentVitals,
-      battery: braceletBattery ?? currentVitals?.bracelet_battery ?? 84,
+      battery: braceletBattery ?? currentVitals?.bracelet_battery ?? patientDevice?.battery_level ?? null,
     };
   };
 

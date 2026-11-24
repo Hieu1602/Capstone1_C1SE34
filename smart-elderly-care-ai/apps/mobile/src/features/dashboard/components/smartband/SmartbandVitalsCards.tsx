@@ -8,6 +8,7 @@ export interface SmartbandVitalsCardsProps {
   hrValue?: string | number | null;
   spo2Value?: string | number | null;
   tempValue?: string | number | null;
+  batteryLevel?: number | null;
   hasHR: boolean;
   hasSpO2: boolean;
   hasTemp: boolean;
@@ -20,6 +21,7 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
   hrValue,
   spo2Value,
   tempValue,
+  batteryLevel,
   hasHR,
   hasSpO2,
   hasTemp,
@@ -235,7 +237,7 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
             <LocalizedText style={[styles.smallMetricValue, isDarkMode && { color: colors.textPrimary }]}>1.01</LocalizedText>
             <LocalizedText style={styles.smallMetricUnit}>G</LocalizedText>
           </View>
-          <LocalizedText style={styles.impactSafeStatus}>✓ Không có va chạm ngã</LocalizedText>
+          <LocalizedText style={styles.impactSafeStatus}>Không có va chạm ngã</LocalizedText>
 
           <View style={[styles.xyzAxisBox, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
             <LocalizedText style={[styles.xyzAxisText, isDarkMode && { color: colors.textSecondary }]}>
@@ -262,10 +264,14 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
           </LocalizedText>
 
           <View style={styles.smallMetricValueRow}>
-            <LocalizedText style={[styles.smallMetricValue, { color: '#10B981' }]}>92</LocalizedText>
+            <LocalizedText style={[styles.smallMetricValue, { color: batteryLevel != null && batteryLevel <= 20 ? '#EF4444' : '#10B981' }]}>
+              {batteryLevel != null ? batteryLevel : '--'}
+            </LocalizedText>
             <LocalizedText style={styles.smallMetricUnit}>%</LocalizedText>
           </View>
-          <LocalizedText style={styles.impactSafeStatus}>Mức pin hoạt động tốt</LocalizedText>
+          <LocalizedText style={[styles.impactSafeStatus, batteryLevel != null && batteryLevel <= 20 && { color: '#EF4444' }]}>
+            {batteryLevel == null ? 'Chưa nhận tín hiệu' : batteryLevel <= 20 ? 'Mức pin yếu, cần sạc' : 'Mức pin hoạt động tốt'}
+          </LocalizedText>
 
           <View style={[styles.xyzAxisBox, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
             <LocalizedText style={[styles.xyzAxisText, isDarkMode && { color: colors.textSecondary }]}>
@@ -334,8 +340,8 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
       <View style={[styles.metricCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.metricCardHeader}>
           <View style={styles.metricHeaderLeft}>
-            <View style={[styles.metricIconCircle, { backgroundColor: '#EDE9FE' }]}>
-              <Ionicons name="moon" size={22} color="#7C3AED" />
+            <View style={[styles.metricIconCircle, { backgroundColor: '#E0F2FE' }]}>
+              <Ionicons name="moon" size={22} color="#0284C7" />
             </View>
             <View style={{ marginLeft: 12 }}>
               <LocalizedText style={[styles.metricTitle, isDarkMode && { color: colors.textPrimary }]}>
@@ -376,7 +382,7 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
               </LocalizedText>
             </View>
             <View style={styles.sleepStagePill}>
-              <View style={[styles.sleepColorDot, { backgroundColor: '#A78BFA' }]} />
+              <View style={[styles.sleepColorDot, { backgroundColor: '#38BDF8' }]} />
               <LocalizedText style={[styles.sleepStageName, isDarkMode && { color: colors.textSecondary }]}>
                 REM (Mơ): 50m (11%)
               </LocalizedText>
@@ -388,7 +394,7 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
         <View style={styles.sleepSegmentBar}>
           <View style={[styles.sleepSegItem, { flex: 30, backgroundColor: '#3B82F6' }]} />
           <View style={[styles.sleepSegItem, { flex: 51, backgroundColor: '#60A5FA' }]} />
-          <View style={[styles.sleepSegItem, { flex: 11, backgroundColor: '#A78BFA' }]} />
+          <View style={[styles.sleepSegItem, { flex: 11, backgroundColor: '#38BDF8' }]} />
           <View style={[styles.sleepSegItem, { flex: 8, backgroundColor: '#FCD34D' }]} />
         </View>
         <View style={styles.sleepLegendRow}>
@@ -401,7 +407,7 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
             <LocalizedText style={styles.sleepLegendText}>Nhẹ: 51%</LocalizedText>
           </View>
           <View style={styles.sleepLegendItem}>
-            <View style={[styles.sleepLegendDot, { backgroundColor: '#A78BFA' }]} />
+            <View style={[styles.sleepLegendDot, { backgroundColor: '#38BDF8' }]} />
             <LocalizedText style={styles.sleepLegendText}>REM: 11%</LocalizedText>
           </View>
           <View style={styles.sleepLegendItem}>
@@ -731,7 +737,7 @@ const styles = StyleSheet.create({
   stepCountGoalText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#7C3AED',
+    color: '#059669',
   },
   stepStatsRow: {
     flexDirection: 'row',
@@ -768,10 +774,10 @@ const styles = StyleSheet.create({
   stepProgressBarFill: {
     height: '100%',
     borderRadius: 4,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#10B981',
   },
   sleepScoreBadge: {
-    backgroundColor: '#EDE9FE',
+    backgroundColor: '#E0F2FE',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -779,7 +785,7 @@ const styles = StyleSheet.create({
   sleepScoreBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#6D28D9',
+    color: '#0284C7',
   },
   sleepStatsRow: {
     flexDirection: 'row',

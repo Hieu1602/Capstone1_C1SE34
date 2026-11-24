@@ -254,7 +254,7 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
     setTimeout(() => {
       setIsFinding(false);
       LocalizedAlert.alert(
-        'Đã Gửi Tín Hiệu Rung 📳',
+        'Đã Gửi Tín Hiệu Rung',
         'Đã gửi lệnh GATT (Vibration Motor Alert) đến vòng đeo tay tại Phòng ngủ. Vòng tay đang rung 3 hồi chu kỳ.'
       );
     }, 800);
@@ -309,6 +309,7 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
         <SmartbandHeroCard
           pulseAnim={pulseAnim}
           deviceParam={device}
+          batteryLevel={currentVitals.bracelet_battery ?? device?.battery_level ?? null}
           isSyncing={isSyncing}
           isFinding={isFinding}
           onSyncNow={handleSyncNow}
@@ -323,6 +324,7 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
           hrValue={hrValue}
           spo2Value={spo2Value}
           tempValue={tempValue}
+          batteryLevel={currentVitals.bracelet_battery ?? device?.battery_level ?? null}
           hasHR={hasHR}
           hasSpO2={hasSpO2}
           hasTemp={hasTemp}

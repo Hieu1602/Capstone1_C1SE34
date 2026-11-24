@@ -7,6 +7,7 @@ import { LocalizedText } from '../../../../i18n/LocalizedComponents';
 interface SmartbandHeroCardProps {
   pulseAnim: Animated.Value;
   deviceParam?: any;
+  batteryLevel?: number | null;
   isSyncing: boolean;
   isFinding: boolean;
   onSyncNow: () => void;
@@ -19,6 +20,7 @@ interface SmartbandHeroCardProps {
 export const SmartbandHeroCard: React.FC<SmartbandHeroCardProps> = ({
   pulseAnim,
   deviceParam,
+  batteryLevel,
   isSyncing,
   isFinding,
   onSyncNow,
@@ -27,6 +29,9 @@ export const SmartbandHeroCard: React.FC<SmartbandHeroCardProps> = ({
   colors = {},
   isDarkMode = false,
 }) => {
+  const effectiveBattery = batteryLevel !== undefined && batteryLevel !== null
+    ? batteryLevel
+    : (deviceParam?.battery_level !== null && deviceParam?.battery_level !== undefined ? deviceParam.battery_level : null);
   return (
     <View style={[styles.heroCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.heroTopRow}>
@@ -99,10 +104,10 @@ export const SmartbandHeroCard: React.FC<SmartbandHeroCardProps> = ({
             <Ionicons name="battery-charging" size={18} color="#10B981" />
           </View>
           <LocalizedText style={[styles.specQuickVal, isDarkMode && { color: colors.textPrimary }]}>
-            {deviceParam?.battery_level !== null && deviceParam?.battery_level !== undefined ? `${deviceParam.battery_level}%` : '--'}
+            {effectiveBattery !== null ? `${effectiveBattery}%` : '--'}
           </LocalizedText>
           <LocalizedText style={[styles.specQuickLabel, isDarkMode && { color: colors.textSecondary }]}>
-            {deviceParam?.battery_level !== null && deviceParam?.battery_level !== undefined ? 'Pin (~5 ngày)' : 'Chưa kết nối'}
+            {effectiveBattery !== null ? 'Pin hoạt động' : 'Chưa kết nối'}
           </LocalizedText>
         </View>
 
@@ -115,8 +120,8 @@ export const SmartbandHeroCard: React.FC<SmartbandHeroCardProps> = ({
         </View>
 
         <View style={styles.specQuickItem}>
-          <View style={[styles.specQuickIconBox, isDarkMode && { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
-            <Ionicons name="wifi" size={18} color="#8B5CF6" />
+          <View style={[styles.specQuickIconBox, isDarkMode && { backgroundColor: 'rgba(13, 148, 136, 0.15)' }]}>
+            <Ionicons name="wifi" size={18} color="#0D9488" />
           </View>
           <LocalizedText style={[styles.specQuickVal, isDarkMode && { color: colors.textPrimary }]}>-58 dBm</LocalizedText>
           <LocalizedText style={[styles.specQuickLabel, isDarkMode && { color: colors.textSecondary }]}>Sóng rất tốt</LocalizedText>

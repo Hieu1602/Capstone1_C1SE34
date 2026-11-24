@@ -373,10 +373,13 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     ) &&
     currentVitals.bracelet_connected !== false
   );
+  const rawBattery = (currentVitals.bracelet_battery !== null && currentVitals.bracelet_battery !== undefined)
+    ? currentVitals.bracelet_battery
+    : ((assignedBand as any)?.battery_level ?? (assignedBand as any)?.batteryLevel ?? null);
   const batteryDisplay = assignedBand
-    ? (isCurrentMatching && currentVitals.bracelet_battery !== null && currentVitals.bracelet_battery !== undefined
-        ? `${currentVitals.bracelet_battery}%`
-        : (assignedBand.isOnline ? `${(assignedBand as any).batteryLevel || 85}%` : 'Ngoại tuyến'))
+    ? (rawBattery !== null && rawBattery !== undefined
+        ? `${rawBattery}%`
+        : (assignedBand.isOnline ? 'Đang kết nối' : 'Ngoại tuyến'))
     : 'Chưa gán vòng';
   const isFallDetected = Boolean(isCurrentMatching && currentVitals.fall_detected);
 
@@ -819,6 +822,8 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           scrubberMinutes={scrubberMinutes}
           isDarkMode={isDarkMode}
           colors={colors}
+          isToday={selectedRange === 'DAY' && selectedDate === getTodayStr()}
+          selectedRange={selectedRange}
         />
 
         {/* 8. Link tới Hồ sơ Bệnh án Điện Tử */}
