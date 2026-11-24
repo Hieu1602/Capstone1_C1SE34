@@ -29,7 +29,6 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
 }) => {
   const displayHR = hrValue ?? '--';
   const displaySpO2 = spo2Value ?? '--';
-  const displayTemp = tempValue ?? '--';
 
   return (
     <>
@@ -248,33 +247,33 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
           </LocalizedText>
         </View>
 
-        {/* Card Nhiệt độ da */}
+        {/* Card Pin & Nguồn điện */}
         <View style={[styles.smallMetricCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.smallMetricHeader}>
-            <View style={[styles.metricIconCircleSmall, { backgroundColor: '#FEF3C7' }]}>
-              <Ionicons name="thermometer" size={18} color="#F59E0B" />
+            <View style={[styles.metricIconCircleSmall, { backgroundColor: '#ECFDF5' }]}>
+              <Ionicons name="battery-charging" size={18} color="#10B981" />
             </View>
             <LocalizedText style={[styles.smallMetricTitle, isDarkMode && { color: colors.textPrimary }]}>
-              Thân Nhiệt Cổ Tay
+              Pin &amp; Nguồn Điện
             </LocalizedText>
           </View>
           <LocalizedText style={[styles.smallMetricSub, isDarkMode && { color: colors.textSecondary }]}>
-            NTC Sensor (±0.1°C)
+            GATT Battery Service
           </LocalizedText>
 
           <View style={styles.smallMetricValueRow}>
-            <LocalizedText style={[styles.smallMetricValue, { color: '#D97706' }]}>{displayTemp}</LocalizedText>
-            <LocalizedText style={styles.smallMetricUnit}>°C</LocalizedText>
+            <LocalizedText style={[styles.smallMetricValue, { color: '#10B981' }]}>92</LocalizedText>
+            <LocalizedText style={styles.smallMetricUnit}>%</LocalizedText>
           </View>
-          <LocalizedText style={styles.impactSafeStatus}>✓ Thân nhiệt ổn định</LocalizedText>
+          <LocalizedText style={styles.impactSafeStatus}>✓ Mức pin hoạt động tốt</LocalizedText>
 
           <View style={[styles.xyzAxisBox, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
             <LocalizedText style={[styles.xyzAxisText, isDarkMode && { color: colors.textSecondary }]}>
-              Chuẩn da: 36.5°C - 37.2°C
+              Thời lượng: 5 - 7 ngày
             </LocalizedText>
           </View>
           <LocalizedText style={[styles.sensorNoteText, isDarkMode && { color: colors.textMuted }]}>
-            Kết hợp AMG8833 Hub
+            Tự động cảnh báo khi &lt; 20%
           </LocalizedText>
         </View>
       </View>

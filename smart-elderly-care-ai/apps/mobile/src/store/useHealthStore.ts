@@ -23,6 +23,7 @@ export interface VitalData {
   person_count: number | null;
   fall_detected: boolean;
   timestamp: number | null;
+  steps?: number | null;
   acoustic_status?: string;
   bracelet_battery?: number | null;
   bracelet_connected?: boolean;

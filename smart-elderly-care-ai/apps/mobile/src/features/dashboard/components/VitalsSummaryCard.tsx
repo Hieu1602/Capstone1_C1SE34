@@ -61,13 +61,13 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
   // Kiểm tra các chỉ số sinh hiệu có dữ liệu thực từ cảm biến hay đang rỗng (null)
   const hasHR = Boolean(patientDevice && isLiveFresh && currentVitals?.heart_rate !== null && currentVitals?.heart_rate !== undefined);
   const hasSpO2 = Boolean(patientDevice && isLiveFresh && currentVitals?.spo2 !== null && currentVitals?.spo2 !== undefined);
-  const hasTemp = Boolean(patientDevice && isLiveFresh && currentVitals?.skin_temp_max !== null && currentVitals?.skin_temp_max !== undefined);
+  const hasSteps = Boolean(patientDevice && isLiveFresh && currentVitals?.steps !== null && currentVitals?.steps !== undefined);
   // Kiểm tra thiết bị vòng đeo tay BLE có đang kết nối thực tế hay không
   // BẮT BUỘC: 1 đồng hồ chỉ kết nối với 1 cụ. Nếu cụ chưa gán vòng -> không kết nối
   const isBraceletConnected = Boolean(
     patientDevice &&
     (currentVitals?.bracelet_connected !== false) &&
-    (hasHR || hasSpO2 || hasTemp || currentVitals?.heart_rate)
+    (hasHR || hasSpO2 || hasSteps || currentVitals?.heart_rate)
   );
   const isBatteryDead = isBraceletConnected && braceletBattery === 0;
   const isBatteryLow = isBraceletConnected && braceletBattery !== null && braceletBattery !== undefined && braceletBattery > 0 && braceletBattery <= 20;
@@ -214,16 +214,16 @@ export const VitalsSummaryCard: React.FC<VitalsSummaryCardProps> = ({
           </>
         )}
 
-        {/* Thân nhiệt (AMG8833) - Ẩn đi nếu chưa có dữ liệu */}
-        {hasTemp && (
+        {/* Vận động & Bước chân (Pedometer) */}
+        {hasSteps && (
           <>
             <View style={styles.vitalItem}>
-              <Ionicons name="thermometer" size={17} color="#F59E0B" />
+              <Ionicons name="footsteps" size={17} color="#16A34A" />
               <Text style={[styles.vitalValText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
-                {currentVitals.skin_temp_max}{' '}
-                <Text style={styles.vitalUnit}>°C</Text>
+                {currentVitals.steps}{' '}
+                <Text style={styles.vitalUnit}>bước</Text>
               </Text>
-              <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Thân nhiệt</Text>
+              <Text style={[styles.vitalLblText, isDarkMode && { color: colors.textSecondary }]}>Vận động</Text>
             </View>
             <View style={[styles.vitalDivider, isDarkMode && { backgroundColor: colors.border }]} />
           </>

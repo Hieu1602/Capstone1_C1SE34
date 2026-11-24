@@ -109,16 +109,16 @@ export function computeHealthTabConfig({
           iconBg: '#E0F2FE',
         },
         card3: {
-          label: 'Thân nhiệt TB tuần',
-          value: weekData.avgTemp,
-          unit: weekData.avgTemp !== '--' ? '°C' : '',
-          status: weekData.avgTemp !== '--' ? 'Chuẩn' : 'Chưa có dữ liệu',
-          statusColor: weekData.avgTemp !== '--' ? '#15803D' : '#64748B',
-          statusBg: weekData.avgTemp !== '--' ? '#DCFCE7' : '#F1F5F9',
-          range: hasRangeData ? 'Chuẩn y tế: 36.5 - 37.2°C' : 'Chưa ghi nhận',
-          icon: 'thermometer' as keyof typeof Ionicons.glyphMap,
-          iconColor: '#D97706',
-          iconBg: '#FEF3C7',
+          label: 'Vận động & Bước chân',
+          value: closestVital?.steps ? `${closestVital.steps}` : '--',
+          unit: closestVital?.steps ? 'bước' : '',
+          status: closestVital?.steps ? 'Tích cực' : 'Chưa có dữ liệu',
+          statusColor: closestVital?.steps ? '#15803D' : '#64748B',
+          statusBg: closestVital?.steps ? '#DCFCE7' : '#F1F5F9',
+          range: 'Mục tiêu: 3,000 - 5,000 bước/ngày',
+          icon: 'footsteps' as keyof typeof Ionicons.glyphMap,
+          iconColor: '#16A34A',
+          iconBg: '#DCFCE7',
         },
         card4: {
           label: 'Trạng thái hoạt động tuần',
@@ -175,16 +175,16 @@ export function computeHealthTabConfig({
           iconBg: '#E0F2FE',
         },
         card3: {
-          label: 'Thân nhiệt trung bình',
-          value: weekData.avgTemp,
-          unit: weekData.avgTemp !== '--' ? '°C' : '',
-          status: weekData.avgTemp !== '--' ? 'Lý tưởng' : 'Chưa có dữ liệu',
-          statusColor: weekData.avgTemp !== '--' ? '#15803D' : '#64748B',
-          statusBg: weekData.avgTemp !== '--' ? '#DCFCE7' : '#F1F5F9',
-          range: hasRangeData ? 'Chuẩn y tế: 36.5 - 37.2°C' : 'Chưa ghi nhận',
-          icon: 'thermometer' as keyof typeof Ionicons.glyphMap,
-          iconColor: '#D97706',
-          iconBg: '#FEF3C7',
+          label: 'Vận động & Bước chân',
+          value: closestVital?.steps ? `${closestVital.steps}` : '--',
+          unit: closestVital?.steps ? 'bước' : '',
+          status: closestVital?.steps ? 'Tích cực' : 'Chưa có dữ liệu',
+          statusColor: closestVital?.steps ? '#15803D' : '#64748B',
+          statusBg: closestVital?.steps ? '#DCFCE7' : '#F1F5F9',
+          range: 'Mục tiêu: 3,000 - 5,000 bước/ngày',
+          icon: 'footsteps' as keyof typeof Ionicons.glyphMap,
+          iconColor: '#16A34A',
+          iconBg: '#DCFCE7',
         },
         card4: {
           label: 'Chỉ số an toàn té ngã',
@@ -218,7 +218,7 @@ export function computeHealthTabConfig({
       // Chỉ lấy số liệu nếu có bản ghi thực tế closestVital trong phạm vi giờ tua
       const hrVal = closestVital ? String(closestVital.heart_rate ?? '--') : '--';
       const spo2Val = closestVital ? String(closestVital.spo2 ?? '--') : '--';
-      const tempVal = closestVital ? String(closestVital.body_temp ?? closestVital.skin_temp_max ?? '--') : '--';
+      const stepsVal = closestVital && typeof closestVital.steps === 'number' ? String(closestVital.steps) : '--';
       const actVal = closestVital
         ? (closestVital.activity_state || closestVital.activity || 'Sinh hoạt')
         : isFutureTime
@@ -248,8 +248,6 @@ export function computeHealthTabConfig({
       const numSpO2 = closestVital && typeof closestVital.spo2 === 'number' && closestVital.spo2 > 0
         ? closestVital.spo2
         : (Number(spo2Val) > 0 ? Number(spo2Val) : null);
-      const rawTemp = closestVital?.body_temp ?? closestVital?.skin_temp_max ?? (tempVal !== '--' ? Number(tempVal) : null);
-      const numTemp = typeof rawTemp === 'number' && rawTemp > 0 ? rawTemp : null;
 
       let bannerTitle = 'Tình trạng sinh tồn bình thường';
       let bannerSubtitle = isToday
@@ -347,22 +345,9 @@ export function computeHealthTabConfig({
           }
         }
 
-        // 3. Phân tích thân nhiệt
-        if (numTemp !== null) {
-          if (numTemp >= 38.0) {
-            if (!bannerAlert) {
-              bannerTitle = `Cảnh báo: Cụ đang bị sốt cao (${numTemp}°C)!`;
-              bannerSubtitle = `Mốc ${vitalHM}: Thân nhiệt vượt ngưỡng 38.0°C.`;
-              bannerIcon = 'warning';
-              bannerAlert = true;
-            }
-            adviceLines.push(`• Thân nhiệt cơ thể ghi nhận ${numTemp}°C lúc ${vitalHM} (dấu hiệu sốt cao ở người lớn tuổi).`);
-            adviceLines.push(`• Cần chườm khăn ấm ở trán, nách, bẹn; cho cụ uống nhiều nước và theo dõi sát diễn biến thân nhiệt.`);
-          } else if (numTemp > 37.5) {
-            adviceLines.push(`• Thân nhiệt ${numTemp}°C (sốt nhẹ). Hãy cho cụ uống nước ấm và nghỉ ngơi ở nơi thông thoáng.`);
-          } else {
-            adviceLines.push(`• Thân nhiệt cơ thể ổn định ở mức ${numTemp}°C.`);
-          }
+        // 3. Phân tích vận động & bước chân
+        if (closestVital && typeof closestVital.steps === 'number' && closestVital.steps > 0) {
+          adviceLines.push(`• Vận động trong ngày: Đã ghi nhận ${closestVital.steps.toLocaleString()} bước chân từ vòng đeo tay.`);
         }
 
         // Lời khuyên vận động chỉ khi sinh hiệu an toàn
@@ -403,16 +388,16 @@ export function computeHealthTabConfig({
           iconBg: '#E0F2FE',
         },
         card3: {
-          label: 'Thân nhiệt cơ thể',
-          value: tempVal,
-          unit: tempVal !== '--' ? '°C' : '',
-          status: !closestVital || tempVal === '--' ? (isFutureTime ? 'Chưa tới' : 'Chưa có dữ liệu') : Number(tempVal) >= 38.0 ? 'Sốt cao' : Number(tempVal) > 37.5 ? 'Sốt nhẹ' : 'Bình thường',
-          statusColor: !closestVital || tempVal === '--' ? '#64748B' : Number(tempVal) > 37.5 ? Colors.danger : '#15803D',
-          statusBg: !closestVital || tempVal === '--' ? '#F1F5F9' : Number(tempVal) > 37.5 ? '#FEE2E2' : '#DCFCE7',
-          range: hasData ? 'Chuẩn: 36.5 - 37.2°C' : 'Chưa ghi nhận',
-          icon: 'thermometer' as keyof typeof Ionicons.glyphMap,
-          iconColor: '#D97706',
-          iconBg: '#FEF3C7',
+          label: 'Vận động & Bước chân',
+          value: stepsVal,
+          unit: stepsVal !== '--' ? 'bước' : '',
+          status: !closestVital || stepsVal === '--' ? (isFutureTime ? 'Chưa tới' : 'Chưa có dữ liệu') : Number(stepsVal) >= 3000 ? 'Đạt mục tiêu' : 'Tích cực',
+          statusColor: !closestVital || stepsVal === '--' ? '#64748B' : '#15803D',
+          statusBg: !closestVital || stepsVal === '--' ? '#F1F5F9' : '#DCFCE7',
+          range: hasData ? 'Mục tiêu: 3,000 - 5,000 bước/ngày' : 'Chưa ghi nhận',
+          icon: 'footsteps' as keyof typeof Ionicons.glyphMap,
+          iconColor: '#16A34A',
+          iconBg: '#DCFCE7',
         },
         card4: {
           label: 'Trạng thái vận động',
