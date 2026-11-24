@@ -80,6 +80,29 @@ async def create_session(start: AwareDatetime, end: AwareDatetime, response: Res
     if not timedelta(0) < end - start <= timedelta(minutes=30):
         raise HTTPException(400, "Use a playback window up to 30 minutes")
     user, (device, _) = context
+
+    # Ưu tiên trích xuất phiên phát lại trực tiếp từ thẻ nhớ MicroSD qua camera upstream
+    try:
+        from app.api.v1.endpoints.mobile.camera import forward_camera
+        res = await forward_camera(context, "/archive/session", params={"start": start.isoformat(), "end": end.isoformat()})
+        if isinstance(res, dict) and "file" in res:
+            file_name = res["file"]
+            started_at = res.get("started_at", start.isoformat())
+            dur = float(res.get("duration", 30))
+            now_sec = int(time.time())
+            expires = ((now_sec + 3600) // 300) * 300
+            token = jwt.encode({"sub": str(user.id), "type": "camera_media", "device": str(device.id),
+                                "resource": f"recordings/{file_name}", "quality": "auto", "overlay": False, "exp": expires},
+                               settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+            return {
+                "path": f"/camera/media/recordings/{file_name}?ticket={token}",
+                "expires_at": expires,
+                "items": [{"id": file_name, "started_at": started_at, "duration": dur}],
+            }
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("[HLS Session] Error forward archive session: %s", exc)
+
     rows = await recordings(db, device.id, start, end)
     if not rows:
         raise HTTPException(404, "No recordings in this window")

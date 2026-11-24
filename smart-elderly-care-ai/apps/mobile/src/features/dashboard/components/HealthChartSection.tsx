@@ -1,51 +1,32 @@
 // ==============================================================================
 // TỆP: HealthChartSection.tsx
-// PHÂN HỆ: Biểu đồ Cột Nhịp tim Smartwatch Chuẩn Y Tế (HealthDetailScreen)
-// TÁC GIẢ: Phan Nguyễn Giáng My & C1SE34 Team
+// PHÂN HỆ: Biểu đồ Đường Sóng Dao động Nhịp tim theo Thời gian (HealthDetailScreen)
+// TÁC GIẢ: Phan Nguyễn Giáng My
 // MÔ TẢ CHỨC NĂNG:
-//   - Tự động thích ứng màu Trắng / Đen theo giao diện người dùng (Light / Dark mode).
-//   - Tái hiện chính xác phong cách Smartwatch (Heart Rate Zone Bars):
-//     + Trái tim đỏ cùng chỉ số nhịp tim nổi bật (Bold Metric).
-//     + Đường đứt đoạn tham chiếu Min và Max chuẩn y tế, KHÔNG ĐÈ LÊN NHAU.
-//     + Các cột đo mật độ cao đổi màu theo 5 phân vùng nhịp tim:
-//       * Xám (<65 bpm): Nghỉ ngơi / baseline
-//       * Xanh lam (65 - 84 bpm): Nhịp tim nhẹ / khởi động
-//       * Xanh lục (85 - 99 bpm): Nhịp tim vừa / bình thường
-//       * Vàng (100 - 119 bpm): Vận động / gắng sức
-//       * Đỏ (>= 120 bpm): Đỉnh cảnh báo nhịp tim nhanh
-//     + Trục thời gian 0h - 24h (ngày khác) hoặc 0h - hiện tại (hôm nay).
-//     + CHẾ ĐỘ TUẦN / THÁNG: Hiển thị ĐẦY ĐỦ TỪNG NGÀY THEO LỊCH (7 ngày cho Tuần,
-//       30 ngày cho Tháng), các cột ngày phân bổ đều, không dính chùm hay đè nhau.
-//   - Nạp và hiển thị đầy đủ và trung thực dữ liệu sinh hiệu thực tế từ CSDL.
+//   - Vẽ biểu đồ đường sóng (Line Chart) trực quan hóa biến thiên nhịp tim theo giờ/ngày.
+//   - Tự động đánh dấu nổi bật (Highlight Pin 📍) điểm dữ liệu gần nhất với mốc thời gian
+//     mà người dùng đang kéo trên Thanh tua dòng thời gian (Timeline Scrubber).
+//   - Hiển thị màn hình Empty State khi ngày/tuần/tháng được chọn chưa có dữ liệu đo.
 // ==============================================================================
 
-import React, { useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, StyleSheet, ScrollView, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Rect, Circle, Line, Text as SvgText } from 'react-native-svg';
+import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line, Text as SvgText } from 'react-native-svg';
 import { LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { Shadows } from '../../../theme/colors';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
-// Hàm gán màu theo 5 phân vùng nhịp tim (Heart Rate Zones) chuẩn y tế & smartwatch
-export function getHeartRateZoneColor(hr: number): string {
-  if (hr >= 120) return '#EF4444'; // Đỉnh / Cực đại (Red)
-  if (hr >= 100) return '#F59E0B'; // Vận động mạnh (Amber/Yellow)
-  if (hr >= 85) return '#10B981';  // Nhịp tim vừa / Khỏe mạnh (Emerald)
-  if (hr >= 65) return '#0284C7';  // Nhẹ / Khởi động (Sky Blue)
-  return '#64748B';                // Nghỉ ngơi / Baseline (Slate Grey)
-}
-
-export interface ChartPoint {
+// Cấu trúc một điểm dữ liệu trên biểu đồ nhịp tim
+interface ChartPoint {
   label: string;
   hr: number;
   id?: any;
   minute?: number;
-  dateStr?: string;
 }
 
-export interface HealthChartSectionProps {
+interface HealthChartSectionProps {
   chartTitle: string;
   chartSubtitle: string;
   chartAvg: string;
@@ -54,8 +35,6 @@ export interface HealthChartSectionProps {
   scrubberMinutes?: number;
   isDarkMode: boolean;
   colors: any;
-  isToday?: boolean;
-  selectedRange?: 'DAY' | 'WEEK' | 'MONTH';
 }
 
 export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(({
@@ -65,666 +44,289 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
   chartData,
   closestVital,
   scrubberMinutes,
-  isDarkMode = false,
-  isToday = false,
-  selectedRange = 'DAY',
+  isDarkMode,
+  colors,
 }) => {
-  const containerWidth = SCREEN_WIDTH - 64;
-  const scrollRef = useRef<any>(null);
+  const [containerWidth, setContainerWidth] = useState(SCREEN_WIDTH - 64);
 
-  const chartHeight = 165;
-  const isDayView = !selectedRange || selectedRange === 'DAY';
-
-  // Dữ liệu an toàn:
-  // - Theo Ngày: chỉ lấy các bản ghi có số đo hr > 0
-  // - Theo Tuần/Tháng: giữ đầy đủ toàn bộ các ngày (kể cả hr = 0) để hiển thị trục ngày chuẩn
-  const safeChartData = useMemo(() => {
-    if (!chartData || !Array.isArray(chartData)) return [];
-    if (isDayView) {
-      return chartData.filter(
+  const chartHeight = 150;
+  const pointSpacing = 28;
+  const safeChartData = useMemo(
+    () =>
+      (chartData || []).filter(
         (p) => p && typeof p.hr === 'number' && Number.isFinite(p.hr) && p.hr > 0
-      );
-    }
-    return chartData.filter((p) => p && typeof p.label === 'string');
-  }, [chartData, isDayView]);
+      ),
+    [chartData]
+  );
+  const hasData = safeChartData.length > 0;
+  const svgWidth = hasData
+    ? Math.max(containerWidth, Math.min(containerWidth * 2.2, safeChartData.length * pointSpacing))
+    : containerWidth;
 
-  const hasData = useMemo(() => {
-    if (isDayView) return safeChartData.length > 0;
-    return safeChartData.some((p) => typeof p.hr === 'number' && p.hr > 0);
-  }, [isDayView, safeChartData]);
-
-  // Giới hạn thời gian (phút) cho trục hoành ngày
-  const maxMinutes = useMemo(() => {
-    if (!isDayView) return 1440;
-    if (isToday) {
-      const now = new Date();
-      const nowM = now.getHours() * 60 + now.getMinutes();
-      return Math.max(60, nowM);
-    }
-    return 1440;
-  }, [isDayView, isToday]);
-
-  const padLeft = 36;
+  const padLeft = 24;
   const padRight = 24;
-  const padTop = 26;
+  const padTop = 32;
   const padBottom = 28;
-
-  // Tính chiều rộng tổng thể của biểu đồ
-  const totalHours = useMemo(() => {
-    if (!isDayView) return safeChartData.length || 7;
-    return isToday ? Math.max(1, Math.ceil(maxMinutes / 60)) : 24;
-  }, [isDayView, isToday, maxMinutes, safeChartData.length]);
-
-  const svgWidth = useMemo(() => {
-    if (!hasData) return containerWidth;
-    if (isDayView) {
-      // Mỗi giờ được cấp 46px để cuộn mượt và thoáng chữ
-      const calculatedW = totalHours * 46 + padLeft + padRight;
-      return Math.max(containerWidth, calculatedW);
-    }
-    // Chế độ Tuần: 7 ngày hiển thị vừa vặn trong màn hình không cần cuộn
-    if (selectedRange === 'WEEK') {
-      return containerWidth;
-    }
-    // Chế độ Tháng: 30 ngày cho phép cuộn ngang thoải mái (mỗi ngày 22px)
-    return Math.max(containerWidth, 30 * 22 + padLeft + padRight);
-  }, [hasData, isDayView, selectedRange, totalHours, containerWidth, padLeft, padRight]);
-
   const usableW = Math.max(60, svgWidth - padLeft - padRight);
   const usableH = chartHeight - padTop - padBottom;
   const bottomY = chartHeight - padBottom;
 
-  // Tự động cuộn đến điểm đo mới nhất (thời điểm hiện tại) khi mở biểu đồ hôm nay hoặc 30 ngày
-  useEffect(() => {
-    if ((isToday || selectedRange === 'MONTH') && hasData && scrollRef.current) {
-      const timer = setTimeout(() => {
-        scrollRef.current?.scrollToEnd({ animated: false });
-      }, 80);
-      return () => clearTimeout(timer);
+  // Tối ưu hóa: Memoize việc tính toán đường cong SVG Bezier để không tính lại khi chỉ tua scrubber
+  const { coords, linePath, areaPath, y60, y100 } = useMemo(() => {
+    if (!hasData) {
+      return { coords: [], linePath: '', areaPath: '', y60: 0, y100: 0 };
     }
-  }, [isToday, selectedRange, hasData]);
+    const hrs = safeChartData.map((p) => p.hr);
+    const minVal = Math.max(30, Math.min(...hrs, 55) - 8);
+    const maxVal = Math.min(180, Math.max(...hrs, 105) + 8);
+    const range = Math.max(20, maxVal - minVal);
 
-  // Thống kê Min / Max / Average của nhịp tim thực tế trong CSDL (chỉ tính mốc có hr > 0)
-  const { minHR, maxHR, avgHRNum } = useMemo(() => {
-    const validPoints = safeChartData.filter((p) => typeof p.hr === 'number' && p.hr > 0);
-    if (validPoints.length === 0) return { minHR: 48, maxHR: 100, avgHRNum: 75 };
-    const hrs = validPoints.map((p) => p.hr);
-    const minVal = Math.min(...hrs);
-    const maxVal = Math.max(...hrs);
-    const avg = Math.round(hrs.reduce((a, b) => a + b, 0) / hrs.length);
-    return { minHR: minVal, maxHR: maxVal, avgHRNum: avg };
-  }, [safeChartData]);
+    const baseCoords = safeChartData.map((point, idx) => {
+      const x = padLeft + (safeChartData.length > 1 ? (idx / (safeChartData.length - 1)) * usableW : usableW / 2);
+      const normY = (point.hr - minVal) / range;
+      const y = padTop + (1 - normY) * usableH;
+      return {
+        x: Number.isFinite(x) ? x : padLeft,
+        y: Number.isFinite(y) ? y : padTop + usableH / 2,
+        hr: point.hr,
+        label: point.label || '',
+        id: point.id,
+        minute: point.minute,
+      };
+    });
 
-  // Tìm điểm đo đang được chọn / tua
-  const closestIndex = useMemo(() => {
-    if (!safeChartData || safeChartData.length === 0) return -1;
-    if (closestVital?.id) {
-      const match = safeChartData.findIndex((c) => c.id === closestVital.id);
-      if (match !== -1) return match;
-    }
-    if (isDayView && scrubberMinutes !== undefined) {
-      let bestIdx = -1;
-      let minDiff = 999999;
-      for (let i = 0; i < safeChartData.length; i++) {
-        const ptMin = safeChartData[i].minute;
-        if (ptMin !== undefined && ptMin >= 0) {
-          const diff = Math.abs(ptMin - scrubberMinutes);
-          if (diff < minDiff) {
-            minDiff = diff;
-            bestIdx = i;
-          }
-        }
+    let lPath = '';
+    let aPath = '';
+    if (baseCoords.length > 1) {
+      lPath = `M ${baseCoords[0].x} ${baseCoords[0].y}`;
+      for (let i = 1; i < baseCoords.length; i++) {
+        const prev = baseCoords[i - 1];
+        const curr = baseCoords[i];
+        const cpX = (prev.x + curr.x) / 2;
+        lPath += ` C ${cpX} ${prev.y}, ${cpX} ${curr.y}, ${curr.x} ${curr.y}`;
       }
-      if (bestIdx !== -1) return bestIdx;
+      const lastX = baseCoords[baseCoords.length - 1].x;
+      const firstX = baseCoords[0].x;
+      aPath = `${lPath} L ${lastX} ${bottomY} L ${firstX} ${bottomY} Z`;
+    } else if (baseCoords.length === 1) {
+      lPath = `M ${padLeft} ${baseCoords[0].y} L ${padLeft + usableW} ${baseCoords[0].y}`;
+      aPath = `${lPath} L ${padLeft + usableW} ${bottomY} L ${padLeft} ${bottomY} Z`;
     }
-    // Đối với tuần/tháng: mặc định chọn ngày cuối cùng (hôm nay)
-    return safeChartData.length - 1;
-  }, [closestVital, safeChartData, scrubberMinutes, isDayView]);
 
-  // Điểm đo nhịp tim đang được chọn hiển thị số to trên đầu
-  const activePoint = useMemo(() => {
-    if (!safeChartData || safeChartData.length === 0) return null;
-    if (closestIndex >= 0 && closestIndex < safeChartData.length) {
-      const pt = safeChartData[closestIndex];
-      if (pt && pt.hr > 0) return pt;
-    }
-    const withData = safeChartData.filter((p) => p.hr > 0);
-    if (withData.length > 0) return withData[withData.length - 1];
-    return safeChartData[safeChartData.length - 1];
-  }, [safeChartData, closestIndex]);
-
-  const activeHR = activePoint && activePoint.hr > 0 ? activePoint.hr : (closestVital?.heart_rate ?? avgHRNum);
-  const activeTimeLabel = isDayView
-    ? (activePoint ? `Ghi nhận lúc: ${activePoint.label}` : chartTitle)
-    : (activePoint ? `Ngày: ${activePoint.label}` : chartTitle);
-
-  // Giới hạn trục Y và ĐẢM BẢO ĐƯỜNG MAX VÀ MIN KHÔNG ĐÈ LÊN NHAU
-  const { yMinLimit, yRange, yUpperRef, yLowerRef } = useMemo(() => {
-    const minScale = Math.max(30, minHR - 6);
-    const maxScale = Math.max(minScale + 40, maxHR + 8);
-    const range = Math.max(30, maxScale - minScale);
-
-    let _yUpper = padTop + (1 - (maxHR - minScale) / range) * usableH;
-    let _yLower = padTop + (1 - (minHR - minScale) / range) * usableH;
-
-    // Khóa khoảng cách tối thiểu 32px giữa Max và Min
-    if (_yLower - _yUpper < 32) {
-      const center = (_yUpper + _yLower) / 2;
-      _yUpper = Math.max(padTop + 6, center - 16);
-      _yLower = Math.min(bottomY - 6, center + 16);
-    }
+    const _y60 = padTop + (1 - (60 - minVal) / range) * usableH;
+    const _y100 = padTop + (1 - (100 - minVal) / range) * usableH;
 
     return {
-      yMinLimit: minScale,
-      yRange: range,
-      yUpperRef: _yUpper,
-      yLowerRef: _yLower,
+      coords: baseCoords,
+      linePath: lPath,
+      areaPath: aPath,
+      y60: _y60,
+      y100: _y100,
     };
-  }, [minHR, maxHR, padTop, usableH, bottomY]);
-
-  // Mốc giờ trục hoành cho chế độ Ngày
-  const hourTicks = useMemo(() => {
-    if (!isDayView) return [];
-    const ticks: { hour: number; x: number; label: string; isCurrent?: boolean }[] = [];
-    const totalH = isToday ? Math.floor(maxMinutes / 60) : 24;
-
-    const pxPerHour = usableW / Math.max(1, totalH);
-    let step = 1;
-    if (pxPerHour < 24) {
-      step = 4;
-    } else if (pxPerHour < 40) {
-      step = 2;
-    } else {
-      step = 1;
-    }
-
-    const currentX = padLeft + usableW;
-
-    for (let h = 0; h <= totalH; h += step) {
-      const m = h * 60;
-      const x = padLeft + (m / maxMinutes) * usableW;
-      if (isToday && Math.abs(currentX - x) < 38) {
-        continue;
-      }
-      const lbl = h < 10 ? `0${h}:00` : `${h}:00`;
-      ticks.push({ hour: h, x, label: lbl });
-    }
-
-    if (isToday) {
-      const hh = Math.floor(maxMinutes / 60);
-      const mm = maxMinutes % 60;
-      const lbl = `${hh < 10 ? `0${hh}` : hh}:${mm < 10 ? `0${mm}` : mm}`;
-      ticks.push({ hour: hh, x: currentX, label: lbl, isCurrent: true });
-    }
-
-    return ticks;
-  }, [isDayView, isToday, maxMinutes, usableW, padLeft]);
-
-  // CỘT BIỂU ĐỒ: Xử lý theo từng ngày cho Tuần / Tháng và theo slot cho Ngày
-  const barElements = useMemo(() => {
-    if (!hasData && isDayView) return [];
-
-    if (!isDayView) {
-      // Chế độ Tuần (7 ngày) hoặc Tháng (30 ngày):
-      // Mỗi ngày là 1 cột đứng độc lập trên trục lịch, phân bổ đều từ ngày đầu đến hôm nay
-      const totalDays = safeChartData.length;
-      return safeChartData.map((pt, idx) => {
-        const x = padLeft + (totalDays > 1 ? (idx / (totalDays - 1)) * usableW : usableW / 2);
-        const hasDayData = typeof pt.hr === 'number' && pt.hr > 0;
-        const norm = hasDayData ? Math.min(1, Math.max(0.12, (pt.hr - yMinLimit) / yRange)) : 0;
-        const bHeight = hasDayData ? norm * usableH : 4.2;
-        const bY = bottomY - bHeight;
-        const color = hasDayData ? getHeartRateZoneColor(pt.hr) : (isDarkMode ? '#334155' : '#CBD5E1');
-        const barW = totalDays <= 7 ? 14 : 5.2;
-
-        return {
-          x,
-          y: bY,
-          width: barW,
-          height: bHeight,
-          color,
-          hr: pt.hr,
-          label: pt.label,
-          isClosest: idx === closestIndex,
-          isBaseline: !hasDayData,
-        };
-      });
-    }
-
-    // Chế độ Ngày (0 - 24h hoặc 0 - hiện tại): Slotting theo các mốc 5-10 phút
-    const slotMinutes = Math.max(5, Math.ceil(maxMinutes / 120));
-    const numSlots = Math.ceil(maxMinutes / slotMinutes);
-    const slotStepPx = usableW / numSlots;
-    const barW = Math.max(3.2, Math.min(7.5, slotStepPx * 0.72));
-
-    const bars: any[] = [];
-    const nowMinutes = isToday ? maxMinutes : 1440;
-
-    for (let s = 0; s < numSlots; s++) {
-      const startM = s * slotMinutes;
-      const endM = startM + slotMinutes;
-      const midM = (startM + endM) / 2;
-      const x = padLeft + (midM / maxMinutes) * usableW;
-
-      const matches = safeChartData.filter(
-        (p) => p.minute !== undefined && p.minute >= startM && p.minute < endM
-      );
-
-      if (matches.length > 0) {
-        const peakHR = Math.max(...matches.map((m) => m.hr));
-        const norm = Math.min(1, Math.max(0.12, (peakHR - yMinLimit) / yRange));
-        const bHeight = norm * usableH;
-        const bY = bottomY - bHeight;
-        const color = getHeartRateZoneColor(peakHR);
-        const isClosest = matches.some((m) => safeChartData.indexOf(m) === closestIndex);
-
-        bars.push({
-          x,
-          y: bY,
-          width: barW,
-          height: bHeight,
-          color,
-          hr: peakHR,
-          label: matches[0].label,
-          isClosest,
-          isBaseline: false,
-        });
-      } else if (startM <= nowMinutes) {
-        const baseH = 4.2;
-        const bY = bottomY - baseH;
-        const baseColor = isDarkMode ? '#334155' : '#CBD5E1';
-
-        bars.push({
-          x,
-          y: bY,
-          width: barW,
-          height: baseH,
-          color: baseColor,
-          hr: 0,
-          label: '',
-          isClosest: false,
-          isBaseline: true,
-        });
-      }
-    }
-
-    return bars;
-  }, [
-    safeChartData,
-    hasData,
-    isDayView,
-    maxMinutes,
-    isToday,
-    usableW,
-    padLeft,
-    usableH,
-    bottomY,
-    yMinLimit,
-    yRange,
-    closestIndex,
-    isDarkMode,
-  ]);
-
-  // Bảng màu thích ứng động theo giao diện Trắng / Đen
-  const cardBg = isDarkMode ? '#090D16' : '#FFFFFF';
-  const cardBorder = isDarkMode ? '#1E293B' : '#E2E8F0';
-  const bigNumColor = isDarkMode ? '#FFFFFF' : '#0F172A';
-  const subTextColor = isDarkMode ? '#94A3B8' : '#64748B';
-  const pillBg = isDarkMode ? '#111827' : '#F8FAFC';
-  const pillBorder = isDarkMode ? '#1F2937' : '#E2E8F0';
-  const pillDivider = isDarkMode ? '#374151' : '#E2E8F0';
-  const refLineColor = isDarkMode ? '#475569' : '#CBD5E1';
-  const maxLabelColor = isDarkMode ? '#F87171' : '#DC2626';
-  const minLabelColor = isDarkMode ? '#38BDF8' : '#0284C7';
-  const hourLineColor = isDarkMode ? '#1E293B' : '#F1F5F9';
-  const baselineColor = isDarkMode ? '#334155' : '#E2E8F0';
-  const activeCursorColor = isDarkMode ? '#FFFFFF' : '#0F172A';
-  const legendBorderColor = isDarkMode ? '#1E293B' : '#F1F5F9';
+  }, [safeChartData, hasData, usableW, usableH, bottomY]);
 
   return (
-    <View style={[styles.watchContainerCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-      {/* 1. Header Smartwatch: Trái tim đỏ + Số nhịp tim to thích ứng màu theme */}
-      <View style={styles.watchHeaderSection}>
-        <View style={styles.watchHeartRow}>
-          <Ionicons name="heart" size={24} color="#EF4444" style={styles.watchHeartIcon} />
-          <Text style={[styles.watchBigNumber, { color: bigNumColor }]}>{activeHR > 0 ? activeHR : '--'}</Text>
-          <Text style={[styles.watchBpmUnit, { color: subTextColor }]}>BPM</Text>
+    <View style={[styles.chartCard, isDarkMode && { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}>
+      <View style={styles.chartCardHeader}>
+        <View style={{ flex: 1, marginRight: 8 }}>
+          <Text style={[styles.chartCardTitle, isDarkMode && { color: colors.textPrimary }]}>{chartTitle}</Text>
+          {chartSubtitle ? (
+            <Text style={[styles.chartCardSubtitle, isDarkMode && { color: colors.textSecondary }]}>{chartSubtitle}</Text>
+          ) : null}
         </View>
-
-        <View style={styles.watchMetaRow}>
-          <Text style={[styles.watchTimeBadge, { color: subTextColor }]}>
-            {activeTimeLabel}
-          </Text>
-          <View style={[styles.watchStatsPillGroup, { backgroundColor: pillBg, borderColor: pillBorder }]}>
-            <View style={styles.watchStatItem}>
-              <Text style={[styles.watchStatLabel, { color: subTextColor }]}>Tối đa: </Text>
-              <Text style={[styles.watchStatValue, { color: '#EF4444' }]}>{maxHR} bpm</Text>
-            </View>
-            <View style={[styles.watchStatDivider, { backgroundColor: pillDivider }]} />
-            <View style={styles.watchStatItem}>
-              <Text style={[styles.watchStatLabel, { color: subTextColor }]}>Tối thiểu: </Text>
-              <Text style={[styles.watchStatValue, { color: '#0284C7' }]}>{minHR} bpm</Text>
-            </View>
-            <View style={[styles.watchStatDivider, { backgroundColor: pillDivider }]} />
-            <View style={styles.watchStatItem}>
-              <Text style={[styles.watchStatLabel, { color: subTextColor }]}>TB: </Text>
-              <Text style={[styles.watchStatValue, { color: '#10B981' }]}>
-                {String(chartAvg || '').replace('Trung bình: ', '')}
-              </Text>
-            </View>
-          </View>
+        <View style={styles.chartAvgBadge}>
+          <Text style={styles.chartAvgText}>{chartAvg}</Text>
         </View>
       </View>
 
-      {/* 2. Khung biểu đồ cột dạng Smartwatch: Không chồng đè đường line */}
       {hasData ? (
         <ScrollView
-          ref={scrollRef}
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.watchScrollContent}
+          contentContainerStyle={styles.barsScrollContainer}
         >
           <View>
             <Svg width={svgWidth} height={chartHeight}>
-              {/* Đường đứt đoạn tham chiếu Max HR */}
-              {yUpperRef >= padTop && yUpperRef <= bottomY && (
-                <>
-                  <Line
-                    x1={padLeft}
-                    y1={yUpperRef}
-                    x2={svgWidth - padRight}
-                    y2={yUpperRef}
-                    stroke={refLineColor}
-                    strokeWidth={1}
-                    strokeDasharray="4 4"
-                    opacity={0.85}
-                  />
-                  <SvgText
-                    x={padLeft - 6}
-                    y={yUpperRef + 4}
-                    textAnchor="end"
-                    fontSize={11}
-                    fontWeight="800"
-                    fill={maxLabelColor}
-                  >
-                    {maxHR}
-                  </SvgText>
-                </>
+              <Defs>
+                <LinearGradient id="healthDetailGrad" x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0%" stopColor="#2563EB" stopOpacity={0.32} />
+                  <Stop offset="100%" stopColor="#2563EB" stopOpacity={0.02} />
+                </LinearGradient>
+              </Defs>
+
+              {/* Đường tham chiếu ngưỡng chuẩn 60 - 100 bpm */}
+              {y100 >= padTop && y100 <= bottomY && (
+                <Line
+                  x1={padLeft}
+                  y1={y100}
+                  x2={svgWidth - padRight}
+                  y2={y100}
+                  stroke={isDarkMode ? '#334155' : '#E2E8F0'}
+                  strokeWidth={1}
+                  strokeDasharray="4 4"
+                />
+              )}
+              {y60 >= padTop && y60 <= bottomY && (
+                <Line
+                  x1={padLeft}
+                  y1={y60}
+                  x2={svgWidth - padRight}
+                  y2={y60}
+                  stroke={isDarkMode ? '#334155' : '#E2E8F0'}
+                  strokeWidth={1}
+                  strokeDasharray="4 4"
+                />
               )}
 
-              {/* Đường đứt đoạn tham chiếu Min HR */}
-              {yLowerRef >= padTop && yLowerRef <= bottomY && (
-                <>
-                  <Line
-                    x1={padLeft}
-                    y1={yLowerRef}
-                    x2={svgWidth - padRight}
-                    y2={yLowerRef}
-                    stroke={refLineColor}
-                    strokeWidth={1}
-                    strokeDasharray="4 4"
-                    opacity={0.85}
-                  />
-                  <SvgText
-                    x={padLeft - 6}
-                    y={yLowerRef + 4}
-                    textAnchor="end"
-                    fontSize={11}
-                    fontWeight="800"
-                    fill={minLabelColor}
-                  >
-                    {minHR}
-                  </SvgText>
-                </>
-              )}
+              {/* Vùng đổ màu gradient dưới đường cong */}
+              <Path d={areaPath} fill="url(#healthDetailGrad)" />
 
-              {/* Lưới trục hoành hiển thị theo giờ (chế độ Ngày) */}
-              {isDayView &&
-                hourTicks.map((tick, idx) => (
-                  <React.Fragment key={`htick_${idx}`}>
-                    <Line
-                      x1={tick.x}
-                      y1={padTop}
-                      x2={tick.x}
-                      y2={bottomY}
-                      stroke={hourLineColor}
-                      strokeWidth={1}
-                      strokeDasharray="2 2"
-                    />
-                    <SvgText
-                      x={tick.x}
-                      y={bottomY + 18}
-                      textAnchor="middle"
-                      fontSize={9.5}
-                      fontWeight={tick.isCurrent ? '700' : '500'}
-                      fill={tick.isCurrent ? '#EF4444' : subTextColor}
-                    >
-                      {tick.label}
-                    </SvgText>
-                  </React.Fragment>
-                ))}
-
-              {/* Nhãn ngày cho Tuần (7 ngày đầy đủ) hoặc Tháng (30 ngày) */}
-              {!isDayView &&
-                safeChartData.map((pt, idx) => {
-                  const totalDays = safeChartData.length;
-                  // Nếu là tuần (7 ngày): hiện toàn bộ cả 7 ngày!
-                  // Nếu là tháng (30 ngày): hiện cách nhau 5 ngày và ngày cuối cùng (hôm nay)
-                  const shouldShow =
-                    totalDays <= 7 || idx === 0 || idx === totalDays - 1 || idx % 5 === 0;
-                  if (!shouldShow) return null;
-                  const x = padLeft + (totalDays > 1 ? (idx / (totalDays - 1)) * usableW : usableW / 2);
-                  const isCurrentDay = idx === totalDays - 1;
-                  return (
-                    <SvgText
-                      key={`wlbl_${idx}`}
-                      x={x}
-                      y={bottomY + 18}
-                      textAnchor="middle"
-                      fontSize={totalDays <= 7 ? 10 : 9}
-                      fontWeight={isCurrentDay ? '700' : '500'}
-                      fill={isCurrentDay ? '#EF4444' : subTextColor}
-                    >
-                      {pt.label}
-                    </SvgText>
-                  );
-                })}
-
-              {/* Vạch nền nghỉ ngơi đáy (Resting baseline) */}
-              <Line
-                x1={padLeft}
-                y1={bottomY}
-                x2={svgWidth - padRight}
-                y2={bottomY}
-                stroke={baselineColor}
-                strokeWidth={1.5}
+              {/* Đường cong nhịp tim mềm mại */}
+              <Path
+                d={linePath}
+                fill="none"
+                stroke="#2563EB"
+                strokeWidth={2.6}
+                strokeLinecap="round"
+                strokeLinejoin="round"
               />
 
-              {/* Các cột nhịp tim đa tầng màu (Heart Rate Zone Bars) */}
-              {barElements.map((bar, idx) => (
-                <React.Fragment key={`bar_${idx}`}>
-                  <Rect
-                    x={bar.x - bar.width / 2}
-                    y={bar.y}
-                    width={bar.width}
-                    height={bar.height}
-                    rx={1.6}
-                    fill={bar.color}
-                  />
+              {/* Các điểm đo và nhãn */}
+              {coords.map((pt, idx) => {
+                const isClosest = Boolean(
+                  closestVital &&
+                  scrubberMinutes !== undefined &&
+                  (pt.id === closestVital.id ||
+                    (pt.minute !== undefined && Math.abs(pt.minute - scrubberMinutes) < 45))
+                );
 
-                  {/* Hiệu ứng nổi bật cho cột đang được chọn */}
-                  {bar.isClosest && !bar.isBaseline && (
-                    <>
+                return (
+                  <React.Fragment key={`pt_${idx}`}>
+                    {isClosest && (
                       <Line
-                        x1={bar.x}
+                        x1={pt.x}
                         y1={padTop - 6}
-                        x2={bar.x}
+                        x2={pt.x}
                         y2={bottomY}
-                        stroke={activeCursorColor}
-                        strokeWidth={1.2}
-                        strokeDasharray="2 2"
-                        opacity={0.8}
+                        stroke="#2563EB"
+                        strokeWidth={1.5}
+                        strokeDasharray="3 3"
+                        opacity={0.6}
                       />
-                      <Circle
-                        cx={bar.x}
-                        cy={bar.y}
-                        r={3.8}
-                        fill={activeCursorColor}
-                      />
+                    )}
+
+                    <Circle
+                      cx={pt.x}
+                      cy={pt.y}
+                      r={isClosest ? 5.5 : 3.5}
+                      fill={isClosest ? '#2563EB' : isDarkMode ? '#38BDF8' : '#2563EB'}
+                      stroke="#FFFFFF"
+                      strokeWidth={1.5}
+                    />
+
+                    {isClosest ? (
                       <SvgText
-                        x={bar.x}
-                        y={Math.max(padTop - 4, bar.y - 7)}
+                        x={pt.x}
+                        y={pt.y - 12}
                         textAnchor="middle"
-                        fontSize={10.5}
+                        fontSize={11}
                         fontWeight="800"
-                        fill={activeCursorColor}
+                        fill={isDarkMode ? '#60A5FA' : '#1D4ED8'}
                       >
-                        {bar.hr}
+                        {pt.hr} bpm
                       </SvgText>
-                    </>
+                    ) : (
+                    <SvgText
+                      x={pt.x}
+                      y={pt.y - 8}
+                      textAnchor="middle"
+                      fontSize={9.5}
+                      fontWeight="600"
+                      fill={isDarkMode ? '#94A3B8' : '#64748B'}
+                    >
+                      {pt.hr}
+                    </SvgText>
                   )}
+
+                  <SvgText
+                    x={pt.x}
+                    y={bottomY + 18}
+                    textAnchor="middle"
+                    fontSize={9.5}
+                    fontWeight={isClosest ? '800' : '500'}
+                    fill={isClosest ? (isDarkMode ? '#60A5FA' : '#2563EB') : isDarkMode ? '#64748B' : '#94A3B8'}
+                  >
+                    {pt.label}
+                  </SvgText>
                 </React.Fragment>
-              ))}
-            </Svg>
+              );
+            })}
+          </Svg>
           </View>
         </ScrollView>
       ) : (
-        <View style={styles.watchEmptyBox}>
-          <Ionicons name="stats-chart-outline" size={32} color={subTextColor} style={{ marginBottom: 6 }} />
-          <Text style={[styles.watchEmptyText, { color: subTextColor }]}>
-            Chưa có bản ghi nhịp tim trong {chartSubtitle || ''}
+        <View style={styles.emptyChartBox}>
+          <Ionicons name="stats-chart-outline" size={32} color={isDarkMode ? '#64748B' : '#94A3B8'} style={{ marginBottom: 6 }} />
+          <Text style={[styles.emptyChartText, { color: colors.textMuted }]}>
+            Chưa có dữ liệu đo để vẽ biểu đồ
           </Text>
         </View>
       )}
-
-      {/* 3. Bảng phân vùng nhịp tim trực quan dưới chân thẻ */}
-      <View style={[styles.watchZoneLegendRow, { borderTopColor: legendBorderColor }]}>
-        <View style={styles.zoneLegendItem}>
-          <View style={[styles.zoneLegendDot, { backgroundColor: '#64748B' }]} />
-          <Text style={[styles.zoneLegendText, { color: subTextColor }]}>&lt;65 Nghỉ</Text>
-        </View>
-        <View style={styles.zoneLegendItem}>
-          <View style={[styles.zoneLegendDot, { backgroundColor: '#0284C7' }]} />
-          <Text style={[styles.zoneLegendText, { color: subTextColor }]}>65-84 Nhẹ</Text>
-        </View>
-        <View style={styles.zoneLegendItem}>
-          <View style={[styles.zoneLegendDot, { backgroundColor: '#10B981' }]} />
-          <Text style={[styles.zoneLegendText, { color: subTextColor }]}>85-99 Vừa</Text>
-        </View>
-        <View style={styles.zoneLegendItem}>
-          <View style={[styles.zoneLegendDot, { backgroundColor: '#F59E0B' }]} />
-          <Text style={[styles.zoneLegendText, { color: subTextColor }]}>100-119 Cao</Text>
-        </View>
-        <View style={styles.zoneLegendItem}>
-          <View style={[styles.zoneLegendDot, { backgroundColor: '#EF4444' }]} />
-          <Text style={[styles.zoneLegendText, { color: subTextColor }]}>≥120 Đỉnh</Text>
-        </View>
-      </View>
     </View>
   );
 });
 
 const styles = StyleSheet.create({
-  watchContainerCard: {
-    borderRadius: 24,
-    paddingTop: 20,
-    paddingBottom: 16,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    borderWidth: 1.5,
+  chartCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     ...Shadows.soft,
   },
-  watchHeaderSection: {
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  watchHeartRow: {
+  chartCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
-  watchHeartIcon: {
-    marginRight: 2,
-  },
-  watchBigNumber: {
-    fontSize: 46,
-    fontWeight: '900',
-    letterSpacing: -1,
-  },
-  watchBpmUnit: {
-    fontSize: 13,
+  chartCardTitle: {
+    fontSize: 15,
     fontWeight: '700',
-    marginLeft: 4,
-    alignSelf: 'flex-end',
-    marginBottom: 8,
+    color: '#0F172A',
+    marginBottom: 2,
   },
-  watchMetaRow: {
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  watchTimeBadge: {
+  chartCardSubtitle: {
     fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 8,
+    color: '#64748B',
   },
-  watchStatsPillGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
+  chartAvgBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 8,
+    borderRadius: 8,
   },
-  watchStatItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  watchStatLabel: {
-    fontSize: 11,
-  },
-  watchStatValue: {
-    fontSize: 11,
+  chartAvgText: {
+    fontSize: 12,
     fontWeight: '700',
+    color: '#2563EB',
   },
-  watchStatDivider: {
-    width: 1,
-    height: 12,
-  },
-  watchScrollContent: {
+  barsScrollContainer: {
     paddingVertical: 4,
   },
-  watchEmptyBox: {
+  emptyChartBox: {
     paddingVertical: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  watchEmptyText: {
+  emptyChartText: {
     fontSize: 12,
-  },
-  watchZoneLegendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    marginTop: 14,
-    paddingTop: 10,
-    borderTopWidth: 1,
-  },
-  zoneLegendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  zoneLegendDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-  },
-  zoneLegendText: {
-    fontSize: 10,
-    fontWeight: '600',
+    textAlign: 'center',
   },
 });
 
 export default HealthChartSection;
+
+

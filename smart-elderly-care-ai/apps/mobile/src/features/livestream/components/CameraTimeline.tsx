@@ -128,27 +128,28 @@ export default function CameraTimeline({ cameraId }: { cameraId?: string }) {
 
     async function seek(value: Date, refresh = false) {
         const current = ++playbackRequest.current;
-        setBusy(true);
         setError("");
         setPlayhead(value);
+        let loaded = session;
+        const first = loaded?.items[0];
+        const last = loaded?.items[loaded.items.length - 1];
+        const isCurrentChunk = (
+            !refresh &&
+            loaded &&
+            loaded.expires_at * 1000 > Date.now() + 60_000 &&
+            first &&
+            last &&
+            value.getTime() >= new Date(first.started_at).getTime() &&
+            value.getTime() < new Date(last.started_at).getTime() + last.duration * 1000
+        );
+
         try {
-            let loaded = session;
-            const first = loaded?.items[0];
-            const last = loaded?.items[loaded.items.length - 1];
-            if (
-                refresh ||
-                !loaded ||
-                loaded.expires_at * 1000 <= Date.now() + 60_000 ||
-                !first ||
-                !last ||
-                value.getTime() < new Date(first.started_at).getTime() ||
-                value.getTime() >=
-                    new Date(last.started_at).getTime() + last.duration * 1000
-            ) {
+            if (!isCurrentChunk || !loaded) {
+                setBusy(true);
                 const start = new Date(
                     Math.max(
                         new Date(dayRange.start).getTime(),
-                        value.getTime() - 60_000,
+                        value.getTime(),
                     ),
                 );
                 const end = new Date(
@@ -163,7 +164,10 @@ export default function CameraTimeline({ cameraId }: { cameraId?: string }) {
                     cameraId,
                 );
             }
-            const position = playbackPosition(loaded.items, value);
+            let position = playbackPosition(loaded.items, value);
+            if (!position && loaded.items.length > 0) {
+                position = { item: loaded.items[0], seconds: 0 };
+            }
             if (!position) throw new Error("missing");
             if (current === playbackRequest.current) {
                 setSession(loaded);
@@ -303,7 +307,7 @@ export default function CameraTimeline({ cameraId }: { cameraId?: string }) {
             {uri && selected ? (
                 <ArchivePlayer
                     uri={uri}
-                    hls
+                    hls={uri.includes(".m3u8")}
                     startAt={startAt}
                     seekVersion={seekVersion}
                     paused={busy || dragging || userPaused}
@@ -387,17 +391,21 @@ export default function CameraTimeline({ cameraId }: { cameraId?: string }) {
                         }
                     />
                 </TouchableOpacity>
-                <View
-                    style={[
-                        styles.storageBadge,
-                        { backgroundColor: colors.primaryLight },
-                    ]}
-                >
-                    <Ionicons
-                        name="cloud-outline"
-                        size={24}
-                        color={colors.primary}
-                    />
+                <View style={styles.storageToggle}>
+                    <View style={styles.toggleItem}>
+                        <Ionicons
+                            name="cloud-outline"
+                            size={18}
+                            color="#9E9E9E"
+                        />
+                    </View>
+                    <View style={[styles.toggleItem, styles.toggleActive]}>
+                        <Ionicons
+                            name="hardware-chip-outline"
+                            size={16}
+                            color="#FFF"
+                        />
+                    </View>
                 </View>
             </View>
 
@@ -589,8 +597,7 @@ export default function CameraTimeline({ cameraId }: { cameraId?: string }) {
                                             style={[
                                                 styles.coverage,
                                                 {
-                                                    backgroundColor:
-                                                        colors.primary,
+                                                    backgroundColor: "#B3E5FC",
                                                     left:
                                                         (start / 86_400_000) *
                                                         dayWidth,
@@ -608,6 +615,9 @@ export default function CameraTimeline({ cameraId }: { cameraId?: string }) {
                             </View>
                         </ScrollView>
                         <View pointerEvents="none" style={styles.playhead}>
+                            <View style={styles.timeBubble}>
+                                <Text style={styles.timeBubbleText}>{formatTime(playhead)}</Text>
+                            </View>
                             <View style={styles.playheadTip} />
                             <View style={styles.playheadLine} />
                             <View
@@ -815,11 +825,45 @@ const styles = StyleSheet.create({
         justifyContent: "center",
     },
     dayLabel: { fontSize: 18, fontWeight: "500" },
-    storageBadge: {
+    storageToggle: {
         marginLeft: "auto",
-        borderRadius: 24,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#E0E0E0",
+        borderRadius: 20,
+        padding: 3,
+        gap: 2,
+    },
+    toggleItem: {
+        width: 32,
+        height: 28,
+        borderRadius: 14,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    toggleActive: {
+        backgroundColor: "#0288D1",
+    },
+    timeBubble: {
+        position: "absolute",
+        top: -34,
+        backgroundColor: "#FFFFFF",
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "#E0E0E0",
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.15,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    timeBubbleText: {
+        fontSize: 12,
+        fontWeight: "700",
+        color: "#1C2738",
+        fontVariant: ["tabular-nums"],
     },
     zoomControls: {
         flexDirection: "row",
@@ -878,16 +922,16 @@ const styles = StyleSheet.create({
         marginLeft: -1,
         alignItems: "center",
     },
-    playheadLine: { width: 3, flex: 1, backgroundColor: "#FF5252" },
+    playheadLine: { width: 2, flex: 1, backgroundColor: "#1C2738" },
     playheadTip: {
         width: 0,
         height: 0,
-        borderLeftWidth: 7,
-        borderRightWidth: 7,
+        borderLeftWidth: 6,
+        borderRightWidth: 6,
         borderTopWidth: 8,
         borderLeftColor: "transparent",
         borderRightColor: "transparent",
-        borderTopColor: "#FF5252",
+        borderTopColor: "#1C2738",
     },
     playheadTipBottom: { transform: [{ rotate: "180deg" }] },
     controls: {

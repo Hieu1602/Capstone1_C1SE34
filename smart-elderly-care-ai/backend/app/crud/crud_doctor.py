@@ -1271,16 +1271,13 @@ class CRUDDoctor:
                         "hourly_records": hourly_list,
                     })
 
-            elif is_single_day:
+            elif is_single_day and start_date:
                 # Nếu xem ngày cụ thể nhưng chưa có bản ghi: vẫn tạo khung 24 giờ để hiển thị trục thời gian 24h
-                if start_date:
-                    try:
-                        d_target = datetime.strptime(start_date, "%Y-%m-%d")
-                        d_str = d_target.strftime("%d/%m")
-                    except ValueError:
-                        d_str = start_date
-                else:
-                    d_str = datetime.now(vn_tz).strftime("%d/%m")
+                try:
+                    d_target = datetime.strptime(start_date, "%Y-%m-%d")
+                    d_str = d_target.strftime("%d/%m")
+                except ValueError:
+                    d_str = start_date
                 hourly_list = [
                     {
                         "time": f"{h:02d}:00",

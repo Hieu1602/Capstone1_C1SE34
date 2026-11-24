@@ -36,6 +36,113 @@ export const cameraDetailStyles = StyleSheet.create({
     },
     card: { borderRadius: 18, padding: 16, gap: 12 },
     sectionTitle: { fontSize: 17, fontWeight: "600" },
+    alertCard: { padding: 16, gap: 14 },
+    alertCardHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+    },
+    alertHeaderTitleGroup: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+    },
+    alertHeaderIconBadge: {
+        width: 28,
+        height: 28,
+        borderRadius: 8,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    alertCountBadge: {
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: 10,
+    },
+    alertCountText: {
+        fontSize: 12,
+        fontWeight: "700",
+        color: "#EF4444",
+    },
+    seeAllText: {
+        fontSize: 13,
+        fontWeight: "600",
+    },
+    alertEmptyState: {
+        alignItems: "center",
+        justifyContent: "center",
+        paddingVertical: 24,
+        gap: 8,
+    },
+    alertEmptyText: {
+        fontSize: 13,
+        textAlign: "center",
+    },
+    alertList: {
+        gap: 10,
+    },
+    alertItem: {
+        borderRadius: 14,
+        borderWidth: 1,
+        padding: 12,
+        gap: 8,
+    },
+    alertItemTop: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        gap: 10,
+    },
+    alertItemIcon: {
+        width: 34,
+        height: 34,
+        borderRadius: 10,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    alertItemTitleRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 6,
+    },
+    alertItemTitle: {
+        fontSize: 14,
+        fontWeight: "600",
+        flex: 1,
+    },
+    alertBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    alertBadgeText: {
+        fontSize: 11,
+        fontWeight: "700",
+    },
+    alertItemTime: {
+        fontSize: 12,
+        color: "#94A3B8",
+        marginTop: 2,
+    },
+    alertItemMessage: {
+        fontSize: 13,
+        lineHeight: 18,
+    },
+    alertClipButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        alignSelf: "flex-start",
+        marginTop: 2,
+    },
+    alertClipText: {
+        fontSize: 12,
+        fontWeight: "600",
+        color: "#0284C7",
+    },
     incident: {
         gap: 6,
         borderTopWidth: StyleSheet.hairlineWidth,

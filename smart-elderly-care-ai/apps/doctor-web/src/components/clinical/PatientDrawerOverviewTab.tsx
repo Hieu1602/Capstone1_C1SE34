@@ -2,6 +2,8 @@ import React from 'react';
 import {
   Droplet,
   Activity,
+  HeartPulse,
+  Thermometer,
   AlertTriangle,
   CheckCircle2,
   ShieldAlert,
@@ -9,6 +11,7 @@ import {
   Apple,
   Stethoscope,
   Clock,
+  Edit,
   LucideIcon,
 } from 'lucide-react';
 import { DoctorPatientDetail } from '../../types';
@@ -17,45 +20,9 @@ interface PatientDrawerOverviewTabProps {
   patientDetail: DoctorPatientDetail;
   activeBloodType: string;
   activeBmi: string;
+  activeBp: string;
+  activeSkinTemp: string;
   onOpenRecordModal: () => void;
-}
-
-export function getBmiClassification(bmiNum: number): {
-  label: string;
-  badgeClass: string;
-  cardClass: string;
-  iconWrapClass: string;
-} {
-  if (bmiNum < 18.5) {
-    return {
-      label: 'Gầy / Thiếu cân (< 18.5)',
-      badgeClass: 'text-sky-700 bg-sky-50 dark:bg-sky-950/40 dark:text-sky-300 border-sky-200 dark:border-sky-900',
-      cardClass: 'from-sky-50/40 to-slate-50/70 dark:from-sky-950/20 hover:border-sky-200 dark:hover:border-sky-900/50',
-      iconWrapClass: 'bg-sky-100/80 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400',
-    };
-  }
-  if (bmiNum <= 22.9) {
-    return {
-      label: 'Bình thường (18.5 - 22.9)',
-      badgeClass: 'text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
-      cardClass: 'from-emerald-50/40 to-slate-50/70 dark:from-emerald-950/20 hover:border-emerald-200 dark:hover:border-emerald-900/50',
-      iconWrapClass: 'bg-emerald-100/80 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400',
-    };
-  }
-  if (bmiNum <= 24.9) {
-    return {
-      label: 'Thừa cân (23.0 - 24.9)',
-      badgeClass: 'text-amber-700 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200 dark:border-amber-900',
-      cardClass: 'from-amber-50/40 to-slate-50/70 dark:from-amber-950/20 hover:border-amber-200 dark:hover:border-amber-900/50',
-      iconWrapClass: 'bg-amber-100/80 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400',
-    };
-  }
-  return {
-    label: 'Béo phì (≥ 25.0)',
-    badgeClass: 'text-rose-700 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-300 border-rose-200 dark:border-rose-900',
-    cardClass: 'from-rose-50/40 to-slate-50/70 dark:from-rose-950/20 hover:border-rose-200 dark:hover:border-rose-900/50',
-    iconWrapClass: 'bg-rose-100/80 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400',
-  };
 }
 
 interface VitalTileConfig {
@@ -65,7 +32,6 @@ interface VitalTileConfig {
   label: string;
   value: string;
   statusText: string;
-  badgeClass?: string;
   cardClass: string;
   iconWrapClass: string;
 }
@@ -89,7 +55,7 @@ const TagInfoCard: React.FC<TagCardProps> = ({
   tagClass,
   emptyText,
 }) => (
-  <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-[#0F172A] dark:border-slate-800/80 p-4 shadow-2xs flex flex-col justify-between min-h-[118px]">
+  <div className="rounded-2xl border border-slate-200/80 bg-white dark:bg-[#0F172A] dark:border-slate-800/80 p-4 shadow-2xs flex flex-col justify-between">
     <div>
       <div className="flex items-center gap-2 mb-1.5">
         <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${iconWrapClass}`}>
@@ -129,11 +95,10 @@ export const PatientDrawerOverviewTab: React.FC<PatientDrawerOverviewTabProps> =
   patientDetail,
   activeBloodType,
   activeBmi,
-  onOpenRecordModal: _onOpenRecordModal,
+  activeBp,
+  activeSkinTemp,
+  onOpenRecordModal,
 }) => {
-  const bmiNum = parseFloat(activeBmi) || (patientDetail.bmi ?? 0);
-  const bmiInfo = getBmiClassification(bmiNum);
-
   const vitalTiles: VitalTileConfig[] = [
     {
       id: 'blood-type',
@@ -142,7 +107,6 @@ export const PatientDrawerOverviewTab: React.FC<PatientDrawerOverviewTabProps> =
       label: 'Nhóm máu',
       value: activeBloodType,
       statusText: 'Đã định nhóm',
-      badgeClass: 'text-rose-700 dark:text-rose-300',
       cardClass:
         'from-rose-50/40 to-slate-50/70 dark:from-rose-950/20 hover:border-rose-200 dark:hover:border-rose-900/50',
       iconWrapClass: 'bg-rose-100/80 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400',
@@ -153,10 +117,32 @@ export const PatientDrawerOverviewTab: React.FC<PatientDrawerOverviewTabProps> =
       category: 'Thể trạng',
       label: 'Chỉ số BMI',
       value: activeBmi,
-      statusText: bmiInfo.label,
-      badgeClass: bmiInfo.badgeClass,
-      cardClass: bmiInfo.cardClass,
-      iconWrapClass: bmiInfo.iconWrapClass,
+      statusText: 'Bình thường (18.5 - 22.9)',
+      cardClass:
+        'from-teal-50/40 to-slate-50/70 dark:from-teal-950/20 hover:border-teal-200 dark:hover:border-teal-900/50',
+      iconWrapClass: 'bg-teal-100/80 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400',
+    },
+    {
+      id: 'blood-pressure',
+      icon: HeartPulse,
+      category: 'Huyết động',
+      label: 'Huyết áp chuẩn',
+      value: activeBp,
+      statusText: 'mmHg (Mục tiêu)',
+      cardClass:
+        'from-blue-50/40 to-slate-50/70 dark:from-blue-950/20 hover:border-blue-200 dark:hover:border-blue-900/50',
+      iconWrapClass: 'bg-blue-100/80 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400',
+    },
+    {
+      id: 'skin-temp',
+      icon: Thermometer,
+      category: 'Cảm biến',
+      label: 'Nhiệt độ da',
+      value: activeSkinTemp,
+      statusText: 'Ổn định (36.2 - 37.2°C)',
+      cardClass:
+        'from-cyan-50/40 to-slate-50/70 dark:from-cyan-950/20 hover:border-cyan-200 dark:hover:border-cyan-900/50',
+      iconWrapClass: 'bg-cyan-100/80 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400',
     },
   ];
 
@@ -175,47 +161,48 @@ export const PatientDrawerOverviewTab: React.FC<PatientDrawerOverviewTabProps> =
 
   return (
     <div className="space-y-5">
-      {/* Header phân mục Thể trạng & Nhân trắc học (Duy nhất 1 CTA ở thanh Footer) */}
-      <div>
-        <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
-          Chỉ số Thể trạng &amp; Nhân trắc học
-        </h4>
-        <p className="text-[11px] text-slate-400 mt-0.5">Dữ liệu khám lâm sàng định kỳ gần nhất</p>
+      {/* Header phân mục Thể trạng & Nút Cập nhật */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
+            Chỉ số Thể trạng &amp; Nhân trắc học
+          </h4>
+          <p className="text-[11px] text-slate-400 mt-0.5">Dữ liệu khám lâm sàng định kỳ gần nhất</p>
+        </div>
+        <button
+          type="button"
+          onClick={onOpenRecordModal}
+          className="flex items-center space-x-1.5 rounded-xl bg-blue-50 border border-blue-200/70 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 transition-colors shadow-2xs cursor-pointer dark:bg-blue-950/40 dark:border-blue-900/60 dark:text-blue-300 dark:hover:bg-blue-900/50"
+        >
+          <Edit className="h-3.5 w-3.5" />
+          <span>Cập nhật hồ sơ</span>
+        </button>
       </div>
 
-      {/* Bento-Grid Vitals & Anthropometrics (2-Column Cards) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {/* Bento-Grid Vitals & Anthropometrics (4-Column Cards) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {vitalTiles.map((tile) => {
           const Icon = tile.icon;
           return (
             <div
               key={tile.id}
-              className={`rounded-2xl border border-slate-200/70 bg-gradient-to-b dark:to-[#0F172A] dark:border-slate-800/80 p-4 shadow-2xs transition ${tile.cardClass}`}
+              className={`rounded-2xl border border-slate-200/70 bg-gradient-to-b dark:to-[#0F172A] dark:border-slate-800/80 p-3.5 shadow-2xs transition ${tile.cardClass}`}
             >
               <div className="flex items-center justify-between mb-2">
-                <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${tile.iconWrapClass}`}>
-                  <Icon className="h-4.5 w-4.5" />
+                <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${tile.iconWrapClass}`}>
+                  <Icon className="h-4 w-4" />
                 </div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                   {tile.category}
                 </span>
               </div>
-              <span className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 block">
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block">
                 {tile.label}
               </span>
-              <p className="text-xl font-extrabold text-slate-900 dark:text-white mt-0.5">{tile.value}</p>
-              <div className="mt-2 flex items-center gap-1.5 text-[11px] font-bold">
-                {tile.id === 'bmi' && bmiNum >= 23 ? (
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10.5px] ${tile.badgeClass}`}>
-                    <AlertTriangle className="h-3 w-3 shrink-0" />
-                    <span>{tile.statusText}</span>
-                  </span>
-                ) : (
-                  <span className={`inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400`}>
-                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                    <span>{tile.statusText}</span>
-                  </span>
-                )}
+              <p className="text-lg font-extrabold text-slate-900 dark:text-white mt-0.5">{tile.value}</p>
+              <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span>{tile.statusText}</span>
               </div>
             </div>
           );

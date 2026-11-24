@@ -18,7 +18,7 @@ import { Colors } from '../../../theme/colors';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useTheme } from '../../../store/useThemeStore';
-import api, { vitalsApi, patientApi } from '../../../services/api';
+import { vitalsApi, patientApi } from '../../../services/api';
 
 // Subcomponents đã được module hoá
 import { HealthTimelineScrubber } from '../components/HealthTimelineScrubber';
@@ -218,41 +218,29 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   const [isScrubbingTimeline, setIsScrubbingTimeline] = useState(false);
 
   // Tải dữ liệu từ Backend khi chọn ngày
-  // Đảm bảo luôn lấy được đầy đủ các bản ghi nhịp tim trong CSDL cho ngày được chọn
+  // QUY TẮC: 1 đồng hồ chỉ kết nối với 1 cụ. Nếu cụ chưa gán đồng hồ -> dữ liệu rỗng.
   const loadDateVitals = async (dateStr: string) => {
     setIsLoadingVitals(true);
     try {
       let vitals: any[] = [];
-      const targetDev = effectiveDevId || 'BLE_BAND_001';
-
-      // 1. Thử tải với thiết bị cụ thể (hoặc mặc định BLE_BAND_001) với giới hạn 3000 bản ghi
-      try {
-        const res = await vitalsApi.getHistory(targetDev, 3000, dateStr);
-        if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-          vitals = res.data;
+      // Chỉ gọi lấy lịch sử khi cụ này CÓ đồng hồ thông minh gán riêng cho mình
+      if (effectiveDevId) {
+        try {
+          const res = await vitalsApi.getHistory(effectiveDevId, 300, dateStr);
+          if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+            vitals = res.data;
+          }
+        } catch (err) {
+          console.warn('Lỗi vitalsApi.getHistory, fallback patientApi:', err);
         }
-      } catch (err) {
-        console.warn('Lỗi vitalsApi.getHistory:', err);
       }
 
-      // 2. Nếu chưa có kết quả, query toàn bộ bản ghi nhịp tim trong CSDL của ngày đó (tối đa 3000)
-      if (vitals.length === 0) {
-        try {
-          const resAll = await api.get('/vitals/history', { params: { limit: 3000, target_date: dateStr } });
-          if (resAll.data && Array.isArray(resAll.data) && resAll.data.length > 0) {
-            vitals = resAll.data;
-          }
-        } catch (err) {}
-      }
-
-      // 3. Fallback qua patientApi nếu có selectedPatientId
-      if (vitals.length === 0 && selectedPatientId) {
-        try {
-          const fbRes = await patientApi.getVitals(selectedPatientId, dateStr);
-          if (fbRes.data && Array.isArray(fbRes.data) && fbRes.data.length > 0) {
-            vitals = fbRes.data;
-          }
-        } catch (err) {}
+      // Nếu có đồng hồ nhưng chưa tải được, thử tải qua API bệnh nhân
+      if (vitals.length === 0 && selectedPatientId && effectiveDevId) {
+        const fbRes = await patientApi.getVitals(selectedPatientId, dateStr).catch(() => ({ data: [] }));
+        if (fbRes.data && Array.isArray(fbRes.data) && fbRes.data.length > 0) {
+          vitals = fbRes.data;
+        }
       }
 
       setDayVitals(vitals);
@@ -281,9 +269,12 @@ export default function HealthDetailScreen({ navigation, route }: any) {
 
   // Cập nhật real-time dữ liệu biểu đồ khi có bản tin WebSocket mới đổ về
   useEffect(() => {
+    // 1 đồng hồ chỉ kết nối 1 cụ: Chỉ nhận bản tin WebSocket nếu cụ CÓ vòng tay và gói tin từ đúng vòng tay đó
+    if (!assignedBand) return;
+
     if (selectedDate === getTodayStr() && currentVitals?.heart_rate && Number(currentVitals.heart_rate) > 0) {
       const vDevId = (currentVitals as any)?.device_id;
-      if (assignedBand && vDevId && vDevId !== assignedBand.deviceId && vDevId !== assignedBand.id) {
+      if (vDevId && vDevId !== assignedBand.deviceId && vDevId !== assignedBand.id) {
         return; // Gói tin của vòng tay cụ khác -> Bỏ qua
       }
       const vTime = (currentVitals as any)?.time || (currentVitals as any)?.recorded_at || currentVitals?.timestamp;
@@ -311,7 +302,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
             return [...prev.slice(0, -1), newRecord];
           }
         }
-        return [...prev, newRecord].slice(-300);
+        return [...prev, newRecord].slice(-100);
       });
     }
   }, [currentVitals?.heart_rate, currentVitals?.spo2, currentVitals?.timestamp, selectedDate, assignedBand]);
@@ -320,28 +311,19 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   const loadRangeVitals = async (days: number) => {
     setIsLoadingVitals(true);
     try {
-      let data: any[] = [];
-      const devId = effectiveDevId || 'BLE_BAND_001';
-
-      // 1. Thử tải daily summary theo thiết bị
-      try {
-        const res = await vitalsApi.getDailySummary(days, devId);
-        if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-          data = res.data;
-        }
-      } catch (err) {}
-
-      // 2. Nếu kết quả có ít ngày (do thiết bị mới đổi/gán gần đây), nạp thêm dữ liệu từ toàn bộ CSDL của các ngày trước đó
-      if (data.length <= 2) {
-        try {
-          const resAll = await vitalsApi.getDailySummary(days);
-          if (resAll.data && Array.isArray(resAll.data) && resAll.data.length > data.length) {
-            data = resAll.data;
-          }
-        } catch (err) {}
+      if (!effectiveDevId) {
+        // Cụ chưa được gán đồng hồ -> dữ liệu tuần/tháng rỗng
+        setRangeVitals([]);
+        return;
       }
-
-      setRangeVitals(data);
+      const devId = effectiveDevId;
+      const res = await vitalsApi.getDailySummary(days, devId).catch(() => ({ data: [] }));
+      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+        setRangeVitals(res.data);
+      } else {
+        const fb = await vitalsApi.getHistory(devId, days * 20).catch(() => ({ data: [] }));
+        setRangeVitals(fb.data && Array.isArray(fb.data) ? fb.data : []);
+      }
     } catch (e) {
       console.warn('Lỗi tải dữ liệu lịch sử tuần/tháng:', e);
       setRangeVitals([]);
@@ -391,13 +373,10 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     ) &&
     currentVitals.bracelet_connected !== false
   );
-  const rawBattery = (currentVitals.bracelet_battery !== null && currentVitals.bracelet_battery !== undefined)
-    ? currentVitals.bracelet_battery
-    : ((assignedBand as any)?.battery_level ?? (assignedBand as any)?.batteryLevel ?? null);
   const batteryDisplay = assignedBand
-    ? (rawBattery !== null && rawBattery !== undefined
-        ? `${rawBattery}%`
-        : (assignedBand.isOnline ? 'Đang kết nối' : 'Ngoại tuyến'))
+    ? (isCurrentMatching && currentVitals.bracelet_battery !== null && currentVitals.bracelet_battery !== undefined
+        ? `${currentVitals.bracelet_battery}%`
+        : (assignedBand.isOnline ? `${(assignedBand as any).batteryLevel || 85}%` : 'Ngoại tuyến'))
     : 'Chưa gán vòng';
   const isFallDetected = Boolean(isCurrentMatching && currentVitals.fall_detected);
 
@@ -498,11 +477,21 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     return best;
   }, [parsedDayVitals, scrubberMinutes, selectedDate, currentVitals, assignedBand]);
 
-  // Dữ liệu biểu đồ động theo ngày được chọn: nạp toàn bộ các bản ghi sinh hiệu thực tế từ CSDL
+  // Dữ liệu biểu đồ động theo ngày được chọn (sử dụng cache tiền xử lý và giới hạn tối đa 30 điểm để 60fps mượt mà)
   const chartDataForDay = useMemo(() => {
     if (!parsedDayVitals || parsedDayVitals.length === 0) return [];
 
-    return parsedDayVitals.map((v) => ({
+    const step = Math.max(1, Math.ceil(parsedDayVitals.length / 30));
+    const sampled: any[] = [];
+    for (let i = 0; i < parsedDayVitals.length; i += step) {
+      sampled.push(parsedDayVitals[i]);
+    }
+    const lastItem = parsedDayVitals[parsedDayVitals.length - 1];
+    if (sampled[sampled.length - 1]?.id !== lastItem?.id) {
+      sampled.push(lastItem);
+    }
+
+    return sampled.map((v) => ({
       id: v.id,
       label: v._label,
       hr: v.heart_rate,
@@ -522,7 +511,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     return `${Math.round(sum / valid.length)} bpm`;
   }, [dayVitals]);
 
-  // Dữ liệu biểu đồ và tính toán trung bình cho Tuần / Tháng: tạo mốc theo từng ngày đầy đủ
+  // Dữ liệu biểu đồ và tính toán trung bình cho Tuần / Tháng (hỗ trợ cả getDailySummary và raw vitals)
   const weekData = useMemo(() => {
     const list = rangeVitals && Array.isArray(rangeVitals) && rangeVitals.length > 0 ? rangeVitals : [];
     const validHR = list.map((v) => v.heartRate ?? v.heart_rate).filter((h) => typeof h === 'number' && h > 0);
@@ -533,37 +522,24 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     const avgSpO2 = validSpO2.length > 0 ? Math.round(validSpO2.reduce((a, b) => a + b, 0) / validSpO2.length).toString() : '--';
     const avgSteps = validSteps.length > 0 ? Math.round(validSteps.reduce((a, b) => a + b, 0) / validSteps.length).toLocaleString() : '--';
 
-    // Tạo mốc theo từng ngày: 7 ngày đối với WEEK, 30 ngày đối với MONTH
-    const totalDays = selectedRange === 'MONTH' ? 30 : 7;
-    const chart: any[] = [];
-    const now = new Date();
-
-    for (let i = totalDays - 1; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      const ymd = formatDateYMD(d);
-      const label = `${d.getDate()}/${d.getMonth() + 1}`;
-
-      // Tìm bản ghi tương ứng với ngày ymd trong dữ liệu Backend trả về
-      const match = list.find((item) => {
-        if (item.date && String(item.date).startsWith(ymd)) return true;
-        const rawDate = item.recorded_at || item.time || item.created_at;
-        if (rawDate && String(rawDate).startsWith(ymd)) return true;
-        return false;
-      });
-
-      const dayHR = match ? (match.heartRate ?? match.heart_rate ?? 0) : 0;
-      chart.push({
-        dateStr: ymd,
+    const chart = list.map((v) => {
+      let label = '';
+      if (v.date) {
+        const parts = String(v.date).split('-');
+        label = parts.length === 3 ? `${parts[2]}/${parts[1]}` : String(v.date);
+      } else {
+        const rawDate = v.recorded_at || v.time || v.created_at;
+        const d = rawDate ? new Date(rawDate) : new Date();
+        label = `${d.getDate()}/${d.getMonth() + 1}`;
+      }
+      return {
         label,
-        hr: dayHR,
-        spo2: match?.spo2,
-        steps: match?.steps,
-      });
-    }
+        hr: v.heartRate ?? v.heart_rate ?? 0,
+      };
+    });
 
     return { avgHR, avgSpO2, avgSteps, chart };
-  }, [rangeVitals, selectedRange]);
+  }, [rangeVitals]);
 
   // Cấu hình tab theo mốc thời gian được chọn
   const currentTabConfig = useMemo(() => {
@@ -843,8 +819,6 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           scrubberMinutes={scrubberMinutes}
           isDarkMode={isDarkMode}
           colors={colors}
-          isToday={selectedRange === 'DAY' && selectedDate === getTodayStr()}
-          selectedRange={selectedRange}
         />
 
         {/* 8. Link tới Hồ sơ Bệnh án Điện Tử */}

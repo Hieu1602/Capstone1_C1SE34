@@ -102,7 +102,7 @@ async def get_vital_history_query(
 @router.get("/{device_identifier}/history", response_model=List[VitalOut])
 async def get_vital_history(
     device_identifier: str = Path(..., description="Mã phần cứng (VD: BLE_BAND_001) hoặc UUID thiết bị"),
-    limit: int = Query(default=100, le=5000),
+    limit: int = Query(default=100, le=1000),
     offset: int = Query(default=0),
     target_date: Optional[str] = Query(default=None, description="Ngày cần lấy (YYYY-MM-DD)"),
     db: AsyncSession = Depends(get_db),

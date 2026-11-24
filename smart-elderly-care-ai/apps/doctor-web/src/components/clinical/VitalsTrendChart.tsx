@@ -1,7 +1,7 @@
 // src/components/clinical/VitalsTrendChart.tsx
 // Biểu đồ xu hướng sinh hiệu chuỗi thời gian (Recharts) cho Bác sĩ
 
-import React, { useMemo } from 'react';
+import React from 'react';
 import {
   ResponsiveContainer,
   LineChart,
@@ -10,27 +10,23 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ReferenceArea,
+  Legend,
 } from 'recharts';
 import { TrendItem } from '../../types';
-import { Activity, Heart, ShieldAlert, MousePointerClick } from 'lucide-react';
+import { Activity, Heart, ShieldAlert } from 'lucide-react';
 
 interface VitalsTrendChartProps {
   data: TrendItem[];
   days?: number;
   titleOverride?: string;
-  title?: string;
   isSingleDay?: boolean;
-  onSelectDate?: (dateStr: string) => void;
 }
 
 export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
   data,
   days = 7,
   titleOverride,
-  title,
   isSingleDay = false,
-  onSelectDate,
 }) => {
   if (!data || data.length === 0) {
     return (
@@ -44,152 +40,49 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
 
   const defaultTitle =
     days === 1 ? 'Xu hướng Sinh hiệu Hôm nay' : `Xu hướng Sinh hiệu ${days} ngày gần nhất`;
-  const chartTitle = title || titleOverride || defaultTitle;
+  const title = titleOverride || defaultTitle;
 
   const isHourlyView = Boolean(
     isSingleDay || (data.length === 1 && data[0]?.hourly_records && data[0].hourly_records.length > 0)
   );
 
-  // Định dạng dữ liệu hiển thị (theo mốc giờ nếu xem 1 ngày, theo từng ngày nếu xem tuần/tháng)
-  const chartData = useMemo(() => {
-    if (isHourlyView && data[0]?.hourly_records && data[0].hourly_records.length > 0) {
-      return data[0].hourly_records.map((h) => ({
-        date: h.time,
-        heartRate: h.heart_rate ?? null,
-        spo2: h.spo2 ?? null,
-        minSpo2: h.spo2 ?? null,
-      }));
-    }
-
-    // Chế độ nhiều ngày (mặc định 7 ngày hoặc 30 ngày):
-    // Tạo đầy đủ các ngày liên tiếp theo lịch để không bị co rút thành 2 đầu
-    const totalDays = Math.max(1, days || 7);
-    const result: any[] = [];
-    const now = new Date();
-
-    for (let i = totalDays - 1; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      const dd = String(d.getDate()).padStart(2, '0');
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const ymd = `${d.getFullYear()}-${mm}-${dd}`;
-      const dateLabel = `${dd}/${mm}`;
-
-      const match = data.find((item) => {
-        if (!item || !item.date) return false;
-        if (item.date === ymd || item.date === dateLabel) return true;
-        if (item.date.startsWith(ymd)) return true;
-        const parts = item.date.split(/[-/]/);
-        if (parts.length === 3) {
-          if (parts[0].length === 4) {
-            return parts[0] === String(d.getFullYear()) && parts[1].padStart(2, '0') === mm && parts[2].padStart(2, '0') === dd;
+  // Định dạng dữ liệu hiển thị (theo mốc giờ nếu xem 1 ngày, theo ngày nếu xem tuần/tháng)
+  const chartData =
+    isHourlyView && data[0]?.hourly_records && data[0].hourly_records.length > 0
+      ? data[0].hourly_records.map((h) => ({
+          date: h.time,
+          heartRate: h.heart_rate ?? null,
+          spo2: h.spo2 ?? null,
+          minSpo2: h.spo2 ?? null,
+        }))
+      : data.map((item) => {
+          let dateLabel = item.date;
+          try {
+            const parts = item.date.split('-');
+            if (parts.length === 3) {
+              dateLabel = `${parts[2]}/${parts[1]}`;
+            }
+          } catch {
+            // fallback
           }
-          return parts[0].padStart(2, '0') === dd && parts[1].padStart(2, '0') === mm;
-        }
-        return false;
-      });
 
-      result.push({
-        date: dateLabel,
-        fullDate: ymd,
-        heartRate: match && match.avg_heart_rate ? Math.round(match.avg_heart_rate) : null,
-        spo2: match && match.avg_spo2 ? Math.round(match.avg_spo2 * 10) / 10 : null,
-        minSpo2: match && match.min_spo2 ? Math.round(match.min_spo2 * 10) / 10 : null,
-      });
-    }
-
-    return result;
-  }, [data, isHourlyView, days]);
-
-  // Thống kê cực trị Hero KPI Bar
-  const kpiStats = useMemo(() => {
-    const validHRs = chartData
-      .map((d) => d.heartRate)
-      .filter((v): v is number => typeof v === 'number' && !isNaN(v));
-    const validSpO2s = chartData
-      .map((d) => d.spo2)
-      .filter((v): v is number => typeof v === 'number' && !isNaN(v));
-
-    const avgHR =
-      validHRs.length > 0 ? Math.round(validHRs.reduce((a, b) => a + b, 0) / validHRs.length) : null;
-    const minHR = validHRs.length > 0 ? Math.min(...validHRs) : null;
-    const maxHR = validHRs.length > 0 ? Math.max(...validHRs) : null;
-
-    const avgSpO2 =
-      validSpO2s.length > 0
-        ? Math.round((validSpO2s.reduce((a, b) => a + b, 0) / validSpO2s.length) * 10) / 10
-        : null;
-    const minSpO2 = validSpO2s.length > 0 ? Math.min(...validSpO2s) : null;
-
-    return { avgHR, minHR, maxHR, avgSpO2, minSpO2 };
-  }, [chartData]);
+          return {
+            date: dateLabel,
+            heartRate: item.avg_heart_rate ? Math.round(item.avg_heart_rate) : null,
+            spo2: item.avg_spo2 ? Math.round(item.avg_spo2 * 10) / 10 : null,
+            minSpo2: item.min_spo2 ? Math.round(item.min_spo2 * 10) / 10 : null,
+          };
+        });
 
   return (
     <div className="space-y-4">
-      {/* 1. Dải tóm tắt chỉ số cực trị Hero KPI */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <div className="rounded-xl border border-blue-100 bg-blue-50/50 dark:border-blue-950 dark:bg-blue-950/20 p-2.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 block">
-            Nhịp tim Trung bình
-          </span>
-          <div className="flex items-baseline gap-1 mt-0.5">
-            <span className="text-base font-extrabold text-slate-900 dark:text-white">
-              {kpiStats.avgHR ? `${kpiStats.avgHR}` : '--'}
-            </span>
-            <span className="text-[10px] font-semibold text-slate-500">bpm</span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900/60 p-2.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
-            Dao động Nhịp tim
-          </span>
-          <div className="flex items-baseline gap-1 mt-0.5">
-            <span className="text-sm font-extrabold text-slate-800 dark:text-slate-200">
-              {kpiStats.minHR && kpiStats.maxHR ? `${kpiStats.minHR} - ${kpiStats.maxHR}` : '--'}
-            </span>
-            <span className="text-[10px] font-semibold text-slate-500">bpm</span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 dark:border-emerald-950 dark:bg-emerald-950/20 p-2.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
-            SpO₂ Trung bình
-          </span>
-          <div className="flex items-baseline gap-1 mt-0.5">
-            <span className="text-base font-extrabold text-slate-900 dark:text-white">
-              {kpiStats.avgSpO2 ? `${kpiStats.avgSpO2}` : '--'}
-            </span>
-            <span className="text-[10px] font-semibold text-slate-500">%</span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900/60 p-2.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
-            SpO₂ Thấp nhất
-          </span>
-          <div className="flex items-baseline gap-1 mt-0.5">
-            <span className="text-sm font-extrabold text-slate-800 dark:text-slate-200">
-              {kpiStats.minSpO2 ? `${kpiStats.minSpO2}` : '--'}
-            </span>
-            <span className="text-[10px] font-semibold text-slate-500">%</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. Header biểu đồ & Chú thích */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+      {/* Header chỉ số */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center space-x-2">
           <Activity className="h-5 w-5 text-blue-600 dark:text-blue-400" />
           <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-            {chartTitle}
+            {title}
           </h4>
-          {!isHourlyView && onSelectDate && (
-            <span className="hidden sm:inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[10.5px] font-semibold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/60">
-              <MousePointerClick className="h-3 w-3" />
-              <span>Bấm vào ngày để xem chi tiết 24h</span>
-            </span>
-          )}
         </div>
 
         {/* Legend chú thích màu */}
@@ -205,25 +98,10 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
         </div>
       </div>
 
-      {/* 3. Khung vẽ biểu đồ Recharts */}
+      {/* Chart container */}
       <div className="h-72 w-full rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs dark:border-slate-800/80 dark:bg-[#0F172A]">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart
-            data={chartData}
-            margin={{ top: 10, right: 25, left: 15, bottom: 6 }}
-            onClick={(e: any) => {
-              if (!isHourlyView && onSelectDate && e && e.activePayload && e.activePayload.length > 0) {
-                const payload = e.activePayload[0].payload;
-                if (payload && (payload.fullDate || payload.date)) {
-                  onSelectDate(payload.fullDate || payload.date);
-                }
-              }
-            }}
-          >
-            {/* Dải tham chiếu an toàn y tế mờ */}
-            <ReferenceArea yAxisId="left" y1={60} y2={100} fill="#3B82F6" fillOpacity={0.05} />
-            <ReferenceArea yAxisId="right" y1={95} y2={100} fill="#10B981" fillOpacity={0.05} />
-
+          <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} vertical={false} />
             <XAxis
               dataKey="date"
@@ -231,28 +109,23 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
               fontSize={11}
               tickLine={false}
               axisLine={{ stroke: '#475569' }}
-              interval={isHourlyView ? 2 : 0}
-              dy={4}
+              interval={isHourlyView ? 1 : 0}
             />
-            {/* Trục trái: Nhịp tim (50 - 130) với ticks chuẩn y tế */}
+            {/* Trục trái: Nhịp tim (40 - 140) */}
             <YAxis
               yAxisId="left"
-              width={68}
               domain={[50, 130]}
-              ticks={[50, 70, 90, 110, 130]}
               stroke="#3B82F6"
               fontSize={11}
               tickLine={false}
               axisLine={false}
               unit=" bpm"
             />
-            {/* Trục phải: SpO2 (85 - 100) với ticks chuẩn y tế */}
+            {/* Trục phải: SpO2 (80 - 100) */}
             <YAxis
               yAxisId="right"
-              width={48}
               orientation="right"
               domain={[85, 100]}
-              ticks={[85, 90, 95, 100]}
               stroke="#10B981"
               fontSize={11}
               tickLine={false}
@@ -275,9 +148,7 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
                 return [value, name];
               }}
               labelFormatter={(label: string) =>
-                isHourlyView
-                  ? `Khung giờ: ${label}`
-                  : `Ngày: ${label}${!isHourlyView && onSelectDate ? ' (Bấm để xem chi tiết 24h)' : ''}`
+                isHourlyView ? `Khung giờ: ${label}` : `Ngày: ${label}`
               }
             />
             <Line
@@ -288,8 +159,8 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
               stroke="#3B82F6"
               strokeWidth={2.5}
               connectNulls={true}
-              dot={{ r: isHourlyView ? 2.5 : 3.5, fill: '#3B82F6', strokeWidth: 1, stroke: '#FFFFFF' }}
-              activeDot={{ r: 5.5, stroke: '#FFFFFF', strokeWidth: 2 }}
+              dot={{ r: isHourlyView ? 2 : 3, fill: '#3B82F6', strokeWidth: 0 }}
+              activeDot={{ r: 5 }}
             />
             <Line
               yAxisId="right"
@@ -299,8 +170,8 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
               stroke="#10B981"
               strokeWidth={2.5}
               connectNulls={true}
-              dot={{ r: isHourlyView ? 2.5 : 3.5, fill: '#10B981', strokeWidth: 1, stroke: '#FFFFFF' }}
-              activeDot={{ r: 5.5, stroke: '#FFFFFF', strokeWidth: 2 }}
+              dot={{ r: isHourlyView ? 2 : 3, fill: '#10B981', strokeWidth: 0 }}
+              activeDot={{ r: 5 }}
             />
           </LineChart>
         </ResponsiveContainer>
