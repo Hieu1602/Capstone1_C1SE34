@@ -66,7 +66,7 @@ export const HealthTimelineVitalCard: React.FC<HealthTimelineVitalCardProps> = (
     const statItems = [
       { label: 'Nhịp tim', value: `${vital.heart_rate ?? '--'} bpm`, color: '#EF4444' },
       { label: 'Oxy SpO₂', value: `${vital.spo2 ?? '--'}%`, color: '#0284C7' },
-      { label: 'Thân nhiệt', value: `${vital.body_temp ?? vital.skin_temp_max ?? '--'}°C`, color: '#D97706' },
+      { label: 'Bước chân', value: vital.steps != null ? `${vital.steps} bước` : '--', color: '#16A34A' },
       {
         label: 'Âm thanh',
         value: vital.sound_state || vital.sound || vital.acoustic_status || 'Bình thường',

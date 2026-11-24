@@ -492,7 +492,7 @@ def send_vitals_to_backend(
         "device_id": device_id,
         "heart_rate": heart_rate,
         "spo2": spo2 or ext.get("spo2") or 98,
-        "skin_temp_max": ext.get("skin_temp_max", 36.6),
+        "skin_temp_max": ext.get("skin_temp_max"),
         "fall_detected": bool(ext.get("fall_detected", False)),
         "is_worn": bool(ext.get("is_worn", True)),
         "activity_state": ext.get("activity_state", "Đang đeo"),

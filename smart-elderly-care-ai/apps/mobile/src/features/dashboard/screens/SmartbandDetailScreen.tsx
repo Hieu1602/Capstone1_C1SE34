@@ -238,13 +238,12 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
       setVitals({
         heart_rate: newHR,
         spo2: newSpO2,
-        skin_temp_max: 36.7,
         timestamp: Date.now(),
       });
       setIsSyncing(false);
       LocalizedAlert.alert(
         'Đồng Bộ Thành Công',
-        `Đã nhận gói tin GATT mới nhất từ vòng đeo tay:\n• Nhịp tim: ${newHR} bpm\n• SpO₂: ${newSpO2}%\n• Thân nhiệt da: 36.7°C\n• Trọng lực: 1.01G (Bình thường)`
+        `Đã nhận gói tin GATT mới nhất từ vòng đeo tay:\n• Nhịp tim: ${newHR} bpm\n• SpO₂: ${newSpO2}%\n• Trọng lực: 1.01G (Bình thường)`
       );
     }, 1200);
   };
