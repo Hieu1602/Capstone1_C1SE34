@@ -201,7 +201,7 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
             </View>
           </View>
           <View style={styles.rangeLabelsRow}>
-            <LocalizedText style={[styles.rangeLabelText, { color: '#EF4444' }]}>Nguy hiểm (&lt;90%)</LocalizedText>
+            <LocalizedText style={[styles.rangeLabelText, { color: '#EF4444' }]}>Nguy hiểm (&lt; 90%)</LocalizedText>
             <LocalizedText style={[styles.rangeLabelText, { color: '#F59E0B' }]}>Cần theo dõi (90-94%)</LocalizedText>
             <LocalizedText style={[styles.rangeLabelText, { color: '#059669' }]}>Lý tưởng (95-100%)</LocalizedText>
           </View>
@@ -265,7 +265,7 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
             <LocalizedText style={[styles.smallMetricValue, { color: '#10B981' }]}>92</LocalizedText>
             <LocalizedText style={styles.smallMetricUnit}>%</LocalizedText>
           </View>
-          <LocalizedText style={styles.impactSafeStatus}>✓ Mức pin hoạt động tốt</LocalizedText>
+          <LocalizedText style={styles.impactSafeStatus}>Mức pin hoạt động tốt</LocalizedText>
 
           <View style={[styles.xyzAxisBox, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
             <LocalizedText style={[styles.xyzAxisText, isDarkMode && { color: colors.textSecondary }]}>
@@ -282,8 +282,8 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
       <View style={[styles.metricCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.metricCardHeader}>
           <View style={styles.metricHeaderLeft}>
-            <View style={[styles.metricIconCircle, { backgroundColor: '#F3E8FF' }]}>
-              <Ionicons name="walk" size={22} color="#8B5CF6" />
+            <View style={[styles.metricIconCircle, { backgroundColor: '#DCFCE7' }]}>
+              <Ionicons name="walk" size={22} color="#16A34A" />
             </View>
             <View style={{ marginLeft: 12 }}>
               <LocalizedText style={[styles.metricTitle, isDarkMode && { color: colors.textPrimary }]}>

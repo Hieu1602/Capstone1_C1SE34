@@ -42,7 +42,7 @@ import {
 
 export default function HealthDetailScreen({ navigation, route }: any) {
   const { isDarkMode, colors } = useTheme();
-  const metric = (route?.params?.focusMetric ?? route?.params?.metric) as 'heartRate' | 'activity' | 'spo2' | undefined;
+  const metric = (route?.params?.focusMetric ?? route?.params?.metric) as 'heartRate' | 'activity' | 'spo2' | 'steps' | undefined;
   const initialTab = route?.params?.initialTab as 'today' | 'week' | 'month' | undefined;
   const {
     currentVitals,
@@ -355,7 +355,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
       const timer = setTimeout(() => {
         if (metric === 'heartRate' || metric === 'spo2') {
           scrollRef.current?.scrollTo({ y: 140, animated: true });
-        } else if (metric === 'activity') {
+        } else if (metric === 'activity' || metric === 'steps') {
           scrollRef.current?.scrollTo({ y: 220, animated: true });
         }
       }, 300);
@@ -516,11 +516,11 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     const list = rangeVitals && Array.isArray(rangeVitals) && rangeVitals.length > 0 ? rangeVitals : [];
     const validHR = list.map((v) => v.heartRate ?? v.heart_rate).filter((h) => typeof h === 'number' && h > 0);
     const validSpO2 = list.map((v) => v.spo2).filter((s) => typeof s === 'number' && s > 0);
-    const validTemp = list.map((v) => v.temperature ?? v.body_temp ?? v.skin_temp_max).filter((t) => typeof t === 'number' && t > 0);
+    const validSteps = list.map((v) => v.steps).filter((s) => typeof s === 'number' && s > 0);
 
     const avgHR = validHR.length > 0 ? (validHR.reduce((a, b) => a + b, 0) / validHR.length).toFixed(1) : '--';
     const avgSpO2 = validSpO2.length > 0 ? Math.round(validSpO2.reduce((a, b) => a + b, 0) / validSpO2.length).toString() : '--';
-    const avgTemp = validTemp.length > 0 ? (validTemp.reduce((a, b) => a + b, 0) / validTemp.length).toFixed(1) : '--';
+    const avgSteps = validSteps.length > 0 ? Math.round(validSteps.reduce((a, b) => a + b, 0) / validSteps.length).toLocaleString() : '--';
 
     const chart = list.map((v) => {
       let label = '';
@@ -538,7 +538,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
       };
     });
 
-    return { avgHR, avgSpO2, avgTemp, chart };
+    return { avgHR, avgSpO2, avgSteps, chart };
   }, [rangeVitals]);
 
   // Cấu hình tab theo mốc thời gian được chọn

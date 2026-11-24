@@ -137,7 +137,15 @@ export const HealthVitalsGrid: React.FC<HealthVitalsGridProps> = React.memo(({
         </View>
         <Text style={[styles.vitalBoxLabel, isDarkMode && { color: colors.textSecondary }]}>{card3.label}</Text>
         <View style={styles.vitalValRow}>
-          <Text style={[styles.vitalValNumber, isDarkMode && { color: colors.textPrimary }]}>{card3.value}</Text>
+          <Text
+            style={[
+              styles.vitalValNumber,
+              isDarkMode && { color: colors.textPrimary },
+              card3.value.length > 6 && { fontSize: 16 },
+            ]}
+          >
+            {card3.value}
+          </Text>
           {Boolean(card3.unit) && (
             <Text style={[styles.vitalValUnit, isDarkMode && { color: colors.textSecondary }]}>{card3.unit}</Text>
           )}
