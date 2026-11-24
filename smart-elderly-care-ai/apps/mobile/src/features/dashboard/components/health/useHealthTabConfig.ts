@@ -133,9 +133,9 @@ export function computeHealthTabConfig({
           iconColor: isFallDetected ? Colors.danger : '#0284C7',
           iconBg: isFallDetected ? '#FEE2E2' : '#E0F2FE',
         },
-        chartTitle: 'Nhịp tim các ngày gần nhất',
-        chartSubtitle: hasRangeData ? `Dữ liệu đo thực tế (${weekData.chart.length} mốc)` : 'Chưa có dữ liệu tuần',
-        chartAvg: weekData.avgHR !== '--' ? `Trung bình: ${weekData.avgHR} bpm` : 'N/A',
+        chartTitle: 'Nhịp tim theo ngày (7 ngày qua)',
+        chartSubtitle: hasRangeData ? 'Thống kê trung bình từng ngày trong tuần' : 'Chưa có dữ liệu tuần',
+        chartAvg: weekData.avgHR !== '--' ? `${weekData.avgHR} bpm` : 'N/A',
         chartData: weekData.chart,
         aiAdvice: hasRangeData
           ? '• Chất lượng nhịp tim và giấc ngủ được ghi nhận duy trì ổn định.\n• Không phát hiện bất thường té ngã.\n• Khuyến khích người cao tuổi duy trì bài tập dưỡng sinh nhẹ nhàng 15-20 phút.'
@@ -199,9 +199,9 @@ export function computeHealthTabConfig({
           iconColor: isFallDetected ? Colors.danger : '#0284C7',
           iconBg: isFallDetected ? '#FEE2E2' : '#E0F2FE',
         },
-        chartTitle: 'Dao động nhịp tim theo các mốc đo',
-        chartSubtitle: hasRangeData ? 'Dữ liệu tổng hợp từ hệ thống' : 'Chưa có dữ liệu tháng',
-        chartAvg: weekData.avgHR !== '--' ? `Trung bình: ${weekData.avgHR} bpm` : 'N/A',
+        chartTitle: 'Nhịp tim theo ngày (30 ngày qua)',
+        chartSubtitle: hasRangeData ? 'Thống kê trung bình từng ngày trong tháng' : 'Chưa có dữ liệu tháng',
+        chartAvg: weekData.avgHR !== '--' ? `${weekData.avgHR} bpm` : 'N/A',
         chartData: weekData.chart,
         aiAdvice: hasRangeData
           ? '• Các chỉ số huyết áp và nhịp tim đo được được lưu trữ an toàn trong hồ sơ.\n• Đề nghị gia đình theo dõi lịch uống thuốc và tái khám định kỳ.'

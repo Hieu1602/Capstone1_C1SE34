@@ -320,19 +320,28 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   const loadRangeVitals = async (days: number) => {
     setIsLoadingVitals(true);
     try {
-      if (!effectiveDevId) {
-        // Cụ chưa được gán đồng hồ -> dữ liệu tuần/tháng rỗng
-        setRangeVitals([]);
-        return;
+      let data: any[] = [];
+      const devId = effectiveDevId || 'BLE_BAND_001';
+
+      // 1. Thử tải daily summary theo thiết bị
+      try {
+        const res = await vitalsApi.getDailySummary(days, devId);
+        if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+          data = res.data;
+        }
+      } catch (err) {}
+
+      // 2. Nếu kết quả có ít ngày (do thiết bị mới đổi/gán gần đây), nạp thêm dữ liệu từ toàn bộ CSDL của các ngày trước đó
+      if (data.length <= 2) {
+        try {
+          const resAll = await vitalsApi.getDailySummary(days);
+          if (resAll.data && Array.isArray(resAll.data) && resAll.data.length > data.length) {
+            data = resAll.data;
+          }
+        } catch (err) {}
       }
-      const devId = effectiveDevId;
-      const res = await vitalsApi.getDailySummary(days, devId).catch(() => ({ data: [] }));
-      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-        setRangeVitals(res.data);
-      } else {
-        const fb = await vitalsApi.getHistory(devId, days * 20).catch(() => ({ data: [] }));
-        setRangeVitals(fb.data && Array.isArray(fb.data) ? fb.data : []);
-      }
+
+      setRangeVitals(data);
     } catch (e) {
       console.warn('Lỗi tải dữ liệu lịch sử tuần/tháng:', e);
       setRangeVitals([]);
@@ -513,7 +522,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     return `${Math.round(sum / valid.length)} bpm`;
   }, [dayVitals]);
 
-  // Dữ liệu biểu đồ và tính toán trung bình cho Tuần / Tháng (hỗ trợ cả getDailySummary và raw vitals)
+  // Dữ liệu biểu đồ và tính toán trung bình cho Tuần / Tháng: tạo mốc theo từng ngày đầy đủ
   const weekData = useMemo(() => {
     const list = rangeVitals && Array.isArray(rangeVitals) && rangeVitals.length > 0 ? rangeVitals : [];
     const validHR = list.map((v) => v.heartRate ?? v.heart_rate).filter((h) => typeof h === 'number' && h > 0);
@@ -524,24 +533,37 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     const avgSpO2 = validSpO2.length > 0 ? Math.round(validSpO2.reduce((a, b) => a + b, 0) / validSpO2.length).toString() : '--';
     const avgSteps = validSteps.length > 0 ? Math.round(validSteps.reduce((a, b) => a + b, 0) / validSteps.length).toLocaleString() : '--';
 
-    const chart = list.map((v) => {
-      let label = '';
-      if (v.date) {
-        const parts = String(v.date).split('-');
-        label = parts.length === 3 ? `${parts[2]}/${parts[1]}` : String(v.date);
-      } else {
-        const rawDate = v.recorded_at || v.time || v.created_at;
-        const d = rawDate ? new Date(rawDate) : new Date();
-        label = `${d.getDate()}/${d.getMonth() + 1}`;
-      }
-      return {
+    // Tạo mốc theo từng ngày: 7 ngày đối với WEEK, 30 ngày đối với MONTH
+    const totalDays = selectedRange === 'MONTH' ? 30 : 7;
+    const chart: any[] = [];
+    const now = new Date();
+
+    for (let i = totalDays - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const ymd = formatDateYMD(d);
+      const label = `${d.getDate()}/${d.getMonth() + 1}`;
+
+      // Tìm bản ghi tương ứng với ngày ymd trong dữ liệu Backend trả về
+      const match = list.find((item) => {
+        if (item.date && String(item.date).startsWith(ymd)) return true;
+        const rawDate = item.recorded_at || item.time || item.created_at;
+        if (rawDate && String(rawDate).startsWith(ymd)) return true;
+        return false;
+      });
+
+      const dayHR = match ? (match.heartRate ?? match.heart_rate ?? 0) : 0;
+      chart.push({
+        dateStr: ymd,
         label,
-        hr: v.heartRate ?? v.heart_rate ?? 0,
-      };
-    });
+        hr: dayHR,
+        spo2: match?.spo2,
+        steps: match?.steps,
+      });
+    }
 
     return { avgHR, avgSpO2, avgSteps, chart };
-  }, [rangeVitals]);
+  }, [rangeVitals, selectedRange]);
 
   // Cấu hình tab theo mốc thời gian được chọn
   const currentTabConfig = useMemo(() => {

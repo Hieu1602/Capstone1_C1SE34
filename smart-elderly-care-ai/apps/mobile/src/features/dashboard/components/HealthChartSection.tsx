@@ -14,8 +14,8 @@
 //       * Vàng (100 - 119 bpm): Vận động / gắng sức
 //       * Đỏ (>= 120 bpm): Đỉnh cảnh báo nhịp tim nhanh
 //     + Trục thời gian 0h - 24h (ngày khác) hoặc 0h - hiện tại (hôm nay).
-//     + CÁC ĐƯỜNG LINE VÀ NHÃN THỜI GIAN ĐƯỢC PHÂN BỔ KHOẢNG CÁCH TOÁN HỌC,
-//       TUYỆT ĐỐI KHÔNG BỊ ĐÈ CHỒNG LÊN NHAU.
+//     + CHẾ ĐỘ TUẦN / THÁNG: Hiển thị ĐẦY ĐỦ TỪNG NGÀY THEO LỊCH (7 ngày cho Tuần,
+//       30 ngày cho Tháng), các cột ngày phân bổ đều, không dính chùm hay đè nhau.
 //   - Nạp và hiển thị đầy đủ và trung thực dữ liệu sinh hiệu thực tế từ CSDL.
 // ==============================================================================
 
@@ -42,6 +42,7 @@ export interface ChartPoint {
   hr: number;
   id?: any;
   minute?: number;
+  dateStr?: string;
 }
 
 export interface HealthChartSectionProps {
@@ -75,18 +76,25 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
   const chartHeight = 165;
   const isDayView = !selectedRange || selectedRange === 'DAY';
 
-  const safeChartData = useMemo(
-    () =>
-      (chartData || []).filter(
+  // Dữ liệu an toàn:
+  // - Theo Ngày: chỉ lấy các bản ghi có số đo hr > 0
+  // - Theo Tuần/Tháng: giữ đầy đủ toàn bộ các ngày (kể cả hr = 0) để hiển thị trục ngày chuẩn
+  const safeChartData = useMemo(() => {
+    if (!chartData || !Array.isArray(chartData)) return [];
+    if (isDayView) {
+      return chartData.filter(
         (p) => p && typeof p.hr === 'number' && Number.isFinite(p.hr) && p.hr > 0
-      ),
-    [chartData]
-  );
-  const hasData = safeChartData.length > 0;
+      );
+    }
+    return chartData.filter((p) => p && typeof p.label === 'string');
+  }, [chartData, isDayView]);
 
-  // Giới hạn thời gian (phút) cho trục hoành:
-  // Nếu là hôm nay: chạy từ 0 đến phút hiện tại (now)
-  // Nếu là ngày khác: chạy đủ 24 giờ (0 - 1440 phút)
+  const hasData = useMemo(() => {
+    if (isDayView) return safeChartData.length > 0;
+    return safeChartData.some((p) => typeof p.hr === 'number' && p.hr > 0);
+  }, [isDayView, safeChartData]);
+
+  // Giới hạn thời gian (phút) cho trục hoành ngày
   const maxMinutes = useMemo(() => {
     if (!isDayView) return 1440;
     if (isToday) {
@@ -102,54 +110,60 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
   const padTop = 26;
   const padBottom = 28;
 
-  // Tính chiều rộng tổng thể của biểu đồ để đảm bảo cuộn mượt và không bị nén chữ
+  // Tính chiều rộng tổng thể của biểu đồ
   const totalHours = useMemo(() => {
-    if (!isDayView) return Math.max(7, safeChartData.length);
+    if (!isDayView) return safeChartData.length || 7;
     return isToday ? Math.max(1, Math.ceil(maxMinutes / 60)) : 24;
   }, [isDayView, isToday, maxMinutes, safeChartData.length]);
 
   const svgWidth = useMemo(() => {
     if (!hasData) return containerWidth;
     if (isDayView) {
-      // Mỗi giờ được cấp tối thiểu 46px để các cột và nhãn cách nhau thông thoáng
+      // Mỗi giờ được cấp 46px để cuộn mượt và thoáng chữ
       const calculatedW = totalHours * 46 + padLeft + padRight;
       return Math.max(containerWidth, calculatedW);
     }
-    return Math.max(containerWidth, safeChartData.length * 48);
-  }, [hasData, isDayView, totalHours, containerWidth, safeChartData.length, padLeft, padRight]);
+    // Chế độ Tuần: 7 ngày hiển thị vừa vặn trong màn hình không cần cuộn
+    if (selectedRange === 'WEEK') {
+      return containerWidth;
+    }
+    // Chế độ Tháng: 30 ngày cho phép cuộn ngang thoải mái (mỗi ngày 22px)
+    return Math.max(containerWidth, 30 * 22 + padLeft + padRight);
+  }, [hasData, isDayView, selectedRange, totalHours, containerWidth, padLeft, padRight]);
 
   const usableW = Math.max(60, svgWidth - padLeft - padRight);
   const usableH = chartHeight - padTop - padBottom;
   const bottomY = chartHeight - padBottom;
 
-  // Tự động cuộn đến điểm đo mới nhất (thời điểm hiện tại) khi mở biểu đồ hôm nay
+  // Tự động cuộn đến điểm đo mới nhất (thời điểm hiện tại) khi mở biểu đồ hôm nay hoặc 30 ngày
   useEffect(() => {
-    if (isToday && hasData && scrollRef.current) {
+    if ((isToday || selectedRange === 'MONTH') && hasData && scrollRef.current) {
       const timer = setTimeout(() => {
         scrollRef.current?.scrollToEnd({ animated: false });
       }, 80);
       return () => clearTimeout(timer);
     }
-  }, [isToday, hasData]);
+  }, [isToday, selectedRange, hasData]);
 
-  // Thống kê Min / Max / Average của nhịp tim thực tế trong CSDL
+  // Thống kê Min / Max / Average của nhịp tim thực tế trong CSDL (chỉ tính mốc có hr > 0)
   const { minHR, maxHR, avgHRNum } = useMemo(() => {
-    if (!hasData) return { minHR: 48, maxHR: 100, avgHRNum: 75 };
-    const hrs = safeChartData.map((p) => p.hr);
+    const validPoints = safeChartData.filter((p) => typeof p.hr === 'number' && p.hr > 0);
+    if (validPoints.length === 0) return { minHR: 48, maxHR: 100, avgHRNum: 75 };
+    const hrs = validPoints.map((p) => p.hr);
     const minVal = Math.min(...hrs);
     const maxVal = Math.max(...hrs);
     const avg = Math.round(hrs.reduce((a, b) => a + b, 0) / hrs.length);
     return { minHR: minVal, maxHR: maxVal, avgHRNum: avg };
-  }, [safeChartData, hasData]);
+  }, [safeChartData]);
 
-  // Tìm điểm đo gần nhất với thanh tua (scrubber)
+  // Tìm điểm đo đang được chọn / tua
   const closestIndex = useMemo(() => {
     if (!safeChartData || safeChartData.length === 0) return -1;
     if (closestVital?.id) {
       const match = safeChartData.findIndex((c) => c.id === closestVital.id);
       if (match !== -1) return match;
     }
-    if (scrubberMinutes !== undefined) {
+    if (isDayView && scrubberMinutes !== undefined) {
       let bestIdx = -1;
       let minDiff = 999999;
       for (let i = 0; i < safeChartData.length; i++) {
@@ -164,22 +178,28 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
       }
       if (bestIdx !== -1) return bestIdx;
     }
+    // Đối với tuần/tháng: mặc định chọn ngày cuối cùng (hôm nay)
     return safeChartData.length - 1;
-  }, [closestVital, safeChartData, scrubberMinutes]);
+  }, [closestVital, safeChartData, scrubberMinutes, isDayView]);
 
   // Điểm đo nhịp tim đang được chọn hiển thị số to trên đầu
   const activePoint = useMemo(() => {
-    if (!hasData) return null;
+    if (!safeChartData || safeChartData.length === 0) return null;
     if (closestIndex >= 0 && closestIndex < safeChartData.length) {
-      return safeChartData[closestIndex];
+      const pt = safeChartData[closestIndex];
+      if (pt && pt.hr > 0) return pt;
     }
+    const withData = safeChartData.filter((p) => p.hr > 0);
+    if (withData.length > 0) return withData[withData.length - 1];
     return safeChartData[safeChartData.length - 1];
-  }, [hasData, closestIndex, safeChartData]);
+  }, [safeChartData, closestIndex]);
 
-  const activeHR = activePoint ? activePoint.hr : (closestVital?.heart_rate ?? avgHRNum);
-  const activeTimeLabel = activePoint?.label || (closestVital?.time ? closestVital.time.slice(11, 16) : 'Hiện tại');
+  const activeHR = activePoint && activePoint.hr > 0 ? activePoint.hr : (closestVital?.heart_rate ?? avgHRNum);
+  const activeTimeLabel = isDayView
+    ? (activePoint ? `Ghi nhận lúc: ${activePoint.label}` : chartTitle)
+    : (activePoint ? `Ngày: ${activePoint.label}` : chartTitle);
 
-  // Tính toán giới hạn trục Y và ĐẢM BẢO ĐƯỜNG MAX VÀ MIN KHÔNG ĐÈ LÊN NHAU
+  // Giới hạn trục Y và ĐẢM BẢO ĐƯỜNG MAX VÀ MIN KHÔNG ĐÈ LÊN NHAU
   const { yMinLimit, yMaxLimit, yRange, yUpperRef, yLowerRef } = useMemo(() => {
     const minScale = Math.max(30, minHR - 6);
     const maxScale = Math.max(minScale + 40, maxHR + 8);
@@ -188,7 +208,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
     let _yUpper = padTop + (1 - (maxHR - minScale) / range) * usableH;
     let _yLower = padTop + (1 - (minHR - minScale) / range) * usableH;
 
-    // RÀNG BUỘC KHOẢNG CÁCH: Tuyệt đối không cho 2 đường tham chiếu đè lên nhau (tối thiểu 32px)
+    // Khóa khoảng cách tối thiểu 32px giữa Max và Min
     if (_yLower - _yUpper < 32) {
       const center = (_yUpper + _yLower) / 2;
       _yUpper = Math.max(padTop + 6, center - 16);
@@ -204,21 +224,20 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
     };
   }, [minHR, maxHR, padTop, usableH, bottomY]);
 
-  // PHÂN BỔ MỐC GIỜ THÔNG MINH: ĐẢM BẢO CÁC ĐƯỜNG LINE VÀ NHÃN GIỜ KHÔNG ĐÈ LÊN NHAU
+  // Mốc giờ trục hoành cho chế độ Ngày
   const hourTicks = useMemo(() => {
     if (!isDayView) return [];
     const ticks: { hour: number; x: number; label: string; isCurrent?: boolean }[] = [];
     const totalH = isToday ? Math.floor(maxMinutes / 60) : 24;
 
-    // Tính bước nhảy giờ sao cho khoảng cách giữa 2 vạch trục X tối thiểu 48px
     const pxPerHour = usableW / Math.max(1, totalH);
     let step = 1;
     if (pxPerHour < 24) {
-      step = 4; // Màn hình hẹp: hiển thị mỗi 4 giờ (0, 4, 8, 12, 16, 20...)
+      step = 4;
     } else if (pxPerHour < 40) {
-      step = 2; // Hiển thị mỗi 2 giờ (0, 2, 4, 6, 8...)
+      step = 2;
     } else {
-      step = 1; // Hiển thị từng giờ
+      step = 1;
     }
 
     const currentX = padLeft + usableW;
@@ -226,7 +245,6 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
     for (let h = 0; h <= totalH; h += step) {
       const m = h * 60;
       const x = padLeft + (m / maxMinutes) * usableW;
-      // Tránh để vạch giờ cuối cùng đè lên nhãn thời gian hiện tại
       if (isToday && Math.abs(currentX - x) < 38) {
         continue;
       }
@@ -234,7 +252,6 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
       ticks.push({ hour: h, x, label: lbl });
     }
 
-    // Nhãn mốc thời gian hiện tại cho ngày hôm nay (màu đỏ nổi bật)
     if (isToday) {
       const hh = Math.floor(maxMinutes / 60);
       const mm = maxMinutes % 60;
@@ -245,35 +262,38 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
     return ticks;
   }, [isDayView, isToday, maxMinutes, usableW, padLeft]);
 
-  // TỔNG HỢP CÁC CỘT THEO KHUNG THỜI GIAN (SLOTS): ĐẢM BẢO CÁC CỘT KHÔNG ĐÈ CHỒNG LÊN NHAU
+  // CỘT BIỂU ĐỒ: Xử lý theo từng ngày cho Tuần / Tháng và theo slot cho Ngày
   const barElements = useMemo(() => {
-    if (!hasData) return [];
+    if (!hasData && isDayView) return [];
 
     if (!isDayView) {
-      // Chế độ Tuần / Tháng: Mỗi ngày là 1 cột riêng biệt
+      // Chế độ Tuần (7 ngày) hoặc Tháng (30 ngày):
+      // Mỗi ngày là 1 cột đứng độc lập trên trục lịch, phân bổ đều từ ngày đầu đến hôm nay
+      const totalDays = safeChartData.length;
       return safeChartData.map((pt, idx) => {
-        const x = padLeft + (safeChartData.length > 1 ? (idx / (safeChartData.length - 1)) * usableW : usableW / 2);
-        const norm = Math.min(1, Math.max(0.12, (pt.hr - yMinLimit) / yRange));
-        const bHeight = norm * usableH;
+        const x = padLeft + (totalDays > 1 ? (idx / (totalDays - 1)) * usableW : usableW / 2);
+        const hasDayData = typeof pt.hr === 'number' && pt.hr > 0;
+        const norm = hasDayData ? Math.min(1, Math.max(0.12, (pt.hr - yMinLimit) / yRange)) : 0;
+        const bHeight = hasDayData ? norm * usableH : 4.2;
         const bY = bottomY - bHeight;
-        const color = getHeartRateZoneColor(pt.hr);
+        const color = hasDayData ? getHeartRateZoneColor(pt.hr) : (isDarkMode ? '#334155' : '#CBD5E1');
+        const barW = totalDays <= 7 ? 14 : 5.2;
+
         return {
           x,
           y: bY,
-          width: 8,
+          width: barW,
           height: bHeight,
           color,
           hr: pt.hr,
           label: pt.label,
           isClosest: idx === closestIndex,
-          isBaseline: false,
+          isBaseline: !hasDayData,
         };
       });
     }
 
-    // Chế độ Ngày (0 - 24h hoặc 0 - hiện tại):
-    // Phân bổ thành các khoảng thời gian (slots) đều đặn (mỗi slot 5 - 10 phút)
-    // để mỗi cột đứng ở vị trí độc lập, tuyệt đối không bị đè chồng lên nhau
+    // Chế độ Ngày (0 - 24h hoặc 0 - hiện tại): Slotting theo các mốc 5-10 phút
     const slotMinutes = Math.max(5, Math.ceil(maxMinutes / 120));
     const numSlots = Math.ceil(maxMinutes / slotMinutes);
     const slotStepPx = usableW / numSlots;
@@ -288,19 +308,17 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
       const midM = (startM + endM) / 2;
       const x = padLeft + (midM / maxMinutes) * usableW;
 
-      // Tìm tất cả các bản ghi nhịp tim trong CSDL rơi vào khoảng thời gian này
       const matches = safeChartData.filter(
         (p) => p.minute !== undefined && p.minute >= startM && p.minute < endM
       );
 
       if (matches.length > 0) {
-        // Lấy nhịp tim đỉnh (peak) trong khung giờ này để làm nổi bật dao động y tế
         const peakHR = Math.max(...matches.map((m) => m.hr));
         const norm = Math.min(1, Math.max(0.12, (peakHR - yMinLimit) / yRange));
         const bHeight = norm * usableH;
         const bY = bottomY - bHeight;
         const color = getHeartRateZoneColor(peakHR);
-        const isClosest = matches.some((m, mIdx) => safeChartData.indexOf(m) === closestIndex);
+        const isClosest = matches.some((m) => safeChartData.indexOf(m) === closestIndex);
 
         bars.push({
           x,
@@ -314,8 +332,6 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
           isBaseline: false,
         });
       } else if (startM <= nowMinutes) {
-        // Khung thời gian đã qua chưa có đo đạc: hiển thị vạch resting baseline nhẹ ở đáy
-        // tái hiện hoàn hảo phong cách smartwatch như trong hình ảnh người dùng yêu cầu
         const baseH = 4.2;
         const bY = bottomY - baseH;
         const baseColor = isDarkMode ? '#334155' : '#CBD5E1';
@@ -351,22 +367,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
     isDarkMode,
   ]);
 
-  // Lọc nhãn trục X cho Tuần / Tháng
-  const visibleWeekLabels = useMemo(() => {
-    if (isDayView || !safeChartData || safeChartData.length === 0) return new Set<number>();
-    const visible = new Set<number>();
-    let lastX = -999;
-    safeChartData.forEach((pt, idx) => {
-      const x = padLeft + (safeChartData.length > 1 ? (idx / (safeChartData.length - 1)) * usableW : usableW / 2);
-      if (idx === 0 || idx === safeChartData.length - 1 || x - lastX >= 52) {
-        visible.add(idx);
-        lastX = x;
-      }
-    });
-    return visible;
-  }, [isDayView, safeChartData, usableW, padLeft]);
-
-  // Bảng màu thích ứng động theo giao diện Trắng / Đen (Light Mode / Dark Mode)
+  // Bảng màu thích ứng động theo giao diện Trắng / Đen
   const cardBg = isDarkMode ? '#090D16' : '#FFFFFF';
   const cardBorder = isDarkMode ? '#1E293B' : '#E2E8F0';
   const bigNumColor = isDarkMode ? '#FFFFFF' : '#0F172A';
@@ -394,7 +395,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
 
         <View style={styles.watchMetaRow}>
           <Text style={[styles.watchTimeBadge, { color: subTextColor }]}>
-            {activePoint ? `Ghi nhận lúc: ${activeTimeLabel}` : chartTitle}
+            {activeTimeLabel}
           </Text>
           <View style={[styles.watchStatsPillGroup, { backgroundColor: pillBg, borderColor: pillBorder }]}>
             <View style={styles.watchStatItem}>
@@ -409,7 +410,9 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
             <View style={[styles.watchStatDivider, { backgroundColor: pillDivider }]} />
             <View style={styles.watchStatItem}>
               <Text style={[styles.watchStatLabel, { color: subTextColor }]}>TB: </Text>
-              <Text style={[styles.watchStatValue, { color: '#10B981' }]}>{chartAvg}</Text>
+              <Text style={[styles.watchStatValue, { color: '#10B981' }]}>
+                {String(chartAvg || '').replace('Trung bình: ', '')}
+              </Text>
             </View>
           </View>
         </View>
@@ -425,7 +428,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
         >
           <View>
             <Svg width={svgWidth} height={chartHeight}>
-              {/* Đường đứt đoạn tham chiếu Max HR chuẩn y tế */}
+              {/* Đường đứt đoạn tham chiếu Max HR */}
               {yUpperRef >= padTop && yUpperRef <= bottomY && (
                 <>
                   <Line
@@ -438,7 +441,6 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
                     strokeDasharray="4 4"
                     opacity={0.85}
                   />
-                  {/* Nhãn Max HR đặt sát lề trái, tuyệt đối không đè vạch Min */}
                   <SvgText
                     x={padLeft - 6}
                     y={yUpperRef + 4}
@@ -452,7 +454,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
                 </>
               )}
 
-              {/* Đường đứt đoạn tham chiếu Min HR chuẩn y tế */}
+              {/* Đường đứt đoạn tham chiếu Min HR */}
               {yLowerRef >= padTop && yLowerRef <= bottomY && (
                 <>
                   <Line
@@ -465,7 +467,6 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
                     strokeDasharray="4 4"
                     opacity={0.85}
                   />
-                  {/* Nhãn Min HR */}
                   <SvgText
                     x={padLeft - 6}
                     y={yLowerRef + 4}
@@ -479,7 +480,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
                 </>
               )}
 
-              {/* Lưới trục hoành hiển thị theo giờ có bước nhảy thông minh tránh đè line */}
+              {/* Lưới trục hoành hiển thị theo giờ (chế độ Ngày) */}
               {isDayView &&
                 hourTicks.map((tick, idx) => (
                   <React.Fragment key={`htick_${idx}`}>
@@ -505,20 +506,26 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
                   </React.Fragment>
                 ))}
 
-              {/* Nhãn ngày cho Tuần / Tháng */}
+              {/* Nhãn ngày cho Tuần (7 ngày đầy đủ) hoặc Tháng (30 ngày) */}
               {!isDayView &&
                 safeChartData.map((pt, idx) => {
-                  if (!visibleWeekLabels.has(idx)) return null;
-                  const x = padLeft + (safeChartData.length > 1 ? (idx / (safeChartData.length - 1)) * usableW : usableW / 2);
+                  const totalDays = safeChartData.length;
+                  // Nếu là tuần (7 ngày): hiện toàn bộ cả 7 ngày!
+                  // Nếu là tháng (30 ngày): hiện cách nhau 5 ngày và ngày cuối cùng (hôm nay)
+                  const shouldShow =
+                    totalDays <= 7 || idx === 0 || idx === totalDays - 1 || idx % 5 === 0;
+                  if (!shouldShow) return null;
+                  const x = padLeft + (totalDays > 1 ? (idx / (totalDays - 1)) * usableW : usableW / 2);
+                  const isCurrentDay = idx === totalDays - 1;
                   return (
                     <SvgText
                       key={`wlbl_${idx}`}
                       x={x}
                       y={bottomY + 18}
                       textAnchor="middle"
-                      fontSize={9.5}
-                      fontWeight="500"
-                      fill={subTextColor}
+                      fontSize={totalDays <= 7 ? 10 : 9}
+                      fontWeight={isCurrentDay ? '700' : '500'}
+                      fill={isCurrentDay ? '#EF4444' : subTextColor}
                     >
                       {pt.label}
                     </SvgText>
@@ -535,10 +542,9 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
                 strokeWidth={1.5}
               />
 
-              {/* Các cột nhịp tim đa tầng màu (Heart Rate Zone Bars) - vị trí độc lập không đè nhau */}
+              {/* Các cột nhịp tim đa tầng màu (Heart Rate Zone Bars) */}
               {barElements.map((bar, idx) => (
                 <React.Fragment key={`bar_${idx}`}>
-                  {/* Cột nhịp tim chính với bo góc nhẹ */}
                   <Rect
                     x={bar.x - bar.width / 2}
                     y={bar.y}
@@ -548,7 +554,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
                     fill={bar.color}
                   />
 
-                  {/* Hiệu ứng nổi bật cho cột đang được chọn/tua */}
+                  {/* Hiệu ứng nổi bật cho cột đang được chọn */}
                   {bar.isClosest && !bar.isBaseline && (
                     <>
                       <Line
@@ -588,7 +594,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
         <View style={styles.watchEmptyBox}>
           <Ionicons name="stats-chart-outline" size={32} color={subTextColor} style={{ marginBottom: 6 }} />
           <Text style={[styles.watchEmptyText, { color: subTextColor }]}>
-            Chưa có bản ghi nhịp tim trong ngày {chartSubtitle || ''}
+            Chưa có bản ghi nhịp tim trong {chartSubtitle || ''}
           </Text>
         </View>
       )}
