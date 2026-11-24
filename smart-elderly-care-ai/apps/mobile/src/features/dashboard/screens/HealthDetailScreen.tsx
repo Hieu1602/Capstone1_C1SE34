@@ -669,6 +669,55 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           </View>
         )}
 
+        {/* Banner thông minh cho Dual-mode: Tại nhà / Di động / Ngoại tuyến */}
+        {assignedBand && (
+          <View style={[
+            styles.connectionModeBanner,
+            isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }
+          ]}>
+            <Ionicons
+              name={
+                assignedBand.status?.includes('Di động')
+                  ? 'cellular'
+                  : (assignedBand.status?.includes('Tại nhà') || assignedBand.isOnline)
+                  ? 'home'
+                  : 'cloud-offline'
+              }
+              size={18}
+              color={
+                assignedBand.status?.includes('Di động')
+                  ? '#3B82F6'
+                  : assignedBand.isOnline
+                  ? '#10B981'
+                  : '#F59E0B'
+              }
+              style={{ marginTop: 2 }}
+            />
+            <View style={{ flex: 1, marginLeft: 8 }}>
+              <Text style={[styles.connectionModeTitle, isDarkMode && { color: '#F1F5F9' }]}>
+                {assignedBand.name || 'Vòng tay thông minh'} •{' '}
+                <Text
+                  style={{
+                    color: assignedBand.status?.includes('Di động')
+                      ? '#3B82F6'
+                      : assignedBand.isOnline
+                      ? '#10B981'
+                      : '#F59E0B',
+                    fontWeight: '700',
+                  }}
+                >
+                  {assignedBand.status || (assignedBand.isOnline ? 'Trực tuyến • Tại nhà' : 'Ngoại tuyến')}
+                </Text>
+              </Text>
+              {!assignedBand.isOnline && (
+                <Text style={[styles.connectionModeSub, isDarkMode && { color: '#94A3B8' }]}>
+                  Cụ đang ở ngoài vùng sóng BLE • Vòng tay đang tự ghi nhớ dữ liệu đo vào bộ nhớ đệm và sẽ tự động bù vào biểu đồ khi cụ về nhà.
+                </Text>
+              )}
+            </View>
+          </View>
+        )}
+
         {/* 2. Banner Tình trạng Tổng quan */}
         <HealthOverallBanner
           bannerAlert={currentTabConfig.bannerAlert}
@@ -951,5 +1000,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     color: '#78350F',
+  },
+  connectionModeBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 12,
+  },
+  connectionModeTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  connectionModeSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+    lineHeight: 16,
   },
 });

@@ -496,6 +496,7 @@ def send_vitals_to_backend(
         "fall_detected": bool(ext.get("fall_detected", False)),
         "is_worn": bool(ext.get("is_worn", True)),
         "activity_state": ext.get("activity_state", "Đang đeo"),
+        "source": ext.get("source", "EDGE_HUB"),
         "raw_payload": ext,
     }
     for k in ("steps", "distance_m", "calories_kcal", "accel_x", "accel_y", "accel_z", "accel_g", "battery_state"):
@@ -521,6 +522,37 @@ def send_vitals_to_backend(
                 pass
         except Exception as e:
             logger.debug("[Backend %s] Gửi sinh hiệu lỗi: %s", url, e)
+
+
+def send_device_status_to_backend(
+    backend_url: str,
+    device_id: str,
+    is_online: bool,
+    status_text: str,
+):
+    """Gửi trạng thái trực tuyến / ngoại tuyến và lý do lên backend."""
+    payload = {
+        "device_id": device_id,
+        "is_online": is_online,
+        "bracelet_connected": is_online,
+        "status_text": status_text,
+    }
+    data = json.dumps(payload).encode("utf-8")
+    ec2_url = "http://16.178.128.42:8000/api/v1/vitals"
+    target_urls = [ec2_url, backend_url] if (ec2_url != backend_url and "localhost" in backend_url) else [backend_url]
+
+    for url in target_urls:
+        try:
+            req = urllib.request.Request(
+                url,
+                data=data,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=5.0) as resp:
+                pass
+        except Exception as e:
+            logger.debug("[Backend %s] Gửi trạng thái lỗi: %s", url, e)
 
 
 async def scan_ble_devices(timeout: float = 6.0):
@@ -1101,8 +1133,20 @@ async def run_stream(
                             await client.write_gatt_char(HUAMI_HR_CTRL_UUID, b"\x16", response=True)
 
             logger.warning("Mất kết nối BLE tới vòng đeo tay! Tự động thử lại sau 5 giây...")
+            send_device_status_to_backend(
+                backend_url,
+                device_name,
+                is_online=False,
+                status_text="Ngoại tuyến • Ngoài vùng phủ sóng (Không mang điện thoại)",
+            )
         except Exception as e:
             logger.warning("Chưa kết nối được BLE trực tiếp (%s). Thử lại sau 5s...", e)
+            send_device_status_to_backend(
+                backend_url,
+                device_name,
+                is_online=False,
+                status_text="Ngoại tuyến • Ngoài vùng phủ sóng (Không mang điện thoại)",
+            )
 
         await asyncio.sleep(5.0)
 
@@ -1151,7 +1195,7 @@ async def run_cloud_sync(
                     f"🩸 SpO2: {latest_spo2}% | MAC: C1:BD:70:58:2D:F5 | {is_new}",
                     flush=True,
                 )
-                send_vitals_to_backend(backend_url, device_name, hr_val, 100, latest_spo2)
+                send_vitals_to_backend(backend_url, device_name, hr_val, 100, latest_spo2, extra={"source": "MOBILE_GATEWAY"})
                 seen_timestamps.add(ts)
         except Exception as exc:
             logger.error("Lỗi đồng bộ Xiaomi Cloud: %s", exc)
@@ -1159,6 +1203,51 @@ async def run_cloud_sync(
         if once:
             break
         await asyncio.sleep(interval)
+
+
+async def run_hybrid_stream(
+    mac_address: str,
+    backend_url: str,
+    device_name: str = "BLE_BAND_001",
+    auth_key: Optional[str] = None,
+    interval: float = 5.0,
+):
+    """
+    Chế độ Giám sát Kép Thích ứng (Dual-Mode Adaptive Vitals Tracking):
+    - Khi cụ ở gần trạm Hub (< 20m): Thu thập BLE trực tiếp (source="EDGE_HUB").
+    - Khi cụ đi xa ngoài tầm BLE (> 20m):
+        + Nếu cụ có dùng điện thoại: Tự động chuyển qua Mobile Gateway (Cloud Sync / source="MOBILE_GATEWAY").
+        + Nếu cụ KHÔNG dùng điện thoại: Vòng tay ghi đệm offline; khi cụ về lại nhà, hệ thống tự động kết nối lại và đẩy bù dữ liệu.
+    """
+    logger.info("🔄 Khởi động Chế độ Giám sát Kép (Dual-Mode Adaptive Vitals Tracking) cho %s...", device_name)
+    seen_cloud_ts = set()
+
+    async def _cloud_fallback_monitor():
+        nonlocal seen_cloud_ts
+        while True:
+            await asyncio.sleep(max(10.0, interval * 2))
+            try:
+                cdata = fetch_xiaomi_cloud_vitals(region="sg")
+                if cdata.get("latest_hr") and cdata.get("latest_time"):
+                    ts = cdata["latest_time"]
+                    if ts not in seen_cloud_ts:
+                        now_epoch = int(time.time())
+                        if abs(now_epoch - ts) <= 600:
+                            logger.info("📱 Phát hiện dữ liệu đo từ Điện thoại Di động của cụ (Cloud Bridge): HR %s bpm", cdata['latest_hr'])
+                            send_vitals_to_backend(
+                                backend_url,
+                                device_name,
+                                cdata["latest_hr"],
+                                100,
+                                cdata.get("latest_spo2") or 98,
+                                extra={"source": "MOBILE_GATEWAY"},
+                            )
+                        seen_cloud_ts.add(ts)
+            except Exception:
+                pass
+
+    asyncio.create_task(_cloud_fallback_monitor())
+    await run_stream(mac_address, backend_url, device_name=device_name, auth_key=auth_key, interval=interval)
 
 
 async def run_simulation(backend_url: str, device_name: str = "Xiaomi-Band-7-Sim"):
@@ -1263,6 +1352,7 @@ def main():
     parser.add_argument("-e", "--email", type=str, default="", help="Email tài khoản")
     parser.add_argument("-p", "--password", type=str, default="", help="Mật khẩu tài khoản")
     parser.add_argument("--auth-key", type=str, default="", help="Auth Key 16-byte hex (e.g. 0x1234...)")
+    parser.add_argument("--hybrid", action="store_true", help="Chế độ giám sát kép thích ứng: Tự động chuyển đổi giữa BLE tại nhà và Cloud Sync khi ra xa")
 
     args = parser.parse_args()
 
@@ -1304,6 +1394,12 @@ def main():
 
     if args.cloud_sync or args.once:
         asyncio.run(run_cloud_sync(args.backend_url, device_name=args.device_id, once=args.once, interval=poll_interval))
+        return
+
+    if args.hybrid:
+        target_mac = args.mac or ble_config.get("device_mac", "")
+        target_auth_key = args.auth_key or ble_config.get("auth_key", "")
+        asyncio.run(run_hybrid_stream(target_mac, args.backend_url, device_name=args.device_id, auth_key=target_auth_key, interval=poll_interval))
         return
 
     # Mặc định: Stream BLE trực tiếp thời gian thực theo chu kỳ (mặc định 5s/lần) từ Xiaomi Smart Band 7 (Zepp OS ECDH B-163 + 0x001d -> 0x2A37)

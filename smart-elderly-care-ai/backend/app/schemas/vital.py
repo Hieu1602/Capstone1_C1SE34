@@ -44,6 +44,7 @@ class VitalCreate(BaseModel):
     activity_state: Optional[str] = None
     activity: Optional[str] = None
     is_worn: Optional[bool] = True
+    source: Optional[str] = None
     raw_payload: Optional[dict] = None
 
     model_config = {"extra": "allow"}

@@ -140,6 +140,36 @@ async def create_vital_sign(
     return await crud_vital.create(db, data=data)
 
 
+@router.post("/batch", response_model=List[VitalOut], status_code=status.HTTP_201_CREATED)
+async def create_vital_signs_batch(
+    payload: List[VitalCreate] = Body(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Tiếp nhận danh sách đo lường sinh hiệu hàng loạt (phục vụ Data Backfill khi vòng tay kết nối lại).
+    Tự động khử trùng lặp và đồng bộ vào TimescaleDB.
+    """
+    data_list = [item.model_dump(exclude_unset=True) for item in payload]
+    return await crud_vital.create_batch(db, items=data_list)
+
+
+@router.post("/check-inactivity", status_code=status.HTTP_200_OK)
+@router.get("/check-inactivity", status_code=status.HTTP_200_OK)
+async def check_vitals_inactivity(
+    timeout_minutes: int = Query(default=30, ge=5, le=1440, description="Số phút mất kết nối để cảnh báo"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Quét và cảnh báo các vòng đeo tay mất kết nối quá thời gian quy định (người già không mang điện thoại).
+    """
+    alerts = await crud_vital.check_inactivity_and_alert(db, timeout_minutes=timeout_minutes)
+    return {
+        "status": "success",
+        "alerts_created": len(alerts),
+        "alerts": alerts,
+    }
+
+
 @router.post("/{device_identifier}", response_model=VitalOut, status_code=status.HTTP_201_CREATED)
 async def create_vital_for_device(
     device_identifier: str = Path(...),

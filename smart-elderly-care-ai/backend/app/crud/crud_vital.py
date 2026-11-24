@@ -187,6 +187,7 @@ class CRUDVital:
                 battery = None
 
         raw_payload = data.pop("raw_payload", None)
+        source = data.pop("source", None)
         bracelet_connected_flag = data.pop("bracelet_connected", None)
         data.pop("edge_hub_connected", None)
 
@@ -217,13 +218,43 @@ class CRUDVital:
                     prev_online = dev.is_online
                     if bracelet_connected_flag is False:
                         dev.is_online = False
+                        dev.status_text = "Ngoại tuyến • Ngoài vùng phủ sóng (Không mang điện thoại)"
+                    elif source == "MOBILE_GATEWAY":
+                        dev.is_online = True
+                        dev.status_text = "Trực tuyến • Di động (4G)"
+                    elif source == "EDGE_HUB":
+                        dev.is_online = True
+                        dev.status_text = "Trực tuyến • Tại nhà"
                     elif battery is not None:
                         dev.battery_level = battery
                         dev.is_online = (battery > 0)
+                        if not dev.status_text or "Ngoại tuyến" in dev.status_text:
+                            dev.status_text = "Trực tuyến • Đang đeo"
                     else:
                         dev.is_online = True
+                        if not dev.status_text or "Ngoại tuyến" in dev.status_text:
+                            dev.status_text = "Trực tuyến • Đang đeo"
                     dev.last_heartbeat = func.now()
                     await db.flush()
+
+                    # Khi thiết bị đã kết nối lại (Trực tuyến) -> Tự động giải quyết sự cố ngoài vùng sóng cũ
+                    if dev.is_online:
+                        try:
+                            await db.execute(
+                                update(Incident)
+                                .where(
+                                    Incident.device_id == uuid_val,
+                                    Incident.alert_type == "OUT_OF_RANGE_NO_PHONE",
+                                    Incident.is_acknowledged == False,
+                                )
+                                .values(
+                                    is_acknowledged=True,
+                                    acknowledged_at=datetime.now(timezone.utc),
+                                    notes="Tự động giải quyết: Cụ đã trở về vùng phủ sóng của trạm Hub",
+                                )
+                            )
+                        except Exception:
+                            pass
 
                     # Nếu trạng thái thiết bị thay đổi (đặc biệt khi ngắt kết nối BLE) -> phát ngay WS DEVICE_STATUS cho cả Gia đình & Bác sĩ
                     if prev_online != dev.is_online:
@@ -1025,6 +1056,7 @@ class CRUDVital:
         # Nếu quá 45s không có dữ liệu mới, cập nhật thiết bị sang offline và báo WS cho Bác sĩ & Gia đình
         if not is_fresh and smartband_device and smartband_device.is_online:
             smartband_device.is_online = False
+            smartband_device.status_text = "Ngoại tuyến • Ngoài vùng phủ sóng (Không mang điện thoại)"
             await db.commit()
             try:
                 import json as _json
@@ -1072,6 +1104,146 @@ class CRUDVital:
             "device_id": device.device_id if device else (str(latest_vital.device_id) if latest_vital else None),
             "time": v_time,
         }
+
+    async def create_batch(self, db: AsyncSession, items: List[dict]) -> List[VitalSign]:
+        """
+        Ghi nhận danh sách sinh hiệu hàng loạt (phục vụ Data Backfill khi vòng tay kết nối lại hoặc đồng bộ lịch sử).
+        Tự động khử trùng lặp (Deduplication) với các bản ghi đã tồn tại trong phạm vi ±2 giây.
+        """
+        if not items:
+            return []
+
+        created_objs = []
+        for item in items:
+            raw_dev = item.get("device_id")
+            uuid_val = await self.resolve_device_uuid(db, raw_dev) if raw_dev else None
+            rec_time = item.get("time")
+
+            # Khử trùng lặp: nếu đã có bản ghi của thiết bị này trong khoảng ±2 giây, bỏ qua
+            if uuid_val and rec_time:
+                dt_time = rec_time
+                if isinstance(dt_time, str):
+                    try:
+                        dt_time = datetime.fromisoformat(dt_time.replace("Z", "+00:00"))
+                    except Exception:
+                        dt_time = None
+                if dt_time:
+                    t_min = dt_time - timedelta(seconds=2)
+                    t_max = dt_time + timedelta(seconds=2)
+                    dup = await db.execute(
+                        select(VitalSign.id)
+                        .where(
+                            VitalSign.device_id == uuid_val,
+                            VitalSign.time >= t_min,
+                            VitalSign.time <= t_max,
+                        )
+                        .limit(1)
+                    )
+                    if dup.scalar_one_or_none():
+                        continue
+
+            obj = await self.create(db, item)
+            created_objs.append(obj)
+
+        return created_objs
+
+    async def check_inactivity_and_alert(self, db: AsyncSession, timeout_minutes: int = 30) -> List[dict]:
+        """
+        Kiểm tra các thiết bị Smartband ngoài vùng phủ sóng BLE quá timeout_minutes mà không có điện thoại.
+        Tự động kích hoạt cảnh báo an toàn OUT_OF_RANGE_NO_PHONE và thông báo cho người thân.
+        """
+        from app.models.device import Device, DeviceType
+        from app.models.incident import Incident
+        from app.crud.crud_incident import crud_incident
+        from app.api.websockets.vitals_ws import alert_clients
+        from app.services.notification.fcm_service import FCMService
+
+        from sqlalchemy.orm import selectinload
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=timeout_minutes)
+        # Tìm các vòng tay đang offline và heartbeat cuối cùng cách đây hơn timeout_minutes
+        stmt = (
+            select(Device)
+            .options(selectinload(Device.elderly))
+            .where(
+                Device.device_type == DeviceType.SMARTBAND,
+                Device.is_online == False,
+                or_(Device.last_heartbeat <= cutoff, Device.last_heartbeat.is_(None)),
+            )
+        )
+        res = await db.execute(stmt)
+        bands = res.scalars().all()
+        created_alerts = []
+
+        for band in bands:
+            # Kiểm tra xem đã có cảnh báo OUT_OF_RANGE_NO_PHONE chưa xử lý trong vòng 60 phút chưa
+            recent_alert = await db.execute(
+                select(Incident.id)
+                .where(
+                    Incident.device_id == band.id,
+                    Incident.alert_type == "OUT_OF_RANGE_NO_PHONE",
+                    Incident.created_at >= (datetime.now(timezone.utc) - timedelta(minutes=60)),
+                )
+                .limit(1)
+            )
+            if recent_alert.scalar_one_or_none():
+                continue
+
+            wearer = band.wearer_name or band.name
+            msg = f"Cụ {wearer} ({band.name}) đã ở ngoài vùng phủ sóng BLE hơn {timeout_minutes} phút mà không mang theo điện thoại! Vui lòng liên hệ kiểm tra an toàn."
+
+            inc = await crud_incident.create(
+                db=db,
+                data={
+                    "device_id": band.id,
+                    "alert_type": "OUT_OF_RANGE_NO_PHONE",
+                    "alert_level": "HIGH",
+                    "message": msg,
+                    "is_acknowledged": False,
+                },
+            )
+
+            alert_dict = {
+                "id": str(inc.id),
+                "device_id": str(band.id),
+                "device_name": band.name,
+                "location": band.location or "Ngoài nhà",
+                "alert_type": "OUT_OF_RANGE_NO_PHONE",
+                "alert_level": "HIGH",
+                "message": msg,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            created_alerts.append(alert_dict)
+
+            # Gửi WebSocket
+            try:
+                import json as _json
+                payload_str = _json.dumps({"type": "ALERT_NEW", "alert_type": "OUT_OF_RANGE_NO_PHONE", "data": alert_dict}, ensure_ascii=False)
+                for c_ws in list(alert_clients):
+                    try:
+                        await c_ws.send_text(payload_str)
+                    except Exception:
+                        if c_ws in alert_clients:
+                            alert_clients.remove(c_ws)
+            except Exception:
+                pass
+
+            # Gửi Push Notification (FCM)
+            try:
+                target_user_ids = set()
+                if band.owner_id:
+                    target_user_ids.add(band.owner_id)
+                for uid in target_user_ids:
+                    await FCMService.send_to_user(
+                        db=db,
+                        user_id=uid,
+                        title=f"⚠️ Cảnh báo an toàn - Cụ {wearer}",
+                        body=msg,
+                        data=alert_dict,
+                    )
+            except Exception:
+                pass
+
+        return created_alerts
 
 
 crud_vital = CRUDVital()
