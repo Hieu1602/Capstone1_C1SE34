@@ -699,11 +699,12 @@ async def run_stream(
     backend_url: str,
     device_name: str = "BLE_BAND_001",
     auth_key: Optional[str] = None,
+    interval: float = 5.0,
 ):
-    """Kết nối và stream TOÀN BỘ dữ liệu cảm biến thực liên tục từng giây qua BLE trực tiếp từ Xiaomi Band 7."""
+    """Kết nối và stream TOÀN BỘ dữ liệu cảm biến thực theo chu kỳ định cấu hình (mặc định: 5.0s/lần) qua BLE từ Xiaomi Band 7."""
     from bleak import BleakClient, BleakScanner
 
-    logger.info("Khởi động kết nối BLE đa cảm biến tới Xiaomi Band 7: %s (gắn thiết bị: %s)", mac_address or "AUTO", device_name)
+    logger.info("Khởi động kết nối BLE đa cảm biến tới Xiaomi Band 7: %s (gắn thiết bị: %s | chu kỳ: %.1fs)", mac_address or "AUTO", device_name, interval)
     telemetry: Dict[str, Any] = {
         "heart_rate": 0,
         "spo2": 98,
@@ -737,12 +738,19 @@ async def run_stream(
         pass
 
     readings = 0
+    last_emit_ts = 0.0
 
-    def _emit_telemetry(trigger_source: str = "HR"):
-        nonlocal readings
+    def _emit_telemetry(trigger_source: str = "HR", force: bool = False):
+        nonlocal readings, last_emit_ts
         hr = int(telemetry.get("heart_rate") or 0)
         if hr <= 0:
             return
+        now_ts = time.time()
+        is_emergency = bool(telemetry.get("fall_detected"))
+        # Throttle đo & gửi dữ liệu theo chu kỳ interval (mặc định: 5.0s / 1 lần)
+        if not force and not is_emergency and (now_ts - last_emit_ts < interval):
+            return
+        last_emit_ts = now_ts
         readings += 1
         if telemetry.get("fall_detected"):
             status = "🚨 [CẢNH BÁO TÉ NGÃ KHẨN CẤP!]"
@@ -1058,9 +1066,9 @@ async def run_stream(
 
                     tick = 0
                     while client.is_connected:
-                        await asyncio.sleep(1.0)
+                        await asyncio.sleep(interval)
                         tick += 1
-                        # Duy trì đo nhịp tim thực mỗi 1 giây
+                        # Duy trì đo nhịp tim thực mỗi chu kỳ (mặc định: 5.0s / 1 lần)
                         state["wh"], state["seq"] = await _zeppos_send_chunked(client, state["wh"], 0x001D, bytes([0x04, 0x02]), mtu)
 
                         # Mỗi 3 giây truy vấn lại Bước chân / Quãng đường / Calo thời gian thực qua ZeppOsStepsService (0x0016)
@@ -1298,10 +1306,10 @@ def main():
         asyncio.run(run_cloud_sync(args.backend_url, device_name=args.device_id, once=args.once, interval=poll_interval))
         return
 
-    # Mặc định: Stream BLE trực tiếp thời gian thực từng giây từ Xiaomi Smart Band 7 (Zepp OS ECDH B-163 + 0x001d -> 0x2A37)
+    # Mặc định: Stream BLE trực tiếp thời gian thực theo chu kỳ (mặc định 5s/lần) từ Xiaomi Smart Band 7 (Zepp OS ECDH B-163 + 0x001d -> 0x2A37)
     target_mac = args.mac or ble_config.get("device_mac", "")
     target_auth_key = args.auth_key or ble_config.get("auth_key", "")
-    asyncio.run(run_stream(target_mac, args.backend_url, device_name=args.device_id, auth_key=target_auth_key))
+    asyncio.run(run_stream(target_mac, args.backend_url, device_name=args.device_id, auth_key=target_auth_key, interval=poll_interval))
 
 
 if __name__ == "__main__":

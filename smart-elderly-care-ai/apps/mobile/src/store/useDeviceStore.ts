@@ -114,6 +114,7 @@ export interface IoTDeviceItem {
   elderly_id?: string | number;
   wearer_name?: string;
   house_id?: string;
+  device_type?: string;
 }
 interface DeviceState {
   activeDevice: Device | null;
@@ -549,8 +550,9 @@ export const useDeviceStore = create<DeviceState>()(
           const res = await devicesApi.listDevices();
           if (res.data && Array.isArray(res.data)) {
             const mapped: IoTDeviceItem[] = res.data.map((dev: any) => {
+              const rawType = String(dev.device_type || "").toUpperCase();
               const def =
-                DEVICE_TYPE_DEFAULTS[dev.device_type] ||
+                DEVICE_TYPE_DEFAULTS[rawType] ||
                 DEVICE_TYPE_DEFAULTS.SENSOR;
               return {
                 id: String(dev.id || dev.device_id),
@@ -558,6 +560,7 @@ export const useDeviceStore = create<DeviceState>()(
                 name: dev.name,
                 sub: dev.sub_title || def.sub,
                 type: def.type,
+                device_type: rawType,
                 status:
                   dev.status_text ||
                   (dev.is_online ? "Trực tuyến" : "Ngoại tuyến"),

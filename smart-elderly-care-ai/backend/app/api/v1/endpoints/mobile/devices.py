@@ -18,6 +18,7 @@ from app.crud.crud_house import crud_house
 from app.models.device import Device, DeviceType
 from app.models.user import User
 from app.schemas.device import (
+    DeviceConfigBase,
     DeviceConfigOut,
     DeviceConfigUpdate,
     DeviceCreate,

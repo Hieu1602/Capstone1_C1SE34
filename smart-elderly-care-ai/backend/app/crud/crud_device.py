@@ -241,7 +241,7 @@ class CRUDDevice:
         self,
         db: AsyncSession,
         device: Device,
-        config_in: Union[DeviceConfigUpdate, DeviceConfigBase, Dict[str, Any]],
+        config_in: Union[DeviceConfigBase, DeviceConfigUpdate, Dict[str, Any]],
     ) -> DeviceConfig:
         config = device.config
         if not config:

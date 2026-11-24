@@ -89,11 +89,24 @@ export default function CreateGroupScreen({ navigation }: any) {
     dev.name.includes('SECA') ||
     dev.name.includes('Ranger');
 
-  const checkIsWatch = (dev: IoTDeviceItem) =>
-    dev.type === 'band' ||
-    dev.type === 'watch' ||
-    dev.name.toLowerCase().includes('smartband') ||
-    dev.name.toLowerCase().includes('đồng hồ');
+  const checkIsWatch = (dev: IoTDeviceItem) => {
+    const type = String(dev.type || '').toLowerCase();
+    const name = String(dev.name || '').toLowerCase();
+    const devType = String((dev as any).device_type || '').toLowerCase();
+    return (
+      type === 'band' ||
+      type === 'watch' ||
+      type === 'smartband' ||
+      devType.includes('band') ||
+      devType.includes('watch') ||
+      name.includes('smartband') ||
+      name.includes('smart band') ||
+      name.includes('band') ||
+      name.includes('xiaomi') ||
+      name.includes('đồng hồ') ||
+      name.includes('vòng')
+    );
+  };
 
   // Lọc thiết bị hiển thị theo Tab
   const filteredDevices = iotDevices.filter((dev) => {

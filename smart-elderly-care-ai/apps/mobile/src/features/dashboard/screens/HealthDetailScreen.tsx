@@ -52,6 +52,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     activePatientId,
     setActivePatientId,
     iotDevices,
+    syncAllWithBackend,
   } = useVitalStore();
 
   const initialPatientId =
@@ -62,10 +63,11 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   const [selectedPatientId, setSelectedPatientId] = useState<any>(initialPatientId);
 
   useEffect(() => {
+    syncAllWithBackend?.();
     if (!patientsList || patientsList.length === 0) {
       fetchPatientsList?.();
     }
-  }, [fetchPatientsList, patientsList]);
+  }, [fetchPatientsList, patientsList, syncAllWithBackend]);
 
   const currentPatient =
     (patientsList || []).find(
@@ -103,6 +105,9 @@ export default function HealthDetailScreen({ navigation, route }: any) {
       devType.includes('band') ||
       devType.includes('watch') ||
       name.includes('smartband') ||
+      name.includes('smart band') ||
+      name.includes('band') ||
+      name.includes('xiaomi') ||
       name.includes('vòng') ||
       name.includes('đồng hồ')
     );
@@ -377,6 +382,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   const isFallDetected = Boolean(isCurrentMatching && currentVitals.fall_detected);
 
   const handleRefresh = async () => {
+    await syncAllWithBackend?.();
     await fetchVitals();
     if (selectedRange === 'DAY') {
       await loadDateVitals(selectedDate);
