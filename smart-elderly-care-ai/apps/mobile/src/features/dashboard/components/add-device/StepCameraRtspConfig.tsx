@@ -7,6 +7,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LocalizedAlert, LocalizedText } from '../../../../i18n/LocalizedComponents';
@@ -366,14 +368,24 @@ export const StepCameraRtspConfig: React.FC<StepCameraRtspConfigProps> = ({
   const currentBrandInfo = CAMERA_BRANDS.find((b) => b.name === selectedBrand);
 
   return (
-    <ScrollView
+    <KeyboardAvoidingView
       style={[
         localStyles.container,
         isDarkMode && { backgroundColor: colors.background || '#0F172A' },
       ]}
-      contentContainerStyle={localStyles.contentContainer}
-      showsVerticalScrollIndicator={false}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
     >
+      <ScrollView
+        style={localStyles.container}
+        contentContainerStyle={[
+          localStyles.contentContainer,
+          { paddingBottom: 240 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
       {/* Khối Tiêu đề */}
       <View style={localStyles.headerBox}>
         <LocalizedText
@@ -1075,7 +1087,8 @@ export const StepCameraRtspConfig: React.FC<StepCameraRtspConfigProps> = ({
         </TouchableOpacity>
       </Modal>
 
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 

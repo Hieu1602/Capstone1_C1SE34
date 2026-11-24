@@ -7,7 +7,8 @@ AWS_RDS_DATABASE_URL = "postgresql+asyncpg://postgres:Seca2026@seca.cdeea4mcuj3h
 
 REQUIRED_VARS = {
     "DATABASE_URL": AWS_RDS_DATABASE_URL,
-    "CAMERA_SERVICE_URL": "https://albuquerque-precise-gained-italiano.trycloudflare.com",
+    "CAMERA_SERVICE_URL": "http://host.docker.internal:8090",
+    "CAMERA_INTERCOM_URL": "http://host.docker.internal:8090",
     "CAMERA_HTTP_USERNAME": "viewer",
     "CAMERA_HTTP_PASSWORD": "123456",
     "OTP_MODE": "esms",

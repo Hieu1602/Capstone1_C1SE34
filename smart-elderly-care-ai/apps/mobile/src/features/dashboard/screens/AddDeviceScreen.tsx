@@ -659,29 +659,8 @@ export default function AddDeviceScreen({ navigation, route }: any) {
         />
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, isDarkMode && { backgroundColor: colors.background }]}
-      >
-        {/* 1. STATE: CATEGORY_SELECT */}
-        {currentStep === 'CATEGORY_SELECT' && (
-          <StepCategorySelect
-            styles={styles}
-            isDarkMode={isDarkMode}
-            colors={colors}
-            onSelectCategory={(category) => {
-              if (category === 'camera') {
-                setProtocol('RTSP_IP');
-                setCurrentStep('CAMERA_RTSP_CONFIG');
-              } else if (category === 'watch') {
-                setCurrentStep('WATCH_LIST');
-              }
-            }}
-          />
-        )}
-
-        {/* 2. CAMERA CONFIG (RTSP / ONVIF / AI) */}
-        {currentStep === 'CAMERA_RTSP_CONFIG' && (
+      {currentStep === 'CAMERA_RTSP_CONFIG' ? (
+        <View style={{ flex: 1 }}>
           <StepCameraRtspConfig
             isDarkMode={isDarkMode}
             colors={colors}
@@ -689,9 +668,31 @@ export default function AddDeviceScreen({ navigation, route }: any) {
             onOpenScanner={() => setShowScanModal(true)}
             onApplyCamera={handleApplyRtspCamera}
           />
-        )}
+        </View>
+      ) : (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={[styles.scrollContent, isDarkMode && { backgroundColor: colors.background }]}
+        >
+          {/* 1. STATE: CATEGORY_SELECT */}
+          {currentStep === 'CATEGORY_SELECT' && (
+            <StepCategorySelect
+              styles={styles}
+              isDarkMode={isDarkMode}
+              colors={colors}
+              onSelectCategory={(category) => {
+                if (category === 'camera') {
+                  setProtocol('RTSP_IP');
+                  setCurrentStep('CAMERA_RTSP_CONFIG');
+                } else if (category === 'watch') {
+                  setCurrentStep('WATCH_LIST');
+                }
+              }}
+            />
+          )}
 
-        {/* 3. WATCH FLOW */}
+          {/* 3. WATCH FLOW */}
         <StepWatchFlow
           currentStep={currentStep}
           styles={styles}
@@ -759,6 +760,7 @@ export default function AddDeviceScreen({ navigation, route }: any) {
           }}
         />
       </ScrollView>
+      )}
 
       {/* ALL MODALS */}
       <AddDeviceModals
