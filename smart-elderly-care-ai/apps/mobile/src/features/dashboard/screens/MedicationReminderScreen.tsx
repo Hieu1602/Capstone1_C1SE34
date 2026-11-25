@@ -9,8 +9,8 @@
 //   4. Hiển thị trạng thái trống (Empty State) chuẩn xác khi chưa tạo lịch nhắc nhở.
 // ==============================================================================
 
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, Switch, Modal, Pressable, ActivityIndicator, Platform, Image } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Switch, Modal, Pressable, ActivityIndicator, Platform, Image, PanResponder } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { formatGenderVN } from '../../../utils/formatters';
@@ -21,6 +21,7 @@ import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n
 import { usePatientStore, ReminderItem } from '../../../store/usePatientStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { remindersApi } from '../../../services/api';
+import { cameraApi } from '../../../services/camera';
 import { handleHeaderBack } from '../../../navigation/navigationHelpers';
 
 // Cấu trúc dữ liệu một mốc nhắc uống nước / sinh hoạt
@@ -340,21 +341,68 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
     );
   };
 
-  const handleTestVoiceSpeaker = () => {
+  const [speakerVolume, setSpeakerVolume] = useState<number>(80);
+  const volumeTrackWidth = useRef(0);
+  const volumeStartVal = useRef(80);
+  const speakerVolumeRef = useRef(80);
+  speakerVolumeRef.current = speakerVolume;
+
+  useEffect(() => {
+    cameraApi.getSpeakerVolume().then((res) => {
+      if (typeof res.data?.volume === 'number') {
+        setSpeakerVolume(res.data.volume);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const persistSpeakerVolume = (vol: number) => {
+    cameraApi.setSpeakerVolume(vol).catch(() => {});
+  };
+
+  const volumeResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        const w = volumeTrackWidth.current;
+        if (!w) return;
+        const pct = Math.round(Math.max(0, Math.min(1, evt.nativeEvent.locationX / w)) * 100);
+        volumeStartVal.current = pct;
+        setSpeakerVolume(pct);
+      },
+      onPanResponderMove: (_, gestureState) => {
+        const w = volumeTrackWidth.current;
+        if (!w) return;
+        const deltaPct = Math.round((gestureState.dx / w) * 100);
+        setSpeakerVolume(Math.max(0, Math.min(100, volumeStartVal.current + deltaPct)));
+      },
+      onPanResponderRelease: () => {
+        persistSpeakerVolume(speakerVolumeRef.current);
+      },
+    })
+  ).current;
+
+  const handleTestVoiceSpeaker = async () => {
     if (!hubVoiceReminderEnabled) {
       LocalizedAlert.alert('Loa đang tắt', 'Vui lòng gạt bật tính năng phát qua Loa thông minh Hub trước.');
       return;
     }
 
+    const firstMed = medications.find((m) => !m.taken);
+    const textNotice = firstMed
+      ? `Chào ${patientDisplayName}, đã đến giờ uống thuốc ${firstMed.name}, liều ${firstMed.dose}. Cụ nhớ uống thuốc với nước ấm nhé.`
+      : `Xin chào ${patientDisplayName}, loa nhắc nhở giọng nói tiếng Việt trên camera đang hoạt động bình thường.`;
+
     setIsPlayingTestVoice(true);
-    setTimeout(() => {
+    try {
+      await cameraApi.speak(textNotice, undefined, true, speakerVolume);
+      LocalizedAlert.alert('Loa camera đã phát', `📢 "${textNotice}"`);
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err?.message || 'Không thể kết nối tới loa camera';
+      LocalizedAlert.alert('Lỗi phát loa camera', String(detail));
+    } finally {
       setIsPlayingTestVoice(false);
-      const firstMed = medications.find((m) => !m.taken);
-      const textNotice = firstMed
-        ? `Đã đến giờ uống thuốc ${firstMed.name} (${firstMed.dose}) của ${patientDisplayName}.`
-        : `Hiện không có lịch uống thuốc sắp tới của ${patientDisplayName}.`;
-      LocalizedAlert.alert('Loa Hub đã phát', `📢 "${textNotice}"`);
-    }, 1200);
+    }
   };
 
   const filteredMeds = medications.filter((m) => {
@@ -634,10 +682,31 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
 
           <View style={[styles.speakerDivider, { backgroundColor: borderCol }]} />
 
+          <View style={styles.speakerVolumeRow}>
+            <Ionicons
+              name={speakerVolume === 0 ? 'volume-mute' : speakerVolume < 50 ? 'volume-low' : 'volume-high'}
+              size={16}
+              color={textSub}
+            />
+            <View
+              style={styles.volumeTrackTouch}
+              onLayout={(e) => {
+                volumeTrackWidth.current = e.nativeEvent.layout.width;
+              }}
+              {...volumeResponder.panHandlers}
+            >
+              <View style={[styles.volumeTrack, { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
+                <View style={[styles.volumeFill, { width: `${speakerVolume}%` }]} />
+              </View>
+              <View style={[styles.volumeThumb, { left: `${speakerVolume}%` }]} />
+            </View>
+            <LocalizedText style={[styles.volumeValueText, { color: textTitle }]}>{speakerVolume}%</LocalizedText>
+          </View>
+
           <View style={styles.speakerBottomRow}>
             <View style={styles.speakerStatusPill}>
               <View style={styles.greenLiveDot} />
-              <LocalizedText style={styles.speakerStatusText}>Hub #01 Online (Âm lượng 80%)</LocalizedText>
+              <LocalizedText style={styles.speakerStatusText}>{`Hub #01 Online (Âm lượng ${speakerVolume}%)`}</LocalizedText>
             </View>
             <TouchableOpacity
               style={[styles.testVoiceBtn, isPlayingTestVoice && { opacity: 0.6 }]}
@@ -1384,6 +1453,12 @@ const styles = StyleSheet.create({
   speakerTitle: { fontSize: 14, fontWeight: '700' },
   speakerSubtitle: { fontSize: 11, marginTop: 2, lineHeight: 15 },
   speakerDivider: { height: 1, marginVertical: 10 },
+  speakerVolumeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  volumeTrackTouch: { flex: 1, height: 28, justifyContent: 'center' },
+  volumeTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
+  volumeFill: { height: '100%', backgroundColor: Colors.primary, borderRadius: 3 },
+  volumeThumb: { position: 'absolute', width: 16, height: 16, borderRadius: 8, backgroundColor: Colors.primary, marginLeft: -8, borderWidth: 2, borderColor: '#FFF' },
+  volumeValueText: { width: 38, textAlign: 'right', fontSize: 12, fontWeight: '700' },
   speakerBottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   speakerStatusPill: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   greenLiveDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#10B981' },

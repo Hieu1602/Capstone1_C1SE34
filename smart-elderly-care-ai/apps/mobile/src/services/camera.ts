@@ -210,6 +210,19 @@ export const cameraApi = {
             },
             { ...sourceConfig(cameraId), signal, timeout: 25000 },
         ),
+    /**
+     * Phát câu nhắc nhở giọng nói tiếng Việt qua loa camera.
+     */
+    speak: (text: string, cameraId?: string, force: boolean = true, volume?: number) =>
+        api.post<{ ok: boolean; dst?: string; bytes?: number }>(
+            "/camera/speaker/speak",
+            { text, force, ...(volume !== undefined ? { volume } : {}) },
+            { ...sourceConfig(cameraId), timeout: 25000 },
+        ),
+    getSpeakerVolume: (cameraId?: string) =>
+        api.get<{ volume: number }>("/camera/speaker/volume", sourceConfig(cameraId)),
+    setSpeakerVolume: (volume: number, cameraId?: string) =>
+        api.put<{ volume: number }>("/camera/speaker/volume", { volume }, sourceConfig(cameraId)),
     // WebView/trình duyệt không giữ mật khẩu camera hoặc JWT đăng nhập.
     /**
      * Xin ticket ngắn hạn cho một tài nguyên và ghép URL để trình phát mở.
