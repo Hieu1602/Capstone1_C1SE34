@@ -41,7 +41,7 @@ DROP TABLE IF EXISTS "users" CASCADE;
 -- PHẦN 3: TẠO 22 BẢNG (DDL)
 -- =================================================================
 
--- 1. Bảng users (29 cột)
+-- 1. Bảng users (28 cột)
 CREATE TABLE "users" (
     "id" UUID NOT NULL,
     "full_name" VARCHAR(255) NOT NULL,
@@ -65,7 +65,6 @@ CREATE TABLE "users" (
     "updated_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
     "last_login_at" TIMESTAMPTZ NULL,
     "two_factor_enabled" BOOLEAN NULL DEFAULT false,
-    "email" VARCHAR(255) NULL,
     "status" VARCHAR(30) NULL DEFAULT 'active'::character varying,
     "lock_reason" TEXT NULL,
     "locked_at" TIMESTAMPTZ NULL,

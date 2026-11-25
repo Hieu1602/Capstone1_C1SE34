@@ -205,7 +205,7 @@ async def check_user_locking_guards(db: AsyncSession, target_user: User, current
 async def list_users(
     page: Optional[int] = Query(default=None, ge=1, description="Số trang hiển thị"),
     page_size: Optional[int] = Query(default=10, ge=1, le=100, description="Số dòng mỗi trang"),
-    search: Optional[str] = Query(default=None, description="Tìm theo số điện thoại, họ tên, email"),
+    search: Optional[str] = Query(default=None, description="Tìm theo số điện thoại, họ tên"),
     role: Optional[str] = Query(default=None, description="Bộ lọc vai trò"),
     status: Optional[str] = Query(default=None, description="Bộ lọc trạng thái (active, locked_auto, locked_admin)"),
     dormancy: Optional[str] = Query(default=None, description="Bộ lọc ngủ đông (active, remind_3m, lock_6m, eligible_delete_1y)"),
@@ -216,7 +216,7 @@ async def list_users(
 ):
     """
     1. Tra cứu người dùng có phân trang và bộ lọc chuyên sâu (dành cho Admin):
-    - Tìm kiếm theo số điện thoại, họ tên, email
+    - Tìm kiếm theo số điện thoại, họ tên
     - Lọc vai trò, trạng thái (active, locked_auto, locked_admin), mức ngủ đông
     - Kiểm tra trước điều kiện xóa (can_delete, cannot_delete_reason)
     """
@@ -399,7 +399,6 @@ async def list_users(
             u for u in filtered
             if (u.full_name and kw in u.full_name.lower())
             or (u.phone and kw in u.phone)
-            or (u.email and kw in u.email.lower())
             or (u.assigned_house and kw in u.assigned_house.lower())
         ]
 

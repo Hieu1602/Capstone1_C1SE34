@@ -1,6 +1,6 @@
 # Tài liệu Cấu trúc Cơ sở Dữ liệu — Smart Elderly Care AI (SECA)
 
-Tài liệu này mô tả đầy đủ **22 bảng (`BASE TABLE`)** và **283 cột** đang tồn tại thực tế trong schema `public` của cơ sở dữ liệu PostgreSQL phục vụ hệ thống **Smart Elderly Care AI (SECA)** (Mobile App, Doctor Web, Web Admin, FastAPI Backend và Edge AI/BLE Gateway).
+Tài liệu này mô tả đầy đủ **22 bảng (`BASE TABLE`)** và **282 cột** đang tồn tại thực tế trong schema `public` của cơ sở dữ liệu PostgreSQL phục vụ hệ thống **Smart Elderly Care AI (SECA)** (Mobile App, Doctor Web, Web Admin, FastAPI Backend và Edge AI/BLE Gateway).
 
 > [!NOTE]
 > **Ghi chú kỹ thuật thực tế trên PostgreSQL:**
@@ -14,7 +14,7 @@ Tài liệu này mô tả đầy đủ **22 bảng (`BASE TABLE`)** và **283 c�
 
 | STT | Tên bảng | Phân hệ | Số cột | Khóa chính (PK) | Vai trò chính |
 |---:|---|---|---:|---|---|
-| 1 | `users` | Tài khoản & Bảo mật | 29 | `id` | Tài khoản người dùng toàn hệ thống (Owner, Caregiver, Member, Doctor, Admin) |
+| 1 | `users` | Tài khoản & Bảo mật | 28 | `id` | Tài khoản người dùng toàn hệ thống (Owner, Caregiver, Member, Doctor, Admin) |
 | 2 | `user_terminals` | Tài khoản & Bảo mật | 11 | `id` | Thiết bị đầu cuối (điện thoại, trình duyệt) đang giữ phiên hoạt động |
 | 3 | `user_login_histories` | Tài khoản & Bảo mật | 9 | `id` | Nhật ký lịch sử các lần đăng nhập thành công / thất bại |
 | 4 | `houses` | Gia đình & Người cao tuổi | 7 | `id` | Hộ gia đình / căn nhà lắp đặt hệ thống IoT chăm sóc |
@@ -84,7 +84,7 @@ erDiagram
 
 ## I. Phân hệ Tài khoản, Phiên đăng nhập & Thiết bị đầu cuối
 
-### 1. Bảng `users` (29 cột)
+### 1. Bảng `users` (28 cột)
 - **Mục đích:** Lưu thông tin định danh, xác thực, vai trò phân quyền, tùy chọn cá nhân hóa giao diện/cảnh báo, thông tin hành nghề bác sĩ và trạng thái khóa tài khoản.
 - **Khóa chính:** `id`
 - **Chỉ mục (Indexes):** `pk_users` (`id`), `ix_users_phone` (`UNIQUE` trên `phone`).
@@ -114,13 +114,12 @@ erDiagram
 | 20 | `updated_at` | `timestamp with time zone` | NOT NULL | `DEFAULT now()` | Thời điểm cập nhật thông tin gần nhất |
 | 21 | `last_login_at` | `timestamp with time zone` | NULL | — | Thời điểm đăng nhập gần nhất (phục vụ đánh giá tài khoản không hoạt động) |
 | 22 | `two_factor_enabled` | `boolean` | NULL | `DEFAULT false` | Bật/tắt xác thực 2 bước (2FA / OTP) cho tài khoản |
-| 23 | `email` | `varchar(255)` | NULL | — | Địa chỉ email liên hệ (tùy chọn) |
-| 24 | `status` | `varchar(30)` | NULL | `DEFAULT 'active'` | Trạng thái chi tiết tài khoản: `active`, `locked_auto` (khóa do brute-force), `locked_admin` (admin khóa) |
-| 25 | `lock_reason` | `text` | NULL | — | Lý do khóa tài khoản bắt buộc khi admin khóa |
-| 26 | `locked_at` | `timestamp with time zone` | NULL | — | Thời điểm tài khoản bị khóa |
-| 27 | `locked_by` | `uuid` | NULL | — | UUID của admin đã thực hiện khóa tài khoản |
-| 28 | `lock_until` | `timestamp with time zone` | NULL | — | Mốc thời gian tự động mở khóa nếu là khóa tạm thời |
-| 29 | `token_version` | `integer` | NULL | `DEFAULT 1` | Phiên bản JWT token; tăng giá trị để thu hồi toàn bộ token cũ của user |
+| 23 | `status` | `varchar(30)` | NULL | `DEFAULT 'active'` | Trạng thái chi tiết tài khoản: `active`, `locked_auto` (khóa do brute-force), `locked_admin` (admin khóa) |
+| 24 | `lock_reason` | `text` | NULL | — | Lý do khóa tài khoản bắt buộc khi admin khóa |
+| 25 | `locked_at` | `timestamp with time zone` | NULL | — | Thời điểm tài khoản bị khóa |
+| 26 | `locked_by` | `uuid` | NULL | — | UUID của admin đã thực hiện khóa tài khoản |
+| 27 | `lock_until` | `timestamp with time zone` | NULL | — | Mốc thời gian tự động mở khóa nếu là khóa tạm thời |
+| 28 | `token_version` | `integer` | NULL | `DEFAULT 1` | Phiên bản JWT token; tăng giá trị để thu hồi toàn bộ token cũ của user |
 
 ---
 

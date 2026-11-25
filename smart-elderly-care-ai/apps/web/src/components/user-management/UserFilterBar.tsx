@@ -42,7 +42,7 @@ export const UserFilterBar: React.FC<UserFilterBarProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Tìm theo họ tên, số điện thoại, email, căn hộ..."
+            placeholder="Tìm theo họ tên, số điện thoại, căn hộ..."
             className="w-full pl-9 pr-4 py-2 rounded-xl text-xs bg-[#F5F6F8] dark:bg-[#202329] border border-[#E7E9ED] dark:border-[#454A53] text-[#191B20] dark:text-[#F5F6F8] placeholder:text-[#737780] dark:placeholder:text-[#727984] focus:outline-none focus:border-[#FF6B35] focus:ring-1 focus:ring-[#FF6B35]/30 transition-all font-sans"
           />
         </div>
