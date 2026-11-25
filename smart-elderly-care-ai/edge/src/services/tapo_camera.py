@@ -679,7 +679,7 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         Returns:
             HTTP response; healthz được phép gọi không cần đăng nhập.
         """
-        if request.path == "/healthz":
+        if request.path == "/healthz" or request.path.startswith("/speaker/clip/"):
             return await handler(request)
         try:
             auth = BasicAuth.decode(request.headers.get("Authorization", ""))
@@ -1236,6 +1236,129 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         except Exception as e:
             return web.json_response({"success": False, "reachable": False, "message": f"Không thể kết nối đến {host}:{port}: {e}"})
 
+    speaker_clips: dict[str, tuple[float, bytes]] = {}
+
+    async def speaker_clip(request):
+        """Phục vụ file audio tạm thời cho go2rtc (tapo-audio) kéo về phát ra loa camera."""
+        clip_id = request.match_info.get("clip_id", "")
+        now = time.monotonic()
+        for k in [k for k, (exp, _) in speaker_clips.items() if exp < now]:
+            speaker_clips.pop(k, None)
+        entry = speaker_clips.get(clip_id)
+        if not entry or entry[0] < now:
+            raise web.HTTPNotFound(text="Audio clip không tồn tại hoặc đã hết hạn")
+        return web.Response(body=entry[1], content_type="audio/mpeg")
+
+    async def speaker_play(request):
+        """Nhận audio base64 (MP3) và phát qua loa camera thông qua go2rtc (tapo-audio)."""
+        import base64
+        import uuid
+        import aiohttp
+
+        payload = await request.json()
+        audio_b64 = payload.get("audio_b64")
+        if not isinstance(audio_b64, str) or not audio_b64:
+            raise web.HTTPBadRequest(text="Thiếu audio_b64")
+        try:
+            audio_bytes = base64.b64decode(audio_b64, validate=True)
+        except Exception:
+            raise web.HTTPBadRequest(text="audio_b64 không hợp lệ") from None
+        if len(audio_bytes) > 5 * 1024 * 1024:
+            raise web.HTTPBadRequest(text="Audio quá lớn (tối đa 5MB)")
+
+        dst = str(payload.get("dst") or "tapo_intercom").strip()
+        tapo_src = payload.get("tapo_src")
+        try:
+            volume = max(0, min(100, int(payload.get("volume", 100))))
+        except (TypeError, ValueError):
+            volume = 100
+        if volume == 0:
+            return web.json_response({"ok": True, "skipped": True, "dst": dst, "volume": 0})
+
+        if volume != 100:
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+                    "-f", "mp3", "-i", "pipe:0",
+                    "-af", f"volume={volume / 100:.2f}",
+                    "-f", "mp3", "pipe:1",
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                scaled_bytes, err_bytes = await asyncio.wait_for(proc.communicate(audio_bytes), timeout=10)
+                if proc.returncode == 0 and scaled_bytes:
+                    audio_bytes = scaled_bytes
+                else:
+                    LOG.warning("[Speaker] ffmpeg chỉnh âm lượng thất bại: %s", err_bytes.decode(errors="ignore")[:120])
+            except Exception as vol_err:
+                LOG.warning("[Speaker] Lỗi chỉnh âm lượng: %s", vol_err)
+
+        now = time.monotonic()
+        for k in [k for k, (exp, _) in speaker_clips.items() if exp < now]:
+            speaker_clips.pop(k, None)
+        clip_id = uuid.uuid4().hex
+        speaker_clips[clip_id] = (now + 60.0, audio_bytes)
+
+        clip_url = f"http://tapo-camera:8090/speaker/clip/{clip_id}.mp3"
+        src_expr = f"ffmpeg:{clip_url}#audio=pcma#input=file"
+
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
+            if isinstance(tapo_src, str) and tapo_src.startswith("tapo://"):
+                await session.put("http://tapo-audio:1984/api/streams", params={"name": dst, "src": tapo_src})
+
+            async def _post_go2rtc(target_dst: str):
+                async with session.post(
+                    "http://tapo-audio:1984/api/streams",
+                    params={"dst": target_dst, "src": src_expr},
+                ) as resp:
+                    if resp.status >= 400:
+                        err = await resp.text()
+                        raise web.HTTPBadGateway(text=f"go2rtc lỗi {resp.status}: {err[:200]}")
+
+            try:
+                await _post_go2rtc(dst)
+            except Exception as first_err:
+                LOG.warning("[Speaker] %s lỗi (%s); tự động đồng bộ IP camera mới...", dst, first_err)
+                # Lấy IP đang sống từ camera driver hoặc quét LAN tự động
+                live_host = None
+                try:
+                    src_val = getattr(camera, "source", None)
+                    if isinstance(src_val, str) and "://" in src_val:
+                        live_host = urlparse(src_val).hostname
+                except Exception:
+                    pass
+                if not live_host:
+                    try:
+                        from src.drivers.tapo import discover_tapo_host
+                        live_host = await asyncio.to_thread(discover_tapo_host)
+                    except Exception:
+                        live_host = None
+
+                if live_host:
+                    new_src = None
+                    if isinstance(tapo_src, str) and "@" in tapo_src:
+                        new_src = f"{tapo_src.rsplit('@', 1)[0]}@{live_host}"
+                    else:
+                        cpwd = os.getenv("TAPO_CONTROL_PASSWORD") or os.getenv("TAPO_CLOUD_PASSWORD") or os.getenv("TAPO_PASSWORD", "")
+                        if cpwd:
+                            import hashlib
+                            ph = hashlib.sha256(cpwd.encode("utf-8")).hexdigest().upper()
+                            new_src = f"tapo://admin:{ph}@{live_host}"
+                    if new_src:
+                        await session.put("http://tapo-audio:1984/api/streams", params={"name": dst, "src": new_src})
+                        await session.put("http://tapo-audio:1984/api/streams", params={"name": "tapo_intercom", "src": new_src})
+                        await _post_go2rtc(dst)
+                        return web.json_response({"ok": True, "dst": dst, "clip_id": clip_id, "bytes": len(audio_bytes), "volume": volume, "host": live_host})
+
+                if dst != "tapo_intercom":
+                    dst = "tapo_intercom"
+                    await _post_go2rtc(dst)
+                else:
+                    raise
+
+        return web.json_response({"ok": True, "dst": dst, "clip_id": clip_id, "bytes": len(audio_bytes)})
+
     async def proxy_audio(request):
         """Chuyển tiếp yêu cầu signaling WebRTC/streams tới dịch vụ go2rtc (tapo-audio:1984)."""
         target_url = f"http://tapo-audio:1984{request.rel_url}"
@@ -1298,6 +1421,8 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         web.get("/archive/session", get_archive_session),
         web.get("/fall-detection", get_fall), web.post("/fall-detection", set_fall),
         web.get("/discover", discover), web.post("/probe", probe),
+        web.post("/speaker/play", speaker_play),
+        web.get("/speaker/clip/{clip_id}.mp3", speaker_clip),
         web.route("*", "/api/webrtc", proxy_audio),
         web.route("*", "/api/streams", proxy_audio),
     ])

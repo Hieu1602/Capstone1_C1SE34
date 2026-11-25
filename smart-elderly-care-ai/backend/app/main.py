@@ -233,10 +233,11 @@ async def lifespan(app: FastAPI):
     mqtt_subscriber.start()
     logger.info("✅ MQTT Subscriber started and handlers registered.")
 
-    # Appointment reminder background worker (UC.0)
-    from app.services.scheduler import appointment_scheduler_service
+    # Appointment & Voice reminder background workers
+    from app.services.scheduler import appointment_scheduler_service, voice_reminder_scheduler_service
     await appointment_scheduler_service.start()
-    logger.info("✅ AppointmentSchedulerService started.")
+    await voice_reminder_scheduler_service.start()
+    logger.info("✅ AppointmentSchedulerService & VoiceReminderSchedulerService started.")
 
     # Background task: Tự động đồng bộ các avatar dạng static file cục bộ lên Base64 trong database
     async def _sync_local_avatars_to_cloud():
@@ -281,7 +282,8 @@ async def lifespan(app: FastAPI):
 
     # ---- Shutdown ----
     logger.info("🛑 Shutting down...")
-    from app.services.scheduler import appointment_scheduler_service
+    from app.services.scheduler import appointment_scheduler_service, voice_reminder_scheduler_service
+    await voice_reminder_scheduler_service.stop()
     await appointment_scheduler_service.stop()
     if mqtt_subscriber:
         mqtt_subscriber.stop()

@@ -7,8 +7,14 @@ from app.services.scheduler.appointment_scheduler import (
     AppointmentSchedulerService,
     appointment_scheduler_service,
 )
+from app.services.scheduler.voice_reminder_scheduler import (
+    VoiceReminderSchedulerService,
+    voice_reminder_scheduler_service,
+)
 
 __all__ = [
     "AppointmentSchedulerService",
     "appointment_scheduler_service",
+    "VoiceReminderSchedulerService",
+    "voice_reminder_scheduler_service",
 ]
