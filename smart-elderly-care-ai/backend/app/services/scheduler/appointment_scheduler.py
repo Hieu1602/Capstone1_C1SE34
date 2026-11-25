@@ -25,6 +25,11 @@ from app.services.notification.appointment_notify import (
     format_vn_dt,
     send_appointment_fcm,
 )
+from app.services.camera_speaker import (
+    build_appointment_reminder_text,
+    find_camera_for_patient,
+    speak_to_camera,
+)
 
 logger = logging.getLogger("appointment_scheduler")
 
@@ -170,6 +175,22 @@ class AppointmentSchedulerService:
             )
         except Exception as dispatch_err:
             logger.warning("[NOTIFICATION DISPATCH] Lỗi gửi WS/FCM reminder %s: %s", reminder.id, dispatch_err)
+
+        # Phát giọng nói tiếng Việt qua loa camera nếu được bật
+        if getattr(apt, "enable_speaker_reminder", True):
+            try:
+                camera_dev = await find_camera_for_patient(db, apt.patient_id, target_house_id)
+                if camera_dev:
+                    voice_text = build_appointment_reminder_text(
+                        patient_name=patient_name,
+                        doctor_name=doctor_name,
+                        scheduled_str=scheduled_str,
+                        location=apt.location,
+                        reminder_type=reminder.reminder_type,
+                    )
+                    await speak_to_camera(camera_dev, voice_text, force=False)
+            except Exception as spk_err:
+                logger.warning("[NOTIFICATION DISPATCH] Lỗi phát loa reminder %s: %s", reminder.id, spk_err)
 
         # Đánh dấu đã gửi
         reminder.status = ReminderStatusEnum.SENT.value
