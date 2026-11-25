@@ -42,6 +42,16 @@ export interface FallDetectionStatus {
     fall_count: number;
     latest_clip: string | null;
 }
+export interface AudioDetectionStatus {
+    enabled: boolean;
+    model_loaded: boolean;
+    detected: boolean;
+    last_event: number | null;
+    event_count: number;
+    last_class: string | null;
+    last_category: "IMPACT" | "DISTRESS" | null;
+    last_confidence: number | null;
+}
 export interface ArchiveCursor { after_time: string; after_id: string }
 export interface ArchiveCoverage { start: string; end: string }
 export interface HlsRecording { id: string; started_at: string; duration: number }
@@ -170,6 +180,17 @@ export const cameraApi = {
     setFallDetection: (enabled: boolean, cameraId?: string) =>
         api.post<{ enabled: boolean }>(
             "/camera/fall-detection",
+            { enabled },
+            sourceConfig(cameraId),
+        ),
+    audioDetection: (cameraId?: string) =>
+        api.get<AudioDetectionStatus>(
+            "/camera/audio-detection",
+            sourceConfig(cameraId),
+        ),
+    setAudioDetection: (enabled: boolean, cameraId?: string) =>
+        api.post<{ enabled: boolean }>(
+            "/camera/audio-detection",
             { enabled },
             sourceConfig(cameraId),
         ),
