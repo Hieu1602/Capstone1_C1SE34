@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.crud_incident import crud_incident
@@ -25,6 +25,7 @@ from app.models.appointment import Appointment
 from app.models.elderly_profile import ElderlyProfile
 from app.models.house import House, HouseMember
 from app.models.user import User
+from app.services.notification.appointment_notify import format_vn_dt
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +74,7 @@ class ChatbotContextBuilder:
                     if age_minutes > 30:
                         v_data["is_stale"] = True
                         v_data["fall_detected"] = False  # Sự cố té ngã cũ không phải là biến cố đang diễn ra
-                        v_data["stale_time_str"] = datetime.fromtimestamp(ts / 1000, tz=timezone.utc).strftime("%H:%M ngày %d/%m/%Y")
+                        v_data["stale_time_str"] = format_vn_dt(datetime.fromtimestamp(ts / 1000, tz=timezone.utc))
                     context["vitals"] = v_data
                 else:
                     context["vitals"] = None
@@ -90,7 +91,7 @@ class ChatbotContextBuilder:
                     "alert_level": inc.alert_level,
                     "message": inc.message,
                     "is_acknowledged": bool(inc.is_acknowledged),
-                    "time": inc.created_at.strftime("%H:%M ngày %d/%m/%Y") if inc.created_at else "Gần đây",
+                    "time": format_vn_dt(inc.created_at, "Gần đây") if inc.created_at else "Gần đây",
                 }
                 for inc in recent_incidents
             ]
@@ -179,21 +180,33 @@ class ChatbotContextBuilder:
 
             # 5. Lịch khám / tái khám y tế sắp tới (Appointment Context Binding)
             try:
-                appt_stmt = (
-                    select(Appointment)
-                    .where(Appointment.status == "UPCOMING")
-                    .order_by(Appointment.scheduled_at.asc())
-                    .limit(1)
-                )
-                appt_res = await db.execute(appt_stmt)
-                appt = appt_res.scalar_one_or_none()
-                if appt:
-                    context["appointment"] = {
-                        "scheduled_at": appt.scheduled_at.strftime("%H:%M ngày %d/%m/%Y") if appt.scheduled_at else None,
-                        "location": appt.location or "Tại nhà",
-                        "visit_type": appt.visit_type or "Khám sức khỏe",
-                        "clinical_notes": appt.clinical_notes or "",
-                    }
+                elderly_ids = [p.id for p in profiles]
+                scope_filters = []
+                if elderly_ids:
+                    scope_filters.append(Appointment.patient_id.in_(elderly_ids))
+                if target_house_ids:
+                    scope_filters.append(Appointment.house_id.in_(target_house_ids))
+
+                if scope_filters:
+                    appt_stmt = (
+                        select(Appointment)
+                        .where(
+                            Appointment.status == "UPCOMING",
+                            Appointment.scheduled_at >= datetime.now(timezone.utc),
+                            or_(*scope_filters),
+                        )
+                        .order_by(Appointment.scheduled_at.asc())
+                        .limit(1)
+                    )
+                    appt_res = await db.execute(appt_stmt)
+                    appt = appt_res.scalar_one_or_none()
+                    if appt:
+                        context["appointment"] = {
+                            "scheduled_at": format_vn_dt(appt.scheduled_at) if appt.scheduled_at else None,
+                            "location": appt.location or "Tại nhà",
+                            "visit_type": appt.visit_type or "Khám sức khỏe",
+                            "clinical_notes": appt.clinical_notes or "",
+                        }
             except Exception as e:
                 logger.warning("Lỗi truy vấn lịch khám từ DB: %s", e)
 

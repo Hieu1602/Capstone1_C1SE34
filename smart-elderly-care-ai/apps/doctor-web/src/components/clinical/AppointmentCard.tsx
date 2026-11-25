@@ -45,6 +45,7 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
   onComplete,
 }) => {
   const isClinic = apt.visit_type === 'CLINIC';
+  const isTelehealth = apt.visit_type === 'TELEHEALTH';
   const statusBadge = STATUS_BADGE_MAP[apt.status] || STATUS_BADGE_MAP.UPCOMING;
 
   let timeStr = '--:--';
@@ -90,7 +91,9 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
                 }`}
               >
                 {isClinic ? <Building className="h-3 w-3 mr-1" /> : <Home className="h-3 w-3 mr-1" />}
-                <span>{isClinic ? 'Khám tại Phòng khám' : 'Khám tại nhà / Tư vấn từ xa'}</span>
+                <span>
+                  {isClinic ? 'Khám tại Phòng khám' : isTelehealth ? 'Tư vấn từ xa (Telehealth)' : 'Khám tại nhà'}
+                </span>
               </span>
             </div>
 
@@ -98,6 +101,12 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
               <span className="font-bold text-slate-700 dark:text-slate-200">Triệu chứng / Ghi chú: </span>
               {apt.clinical_notes || 'Khám sức khỏe định kỳ, kiểm tra huyết áp và tim mạch'}
             </p>
+            {apt.status === 'CANCELLED' && apt.cancellation_reason && (
+              <p className="text-xs font-medium text-rose-600 dark:text-rose-400">
+                <span className="font-bold">Lý do hủy: </span>
+                {apt.cancellation_reason}
+              </p>
+            )}
 
             <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-slate-500 dark:text-slate-400">
               <div className="flex items-center space-x-1">

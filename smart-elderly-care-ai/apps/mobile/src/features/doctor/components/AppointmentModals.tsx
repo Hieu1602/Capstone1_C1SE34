@@ -173,11 +173,15 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
   const [calendarPickerMode, setCalendarPickerMode] = useState<'DAY' | 'MONTH_YEAR'>('DAY');
 
   const syncScheduledAt = (date: Date, timeSlot: string) => {
-    const [hours, minutes] = timeSlot.split(':').map(Number);
+    const m = timeSlot.trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+    const hours = m ? Number(m[1]) : 8;
+    const minutes = m ? Number(m[2]) : 30;
+    const normSlot = `${pad2(hours)}:${pad2(minutes)}`;
     const target = new Date(date);
-    target.setHours(hours || 8, minutes || 30, 0, 0);
+    target.setHours(hours, minutes, 0, 0);
     setSelectedDate(target);
-    setSelectedTimeSlot(timeSlot);
+    setSelectedTimeSlot(normSlot);
+    setCustomTimeInput(normSlot);
     onChangeScheduledAt(target.toISOString());
   };
 

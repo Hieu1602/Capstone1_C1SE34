@@ -33,6 +33,7 @@ export default function RealtimeDashboardScreen() {
         person_count:  data.person_count ?? null,
         fall_detected: data.fall_detected ?? false,
         timestamp:     data.timestamp,
+        steps:         data.steps ?? null,
       });
     });
 
@@ -95,15 +96,14 @@ export default function RealtimeDashboardScreen() {
               color="#3B82F6"
             />
           )}
-          {currentVitals.skin_temp_max != null && (
+          {currentVitals.steps != null && (
             <VitalCard
-              icon="thermometer"
-              label="Nhiệt độ cơ thể"
-              value={currentVitals.skin_temp_max}
-              unit="°C"
-              normalRange={{ min: 35, max: 38 }}
-              color="#F97316"
-              decimals={1}
+              icon="footsteps"
+              label="Số bước chân"
+              value={currentVitals.steps}
+              unit="bước"
+              normalRange={{ min: 3000, max: 10000 }}
+              color="#10B981"
             />
           )}
           <VitalCard

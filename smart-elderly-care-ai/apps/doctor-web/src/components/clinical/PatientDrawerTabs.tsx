@@ -231,26 +231,33 @@ export const PatientDrawerAppointmentsTab: React.FC<PatientDrawerAppointmentsTab
     skeletonHeightClass="h-20"
     emptyText="Chưa có lịch khám nào với bệnh nhân này."
   >
-    {appointments.map((apt) => {
-      const badge = APPOINTMENT_STATUS_BADGE[apt.status] ?? DEFAULT_APPOINTMENT_BADGE;
-      return (
-        <div
-          key={apt.id}
-          className="rounded-2xl border border-slate-200/80 bg-white dark:bg-[#0F172A] dark:border-slate-800/80 p-4 shadow-xs"
-        >
-          <div className="flex items-center justify-between">
-            <span className="font-extrabold text-slate-900 dark:text-white text-xs">
-              {apt.clinical_notes || 'Khám sức khỏe'}
-            </span>
-            <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold border ${badge.className}`}>
-              {badge.label}
-            </span>
+    {[...appointments]
+      .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
+      .map((apt) => {
+        const badge = APPOINTMENT_STATUS_BADGE[apt.status] ?? DEFAULT_APPOINTMENT_BADGE;
+        return (
+          <div
+            key={apt.id}
+            className="rounded-2xl border border-slate-200/80 bg-white dark:bg-[#0F172A] dark:border-slate-800/80 p-4 shadow-xs"
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-extrabold text-slate-900 dark:text-white text-xs">
+                {apt.clinical_notes || 'Khám sức khỏe'}
+              </span>
+              <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold border ${badge.className}`}>
+                {badge.label}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              {new Date(apt.scheduled_at).toLocaleString('vi-VN')} • {apt.location}
+            </p>
+            {apt.status === 'CANCELLED' && apt.cancellation_reason && (
+              <p className="mt-1 text-xs font-medium text-rose-600 dark:text-rose-400">
+                Lý do hủy: {apt.cancellation_reason}
+              </p>
+            )}
           </div>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            {new Date(apt.scheduled_at).toLocaleString('vi-VN')} • {apt.location}
-          </p>
-        </div>
-      );
-    })}
+        );
+      })}
   </TabListSection>
 );

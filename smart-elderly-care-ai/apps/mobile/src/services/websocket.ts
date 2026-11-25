@@ -243,13 +243,15 @@ class AlertsWebSocket {
     if (event.alert_type === 'APPOINTMENT_CANCELLED' || event.type === 'APPOINTMENT_CANCELLED') {
       const aptId = event.appointment_id || event.data?.appointment_id;
       const reason = event.cancellation_reason || event.data?.cancellation_reason || 'Bác sĩ bận việc đột xuất';
-      const targetInc = store.incidents.find(
-        (i) =>
-          (aptId && i.note && (i.note === aptId || i.note.includes(aptId))) ||
+      const targetInc = store.incidents.find((i) => {
+        const noteStr = String((i as any).notes ?? (i as any).note ?? '');
+        return (
+          (aptId && noteStr && (noteStr === aptId || noteStr.includes(aptId))) ||
           i.id === event.incident_id ||
           i.id === event.data?.id ||
-          (i.alert_type === 'APPOINTMENT_SCHEDULED' && (!aptId || (i.note && i.note.includes(aptId))))
-      );
+          (i.alert_type === 'APPOINTMENT_SCHEDULED' && (!aptId || (noteStr && noteStr.includes(aptId))))
+        );
+      });
       if (targetInc) {
         store.acknowledgeIncident(targetInc.id, `Lịch khám đã bị hủy: ${reason}`);
       }
@@ -342,11 +344,23 @@ class AlertsWebSocket {
       return;
     }
 
+    // 0.2b. Lịch khám đổi giờ / hoàn tất / xóa -> bỏ qua còi báo động khẩn cấp
+    if (
+      ['APPOINTMENT_RESCHEDULED', 'APPOINTMENT_COMPLETED', 'APPOINTMENT_DELETED'].includes(
+        String(event.alert_type || event.type || '')
+      )
+    ) {
+      return;
+    }
+
     // 1. Cảnh báo té ngã / pin yếu / sự cố khẩn cấp mới (Feature 1)
     if (
       event.alert_type === 'LOW_BATTERY' ||
       event.alert_type === 'DEVICE_BATTERY_DEAD' ||
-      ((event.type === 'ALERT_NEW' && event.alert_type !== 'APPOINTMENT_SCHEDULED' && event.alert_type !== 'MEDICAL_RECORD_UPDATED') || event.alert_type === 'FALL_DETECTED')
+      ((event.type === 'ALERT_NEW' &&
+        !String(event.alert_type || '').startsWith('APPOINTMENT_') &&
+        event.alert_type !== 'MEDICAL_RECORD_UPDATED') ||
+        event.alert_type === 'FALL_DETECTED')
     ) {
       const incData = event.data || {};
       const incDevId = String(incData.device_id || event.device_id || '').toLowerCase();
@@ -437,7 +451,7 @@ class AlertsWebSocket {
         });
         store.setSirenActive(true);
 
-        // Kích hoạt Modal Đếm ngược Khẩn cấp Tự động (Auto-Escalation 45s)
+        // Kích hoạt Modal Đếm ngược Khẩn cấp Tự động (Auto-Escalation 30s)
         useEscalationStore.getState().triggerEscalation({
           incidentId: newIncident.id,
           alertType,
@@ -445,7 +459,7 @@ class AlertsWebSocket {
           location: incData.location || incData.house_address || 'Nhà riêng đang giám sát',
           message: newIncident.message,
           thumbnailUrl: newIncident.thumbnail_url,
-          delaySeconds: incData.escalation_seconds,
+          delaySeconds: incData.escalation_seconds || 30,
           createdAt: newIncident.created_at,
         });
 
@@ -458,6 +472,16 @@ class AlertsWebSocket {
       } else {
         // Cảnh báo sinh hiệu: Nhịp tim, SpO2, Sốt cao, Loạn nhịp
         let alertTitle = '⚠️ CẢNH BÁO SINH TỒN BẤT THƯỜNG';
+        const isCriticalVital =
+          alertType === 'HIGH_HEART_RATE' ||
+          alertType === 'LOW_HEART_RATE' ||
+          alertType === 'LOW_SPO2' ||
+          alertType === 'CRITICAL_TRIAD' ||
+          alertType === 'CARDIO_COLLAPSE' ||
+          alertType === 'EXERTION_HYPOXIA' ||
+          alertType === 'FEVER_TACHYCARDIA' ||
+          Boolean(incData.escalation_seconds);
+
         if (alertType === 'HIGH_HEART_RATE') {
           alertTitle = '💓 CẢNH BÁO NHỊP TIM CAO BẤT THƯỜNG';
           store.setSirenActive(true);
@@ -469,9 +493,14 @@ class AlertsWebSocket {
         } else if (alertType === 'LOW_SPO2') {
           alertTitle = '⚠️ CẢNH BÁO OXY MÁU (SPO2) TỤT SÂU';
           store.setSirenActive(true);
-        } else if (alertType === 'CRITICAL_TRIAD' || alertType === 'CARDIO_COLLAPSE' || Boolean(incData.escalation_seconds)) {
+        } else if (alertType === 'CRITICAL_TRIAD' || alertType === 'CARDIO_COLLAPSE') {
           alertTitle = '🚨 BÁO ĐỘNG ĐỎ: TÌNH TRẠNG NGUY KỊCH';
           store.setSirenActive(true);
+        } else if (alertType === 'HIGH_FEVER' || alertType === 'FEVER_TACHYCARDIA') {
+          alertTitle = '🌡️ CẢNH BÁO THÂN NHIỆT SỐT CAO';
+        }
+
+        if (isCriticalVital) {
           useEscalationStore.getState().triggerEscalation({
             incidentId: newIncident.id,
             alertType,
@@ -479,11 +508,9 @@ class AlertsWebSocket {
             location: incData.location || incData.house_address || 'Nhà riêng đang giám sát',
             message: newIncident.message,
             thumbnailUrl: newIncident.thumbnail_url,
-            delaySeconds: incData.escalation_seconds,
+            delaySeconds: incData.escalation_seconds || 30,
             createdAt: newIncident.created_at,
           });
-        } else if (alertType === 'HIGH_FEVER' || alertType === 'FEVER_TACHYCARDIA') {
-          alertTitle = '🌡️ CẢNH BÁO THÂN NHIỆT SỐT CAO';
         }
 
         notificationService.triggerEmergencyNotification({

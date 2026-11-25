@@ -4,7 +4,7 @@
 // TÁC GIẢ: Phan Nguyễn Giáng My
 // MÔ TẢ CHỨC NĂNG:
 //   - Hiển thị 4 thẻ chỉ số dạng Grid 2x2: Nhịp tim (BPM), Nồng độ Oxy máu (SpO2),
-//     Nhiệt độ da (AMG8833) và Mức độ vận động / Tư thế (YOLO-Pose).
+//     Vận động & Bước chân (Pedometer) và Mức độ vận động / Tư thế (YOLO-Pose).
 //   - Hỗ trợ chạm vào từng thẻ để làm nổi bật (Highlight) chỉ số đang quan tâm.
 // ==============================================================================
 
@@ -115,15 +115,15 @@ export const HealthVitalsGrid: React.FC<HealthVitalsGridProps> = React.memo(({
         <Text style={styles.vitalNormalRange}>{card2.range}</Text>
       </TouchableOpacity>
 
-      {/* Thẻ 3: Nhiệt độ cơ thể */}
+      {/* Thẻ 3: Vận động & Bước chân */}
       <TouchableOpacity
         style={[
           styles.vitalBox,
           isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
-          highlightedMetric === 'temp' && styles.vitalBoxHighlighted,
+          highlightedMetric === 'steps' && styles.vitalBoxHighlighted,
         ]}
         activeOpacity={0.8}
-        onPress={() => setHighlightedMetric(highlightedMetric === 'temp' ? null : 'temp')}
+        onPress={() => setHighlightedMetric(highlightedMetric === 'steps' ? null : 'steps')}
       >
         <View style={styles.vitalBoxHeader}>
           <View style={[styles.vitalIconWrapper, { backgroundColor: card3.iconBg }]}>
@@ -137,7 +137,15 @@ export const HealthVitalsGrid: React.FC<HealthVitalsGridProps> = React.memo(({
         </View>
         <Text style={[styles.vitalBoxLabel, isDarkMode && { color: colors.textSecondary }]}>{card3.label}</Text>
         <View style={styles.vitalValRow}>
-          <Text style={[styles.vitalValNumber, isDarkMode && { color: colors.textPrimary }]}>{card3.value}</Text>
+          <Text
+            style={[
+              styles.vitalValNumber,
+              isDarkMode && { color: colors.textPrimary },
+              card3.value.length > 6 && { fontSize: 16 },
+            ]}
+          >
+            {card3.value}
+          </Text>
           {Boolean(card3.unit) && (
             <Text style={[styles.vitalValUnit, isDarkMode && { color: colors.textSecondary }]}>{card3.unit}</Text>
           )}

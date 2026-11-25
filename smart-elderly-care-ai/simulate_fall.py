@@ -18,10 +18,17 @@ def trigger_fall(
     host: str = "127.0.0.1",
     port: int = 1883,
     device_id: str = "077c83fd-1331-45bd-97b4-c42a37de0db5",
+    patient_name: str = "Cụ Nguyễn Văn An",
+    similarity: float = 0.94,
     message: str | None = None,
 ):
     event_id = str(uuid.uuid4())
-    msg = message or "🚨 CẢNH BÁO TÉ NGÃ KHẨN CẤP: Phát hiện người cao tuổi té ngã trong phòng khách!"
+    msg = message or f"🚨 CẢNH BÁO TÉ NGÃ: Phát hiện {patient_name} té ngã (Khớp khuôn mặt hồ sơ: {int(similarity * 100)}%)!"
+    notes_dict = {
+        "patient_name": patient_name,
+        "face_similarity": similarity,
+        "is_patient_matched": True,
+    }
     payload = {
         "id": event_id,
         "device_id": device_id,
@@ -30,7 +37,9 @@ def trigger_fall(
         "confidence": 0.98,
         "timestamp": time.time(),
         "message": msg,
-        "sources": ["camera"],
+        "patient_name": patient_name,
+        "sources": ["camera", "face_reid"],
+        "notes": json.dumps(notes_dict, ensure_ascii=False),
     }
     topic = f"care/{device_id}/alert"
 
@@ -52,6 +61,8 @@ if __name__ == "__main__":
     parser.add_argument("--host", default="127.0.0.1", help="Địa chỉ MQTT broker (127.0.0.1 hoặc IP EC2)")
     parser.add_argument("--port", type=int, default=1883, help="Cổng MQTT broker (1883)")
     parser.add_argument("--device", default="077c83fd-1331-45bd-97b4-c42a37de0db5", help="UUID camera/thiết bị")
+    parser.add_argument("--name", default="Cụ Nguyễn Văn An", help="Tên bệnh nhân nhận diện được")
+    parser.add_argument("--sim", type=float, default=0.94, help="Độ tương đồng khuôn mặt (0.0 - 1.0)")
     parser.add_argument("--msg", default=None, help="Nội dung thông báo tùy chọn")
     args = parser.parse_args()
-    trigger_fall(args.host, args.port, args.device, args.msg)
+    trigger_fall(args.host, args.port, args.device, args.name, args.sim, args.msg)

@@ -18,6 +18,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 
 import { useTheme } from '../../../store/useThemeStore';
 import { doctorApi } from '../../../services/api';
+import { alertsWS } from '../../../services/websocket';
 import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
 import AdminMarqueeBanner from '../../../components/AdminMarqueeBanner';
 
@@ -78,7 +79,11 @@ export default function DoctorAppointmentsScreen() {
         doctorApi.getPatients(),
       ]);
       if (aptRes.status === 'fulfilled' && aptRes.value.data && Array.isArray(aptRes.value.data)) {
-        setAppointments(aptRes.value.data);
+        setAppointments(
+          [...aptRes.value.data].sort(
+            (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
+          )
+        );
       }
       if (patRes.status === 'fulfilled' && patRes.value.data && Array.isArray(patRes.value.data)) {
         setPatients(patRes.value.data);
@@ -91,6 +96,16 @@ export default function DoctorAppointmentsScreen() {
 
   useEffect(() => {
     fetchAppointments();
+    alertsWS.connect();
+    const unsub = alertsWS.subscribe((event: any) => {
+      const t = String(event?.alert_type || event?.type || '');
+      if (t.startsWith('APPOINTMENT_') || t === 'INCIDENT_RESOLVED') {
+        fetchAppointments();
+      }
+    });
+    return () => {
+      unsub();
+    };
   }, [fetchAppointments]);
 
   useFocusEffect(
@@ -204,18 +219,23 @@ export default function DoctorAppointmentsScreen() {
       if (editingAptId) {
         const res = await doctorApi.updateAppointment(editingAptId, payload);
         if (res.data) {
-          setAppointments((prev) => prev.map((a) => (a.id === editingAptId ? res.data : a)));
+          setAppointments((prev) =>
+            prev
+              .map((a) => (a.id === editingAptId ? res.data : a))
+              .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
+          );
         }
         setModalVisible(false);
         LocalizedAlert.alert('Thành công', 'Đã cập nhật lịch hẹn tái khám.');
       } else {
         const res = await doctorApi.createAppointment(payload);
         if (res.data) {
-          if (Array.isArray(res.data)) {
-            setAppointments([...res.data, ...appointments]);
-          } else {
-            setAppointments([res.data, ...appointments]);
-          }
+          const added = Array.isArray(res.data) ? res.data : [res.data];
+          setAppointments((prev) =>
+            [...added, ...prev].sort(
+              (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
+            )
+          );
         }
         setModalVisible(false);
         const displayTime = new Date(finalScheduledAt).toLocaleTimeString('vi-VN', {

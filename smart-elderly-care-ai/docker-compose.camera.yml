@@ -4,7 +4,8 @@ services:
     init: true
     restart: unless-stopped
     env_file:
-      - .env
+      - path: .env
+        required: false
       - path: .env.camera
         required: false
     networks:
@@ -24,7 +25,8 @@ services:
     cpus: 2.0
     mem_limit: 2g
     env_file:
-      - .env
+      - path: .env
+        required: false
       - path: .env.camera
         required: false
     environment:
@@ -34,7 +36,7 @@ services:
       MQTT_PASSWORD: "${MQTT_PASSWORD:-mqtt_secure_pass_123}"
       FALL_DETECTION_ENABLED: "${FALL_DETECTION_ENABLED:-true}"
       CAMERA_DEVICE_ID: "${CAMERA_DEVICE_ID:-camera-main}"
-      AI_INFERENCE_FPS: "${AI_INFERENCE_FPS:-5}"
+      AI_INFERENCE_FPS: "${AI_INFERENCE_FPS:-25}"
       AI_NUM_THREADS: "${AI_NUM_THREADS:-2}"
       TAPO_STREAM: "${TAPO_STREAM:-stream2}"
       CAMERA_RETENTION_HOURS: "${CAMERA_RETENTION_HOURS:-48}"
@@ -54,10 +56,25 @@ services:
       timeout: 5s
       start_period: 20s
   camera-tunnel:
-    image: cloudflare/cloudflared:latest
+    image: alpine:latest
     container_name: elderly_care_camera_tunnel
     restart: unless-stopped
-    command: tunnel --no-autoupdate --url http://tapo-camera:8090
+    volumes:
+      - ~/.ssh/elderly-care-new:/key:ro
+    entrypoint:
+      - sh
+      - -c
+      - |
+        apk add --no-cache openssh-client
+        mkdir -p /root/.ssh
+        cp /key /root/.ssh/id_ed25519
+        chmod 600 /root/.ssh/id_ed25519
+        while true; do
+          echo "[Tunnel] Connecting to EC2 16.178.128.42..."
+          ssh -i /root/.ssh/id_ed25519 -N -R 0.0.0.0:8090:tapo-camera:8090 -R 0.0.0.0:1984:tapo-audio:1984 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no ubuntu@16.178.128.42
+          echo "[Tunnel] Disconnected. Reconnecting in 5s..."
+          sleep 5
+        done
     networks:
       - elderly_care_net
 volumes:

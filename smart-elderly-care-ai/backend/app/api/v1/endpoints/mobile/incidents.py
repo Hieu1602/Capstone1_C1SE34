@@ -80,8 +80,51 @@ async def acknowledge_all_incidents(
     current_user: User | None = Depends(get_current_user_optional),
 ):
     """Xác nhận đã đọc toàn bộ thông báo/cảnh báo và lưu vào CSDL."""
+    from sqlalchemy import select
+    from app.models.incident import Incident
+    from app.services.notification.appointment_notify import (
+        extract_appointment_id,
+        notify_doctor_appointment_confirmed,
+    )
+
     curr_uid = current_user.id if current_user else None
+
+    apt_ids_to_confirm: list[str] = []
+    if curr_uid:
+        scoped_incidents = await crud_incident.list(db, limit=100, current_user_id=curr_uid)
+    else:
+        res = await db.execute(
+            select(Incident).where(
+                Incident.is_acknowledged.is_(False),
+                Incident.alert_type == "APPOINTMENT_SCHEDULED",
+            )
+        )
+        scoped_incidents = list(res.scalars().all())
+
+    for inc in scoped_incidents:
+        if (
+            not inc.is_acknowledged
+            and inc.alert_type == "APPOINTMENT_SCHEDULED"
+            and inc.notes
+            and "APPOINTMENT_REQUESTED" not in inc.notes
+        ):
+            apt_id = extract_appointment_id(inc.notes)
+            if apt_id and apt_id not in apt_ids_to_confirm:
+                apt_ids_to_confirm.append(apt_id)
+
     count = await crud_incident.acknowledge_all(db, current_user_id=curr_uid)
+    await db.commit()
+
+    for apt_id in apt_ids_to_confirm:
+        try:
+            await notify_doctor_appointment_confirmed(
+                db=db,
+                appointment_id=apt_id,
+                ack_user=current_user,
+            )
+        except Exception as notify_err:
+            logger.warning("[acknowledge_all_incidents] Lỗi đồng bộ xác nhận lịch %s: %s", apt_id, notify_err)
+
     try:
         from app.services.redis import redis_service
         await redis_service.invalidate_incidents_cache()
@@ -168,16 +211,26 @@ async def acknowledge_incident(
         )
 
     # Nếu người nhà xác nhận thông báo đặt lịch khám của Bác sĩ -> đồng bộ xác nhận & báo Bác sĩ
-    if incident.alert_type == "APPOINTMENT_SCHEDULED" and incident.notes:
-        from app.services.notification.appointment_notify import notify_doctor_appointment_confirmed
-        try:
-            await notify_doctor_appointment_confirmed(
-                db=db,
-                appointment_id=incident.notes,
-                ack_user=current_user,
-            )
-        except Exception as notify_err:
-            logger.warning("[acknowledge_incident] Lỗi kích hoạt notify_doctor_appointment_confirmed: %s", notify_err)
+    if (
+        incident.alert_type == "APPOINTMENT_SCHEDULED"
+        and incident.notes
+        and "APPOINTMENT_REQUESTED" not in incident.notes
+    ):
+        from app.services.notification.appointment_notify import (
+            extract_appointment_id,
+            notify_doctor_appointment_confirmed,
+        )
+        apt_id = extract_appointment_id(incident.notes)
+        if apt_id:
+            try:
+                await notify_doctor_appointment_confirmed(
+                    db=db,
+                    appointment_id=apt_id,
+                    ack_user=current_user,
+                )
+                incident = await crud_incident.get(db, incident_id) or incident
+            except Exception as notify_err:
+                logger.warning("[acknowledge_incident] Lỗi kích hoạt notify_doctor_appointment_confirmed: %s", notify_err)
 
     # Hủy bộ đếm ngược tự động gọi cấp cứu nếu đang chạy
     try:

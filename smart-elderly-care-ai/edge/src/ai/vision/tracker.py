@@ -60,7 +60,7 @@ class PersonTracker:
     def __init__(
         self,
         iou_threshold: float = 0.30,
-        max_missed_frames: int = 15,  # 15 frames @ 15fps = 1.0 giây
+        max_missed_frames: int = 25,  # 25 frames @ 25fps = 1.0 giây
         stitching_distance_threshold: float = 120.0,  # pixels
         sedentary_threshold_sec: float = 3600.0,  # Ngồi liên tục > 60 phút cảnh báo lười vận động
         face_cache_file: Optional[str] = None,
@@ -234,16 +234,17 @@ class PersonTracker:
         track.last_seen_time = now
         track.missed_frames = 0
 
-        # Nhận diện khuôn mặt người cao tuổi từ 5 keypoints đầu nếu chưa được định danh
-        if not track.is_elderly and raw_frame is not None:
+        # Nhận diện khuôn mặt người cao tuổi từ 5 keypoints đầu (cho phép cập nhật nếu thấy góc mặt rõ hơn)
+        if raw_frame is not None and (not track.is_elderly or track.face_similarity < 0.85):
             face_crop = extract_face_roi(raw_frame, float_kps)
             if face_crop is not None:
                 e_id, name, score = self.face_manager.identify_face(face_crop)
                 if e_id is not None and name is not None and score >= self.face_manager.similarity_threshold:
-                    track.elderly_id = e_id
-                    track.person_name = name
-                    track.is_elderly = True
-                    track.face_similarity = score
+                    if not track.is_elderly or score > track.face_similarity + 0.05:
+                        track.elderly_id = e_id
+                        track.person_name = name
+                        track.is_elderly = True
+                        track.face_similarity = score
 
         # Phân tích góc cột sống và trọng tâm hông
         spine_angle = KinematicFallEngine.calculate_spine_angle(float_kps)

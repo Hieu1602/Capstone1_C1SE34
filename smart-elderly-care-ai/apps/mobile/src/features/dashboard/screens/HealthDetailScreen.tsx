@@ -42,7 +42,7 @@ import {
 
 export default function HealthDetailScreen({ navigation, route }: any) {
   const { isDarkMode, colors } = useTheme();
-  const metric = (route?.params?.focusMetric ?? route?.params?.metric) as 'heartRate' | 'activity' | 'spo2' | undefined;
+  const metric = (route?.params?.focusMetric ?? route?.params?.metric) as 'heartRate' | 'activity' | 'spo2' | 'steps' | undefined;
   const initialTab = route?.params?.initialTab as 'today' | 'week' | 'month' | undefined;
   const {
     currentVitals,
@@ -52,6 +52,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     activePatientId,
     setActivePatientId,
     iotDevices,
+    syncAllWithBackend,
   } = useVitalStore();
 
   const initialPatientId =
@@ -62,10 +63,11 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   const [selectedPatientId, setSelectedPatientId] = useState<any>(initialPatientId);
 
   useEffect(() => {
+    syncAllWithBackend?.();
     if (!patientsList || patientsList.length === 0) {
       fetchPatientsList?.();
     }
-  }, [fetchPatientsList, patientsList]);
+  }, [fetchPatientsList, patientsList, syncAllWithBackend]);
 
   const currentPatient =
     (patientsList || []).find(
@@ -103,6 +105,9 @@ export default function HealthDetailScreen({ navigation, route }: any) {
       devType.includes('band') ||
       devType.includes('watch') ||
       name.includes('smartband') ||
+      name.includes('smart band') ||
+      name.includes('band') ||
+      name.includes('xiaomi') ||
       name.includes('vòng') ||
       name.includes('đồng hồ')
     );
@@ -286,8 +291,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           recorded_at: now.toISOString(),
           heart_rate: currentVitals.heart_rate,
           spo2: currentVitals.spo2,
-          body_temp: currentVitals.skin_temp_max,
-          skin_temp_max: currentVitals.skin_temp_max,
+          steps: (currentVitals as any)?.steps,
           fall_detected: currentVitals.fall_detected,
           activity_state: (currentVitals as any)?.activity_state || 'Sinh hoạt',
         };
@@ -351,7 +355,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
       const timer = setTimeout(() => {
         if (metric === 'heartRate' || metric === 'spo2') {
           scrollRef.current?.scrollTo({ y: 140, animated: true });
-        } else if (metric === 'activity') {
+        } else if (metric === 'activity' || metric === 'steps') {
           scrollRef.current?.scrollTo({ y: 220, animated: true });
         }
       }, 300);
@@ -377,6 +381,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   const isFallDetected = Boolean(isCurrentMatching && currentVitals.fall_detected);
 
   const handleRefresh = async () => {
+    await syncAllWithBackend?.();
     await fetchVitals();
     if (selectedRange === 'DAY') {
       await loadDateVitals(selectedDate);
@@ -462,8 +467,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
         recorded_at: now.toISOString(),
         heart_rate: currentVitals.heart_rate,
         spo2: currentVitals.spo2,
-        body_temp: currentVitals.skin_temp_max,
-        skin_temp_max: currentVitals.skin_temp_max,
+        steps: (currentVitals as any)?.steps,
         fall_detected: currentVitals.fall_detected,
         activity_state: (currentVitals as any)?.activity_state || 'Sinh hoạt',
         sound_state: (currentVitals as any)?.acoustic_status || 'Bình thường',
@@ -512,11 +516,11 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     const list = rangeVitals && Array.isArray(rangeVitals) && rangeVitals.length > 0 ? rangeVitals : [];
     const validHR = list.map((v) => v.heartRate ?? v.heart_rate).filter((h) => typeof h === 'number' && h > 0);
     const validSpO2 = list.map((v) => v.spo2).filter((s) => typeof s === 'number' && s > 0);
-    const validTemp = list.map((v) => v.temperature ?? v.body_temp ?? v.skin_temp_max).filter((t) => typeof t === 'number' && t > 0);
+    const validSteps = list.map((v) => v.steps).filter((s) => typeof s === 'number' && s > 0);
 
     const avgHR = validHR.length > 0 ? (validHR.reduce((a, b) => a + b, 0) / validHR.length).toFixed(1) : '--';
     const avgSpO2 = validSpO2.length > 0 ? Math.round(validSpO2.reduce((a, b) => a + b, 0) / validSpO2.length).toString() : '--';
-    const avgTemp = validTemp.length > 0 ? (validTemp.reduce((a, b) => a + b, 0) / validTemp.length).toFixed(1) : '--';
+    const avgSteps = validSteps.length > 0 ? Math.round(validSteps.reduce((a, b) => a + b, 0) / validSteps.length).toLocaleString() : '--';
 
     const chart = list.map((v) => {
       let label = '';
@@ -534,7 +538,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
       };
     });
 
-    return { avgHR, avgSpO2, avgTemp, chart };
+    return { avgHR, avgSpO2, avgSteps, chart };
   }, [rangeVitals]);
 
   // Cấu hình tab theo mốc thời gian được chọn
@@ -659,6 +663,55 @@ export default function HealthDetailScreen({ navigation, route }: any) {
               <Text style={[styles.unassignedBandText, isDarkMode && { color: '#CBD5E1' }]}>
                 {patientDisplayName} chưa được liên kết với vòng tay BLE nào. Để theo dõi nhịp tim và SpO₂, hãy gán vòng tay trong mục Quản lý thiết bị hoặc chuyển người đeo ở chi tiết Smartband.
               </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Banner thông minh cho Dual-mode: Tại nhà / Di động / Ngoại tuyến */}
+        {assignedBand && (
+          <View style={[
+            styles.connectionModeBanner,
+            isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }
+          ]}>
+            <Ionicons
+              name={
+                assignedBand.status?.includes('Di động')
+                  ? 'cellular'
+                  : (assignedBand.status?.includes('Tại nhà') || assignedBand.isOnline)
+                  ? 'home'
+                  : 'cloud-offline'
+              }
+              size={18}
+              color={
+                assignedBand.status?.includes('Di động')
+                  ? '#3B82F6'
+                  : assignedBand.isOnline
+                  ? '#10B981'
+                  : '#F59E0B'
+              }
+              style={{ marginTop: 2 }}
+            />
+            <View style={{ flex: 1, marginLeft: 8 }}>
+              <Text style={[styles.connectionModeTitle, isDarkMode && { color: '#F1F5F9' }]}>
+                {assignedBand.name || 'Vòng tay thông minh'} •{' '}
+                <Text
+                  style={{
+                    color: assignedBand.status?.includes('Di động')
+                      ? '#3B82F6'
+                      : assignedBand.isOnline
+                      ? '#10B981'
+                      : '#F59E0B',
+                    fontWeight: '700',
+                  }}
+                >
+                  {assignedBand.status || (assignedBand.isOnline ? 'Trực tuyến • Tại nhà' : 'Ngoại tuyến')}
+                </Text>
+              </Text>
+              {!assignedBand.isOnline && (
+                <Text style={[styles.connectionModeSub, isDarkMode && { color: '#94A3B8' }]}>
+                  Cụ đang ở ngoài vùng sóng BLE • Vòng tay đang tự ghi nhớ dữ liệu đo vào bộ nhớ đệm và sẽ tự động bù vào biểu đồ khi cụ về nhà.
+                </Text>
+              )}
             </View>
           </View>
         )}
@@ -945,5 +998,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     color: '#78350F',
+  },
+  connectionModeBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 12,
+  },
+  connectionModeTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  connectionModeSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+    lineHeight: 16,
   },
 });

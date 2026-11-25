@@ -79,7 +79,6 @@ class User(Base):
     cchn_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
     specialty: Mapped[str | None] = mapped_column(String(255), nullable=True)
     workplace: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    email: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     status: Mapped[str] = mapped_column(
         String(30), nullable=False, default=UserStatus.ACTIVE, server_default=UserStatus.ACTIVE

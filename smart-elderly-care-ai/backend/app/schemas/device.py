@@ -5,7 +5,7 @@ Nghiệp vụ: Data transfer objects (DTO) xác thực dữ liệu đầu vào/r
 """
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -55,6 +55,7 @@ class DeviceConfigUpdate(BaseModel):
     is_custom_thresholds: Optional[bool] = None
     configured_by_user_id: Optional[UUID] = None
     configured_by_role: Optional[str] = None
+    mqtt_topic: Optional[str] = None
     extra_settings: Optional[Dict[str, Any]] = None
 
 
@@ -86,7 +87,7 @@ class DeviceBase(BaseModel):
 
 class DeviceCreate(DeviceBase):
     house_id: Optional[UUID] = None
-    config: Optional[DeviceConfigBase] = None
+    config: Optional[Union[DeviceConfigBase, DeviceConfigUpdate]] = None
 
 
 class DeviceUpdate(BaseModel):
@@ -98,6 +99,8 @@ class DeviceUpdate(BaseModel):
     status_text: Optional[str] = None
     battery_level: Optional[int] = Field(default=None, ge=0, le=100)
     is_online: Optional[bool] = None
+    mac_address: Optional[str] = None
+    ip_address: Optional[str] = None
     firmware_version: Optional[str] = None
 
 

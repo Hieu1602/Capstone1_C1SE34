@@ -6,7 +6,6 @@ export interface DoctorUser {
   phone: string;
   full_name: string;
   role: 'doctor';
-  email?: string;
   avatar_url?: string;
   specialty?: string;
   workplace?: string;

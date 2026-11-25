@@ -67,7 +67,7 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play().catch(() => {});
+        videoRef.current.play().catch(() => { });
       }
     } catch (err: any) {
       setHasPermission(false);
@@ -128,13 +128,13 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
       const animation = Animated.loop(
         Animated.sequence([
           Animated.timing(laserAnim, {
-            toValue: 176,
-            duration: 1800,
+            toValue: 106,
+            duration: 1600,
             useNativeDriver: false,
           }),
           Animated.timing(laserAnim, {
             toValue: 0,
-            duration: 1800,
+            duration: 1600,
             useNativeDriver: false,
           }),
         ])
@@ -194,9 +194,17 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
   const handleManualSubmit = () => {
     const trimmed = manualCode.trim();
     if (!trimmed) {
-      const msg = 'Vui lòng nhập mã vạch S/N hoặc địa chỉ MAC ở đáy camera.';
+      const msg = 'Vui lòng nhập mã vạch S/N ở đáy camera.';
       setManualError(msg);
       LocalizedAlert.alert('Chưa nhập mã camera', msg);
+      return;
+    }
+
+    const clean = trimmed.toUpperCase().replace(/^(S\/N|SN|MAC)[:\s-]+/, '').replace(/[:-]/g, '');
+    if (/^[0-9A-F]{12}$/.test(clean)) {
+      const msg = 'Đây là mã MAC. Vui lòng nhập mã vạch S/N (Serial Number) ở đáy camera.';
+      setManualError(msg);
+      LocalizedAlert.alert('Vui lòng dùng mã S/N', msg);
       return;
     }
 
@@ -209,7 +217,7 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
       return;
     }
 
-    const errorMsg = 'Hãy kiểm tra lại S/N hoặc địa chỉ MAC ở đáy camera (VD: 0C-EF-15-15-80-C5).';
+    const errorMsg = 'Hãy kiểm tra lại mã S/N ở đáy camera (VD: 22550A3009164).';
     setManualError(errorMsg);
     LocalizedAlert.alert('Mã camera không hợp lệ', errorMsg);
   };
@@ -230,7 +238,7 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
             videoRef.current = el;
             if (el && streamRef.current && el.srcObject !== streamRef.current) {
               el.srcObject = streamRef.current;
-              el.play().catch(() => {});
+              el.play().catch(() => { });
             }
           },
           autoPlay: true,
@@ -327,7 +335,7 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
           <View style={[styles.maskBottom, { paddingBottom: bottomInset + 12 }]}>
             <LocalizedText style={styles.qrGuideText}>
               Căn chỉnh mã vạch{' '}
-              <LocalizedText style={{ fontWeight: 'bold', color: '#38BDF8' }}>S/N hoặc MAC ở đáy Camera</LocalizedText> vào khung.
+              <LocalizedText style={{ fontWeight: 'bold', color: '#38BDF8' }}>S/N (Serial Number) ở đáy Camera</LocalizedText> vào khung.
             </LocalizedText>
 
             {/* Nhập mã thủ công */}
@@ -351,7 +359,7 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
                       setManualCode(text);
                       if (manualError) setManualError('');
                     }}
-                    placeholder="VD: 0C-EF-15-15-80-C5 hoặc S/N..."
+                    placeholder="VD: 22550A3009164 (Mã S/N)..."
                     placeholderTextColor="#94A3B8"
                     style={[styles.input, manualError ? styles.inputError : null]}
                     autoCapitalize="characters"
@@ -416,7 +424,7 @@ const styles = StyleSheet.create({
   },
   middleRow: {
     flexDirection: 'row',
-    height: 180,
+    height: 110,
     alignItems: 'center',
   },
   maskSide: {
@@ -425,8 +433,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
   },
   qrViewfinder: {
-    width: 300,
-    height: 180,
+    width: 280,
+    height: 110,
     borderRadius: 16,
     borderWidth: 1.5,
     borderColor: 'rgba(56, 189, 248, 0.5)',

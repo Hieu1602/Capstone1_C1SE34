@@ -44,6 +44,7 @@ class VitalCreate(BaseModel):
     activity_state: Optional[str] = None
     activity: Optional[str] = None
     is_worn: Optional[bool] = True
+    source: Optional[str] = None
     raw_payload: Optional[dict] = None
 
     model_config = {"extra": "allow"}
@@ -65,6 +66,17 @@ class VitalCurrentOut(BaseModel):
     edge_hub_connected: bool = False
     device_id: Optional[str] = None
     time: Optional[datetime] = None
+    activity_state: Optional[str] = None
+    is_worn: Optional[bool] = None
+    steps: Optional[int] = None
+    distance_m: Optional[int] = None
+    calories_kcal: Optional[int] = None
+    accel_x: Optional[float] = None
+    accel_y: Optional[float] = None
+    accel_z: Optional[float] = None
+    accel_g: Optional[float] = None
+    battery_state: Optional[str] = None
+    raw_payload: Optional[dict] = None
 
 
 class VitalStats(BaseModel):

@@ -138,12 +138,19 @@ export default function DoctorHomeScreen() {
       let nextAptObj: AppointmentItem | null = null;
       if (aptRes.status === 'fulfilled' && Array.isArray(aptRes.value.data)) {
         const allApts: AppointmentItem[] = aptRes.value.data;
-        const todayStr = new Date().toISOString().slice(0, 10);
+        const toLocalYMD = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const todayStr = toLocalYMD(new Date());
         nextTodays = allApts
-          .filter((apt) => apt.scheduled_at?.slice(0, 10) === todayStr && apt.status !== 'CANCELLED')
+          .filter((apt) => {
+            if (!apt.scheduled_at || apt.status === 'CANCELLED') return false;
+            const parsed = new Date(apt.scheduled_at);
+            return (!isNaN(parsed.getTime()) ? toLocalYMD(parsed) : apt.scheduled_at.slice(0, 10)) === todayStr;
+          })
           .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
-        nextUpcoming = allApts.filter((a) => a.status === 'UPCOMING');
-        nextAptObj = nextTodays.find((a) => a.status === 'UPCOMING') || nextTodays[0] || null;
+        nextUpcoming = allApts
+          .filter((a) => a.status === 'UPCOMING')
+          .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
+        nextAptObj = nextTodays.find((a) => a.status === 'UPCOMING') || nextUpcoming[0] || null;
 
         setTodayAppointments(nextTodays);
         setUpcomingAppointments(nextUpcoming);
@@ -162,7 +169,7 @@ export default function DoctorHomeScreen() {
               selectedPatientId: nextSelId ?? prev.selectedPatientId ?? null,
               todayAppointments: nextTodays ?? prev.todayAppointments ?? [],
               upcomingAppointments: nextUpcoming ?? prev.upcomingAppointments ?? [],
-              nextAppointment: nextAptObj ?? prev.nextAppointment ?? null,
+              nextAppointment: nextAptObj ?? null,
             })
           );
         })

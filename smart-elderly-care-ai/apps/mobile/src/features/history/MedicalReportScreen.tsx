@@ -118,7 +118,7 @@ export default function MedicalReportScreen({ navigation, route }: any) {
   const { patientsList, fetchPatientsList, activePatientId, setActivePatientId } = usePatientStore();
   const { userRole, role, has_house, household_id } = useAuthStore();
   const isSpecialUser = userRole === 'admin' || userRole === 'doctor' || role === 'admin' || role === 'doctor';
-  const hasNoHouse = !isSpecialUser && !household_id && has_house === false;
+  const hasNoHouse = !isSpecialUser && (!household_id || has_house === false);
   const effectivePatientsList = hasNoHouse ? [] : (patientsList || []);
 
   const routePatientId = route?.params?.patientId;

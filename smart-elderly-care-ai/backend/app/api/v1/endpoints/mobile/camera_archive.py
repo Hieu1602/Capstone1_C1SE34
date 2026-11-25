@@ -101,10 +101,14 @@ async def ingest(body: RecordingMetadata, authorization: str = Header(default=""
         if existing is None or any(getattr(existing, key) != value for key, value in body.model_dump().items()):
             await db.rollback()
             raise HTTPException(409, "Recording metadata is immutable")
-    if body.kind == "incident" and body.incident_id:
+    if body.kind in ("incident", "snapshot") and body.incident_id:
         incident = await db.get(Incident, body.incident_id)
-        if incident and not incident.video_clip_url:
-            incident.video_clip_url = f"/api/v1/mobile/camera/archive/{body.id}/playback"
+        if incident:
+            playback_url = f"/api/v1/camera/archive/{body.id}/playback"
+            if body.kind == "incident" and (not incident.video_clip_url or incident.video_clip_url.startswith("/recordings/")):
+                incident.video_clip_url = playback_url
+            elif body.kind == "snapshot" and (not incident.thumbnail_url or incident.thumbnail_url.startswith("/recordings/")):
+                incident.thumbnail_url = playback_url
     await db.commit()
     return {"id": str(body.id)}
 
@@ -114,8 +118,8 @@ async def timeline(start: AwareDatetime, end: AwareDatetime,
                    after_time: AwareDatetime | None = None, after_id: UUID | None = None,
                    incident_id: UUID | None = None, limit: int = Query(100, ge=1, le=300),
                    context=Depends(viewer), db: AsyncSession = Depends(get_db)):
-    if end <= start or end - start > timedelta(days=1) or (after_time is None) != (after_id is None):
-        raise HTTPException(400, "Use a time range up to 24 hours and a complete cursor")
+    if end <= start or end - start > timedelta(days=30) or (after_time is None) != (after_id is None):
+        raise HTTPException(400, "Use a time range up to 30 days and a complete cursor")
     query = select(CameraRecording).where(CameraRecording.device_id == context[1][0].id,
                                          CameraRecording.started_at >= start, CameraRecording.started_at < end)
     if incident_id:
@@ -133,6 +137,14 @@ async def coverage(start: AwareDatetime, end: AwareDatetime,
                    context=Depends(viewer), db: AsyncSession = Depends(get_db)):
     if end <= start or end - start > timedelta(days=1):
         raise HTTPException(400, "Use a time range up to 24 hours")
+    # Ưu tiên lấy dải bản ghi trực tiếp từ thẻ nhớ MicroSD của camera qua upstream
+    try:
+        from app.api.v1.endpoints.mobile.camera import forward_camera
+        res = await forward_camera(context, "/coverage", params={"start": start.isoformat(), "end": end.isoformat()})
+        if isinstance(res, dict) and "items" in res and res["items"]:
+            return res
+    except Exception:
+        pass
     query = select(CameraRecording.started_at, CameraRecording.duration).where(
         CameraRecording.device_id == context[1][0].id,
         CameraRecording.kind == "segment",

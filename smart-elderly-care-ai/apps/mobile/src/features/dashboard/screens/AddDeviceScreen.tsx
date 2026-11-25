@@ -188,33 +188,42 @@ export default function AddDeviceScreen({ navigation, route }: any) {
       location: deviceData.location,
       streamUrl: deviceData.streamUrl,
       ipAddress: deviceData.ip,
+      macAddress: activeScannedData?.mac || scannedData?.mac,
     };
 
-    const createdId = await addIoTDevice(newDevice);
-    const finalId = createdId || newDevice.id;
-    setCreatedCameraDeviceId(finalId);
+    try {
+      const createdId = await addIoTDevice(newDevice);
+      const finalId = createdId || newDevice.id;
+      setCreatedCameraDeviceId(finalId);
 
-    if (deviceData.isDefault && setCameraDefault) {
-      setCameraDefault({
-        id: finalId,
+      if (deviceData.isDefault && setCameraDefault) {
+        setCameraDefault({
+          id: finalId,
+          name: newDevice.name,
+          room: newDevice.location || 'Phòng khách',
+          streamUrl: newDevice.streamUrl || '',
+          isOnline: true,
+        });
+      }
+
+      setSuccessInfo({
         name: newDevice.name,
-        room: newDevice.location || 'Phòng khách',
-        streamUrl: newDevice.streamUrl || '',
-        isOnline: true,
+        type: `Camera An Ninh (${deviceData.brand})`,
+        protocol: 'RTSP (Cổng 554)',
+        details: deviceData.streamUrl,
+        location: deviceData.location,
+        icon: 'videocam',
+        color: '#0284C7',
       });
+
+      setCurrentStep('SETUP_SUCCESS');
+    } catch (err: any) {
+      LocalizedAlert.alert(
+        'Thông báo liên kết thiết bị',
+        err?.message || 'Không thể liên kết camera. Vui lòng kiểm tra lại.',
+        [{ text: 'Đã hiểu' }]
+      );
     }
-
-    setSuccessInfo({
-      name: newDevice.name,
-      type: `Camera An Ninh (${deviceData.brand})`,
-      protocol: 'RTSP (Cổng 554)',
-      details: deviceData.streamUrl,
-      location: deviceData.location,
-      icon: 'videocam',
-      color: '#0284C7',
-    });
-
-    setCurrentStep('SETUP_SUCCESS');
   };
 
   // -------------------------------------------------------------
@@ -650,29 +659,8 @@ export default function AddDeviceScreen({ navigation, route }: any) {
         />
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, isDarkMode && { backgroundColor: colors.background }]}
-      >
-        {/* 1. STATE: CATEGORY_SELECT */}
-        {currentStep === 'CATEGORY_SELECT' && (
-          <StepCategorySelect
-            styles={styles}
-            isDarkMode={isDarkMode}
-            colors={colors}
-            onSelectCategory={(category) => {
-              if (category === 'camera') {
-                setProtocol('RTSP_IP');
-                setCurrentStep('CAMERA_RTSP_CONFIG');
-              } else if (category === 'watch') {
-                setCurrentStep('WATCH_LIST');
-              }
-            }}
-          />
-        )}
-
-        {/* 2. CAMERA CONFIG (RTSP / ONVIF / AI) */}
-        {currentStep === 'CAMERA_RTSP_CONFIG' && (
+      {currentStep === 'CAMERA_RTSP_CONFIG' ? (
+        <View style={{ flex: 1 }}>
           <StepCameraRtspConfig
             isDarkMode={isDarkMode}
             colors={colors}
@@ -680,9 +668,31 @@ export default function AddDeviceScreen({ navigation, route }: any) {
             onOpenScanner={() => setShowScanModal(true)}
             onApplyCamera={handleApplyRtspCamera}
           />
-        )}
+        </View>
+      ) : (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={[styles.scrollContent, isDarkMode && { backgroundColor: colors.background }]}
+        >
+          {/* 1. STATE: CATEGORY_SELECT */}
+          {currentStep === 'CATEGORY_SELECT' && (
+            <StepCategorySelect
+              styles={styles}
+              isDarkMode={isDarkMode}
+              colors={colors}
+              onSelectCategory={(category) => {
+                if (category === 'camera') {
+                  setProtocol('RTSP_IP');
+                  setCurrentStep('CAMERA_RTSP_CONFIG');
+                } else if (category === 'watch') {
+                  setCurrentStep('WATCH_LIST');
+                }
+              }}
+            />
+          )}
 
-        {/* 3. WATCH FLOW */}
+          {/* 3. WATCH FLOW */}
         <StepWatchFlow
           currentStep={currentStep}
           styles={styles}
@@ -750,6 +760,7 @@ export default function AddDeviceScreen({ navigation, route }: any) {
           }}
         />
       </ScrollView>
+      )}
 
       {/* ALL MODALS */}
       <AddDeviceModals

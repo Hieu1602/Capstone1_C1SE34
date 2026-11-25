@@ -13,15 +13,20 @@ const moduleExports = {};
 vm.runInNewContext(source, { exports: moduleExports });
 
 test('parses supported camera and smartband QR identifiers', () => {
-  assert.deepEqual({ ...moduleExports.parseDeviceQr(' seca_001 ') }, { deviceId: 'SECA_001', type: 'camera' });
-  assert.deepEqual({ ...moduleExports.parseDeviceQr('BLE_BAND_01') }, { deviceId: 'BLE_BAND_01', type: 'watch' });
+  const cam = moduleExports.parseDeviceQr(' seca_001 ');
+  assert.equal(cam.deviceId, 'SECA_001');
+  assert.equal(cam.type, 'camera');
+
+  const watch = moduleExports.parseDeviceQr('BLE_BAND_01');
+  assert.equal(watch.deviceId, 'BLE_BAND_01');
+  assert.equal(watch.type, 'watch');
 });
 
 test('parses the Tapo S/N Code 128 barcode but not the MAC barcode', () => {
-  assert.deepEqual(
-    { ...moduleExports.parseDeviceQr('22550A3009164', 'code128') },
-    { deviceId: 'TAPO_SN_22550A3009164', type: 'camera' }
-  );
+  const tapo = moduleExports.parseDeviceQr('22550A3009164', 'code128');
+  assert.equal(tapo.deviceId, 'CAM_SN_22550A3009164');
+  assert.equal(tapo.type, 'camera');
+  assert.equal(tapo.sn, '22550A3009164');
   assert.equal(moduleExports.parseDeviceQr('0CEF151580C5', 'code128'), null);
 });
 

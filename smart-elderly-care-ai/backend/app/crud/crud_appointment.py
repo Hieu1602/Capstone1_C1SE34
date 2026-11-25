@@ -6,7 +6,7 @@ Implements conflict verification, recurrence series generation, and reminder man
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 import uuid
 
 from sqlalchemy import and_, or_, select, update
@@ -18,12 +18,57 @@ from app.models.elderly_profile import ElderlyProfile
 from app.models.user import User
 from app.schemas.appointment import (
     AppointmentCreate,
+    AppointmentResponse,
     AppointmentStatusEnum,
     AppointmentUpdate,
     RecurrencePatternEnum,
     ReminderStatusEnum,
     ReminderTypeEnum,
 )
+
+
+def _to_utc(dt: datetime) -> datetime:
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+
+
+async def get_patient_names_map(
+    db: AsyncSession, patient_ids: Iterable[uuid.UUID]
+) -> Dict[uuid.UUID, str]:
+    ids = list({pid for pid in patient_ids if pid})
+    if not ids:
+        return {}
+    res = await db.execute(
+        select(ElderlyProfile.id, ElderlyProfile.full_name).where(ElderlyProfile.id.in_(ids))
+    )
+    return {pid: name for pid, name in res.all() if name}
+
+
+def build_appointment_response(
+    apt: Appointment,
+    patient_name: Optional[str] = None,
+    doctor_name: Optional[str] = None,
+) -> AppointmentResponse:
+    resolved_doctor = doctor_name or (apt.doctor.full_name if apt.doctor else "Bác sĩ")
+    return AppointmentResponse(
+        id=str(apt.id),
+        doctor_id=str(apt.doctor_id) if apt.doctor_id else None,
+        doctor_name=resolved_doctor,
+        patient_id=str(apt.patient_id),
+        patient_name=patient_name or "Bệnh nhân người cao tuổi",
+        house_id=str(apt.house_id) if apt.house_id else None,
+        visit_type=apt.visit_type,
+        scheduled_at=apt.scheduled_at,
+        duration_minutes=apt.duration_minutes,
+        location=apt.location,
+        clinical_notes=apt.clinical_notes,
+        status=apt.status,
+        cancellation_reason=apt.cancellation_reason,
+        recurrence_pattern=apt.recurrence_pattern,
+        parent_recurring_id=str(apt.parent_recurring_id) if apt.parent_recurring_id else None,
+        enable_speaker_reminder=apt.enable_speaker_reminder,
+        created_at=apt.created_at,
+        updated_at=apt.updated_at,
+    )
 
 
 class CRUDAppointment:
@@ -43,13 +88,14 @@ class CRUDAppointment:
         bất kỳ lịch khám UPCOMING nào khác của cùng Bác sĩ hoặc cùng Bệnh nhân hay không.
         Trả về True nếu bị trùng lịch (Conflict), ngược lại False.
         """
-        end_time = start_time + timedelta(minutes=duration_minutes)
+        norm_start = _to_utc(start_time)
+        dur = duration_minutes if (duration_minutes and duration_minutes > 0) else 30
+        norm_end = norm_start + timedelta(minutes=dur)
 
-        # Điều kiện overlap khoảng thời gian: A_start < B_end AND A_end > B_start
         conflict_conditions = [
             Appointment.status == AppointmentStatusEnum.UPCOMING.value,
-            Appointment.scheduled_at < end_time,
-            (Appointment.scheduled_at + timedelta(minutes=30)) > start_time,
+            Appointment.scheduled_at < norm_end,
+            Appointment.scheduled_at >= norm_start - timedelta(days=1),
         ]
 
         if exclude_id:
@@ -61,9 +107,18 @@ class CRUDAppointment:
 
         conflict_conditions.append(or_(*target_party))
 
-        stmt = select(Appointment.id).where(and_(*conflict_conditions)).limit(1)
+        stmt = select(
+            Appointment.id, Appointment.scheduled_at, Appointment.duration_minutes
+        ).where(and_(*conflict_conditions))
         res = await db.execute(stmt)
-        return res.scalar_one_or_none() is not None
+        for _, ex_start, ex_dur in res.all():
+            ex_start_utc = _to_utc(ex_start)
+            ex_end_utc = ex_start_utc + timedelta(
+                minutes=(ex_dur if (ex_dur and ex_dur > 0) else 30)
+            )
+            if ex_start_utc < norm_end and ex_end_utc > norm_start:
+                return True
+        return False
 
     async def _create_reminders_for_appointment(
         self,
@@ -132,8 +187,8 @@ class CRUDAppointment:
             filters.append(Appointment.patient_id == patient_id)
         if house_id:
             filters.append(Appointment.house_id == house_id)
-        if status:
-            filters.append(Appointment.status == status)
+        if status and status.strip() and status.strip().upper() != "ALL":
+            filters.append(Appointment.status == status.strip().upper())
 
         stmt = (
             select(Appointment)
@@ -160,36 +215,20 @@ class CRUDAppointment:
         Tạo lịch hẹn mới (hỗ trợ chu kỳ tái khám định kỳ tự động WEEKLY, MONTHLY, QUARTERLY).
         Kiểm tra thời gian tương lai và chống trùng lịch.
         """
-        # Đảm bảo scheduled_at có timezone UTC
-        scheduled_at = obj_in.scheduled_at
-        if scheduled_at.tzinfo is None:
-            scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+        scheduled_at = _to_utc(obj_in.scheduled_at)
 
         # 1. Chuyển đổi và tìm kiếm thông tin bệnh nhân
-        patient_uuid = None
-        house_id = None
         try:
             patient_uuid = uuid.UUID(obj_in.patient_id)
-        except ValueError:
-            pass
+        except (ValueError, TypeError):
+            raise ValueError("ID bệnh nhân không hợp lệ.")
 
-        # Tìm hồ sơ người cao tuổi
-        if patient_uuid:
-            p_stmt = select(ElderlyProfile).where(ElderlyProfile.id == patient_uuid)
-            p_res = await db.execute(p_stmt)
-            elderly = p_res.scalar_one_or_none()
-            if elderly:
-                house_id = elderly.house_id
-        else:
-            # Fallback lấy hồ sơ người cao tuổi đầu tiên
-            f_stmt = select(ElderlyProfile).limit(1)
-            f_res = await db.execute(f_stmt)
-            elderly = f_res.scalar_one_or_none()
-            if elderly:
-                patient_uuid = elderly.id
-                house_id = elderly.house_id
-            else:
-                patient_uuid = uuid.uuid4()
+        p_stmt = select(ElderlyProfile).where(ElderlyProfile.id == patient_uuid)
+        p_res = await db.execute(p_stmt)
+        elderly = p_res.scalar_one_or_none()
+        if not elderly:
+            raise ValueError("Không tìm thấy hồ sơ người cao tuổi.")
+        house_id = elderly.house_id
 
         # 2. Kiểm tra trùng lịch cho cuộc hẹn gốc
         is_conflict = await self.check_conflict(
@@ -203,6 +242,7 @@ class CRUDAppointment:
             raise ValueError("Thời gian hẹn bị trùng với lịch khám khác của Bác sĩ hoặc Bệnh nhân.")
 
         # 3. Tạo cuộc hẹn chính (Root Appointment)
+        pattern = (obj_in.recurrence_pattern or RecurrencePatternEnum.NONE.value).strip().upper()
         root_apt = Appointment(
             doctor_id=doctor_id,
             patient_id=patient_uuid,
@@ -214,7 +254,7 @@ class CRUDAppointment:
             location=obj_in.location,
             clinical_notes=obj_in.clinical_notes,
             status=AppointmentStatusEnum.UPCOMING.value,
-            recurrence_pattern=obj_in.recurrence_pattern,
+            recurrence_pattern=pattern,
             enable_speaker_reminder=obj_in.enable_speaker_reminder,
         )
         db.add(root_apt)
@@ -227,7 +267,6 @@ class CRUDAppointment:
 
         # 4. Sinh các lịch hẹn lặp định kỳ (nếu có)
         occurrences = obj_in.recurrence_occurrences or 1
-        pattern = obj_in.recurrence_pattern.upper()
         if pattern != RecurrencePatternEnum.NONE.value and occurrences > 1:
             for i in range(1, min(occurrences, 12)):
                 if pattern == RecurrencePatternEnum.WEEKLY.value:
@@ -272,8 +311,8 @@ class CRUDAppointment:
                     total_created += 1
 
         await db.commit()
-        await db.refresh(root_apt)
-        return root_apt, total_created, total_reminders
+        loaded = await self.get_by_id(db, root_apt.id)
+        return (loaded or root_apt), total_created, total_reminders
 
     async def update_appointment(
         self,
@@ -283,16 +322,16 @@ class CRUDAppointment:
     ) -> Optional[Appointment]:
         """Dời lịch hẹn hoặc cập nhật ghi chú y khoa."""
         apt = await self.get_by_id(db, appointment_id)
-        if not apt or apt.status != AppointmentStatusEnum.UPCOMING.value:
+        if not apt:
             return None
+        if apt.status != AppointmentStatusEnum.UPCOMING.value:
+            raise ValueError("Chỉ có thể cập nhật lịch khám ở trạng thái sắp tới (UPCOMING).")
 
         # Nếu thay đổi thời gian hoặc thời lượng
-        new_time = obj_in.scheduled_at or apt.scheduled_at
-        if new_time.tzinfo is None:
-            new_time = new_time.replace(tzinfo=timezone.utc)
-        new_duration = obj_in.duration_minutes or apt.duration_minutes
+        new_time = _to_utc(obj_in.scheduled_at) if obj_in.scheduled_at is not None else _to_utc(apt.scheduled_at)
+        new_duration = obj_in.duration_minutes if obj_in.duration_minutes is not None else apt.duration_minutes
 
-        if obj_in.scheduled_at or obj_in.duration_minutes:
+        if obj_in.scheduled_at is not None or obj_in.duration_minutes is not None:
             is_conflict = await self.check_conflict(
                 db=db,
                 start_time=new_time,
@@ -330,18 +369,24 @@ class CRUDAppointment:
             apt.enable_speaker_reminder = obj_in.enable_speaker_reminder
 
         await db.commit()
-        await db.refresh(apt)
-        return apt
+        return await self.get_by_id(db, appointment_id)
 
     async def mark_completed(
-        self, db: AsyncSession, appointment_id: uuid.UUID
+        self,
+        db: AsyncSession,
+        appointment_id: uuid.UUID,
+        clinical_notes: Optional[str] = None,
     ) -> Optional[Appointment]:
         """Xác nhận đã khám xong (COMPLETED). Hủy các mốc nhắc nhở còn lại."""
         apt = await self.get_by_id(db, appointment_id)
-        if not apt or apt.status != AppointmentStatusEnum.UPCOMING.value:
+        if not apt:
             return None
+        if apt.status != AppointmentStatusEnum.UPCOMING.value:
+            raise ValueError("Lịch khám đã hoàn tất hoặc đã bị hủy trước đó.")
 
         apt.status = AppointmentStatusEnum.COMPLETED.value
+        if clinical_notes is not None and clinical_notes.strip():
+            apt.clinical_notes = clinical_notes.strip()
 
         # Hủy các nhắc nhở chưa gửi
         await db.execute(

@@ -878,7 +878,7 @@ export default function SettingsScreen({ navigation, route }: any) {
                 onChangePasswordPress={() =>
                     profileMgr.setChangePasswordVisible(true)
                 }
-                onLogoutPress={() => profileMgr.setLogoutConfirmVisible(true)}
+                onLogoutPress={profileMgr.performLogout}
                 onSaveName={profileMgr.handleSaveName}
                 onSavePhone={profileMgr.handleSavePhone}
             />

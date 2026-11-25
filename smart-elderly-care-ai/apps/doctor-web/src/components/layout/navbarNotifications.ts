@@ -12,14 +12,18 @@ import {
   formatNotificationTime,
 } from '../../utils/notificationBuilder';
 
+function toLocalYMD(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function formatNavbarDate(dateStr?: string): string {
   if (!dateStr) return 'Vừa xong';
   try {
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return 'Vừa xong';
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = toLocalYMD(new Date());
     const time = formatNotificationTime(dateStr);
-    return dateStr.slice(0, 10) === todayStr
+    return toLocalYMD(d) === todayStr
       ? `Hôm nay, ${time}`
       : `${d.getDate()}/${d.getMonth() + 1} lúc ${time}`;
   } catch {
@@ -234,12 +238,13 @@ export async function fetchDoctorNavbarNotifications(doctorUserId?: string): Pro
 
   // 3. Lịch khám từ Doctor API (UPCOMING & TODAY)
   if (aptRes.status === 'fulfilled' && Array.isArray(aptRes.value)) {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = toLocalYMD(new Date());
     aptRes.value.forEach((apt: AppointmentItem) => {
       const aptId = `apt_${apt.id}`;
       if (unifiedList.some((item) => item.id === aptId)) return;
 
-      const isToday = apt.scheduled_at?.slice(0, 10) === todayStr;
+      const aptDt = apt.scheduled_at ? new Date(apt.scheduled_at) : null;
+      const isToday = Boolean(aptDt && !isNaN(aptDt.getTime()) && toLocalYMD(aptDt) === todayStr);
       const isCompleted = apt.status === 'COMPLETED';
       const isCancelled = apt.status === 'CANCELLED';
       const label = isCompleted ? 'Đã khám' : isCancelled ? 'Đã hủy' : isToday ? 'Khám hôm nay' : 'Sắp tới';

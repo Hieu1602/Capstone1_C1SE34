@@ -15,24 +15,16 @@ import { useEscalationStore } from '../store/useEscalationStore';
 import { useAlertStore } from '../store/useAlertStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useVitalStore } from '../store/useVitalStore';
-import { BASE_URL, incidentsApi } from '../services/api';
+import { incidentsApi } from '../services/api';
+import { resolveIncidentMediaUrl } from '../services/camera';
 import { dialEmergencyNumber, EMERGENCY_TEST_PHONE, requestEmergencyCallPermission } from '../services/emergency';
-
-const resolveMediaUrl = (raw?: string | null): string | null => {
-  if (!raw || !raw.trim()) return null;
-  const clean = raw.trim();
-  if (clean.startsWith('http://') || clean.startsWith('https://') || clean.startsWith('data:')) {
-    return clean;
-  }
-  const base = BASE_URL.replace(/\/api\/v1\/?$/, '');
-  return `${base}${clean.startsWith('/') ? clean : `/${clean}`}`;
-};
 
 export const CriticalEscalationModal: React.FC = () => {
   const { activeEscalation, autoCallEnabled, markEscalated, clearEscalation } = useEscalationStore();
-  const [secondsLeft, setSecondsLeft] = useState<number>(45);
+  const [secondsLeft, setSecondsLeft] = useState<number>(30);
   const [hasAutoCalled, setHasAutoCalled] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [snapshotUri, setSnapshotUri] = useState<string | null>(null);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -41,7 +33,7 @@ export const CriticalEscalationModal: React.FC = () => {
       setHasAutoCalled(false);
       return;
     }
-    setSecondsLeft(activeEscalation.delaySeconds || 45);
+    setSecondsLeft(activeEscalation.delaySeconds || 30);
     setHasAutoCalled(false);
   }, [activeEscalation?.incidentId]);
 
@@ -103,11 +95,17 @@ export const CriticalEscalationModal: React.FC = () => {
     }
   }, [secondsLeft, activeEscalation?.status, activeEscalation?.incidentId, autoCallEnabled, hasAutoCalled, markEscalated]);
 
+  useEffect(() => {
+    let active = true;
+    resolveIncidentMediaUrl(activeEscalation?.thumbnailUrl).then((url) => {
+      if (active) setSnapshotUri(url);
+    });
+    return () => { active = false; };
+  }, [activeEscalation?.incidentId, activeEscalation?.thumbnailUrl]);
+
   if (!activeEscalation) {
     return null;
   }
-
-  const snapshotUri = resolveMediaUrl(activeEscalation.thumbnailUrl);
 
   const handleCallNow = async () => {
     setHasAutoCalled(true);

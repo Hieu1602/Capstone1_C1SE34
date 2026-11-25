@@ -225,7 +225,7 @@ async def get_incidents(db: AsyncSession = Depends(get_db)) -> List[Dict[str, An
                     "service": r[2],
                     "type": r[3],
                     "message": r[4],
-                    "resolved": bool(r[5]),
+                    "resolved": bool(r[5]) if r[3] != "INFO" else True,
                 }
                 for r in rows
             ]

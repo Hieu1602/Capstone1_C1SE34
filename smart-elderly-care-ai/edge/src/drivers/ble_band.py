@@ -48,9 +48,9 @@ class BLEBandDriver:
     # Standard GATT UUIDs
     HR_SERVICE_UUID         = "0000180d-0000-1000-8000-00805f9b34fb"
     HR_MEASUREMENT_UUID     = "00002a37-0000-1000-8000-00805f9b34fb"
+    HUAMI_HR_CTRL_UUID      = "00002a39-0000-1000-8000-00805f9b34fb"
     BATTERY_SERVICE_UUID    = "0000180f-0000-1000-8000-00805f9b34fb"
     BATTERY_LEVEL_UUID      = "00002a19-0000-1000-8000-00805f9b34fb"
-    HUAMI_HR_CTRL_UUID      = "00000004-0000-3512-2118-0009af100700"
 
     def __init__(self, config: dict):
         self.device_mac: str = config.get("device_mac", "")

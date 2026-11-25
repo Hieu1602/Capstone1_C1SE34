@@ -7,6 +7,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LocalizedAlert, LocalizedText } from '../../../../i18n/LocalizedComponents';
@@ -366,14 +368,24 @@ export const StepCameraRtspConfig: React.FC<StepCameraRtspConfigProps> = ({
   const currentBrandInfo = CAMERA_BRANDS.find((b) => b.name === selectedBrand);
 
   return (
-    <ScrollView
+    <KeyboardAvoidingView
       style={[
         localStyles.container,
         isDarkMode && { backgroundColor: colors.background || '#0F172A' },
       ]}
-      contentContainerStyle={localStyles.contentContainer}
-      showsVerticalScrollIndicator={false}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
     >
+      <ScrollView
+        style={localStyles.container}
+        contentContainerStyle={[
+          localStyles.contentContainer,
+          { paddingBottom: 240 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
       {/* Khối Tiêu đề */}
       <View style={localStyles.headerBox}>
         <LocalizedText
@@ -398,7 +410,7 @@ export const StepCameraRtspConfig: React.FC<StepCameraRtspConfigProps> = ({
         >
           <Ionicons name="barcode-outline" size={20} color="#0284C7" style={{ marginRight: 8 }} />
           <LocalizedText style={[localStyles.scanBarcodeBtnText, isDarkMode && { color: '#38BDF8' }]}>
-            {scannedData ? 'Quét lại mã vạch camera' : 'Quét mã vạch S/N hoặc MAC ở đáy camera'}
+            {scannedData ? 'Quét lại mã vạch camera' : 'Quét mã vạch S/N ở đáy camera'}
           </LocalizedText>
         </TouchableOpacity>
       )}
@@ -585,7 +597,7 @@ export const StepCameraRtspConfig: React.FC<StepCameraRtspConfigProps> = ({
           >
             <Ionicons name="wifi" size={16} color="#0284C7" style={{ marginRight: 8 }} />
             <LocalizedText style={localStyles.scanNetworkButtonText}>
-              📡 Dò tìm camera trong mạng WiFi
+              Dò tìm camera trong mạng WiFi
             </LocalizedText>
           </TouchableOpacity>
         )}
@@ -1075,7 +1087,8 @@ export const StepCameraRtspConfig: React.FC<StepCameraRtspConfigProps> = ({
         </TouchableOpacity>
       </Modal>
 
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 

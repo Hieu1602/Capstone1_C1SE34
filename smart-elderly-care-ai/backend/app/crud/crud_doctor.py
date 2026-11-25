@@ -58,7 +58,7 @@ from app.models.device_config import DeviceConfig
 from app.models.vital_sign import VitalSign
 from app.models.user import User
 from app.models.prescription import Prescription
-from app.crud.crud_elderly import crud_elderly
+from app.crud.crud_elderly import crud_elderly, parse_valid_upcoming_appointment
 from app.schemas.doctor import (
     DoctorPatientCard,
     DoctorPatientDetail,
@@ -70,9 +70,6 @@ from app.schemas.doctor import (
     DoctorMedicalRecordUpdate,
     DoctorVitalsAnalytics,
     ThresholdsUpdate,
-    AppointmentItem,
-    AppointmentCreate,
-    AppointmentUpdate,
 )
 from app.schemas.patient import MedicalCondition, PatientMedicalRecordUpdate
 
@@ -82,9 +79,6 @@ _PRESCRIPTION_STORE: Dict[str, List[PrescriptionItem]] = {}
 
 # In-memory store cho hồ sơ lâm sàng có thể chỉnh sửa của Bác sĩ
 _CLINICAL_STORE: Dict[str, Dict[str, Any]] = {}
-
-# In-memory store cho lịch hẹn & tái khám y tế (chỉ lưu các lịch do Bác sĩ tạo)
-_APPOINTMENT_STORE: List[AppointmentItem] = []
 
 
 def _init_clinical_data(patient_id: str) -> Dict[str, Any]:
@@ -681,7 +675,8 @@ class CRUDDoctor:
             weight_kg=weight,
             bmi=bmi,
             next_appointment=(
-                getattr(__import__("app.crud.crud_elderly", fromlist=["parse_valid_upcoming_appointment"]), "parse_valid_upcoming_appointment", lambda x: x)(clinical.get("next_appointment"))
+                med_record.next_appointment
+                or parse_valid_upcoming_appointment(clinical.get("next_appointment"))
             ),
             prescriptions_count=len(prescriptions),
             hr_threshold_low=cfg_hr_low,
@@ -1096,7 +1091,11 @@ class CRUDDoctor:
                         }
                     }, ensure_ascii=False)
                     for client_ws in list(alert_clients):
-                        await client_ws.send_text(ws_payload)
+                        try:
+                            await client_ws.send_text(ws_payload)
+                        except Exception:
+                            if client_ws in alert_clients:
+                                alert_clients.remove(client_ws)
             except Exception:
                 pass
 
@@ -1424,7 +1423,11 @@ class CRUDDoctor:
                     }
                 }, ensure_ascii=False)
                 for client_ws in list(alert_clients):
-                    await client_ws.send_text(ws_payload)
+                    try:
+                        await client_ws.send_text(ws_payload)
+                    except Exception:
+                        if client_ws in alert_clients:
+                            alert_clients.remove(client_ws)
             except Exception:
                 pass
 
@@ -1433,53 +1436,6 @@ class CRUDDoctor:
             "message": "Đã cập nhật ngưỡng an toàn y tế thành công và đồng bộ xuống Hub.",
             "thresholds": thresholds_in.model_dump(exclude_unset=True),
         }
-
-    def get_appointments(self, status: Optional[str] = None) -> List[AppointmentItem]:
-        """Lấy danh sách các cuộc hẹn và tái khám định kỳ."""
-        if status and status != "ALL":
-            return [apt for apt in _APPOINTMENT_STORE if apt.status == status]
-        return _APPOINTMENT_STORE
-
-    def create_appointment(
-        self, obj_in: AppointmentCreate, doctor_name: Optional[str] = None
-    ) -> AppointmentItem:
-        """Tạo lịch tái khám mới và đồng bộ xuống Hub để nhắc nhở người nhà."""
-        new_apt = AppointmentItem(
-            id=f"apt-{uuid.uuid4().hex[:6]}",
-            patient_id=obj_in.patient_id,
-            patient_name=obj_in.patient_name,
-            scheduled_at=obj_in.scheduled_at,
-            exam_type=obj_in.exam_type,
-            location=obj_in.location,
-            status="UPCOMING",
-            instructions=obj_in.instructions,
-            doctor_name=doctor_name,
-            enable_speaker_reminder=obj_in.enable_speaker_reminder,
-            created_at=datetime.now().strftime("%d/%m/%Y"),
-        )
-        _APPOINTMENT_STORE.insert(0, new_apt)
-        return new_apt
-
-    def update_appointment(
-        self, appointment_id: str, obj_in: AppointmentUpdate
-    ) -> Optional[AppointmentItem]:
-        """Cập nhật thông tin lịch khám hoặc đổi trạng thái (COMPLETED/CANCELLED)."""
-        for idx, apt in enumerate(_APPOINTMENT_STORE):
-            if apt.id == appointment_id:
-                updated_data = apt.model_dump()
-                update_fields = obj_in.model_dump(exclude_unset=True)
-                updated_data.update(update_fields)
-                updated_apt = AppointmentItem(**updated_data)
-                _APPOINTMENT_STORE[idx] = updated_apt
-                return updated_apt
-        return None
-
-    def delete_appointment(self, appointment_id: str) -> bool:
-        """Hủy bỏ cuộc hẹn khỏi hệ thống."""
-        global _APPOINTMENT_STORE
-        initial_len = len(_APPOINTMENT_STORE)
-        _APPOINTMENT_STORE = [apt for apt in _APPOINTMENT_STORE if apt.id != appointment_id]
-        return len(_APPOINTMENT_STORE) < initial_len
 
 
 crud_doctor = CRUDDoctor()

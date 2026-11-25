@@ -53,7 +53,6 @@ def validate_vietnamese_full_name(name: str) -> str:
 class UserBase(BaseModel):
     full_name: str
     phone: str
-    email: Optional[str] = None
     role: str = "member"
     avatar_url: Optional[str] = None
     cchn_number: Optional[str] = None
@@ -185,7 +184,6 @@ class DeleteAccountRequest(BaseModel):
 
 class UserOut(UserBase):
     id: uuid.UUID
-    email: Optional[str] = None
     is_active: bool
     status: str = "active"
     lock_reason: Optional[str] = None

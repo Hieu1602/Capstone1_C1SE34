@@ -517,7 +517,7 @@ def client(camera_id: str | None = None):
         raise HTTPException(503, "Backend chưa có tài khoản dịch vụ camera")
     return httpx.AsyncClient(
         base_url=source.get("url", os.getenv("CAMERA_SERVICE_URL", "http://tapo-camera:8090")),
-        auth=(username, password), timeout=httpx.Timeout(20, connect=5), trust_env=False,
+        auth=(username, password), timeout=httpx.Timeout(45, connect=10), trust_env=False,
     )
 
 
@@ -891,7 +891,9 @@ def valid_resource(resource: str) -> bool:
     Returns:
         True nếu là MJPEG, JPEG hoặc tên MP4 hợp lệ.
     """
-    return resource in ("live.mjpg", "snapshot.jpg") or bool(re.fullmatch(r"recordings/[0-9a-f]{32}\.mp4", resource))
+    return resource in ("live.mjpg", "snapshot.jpg") or (
+        bool(re.fullmatch(r"recordings/[a-zA-Z0-9_\-\. ]+\.(mp4|jpg)", resource)) and ".." not in resource
+    )
 
 
 class MediaRequest(BaseModel):
@@ -926,11 +928,12 @@ async def ticket(body: MediaRequest, context=Depends(viewer)):
 
 
 @router.get("/media/{resource:path}")
-async def media(resource: str, ticket: str = Query(...), db: AsyncSession = Depends(get_db), quality: Literal["1080p", "720p", "auto"] = "auto", overlay: str = Query(default="0")):
+async def media(resource: str, request: Request, ticket: str = Query(...), db: AsyncSession = Depends(get_db), quality: Literal["1080p", "720p", "auto"] = "auto", overlay: str = Query(default="0")):
     """Xác minh ticket và kiểm tra lại quyền trước khi truyền media.
 
     Args:
         resource: Tài nguyên media cần cấp hoặc kiểm tra quyền.
+        request: FastAPI Request để đọc Range header.
         ticket: Ticket media ký bởi backend.
         db: Phiên cơ sở dữ liệu của request.
 
@@ -963,11 +966,14 @@ async def media(resource: str, ticket: str = Query(...), db: AsyncSession = Depe
         dev_config = getattr(device, "config", None)
         if dev_config and getattr(dev_config, "stream_url", None):
             params["src"] = dev_config.stream_url
-        response = await upstream.send(upstream.build_request("GET", "/" + resource, params=params), stream=True)
+        req_headers = {}
+        if resource.startswith("recordings/") and request.headers.get("range"):
+            req_headers["range"] = request.headers["range"]
+        response = await upstream.send(upstream.build_request("GET", "/" + resource, params=params, headers=req_headers), stream=True)
     except (httpx.HTTPError, OSError):
         await upstream.aclose()
         raise HTTPException(503, "Không kết nối được camera") from None
-    if response.status_code != 200:
+    if response.status_code not in (200, 206):
         await response.aclose()
         await upstream.aclose()
         raise HTTPException(503, "Camera chưa có hình hoặc file chưa sẵn sàng")
@@ -987,8 +993,15 @@ async def media(resource: str, ticket: str = Query(...), db: AsyncSession = Depe
             await response.aclose()
             await upstream.aclose()
 
-    headers = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer",
-               "X-Content-Type-Options": "nosniff"}
+    headers = {"Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff"}
     if resource.startswith("recordings/"):
-        headers["Content-Disposition"] = f'attachment; filename="{resource.split("/")[1]}"'
-    return StreamingResponse(chunks(), media_type=response.headers.get("content-type", "application/octet-stream"), headers=headers)
+        headers["Cache-Control"] = "public, max-age=86400"
+        headers["Content-Disposition"] = f'inline; filename="{resource.split("/")[1]}"'
+        headers["Accept-Ranges"] = "bytes"
+        if "content-range" in response.headers:
+            headers["Content-Range"] = response.headers["content-range"]
+        if "content-length" in response.headers:
+            headers["Content-Length"] = response.headers["content-length"]
+    else:
+        headers["Cache-Control"] = "no-store"
+    return StreamingResponse(chunks(), status_code=response.status_code, media_type=response.headers.get("content-type", "application/octet-stream"), headers=headers)

@@ -23,12 +23,12 @@ class VideoRingBuffer:
     Bộ đệm vòng lưu frames video trong RAM.
 
     Usage:
-        buf = VideoRingBuffer(duration_sec=5, fps=15)
+        buf = VideoRingBuffer(duration_sec=5, fps=25)
         buf.push(frame)
         clip = buf.get_last_n_seconds(3)
     """
 
-    def __init__(self, duration_sec: float = 5.0, fps: int = 15):
+    def __init__(self, duration_sec: float = 5.0, fps: int = 25):
         self.duration_sec = duration_sec
         self.fps = fps
         self._maxlen = int(duration_sec * fps)

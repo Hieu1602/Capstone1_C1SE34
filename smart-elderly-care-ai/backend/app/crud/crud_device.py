@@ -6,7 +6,7 @@ và cập nhật nhịp tim định kỳ (heartbeat) thời gian thực.
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
 
 from sqlalchemy import and_, or_, select
@@ -16,7 +16,12 @@ from sqlalchemy.orm import selectinload
 from app.models.device import Device
 from app.models.device_config import DeviceConfig
 from app.models.house import HouseMember
-from app.schemas.device import DeviceConfigUpdate, DeviceCreate, DeviceUpdate
+from app.schemas.device import (
+    DeviceConfigBase,
+    DeviceConfigUpdate,
+    DeviceCreate,
+    DeviceUpdate,
+)
 
 # Cấu hình nạp quan hệ liên kết mặc định cho Device (DRY)
 DEVICE_EAGER_LOADS = (
@@ -61,6 +66,35 @@ class CRUDDevice:
     ) -> Optional[Device]:
         result = await db.execute(
             select(Device).options(*DEVICE_EAGER_LOADS).where(Device.device_id == device_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_device_id_or_mac(
+        self, db: AsyncSession, device_id: str, mac_address: Optional[str] = None
+    ) -> Optional[Device]:
+        """Tra cứu thiết bị theo device_id hoặc đối soát chéo theo địa chỉ MAC."""
+        conditions = [Device.device_id == device_id]
+        if mac_address:
+            clean_mac = mac_address.replace(":", "").replace("-", "").upper()
+            conditions.append(Device.mac_address == mac_address)
+            conditions.append(Device.device_id == f"CAM_MAC_{clean_mac}")
+            if len(clean_mac) == 12:
+                formatted_colon = ":".join(clean_mac[i:i+2] for i in range(0, 12, 2))
+                formatted_dash = "-".join(clean_mac[i:i+2] for i in range(0, 12, 2))
+                conditions.append(Device.mac_address == formatted_colon)
+                conditions.append(Device.mac_address == formatted_dash)
+
+        if device_id.startswith("CAM_MAC_"):
+            raw_mac = device_id.replace("CAM_MAC_", "").replace(":", "").replace("-", "").upper()
+            conditions.append(Device.mac_address == raw_mac)
+            if len(raw_mac) == 12:
+                formatted_colon = ":".join(raw_mac[i:i+2] for i in range(0, 12, 2))
+                formatted_dash = "-".join(raw_mac[i:i+2] for i in range(0, 12, 2))
+                conditions.append(Device.mac_address == formatted_colon)
+                conditions.append(Device.mac_address == formatted_dash)
+
+        result = await db.execute(
+            select(Device).options(*DEVICE_EAGER_LOADS).where(or_(*conditions))
         )
         return result.scalar_one_or_none()
 
@@ -204,7 +238,10 @@ class CRUDDevice:
         return refreshed or device
 
     async def update_config(
-        self, db: AsyncSession, device: Device, config_in: DeviceConfigUpdate
+        self,
+        db: AsyncSession,
+        device: Device,
+        config_in: Union[DeviceConfigBase, DeviceConfigUpdate, Dict[str, Any]],
     ) -> DeviceConfig:
         config = device.config
         if not config:
@@ -212,9 +249,14 @@ class CRUDDevice:
             db.add(config)
             await db.flush()
 
-        update_data = config_in.model_dump(exclude_unset=True)
+        if isinstance(config_in, dict):
+            update_data = config_in
+        else:
+            update_data = config_in.model_dump(exclude_unset=True)
+
         for field, value in update_data.items():
-            setattr(config, field, value)
+            if hasattr(config, field):
+                setattr(config, field, value)
 
         await db.flush()
         await db.refresh(config)

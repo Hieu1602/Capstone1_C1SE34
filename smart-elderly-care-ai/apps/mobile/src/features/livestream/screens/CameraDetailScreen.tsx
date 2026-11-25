@@ -43,6 +43,7 @@ import CameraControlPanel, {
 } from "../components/CameraControlPanel";
 import CameraControlIcon from "../components/CameraControlIcon";
 import type { CameraMoveDirection } from "../hooks/useCameraConnection";
+import { getAlertConfig, formatFriendlyTime } from "../../alerts/utils/alertConfig";
 import { cameraDetailStyles as styles } from "./cameraDetailStyles";
 interface Props {
     navigation: {
@@ -431,52 +432,174 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                             />
                         </TouchableOpacity>
 
-                        <View style={[styles.card, cardStyle]}>
-                            <Text style={[styles.sectionTitle, textStyle]}>
-                                Cảnh báo gần đây
-                            </Text>
-                            {incidents.length === 0 && (
-                                <Text style={{ color: colors.textSecondary }}>
-                                    Chưa có cảnh báo.
-                                </Text>
-                            )}
-                            {incidents.map((incident) => (
-                                <View
-                                    key={incident.id}
-                                    style={[
-                                        styles.incident,
-                                        { borderColor: colors.border },
-                                    ]}
-                                >
-                                    <Text style={textStyle}>
-                                        {incident.message}
+                        <View style={[styles.card, cardStyle, styles.alertCard]}>
+                            <View style={styles.alertCardHeader}>
+                                <View style={styles.alertHeaderTitleGroup}>
+                                    <View style={[styles.alertHeaderIconBadge, { backgroundColor: isDarkMode ? "rgba(239, 68, 68, 0.2)" : "#FEE2E2" }]}>
+                                        <Ionicons name="notifications" size={16} color="#EF4444" />
+                                    </View>
+                                    <Text style={[styles.sectionTitle, textStyle]}>
+                                        Cảnh báo gần đây
                                     </Text>
-                                    <Text
-                                        style={{ color: colors.textSecondary }}
-                                    >
-                                        {incident.created_at}
-                                    </Text>
-                                    {incident.video_clip_url && (
-                                        <TouchableOpacity
-                                            accessibilityRole="button"
-                                            onPress={() => {
-                                                void Linking.openURL(
-                                                    incident.video_clip_url!,
-                                                ).catch(() =>
-                                                    LocalizedAlert.alert(
-                                                        "Video sự kiện",
-                                                        "Không mở được video.",
-                                                    ),
-                                                );
-                                            }}
-                                        >
-                                            <Text style={textStyle}>
-                                                Xem video sự kiện
-                                            </Text>
-                                        </TouchableOpacity>
+                                    {incidents.length > 0 && (
+                                        <View style={[styles.alertCountBadge, { backgroundColor: isDarkMode ? "rgba(239, 68, 68, 0.25)" : "#FEE2E2" }]}>
+                                            <Text style={styles.alertCountText}>{incidents.length}</Text>
+                                        </View>
                                     )}
                                 </View>
-                            ))}
+                                {incidents.length > 0 && (
+                                    <TouchableOpacity
+                                        accessibilityRole="button"
+                                        accessibilityLabel="Xem tất cả cảnh báo"
+                                        onPress={() => navigation.navigate?.("Alerts")}
+                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    >
+                                        <Text style={[styles.seeAllText, { color: colors.primary }]}>
+                                            Xem tất cả
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+
+                            {incidents.length === 0 ? (
+                                <View style={styles.alertEmptyState}>
+                                    <Ionicons name="shield-checkmark" size={36} color="#10B981" />
+                                    <Text style={[styles.alertEmptyText, { color: colors.textSecondary }]}>
+                                        Không có sự cố hoặc cảnh báo bất thường nào gần đây.
+                                    </Text>
+                                </View>
+                            ) : (
+                                <View style={styles.alertList}>
+                                    {incidents.slice(0, 5).map((incident) => {
+                                        const config = getAlertConfig(
+                                            incident.alert_type,
+                                            (incident.notes || incident.note) ?? undefined,
+                                            incident.message,
+                                        );
+                                        const friendlyTime = formatFriendlyTime(
+                                            incident.created_at,
+                                            (key, count) => count !== undefined ? key.replace("{{count}}", String(count)) : key,
+                                        );
+                                        const cleanMsg = incident.message?.replace(/^Cảnh báo:\s*/i, "") || "";
+                                        const isCritical = config.isCritical || incident.alert_level === "CRITICAL";
+
+                                        return (
+                                            <View
+                                                key={incident.id}
+                                                style={[
+                                                    styles.alertItem,
+                                                    {
+                                                        backgroundColor: isDarkMode
+                                                            ? "rgba(255, 255, 255, 0.04)"
+                                                            : "#F8FAFC",
+                                                        borderColor: isCritical
+                                                            ? isDarkMode
+                                                                ? "rgba(239, 68, 68, 0.4)"
+                                                                : "#FCA5A5"
+                                                            : colors.border,
+                                                    },
+                                                ]}
+                                            >
+                                                <View style={styles.alertItemTop}>
+                                                    <View
+                                                        style={[
+                                                            styles.alertItemIcon,
+                                                            {
+                                                                backgroundColor: isDarkMode
+                                                                    ? "rgba(255, 255, 255, 0.08)"
+                                                                    : config.iconBg,
+                                                            },
+                                                        ]}
+                                                    >
+                                                        <Ionicons
+                                                            name={config.iconName}
+                                                            size={18}
+                                                            color={config.iconColor}
+                                                        />
+                                                    </View>
+                                                    <View style={{ flex: 1 }}>
+                                                        <View style={styles.alertItemTitleRow}>
+                                                            <Text
+                                                                style={[
+                                                                    styles.alertItemTitle,
+                                                                    textStyle,
+                                                                ]}
+                                                                numberOfLines={1}
+                                                            >
+                                                                {config.title}
+                                                            </Text>
+                                                            <View
+                                                                style={[
+                                                                    styles.alertBadge,
+                                                                    {
+                                                                        backgroundColor: isDarkMode
+                                                                            ? "rgba(255, 255, 255, 0.08)"
+                                                                            : config.badgeBg,
+                                                                    },
+                                                                ]}
+                                                            >
+                                                                <Text
+                                                                    style={[
+                                                                        styles.alertBadgeText,
+                                                                        { color: config.badgeColor },
+                                                                    ]}
+                                                                >
+                                                                    {config.badgeText}
+                                                                </Text>
+                                                            </View>
+                                                        </View>
+                                                        <Text style={styles.alertItemTime}>
+                                                            {friendlyTime}
+                                                        </Text>
+                                                    </View>
+                                                </View>
+
+                                                <Text
+                                                    style={[
+                                                        styles.alertItemMessage,
+                                                        { color: colors.textSecondary },
+                                                    ]}
+                                                >
+                                                    {cleanMsg}
+                                                </Text>
+
+                                                {incident.video_clip_url && (
+                                                    <TouchableOpacity
+                                                        accessibilityRole="button"
+                                                        style={[
+                                                            styles.alertClipButton,
+                                                            {
+                                                                backgroundColor: isDarkMode
+                                                                    ? "rgba(2, 132, 199, 0.2)"
+                                                                    : "#E0F2FE",
+                                                            },
+                                                        ]}
+                                                        onPress={() => {
+                                                            void Linking.openURL(
+                                                                incident.video_clip_url!,
+                                                            ).catch(() =>
+                                                                LocalizedAlert.alert(
+                                                                    "Video sự kiện",
+                                                                    "Không mở được video.",
+                                                                ),
+                                                            );
+                                                        }}
+                                                    >
+                                                        <Ionicons
+                                                            name="play-circle"
+                                                            size={16}
+                                                            color="#0284C7"
+                                                        />
+                                                        <Text style={styles.alertClipText}>
+                                                            Xem video ghi hình sự kiện
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                )}
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            )}
                         </View>
                     </ScrollView>
                 )}
@@ -528,12 +651,12 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                         activeOpacity={1}
                                         accessibilityRole="tab"
                                         accessibilityState={{ selected: archiveTab === tab }}
-                                        accessibilityLabel={tab === "playback" ? "Xem lại" : "Tải xuống"}
+                                        accessibilityLabel={tab === "playback" ? "Playback" : "Download"}
                                         style={[styles.archiveTab, archiveTab === tab && { borderBottomColor: colors.primary }]}
                                         onPress={() => { setRecordingUri(""); recordingRequest.current++; setArchiveTab(tab); }}
                                     >
                                         <Text style={[styles.archiveTabText, { color: archiveTab === tab ? colors.primary : colors.textSecondary }]}>
-                                            {tab === "playback" ? "Xem lại" : "Tải xuống"}
+                                            {tab === "playback" ? "Playback" : "Download"}
                                         </Text>
                                     </TouchableOpacity>
                                 ))}
@@ -555,7 +678,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                             </> : null}
                                             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                                                 <Text style={[styles.sectionTitle, textStyle]}>
-                                                    Bản ghi khả dụng
+                                                    Bản ghi thẻ nhớ & thiết bị
                                                 </Text>
                                                 <TouchableOpacity
                                                     accessibilityRole="button"

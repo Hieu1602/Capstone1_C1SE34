@@ -10,7 +10,17 @@ from enum import Enum
 from typing import List, Optional
 import uuid
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+def _normalize_visit_type(value: str) -> str:
+    norm = str(value).strip().upper()
+    if norm == "HOME":
+        norm = VisitTypeEnum.HOME_VISIT.value
+    valid = {e.value for e in VisitTypeEnum}
+    if norm not in valid:
+        raise ValueError(f"visit_type phải thuộc: {', '.join(sorted(valid))}")
+    return norm
 
 
 class VisitTypeEnum(str, Enum):
@@ -48,7 +58,7 @@ class AppointmentCreate(BaseModel):
     patient_id: str = Field(..., description="ID của bệnh nhân người cao tuổi")
     patient_name: Optional[str] = Field(None, description="Tên bệnh nhân")
     scheduled_at: datetime = Field(..., description="Thời gian hẹn (ISO 8601 UTC hoặc local with tz)")
-    duration_minutes: int = Field(default=30, ge=15, le=240, description="Thời lượng dự kiến (phút)")
+    duration_minutes: int = Field(default=30, ge=5, le=240, description="Thời lượng dự kiến (phút)")
     visit_type: str = Field(default=VisitTypeEnum.HOME_VISIT.value, description="Hình thức khám (CLINIC | HOME_VISIT | TELEHEALTH)")
     location: str = Field(default="Tại nhà (Khám tại gia)", description="Địa điểm hoặc phòng khám")
     clinical_notes: Optional[str] = Field(None, description="Ghi chú dặn dò chuẩn bị của bác sĩ")
@@ -56,20 +66,55 @@ class AppointmentCreate(BaseModel):
     recurrence_pattern: str = Field(default=RecurrencePatternEnum.NONE.value, description="Chu kỳ lặp (NONE | WEEKLY | MONTHLY | QUARTERLY)")
     recurrence_occurrences: int = Field(default=1, ge=1, le=12, description="Số lần lặp định kỳ (tối đa 12)")
 
+    @field_validator("visit_type", mode="before")
+    @classmethod
+    def validate_visit_type(cls, v):
+        if v is None:
+            return VisitTypeEnum.HOME_VISIT.value
+        return _normalize_visit_type(v)
+
+    @field_validator("recurrence_pattern", mode="before")
+    @classmethod
+    def validate_recurrence_pattern(cls, v):
+        if v is None:
+            return RecurrencePatternEnum.NONE.value
+        norm = str(v).strip().upper()
+        valid = {e.value for e in RecurrencePatternEnum}
+        if norm not in valid:
+            raise ValueError(f"recurrence_pattern phải thuộc: {', '.join(sorted(valid))}")
+        return norm
+
 
 class AppointmentUpdate(BaseModel):
     """Payload to reschedule or modify an upcoming appointment."""
     scheduled_at: Optional[datetime] = None
-    duration_minutes: Optional[int] = Field(None, ge=15, le=240)
+    duration_minutes: Optional[int] = Field(None, ge=5, le=240)
     visit_type: Optional[str] = None
     location: Optional[str] = None
     clinical_notes: Optional[str] = None
     enable_speaker_reminder: Optional[bool] = None
 
+    @field_validator("visit_type", mode="before")
+    @classmethod
+    def validate_visit_type(cls, v):
+        if v is None:
+            return None
+        return _normalize_visit_type(v)
+
 
 class AppointmentCancelRequest(BaseModel):
     """Payload to cancel an appointment."""
     cancellation_reason: str = Field(..., min_length=3, max_length=500, description="Lý do hủy hẹn bắt buộc")
+
+    @field_validator("cancellation_reason", mode="before")
+    @classmethod
+    def strip_cancellation_reason(cls, v):
+        return v.strip() if isinstance(v, str) else v
+
+
+class AppointmentCompleteRequest(BaseModel):
+    """Optional payload when marking an appointment as completed."""
+    clinical_notes: Optional[str] = Field(None, max_length=2000)
 
 
 class AppointmentReminderItem(BaseModel):

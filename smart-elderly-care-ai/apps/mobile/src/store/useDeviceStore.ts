@@ -114,6 +114,7 @@ export interface IoTDeviceItem {
   elderly_id?: string | number;
   wearer_name?: string;
   house_id?: string;
+  device_type?: string;
 }
 interface DeviceState {
   activeDevice: Device | null;
@@ -249,6 +250,7 @@ export const useDeviceStore = create<DeviceState>()(
             device_type: isCam ? "CAMERA" : "SMARTBAND",
             location: device.location || "Phòng khách",
             ip_address: (device as any).ipAddress,
+            mac_address: (device as any).macAddress,
             config: isCam && device.streamUrl ? { stream_url: device.streamUrl } : undefined,
           });
           if (res?.data?.id) {
@@ -274,11 +276,21 @@ export const useDeviceStore = create<DeviceState>()(
             }));
             return String(dev.id);
           }
-        } catch (err) {
+        } catch (err: any) {
+          const status = err?.response?.status;
+          const detail = err?.response?.data?.detail;
           console.log(
-            "[DeviceStore] Thiết bị lưu local cache, đồng bộ backend sau:",
-            err,
+            "[DeviceStore] Lỗi đăng ký thiết bị:",
+            status,
+            detail || err?.message,
           );
+          if (status === 409 || status === 403 || status === 400) {
+            // Hoàn tác thiết bị đã thêm tạm vào local state
+            set((state) => ({
+              iotDevices: state.iotDevices.filter((d) => d.id !== device.id),
+            }));
+            throw new Error(detail || "Không thể đăng ký thiết bị trên hệ thống.");
+          }
           return undefined;
         }
         return device.id;
@@ -538,8 +550,9 @@ export const useDeviceStore = create<DeviceState>()(
           const res = await devicesApi.listDevices();
           if (res.data && Array.isArray(res.data)) {
             const mapped: IoTDeviceItem[] = res.data.map((dev: any) => {
+              const rawType = String(dev.device_type || "").toUpperCase();
               const def =
-                DEVICE_TYPE_DEFAULTS[dev.device_type] ||
+                DEVICE_TYPE_DEFAULTS[rawType] ||
                 DEVICE_TYPE_DEFAULTS.SENSOR;
               return {
                 id: String(dev.id || dev.device_id),
@@ -547,6 +560,7 @@ export const useDeviceStore = create<DeviceState>()(
                 name: dev.name,
                 sub: dev.sub_title || def.sub,
                 type: def.type,
+                device_type: rawType,
                 status:
                   dev.status_text ||
                   (dev.is_online ? "Trực tuyến" : "Ngoại tuyến"),

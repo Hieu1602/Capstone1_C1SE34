@@ -73,6 +73,9 @@ export const HomeVitalsSection: React.FC<HomeVitalsSectionProps> = ({
       devType.includes('band') ||
       devType.includes('watch') ||
       name.includes('smartband') ||
+      name.includes('smart band') ||
+      name.includes('band') ||
+      name.includes('xiaomi') ||
       name.includes('vòng') ||
       name.includes('đồng hồ')
     );

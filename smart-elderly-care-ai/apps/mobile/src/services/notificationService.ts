@@ -321,8 +321,13 @@ class NotificationService {
       if (Platform.OS === 'android' && NativeNotificationModule) {
         try {
           if (isCritical) {
-            // Báo động nguy hiểm: Hú chuông báo động, rung liên tục, có nút [ĐÃ XỬ LÝ (TẮT CHUÔNG)]
-            NativeNotificationModule.triggerEmergencyAlarm(title, body, true);
+            // Báo động nguy hiểm: Hú chuông báo động, rung liên tục, tự động gọi số khẩn cấp sau 30s reo chuông nếu không ai tắt chuông
+            const phone = '0898230852';
+            if (NativeNotificationModule.triggerEmergencyAlarmWithConfig) {
+              NativeNotificationModule.triggerEmergencyAlarmWithConfig(title, body, true, phone, 30);
+            } else {
+              NativeNotificationModule.triggerEmergencyAlarm(title, body, true);
+            }
           } else {
             // Thông báo thông thường (Lịch khám, Tin nhắn): Chỉ phát tiếng ting ting nhẹ nhàng, không hú còi
             NativeNotificationModule.showNotification(title, body);

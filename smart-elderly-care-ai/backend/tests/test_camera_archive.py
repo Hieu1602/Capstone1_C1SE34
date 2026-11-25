@@ -148,3 +148,28 @@ class ArchiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(str(payload["id"]), event_id)
         self.assertEqual(json.loads(payload["sources"]), ["camera"])
         self.assertNotIn("clip_path", payload)
+
+    async def test_ingest_updates_incident_media_over_local_placeholder(self):
+        incident_id = str(uuid4())
+        incident = SimpleNamespace(video_clip_url="/recordings/old.mp4", thumbnail_url="/recordings/old.jpg")
+        self.db.get.side_effect = [self.device, None, incident, self.device, None, incident]
+        self.db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: uuid4())
+        client = MagicMock()
+        with patch.object(archive.video_storage, "client", return_value=client):
+            clip_id = str(uuid4())
+            client.head_object.return_value = {"ContentLength": 123, "ContentType": "video/mp4"}
+            res1 = await self.http.post("/archive", headers=self.headers, json={
+                **self.body, "id": clip_id, "kind": "incident", "duration": 5.0,
+                "incident_id": incident_id, "object_key": f"incidents/{self.device.id}/{clip_id}.mp4",
+            })
+            self.assertEqual(res1.status_code, 200)
+            self.assertEqual(incident.video_clip_url, f"/api/v1/camera/archive/{clip_id}/playback")
+
+            snap_id = str(uuid4())
+            client.head_object.return_value = {"ContentLength": 123, "ContentType": "image/jpeg"}
+            res2 = await self.http.post("/archive", headers=self.headers, json={
+                **self.body, "id": snap_id, "kind": "snapshot", "duration": 0,
+                "incident_id": incident_id, "object_key": f"incidents/{self.device.id}/{snap_id}.jpg",
+            })
+            self.assertEqual(res2.status_code, 200)
+            self.assertEqual(incident.thumbnail_url, f"/api/v1/camera/archive/{snap_id}/playback")
