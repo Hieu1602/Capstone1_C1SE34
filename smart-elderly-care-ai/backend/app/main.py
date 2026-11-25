@@ -217,6 +217,7 @@ async def lifespan(app: FastAPI):
                                             "alert_type": incident.alert_type,
                                             "alert_level": incident.alert_level,
                                             "video_clip_url": incident.video_clip_url or "",
+                                            "thumbnail_url": incident.thumbnail_url or "",
                                         },
                                         priority="high",
                                     )

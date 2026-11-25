@@ -156,7 +156,7 @@ def main():
     last_alert_time = 0.0
     frame_count = 0
     start_time = time.time()
-    frame_buffer: deque = deque(maxlen=90)  # lưu 5-6 giây video gần nhất
+    frame_buffer: deque = deque(maxlen=125)  # lưu 5 giây video gần nhất ở 25 FPS
     recordings_dir = Path(os.getenv("CAMERA_RECORDINGS_DIR", "./data/recordings"))
     recordings_dir.mkdir(parents=True, exist_ok=True)
     device_id = os.getenv("CAMERA_DEVICE_ID", os.getenv("DEVICE_ID", "camera-main"))
@@ -187,7 +187,7 @@ def main():
                     try:
                         h, w = frame.shape[:2]
                         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                        writer = cv2.VideoWriter(str(clip_path), fourcc, 15.0, (w, h))
+                        writer = cv2.VideoWriter(str(clip_path), fourcc, 25.0, (w, h))
                         for f in list(frame_buffer):
                             writer.write(f)
                         writer.release()

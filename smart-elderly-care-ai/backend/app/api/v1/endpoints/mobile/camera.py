@@ -892,7 +892,7 @@ def valid_resource(resource: str) -> bool:
         True nếu là MJPEG, JPEG hoặc tên MP4 hợp lệ.
     """
     return resource in ("live.mjpg", "snapshot.jpg") or (
-        bool(re.fullmatch(r"recordings/[a-zA-Z0-9_\-\. ]+\.mp4", resource)) and ".." not in resource
+        bool(re.fullmatch(r"recordings/[a-zA-Z0-9_\-\. ]+\.(mp4|jpg)", resource)) and ".." not in resource
     )
 
 

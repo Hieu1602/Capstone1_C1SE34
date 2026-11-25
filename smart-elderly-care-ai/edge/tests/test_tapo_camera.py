@@ -179,6 +179,10 @@ class APITests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(self.recorder.error)
         self.assertEqual(list(Path(self.temp.name).iterdir()), [])
         self.assertEqual((await self.client.get("/recordings/not-a-recording.mp4", auth=self.auth)).status, 404)
+        snap = Path(self.temp.name) / "fall_snap.jpg"
+        snap.write_bytes(b"\xff\xd8\xff\xe0")
+        resp = await self.client.get("/recordings/fall_snap.jpg", auth=self.auth)
+        self.assertEqual(resp.status, 200)
 
 
 if __name__ == "__main__":

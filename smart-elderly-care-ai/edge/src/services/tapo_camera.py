@@ -250,11 +250,12 @@ class CameraFallDetector:
         self.latest_clip = None
         self.latest_result = None
         self.get_active_driver_fn = None
-        self.frame_buffer = deque(maxlen=75)  # Lưu 5 giây video ở 15 FPS
-        self.inference_fps = max(1.0, float(os.getenv("AI_INFERENCE_FPS", "5.0")))
+        self.frame_buffer = deque(maxlen=125)  # Lưu 5 giây video ở 25 FPS
+        self.inference_fps = max(1.0, float(os.getenv("AI_INFERENCE_FPS", "25.0")))
         self.inference_interval = 1.0 / self.inference_fps
         self._last_infer_time = 0.0
         self.task = None
+        self.sync_task = None
 
         # Khởi tạo Face Re-ID Manager kết nối hồ sơ bệnh án
         cache_file = os.getenv("FACE_CACHE_FILE")
@@ -297,14 +298,40 @@ class CameraFallDetector:
                     with urllib.request.urlopen(req, timeout=3) as response:
                         if response.status == 200:
                             data = json.loads(response.read().decode("utf-8"))
+                            base_url = url.rsplit("/api/v1/", 1)[0]
                             count = 0
                             for item in data:
                                 eid = item.get("elderly_id")
                                 name = item.get("full_name")
                                 emb = item.get("face_embedding")
                                 avatar = item.get("avatar_url")
-                                if eid and name and emb:
+                                if not (eid and name):
+                                    continue
+                                enrolled_from_img = False
+                                if avatar:
+                                    try:
+                                        import base64
+                                        import numpy as np
+                                        img_bytes = None
+                                        if avatar.startswith("data:image") and "," in avatar:
+                                            img_bytes = base64.b64decode(avatar.split(",", 1)[1])
+                                        else:
+                                            img_url = avatar if avatar.startswith("http") else f"{base_url}{avatar if avatar.startswith('/') else '/' + avatar}"
+                                            img_req = urllib.request.Request(img_url, headers={"User-Agent": "TapoCameraFaceReID/1.0"})
+                                            with urllib.request.urlopen(img_req, timeout=4) as img_resp:
+                                                if img_resp.status == 200:
+                                                    img_bytes = img_resp.read()
+                                        if img_bytes:
+                                            arr = np.frombuffer(img_bytes, dtype=np.uint8)
+                                            img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                                            if img is not None:
+                                                enrolled_from_img = self.face_manager.enroll_from_image(eid, name, img, avatar)
+                                    except Exception:
+                                        pass
+                                if not enrolled_from_img and emb:
                                     self.face_manager.enroll_elderly(eid, name, emb, avatar)
+                                    enrolled_from_img = True
+                                if enrolled_from_img:
                                     count += 1
                             if count > 0:
                                 LOG.info("[FaceReID] Đã đồng bộ %d khuôn mặt từ hồ sơ bệnh án (%s).", count, url)
@@ -345,14 +372,25 @@ class CameraFallDetector:
         if self.mqtt is None and os.getenv("MQTT_BROKER_HOST"):
             self.mqtt = get_mqtt_client()
         self.task = asyncio.create_task(self._loop())
-        # Đồng bộ danh sách khuôn mặt bệnh nhân nền
-        asyncio.create_task(self.sync_enrolled_faces())
+        # Đồng bộ danh sách khuôn mặt bệnh nhân định kỳ (mỗi 60s)
+        self.sync_task = asyncio.create_task(self._sync_loop())
+
+    async def _sync_loop(self):
+        while True:
+            try:
+                await asyncio.to_thread(lambda: None)
+                await self.sync_enrolled_faces()
+                await asyncio.sleep(60.0)
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                await asyncio.sleep(15.0)
 
     async def _loop(self):
         last_frame_id = -1
         while True:
             try:
-                await asyncio.sleep(0.03)
+                await asyncio.sleep(0.01)
                 active_cam = self.get_active_driver_fn() if self.get_active_driver_fn else self.camera
                 if not active_cam:
                     continue
@@ -471,6 +509,7 @@ class CameraFallDetector:
                 clip_name=clip_name,
                 clip_path=clip_path,
                 thumb_name=thumb_name,
+                thumb_path=thumb_path,
                 cloud_video=cloud_video,
                 cloud_thumb=cloud_thumb,
                 message=fall_msg,
@@ -488,14 +527,14 @@ class CameraFallDetector:
             subprocess.run([
                 "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
                 "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{w}x{h}",
-                "-r", "15", "-i", "pipe:0", "-an", "-c:v", "libx264",
+                "-r", "25", "-i", "pipe:0", "-an", "-c:v", "libx264",
                 "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
                 "-f", "mp4", str(path)
             ], input=b"".join(f.tobytes() for f in frames), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15, check=True)
         except Exception:
             try:
                 fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # type: ignore[attr-defined]
-                writer = cv2.VideoWriter(str(path), fourcc, 15.0, (w, h))
+                writer = cv2.VideoWriter(str(path), fourcc, 25.0, (w, h))
                 for f in frames:
                     writer.write(f)
                 writer.release()
@@ -510,6 +549,7 @@ class CameraFallDetector:
         clip_name,
         clip_path,
         thumb_name=None,
+        thumb_path=None,
         cloud_video=None,
         cloud_thumb=None,
         message=None,
@@ -536,6 +576,7 @@ class CameraFallDetector:
                 "timestamp": timestamp,
                 "message": message or "Phát hiện té ngã (Camera AI)!",
                 "thumbnail_url": cloud_thumb or (f"/recordings/{thumb_name}" if thumb_name else None),
+                "thumbnail_path": str(thumb_path) if thumb_path else None,
                 "video_clip_url": cloud_video or f"/recordings/{clip_name}",
                 "clip_path": str(clip_path),
                 "sources": ["camera", "face_reid"],
@@ -551,9 +592,10 @@ class CameraFallDetector:
             LOG.error("Lỗi gửi MQTT cảnh báo té ngã: %s", e)
 
     async def close(self):
-        if self.task and not self.task.done():
-            self.task.cancel()
-            await asyncio.gather(self.task, return_exceptions=True)
+        for t in (self.task, self.sync_task):
+            if t and not t.done():
+                t.cancel()
+                await asyncio.gather(t, return_exceptions=True)
         if self.mqtt:
             try:
                 self.mqtt.disconnect()
@@ -798,7 +840,7 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
                         height, encoding_quality = 480, 60
                     elif stable_frames >= 30:
                         height, encoding_quality = 720, 75
-                await asyncio.sleep(0.1)  # giới hạn MJPEG 10 FPS cho trình duyệt
+                await asyncio.sleep(0.04)  # giới hạn MJPEG 25 FPS cho trình duyệt
                 frame = await asyncio.to_thread(jpeg, cam, height, encoding_quality, overlay)
         except (ConnectionError, asyncio.TimeoutError, web.HTTPServiceUnavailable):
             return response
@@ -944,7 +986,7 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
             FileResponse dạng tải xuống hoặc lỗi nếu tệp không tồn tại.
         """
         name = request.match_info["name"]
-        if not re.fullmatch(r"[a-zA-Z0-9_\-\. ]+\.mp4", name) or ".." in name:
+        if not re.fullmatch(r"[a-zA-Z0-9_\-\. ]+\.(mp4|jpg)", name) or ".." in name:
             raise web.HTTPNotFound()
         path = recorder.directory / name
         if not path.is_file():

@@ -8,7 +8,8 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Platform, Vibration } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { incidentsApi, BASE_URL } from '../../../services/api';
+import { incidentsApi } from '../../../services/api';
+import { resolveIncidentMediaUrl } from '../../../services/camera';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAlertStore, useAuthStore } from '../../../store';
 import { useVitalStore } from '../../../store/useVitalStore';
@@ -48,15 +49,6 @@ const getHandlerDisplayName = (
   return rawStr;
 };
 
-const resolveMediaUrl = (url?: string | null) => {
-  if (!url) return null;
-  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('file://')) {
-    return url;
-  }
-  const origin = (BASE_URL || '').replace(/\/api\/v1\/?$/, '');
-  return `${origin}${url.startsWith('/') ? '' : '/'}${url}`;
-};
-
 export default function IncidentDetailScreen({ route, navigation }: any) {
   const { isDarkMode, colors } = useTheme();
   const { acknowledgeIncident, reopenIncident, setSirenActive, incidents, fetchNotifications } = useAlertStore();
@@ -71,8 +63,26 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
   const [feedbackBanner, setFeedbackBanner] = useState<'ACKED' | 'REOPENED' | 'ERROR' | null>(null);
   const [imgError, setImgError] = useState(false);
   const [viewMode, setViewMode] = useState<'ai_box' | 'video'>('ai_box');
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [evidenceImg, setEvidenceImg] = useState<string | null>(null);
 
   const handlerDisplayName = getHandlerDisplayName(incident, userName, userId);
+
+  useEffect(() => {
+    let active = true;
+    const camId = incident?.device_id ? String(incident.device_id) : undefined;
+    resolveIncidentMediaUrl(incident?.video_clip_url, camId).then((url) => {
+      if (active) setVideoUrl(url);
+    });
+    if (imgError) {
+      setEvidenceImg(null);
+    } else {
+      resolveIncidentMediaUrl(incident?.thumbnail_url, camId).then((url) => {
+        if (active) setEvidenceImg(url);
+      });
+    }
+    return () => { active = false; };
+  }, [incident?.video_clip_url, incident?.thumbnail_url, incident?.device_id, imgError]);
 
   const fetchIncident = async () => {
     try {
@@ -215,8 +225,6 @@ export default function IncidentDetailScreen({ route, navigation }: any) {
   }
 
   const typeLabel = ALERT_TYPE_LABELS[incident.alert_type] ?? incident.alert_type;
-  const videoUrl = resolveMediaUrl(incident.video_clip_url);
-  const evidenceImg = imgError ? null : resolveMediaUrl(incident.thumbnail_url);
 
   const activeFeedbackKey: 'ACKED' | 'REOPENED' | 'ERROR' | null =
     feedbackBanner === 'ERROR'

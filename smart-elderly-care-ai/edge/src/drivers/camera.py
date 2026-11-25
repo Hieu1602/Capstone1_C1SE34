@@ -31,7 +31,7 @@ class CameraDriver:
                 pass
         if self.source is None:
             self.source = 0
-        self.fps = max(1, int(config.get("fps", 15)))
+        self.fps = max(1, int(config.get("fps", 25)))
         self.width = config.get("resolution", {}).get("width", 1280)
         self.height = config.get("resolution", {}).get("height", 720)
         self.reconnect_interval = float(config.get("reconnect_interval_sec", 5))
