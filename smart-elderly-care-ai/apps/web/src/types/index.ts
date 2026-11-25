@@ -20,7 +20,6 @@ export interface PermissionRule {
 export interface User {
   id: string;
   phone: string;
-  email?: string | null;
   full_name: string;
   role: UserRole;
   is_active: boolean;

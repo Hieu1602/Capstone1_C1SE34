@@ -117,7 +117,6 @@ export const useUserManagement = () => {
       const matchesSearch =
         u.full_name.toLowerCase().includes(q) ||
         u.phone.includes(searchQuery) ||
-        (u.email && u.email.toLowerCase().includes(q)) ||
         (u.assigned_house && u.assigned_house.toLowerCase().includes(q));
 
       let matchesRole = true;
