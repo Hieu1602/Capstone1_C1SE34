@@ -5,9 +5,16 @@ report_service.py – Dịch vụ tạo báo cáo y tế (PDF / Excel / JSON Sum
 import io
 import os
 import re
+import shutil
+import subprocess
+import tempfile
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Tuple, Union
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 from uuid import UUID
+
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
@@ -725,6 +732,441 @@ class ReportService:
         )
 
     @staticmethod
+    def _to_vn_dt(dt: Optional[datetime]) -> Optional[datetime]:
+        if not dt:
+            return None
+        vn_tz = timezone(timedelta(hours=7))
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc).astimezone(vn_tz)
+        return dt.astimezone(vn_tz)
+
+    @staticmethod
+    def _render_html_to_pdf_bytes(html: str, base_dir: Path) -> Optional[bytes]:
+        """Chuyển HTML/SVG sang PDF bằng WeasyPrint hoặc trình duyệt headless (Edge/Chrome)."""
+        try:
+            from weasyprint import HTML  # type: ignore
+
+            return HTML(string=html, base_url=str(base_dir)).write_pdf()
+        except Exception:
+            pass
+
+        browser_candidates = [
+            shutil.which("msedge"),
+            shutil.which("google-chrome"),
+            shutil.which("chromium"),
+            shutil.which("chromium-browser"),
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        ]
+        browser_bin = next((b for b in browser_candidates if b and os.path.exists(b)), None)
+        if not browser_bin:
+            return None
+
+        try:
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                tmp_path = Path(tmp_dir)
+                html_file = tmp_path / "report.html"
+                pdf_file = tmp_path / "report.pdf"
+                html_file.write_text(html, encoding="utf-8")
+                subprocess.run(
+                    [
+                        browser_bin,
+                        "--headless",
+                        "--disable-gpu",
+                        "--no-sandbox",
+                        "--no-pdf-header-footer",
+                        f"--print-to-pdf={pdf_file}",
+                        html_file.as_uri(),
+                    ],
+                    capture_output=True,
+                    timeout=25,
+                    check=False,
+                )
+                if pdf_file.exists() and pdf_file.stat().st_size > 0:
+                    return pdf_file.read_bytes()
+        except Exception:
+            return None
+        return None
+
+    @classmethod
+    def _build_html_report_context(
+        cls,
+        device_id: Union[UUID, str],
+        vitals: List[VitalSign],
+        incidents: List[Incident],
+        elderly: Optional[ElderlyProfile] = None,
+        period_days: int = 7,
+        device: Optional[Device] = None,
+    ) -> Dict[str, Any]:
+        """Chuẩn bị dữ liệu đúng hợp đồng của `health_report_template.html` từ dữ liệu CSDL."""
+        vn_tz = timezone(timedelta(hours=7))
+        now_vn = datetime.now(vn_tz)
+        end_date = now_vn.date()
+        start_date = end_date - timedelta(days=max(period_days - 1, 0))
+
+        # Lọc các cảnh báo thực tế
+        valid_incidents = [
+            inc for inc in incidents
+            if (getattr(inc, "alert_type", None) or "").upper() not in cls.NON_ALERT_INCIDENT_TYPES
+        ]
+        critical_inc_list = [inc for inc in valid_incidents if cls.is_critical_incident(inc)]
+        critical_count = len(critical_inc_list)
+
+        fall_vital_count = sum(1 for v in vitals if getattr(v, "fall_detected", False))
+        fall_inc_count = sum(1 for inc in valid_incidents if "FALL" in (getattr(inc, "alert_type", "") or "").upper())
+        total_falls = max(fall_vital_count, fall_inc_count)
+
+        vital_anomalies = sum(
+            1 for v in vitals
+            if (v.heart_rate and (v.heart_rate < 55 or v.heart_rate > 100))
+            or (v.spo2 and v.spo2 < 95)
+            or (v.skin_temp_max and v.skin_temp_max >= 37.8)
+            or getattr(v, "fall_detected", False)
+        )
+        total_anomalies = max(vital_anomalies, len(valid_incidents)) if vitals else len(valid_incidents)
+
+        valid_hrs = [int(round(v.heart_rate)) for v in vitals if v.heart_rate is not None and v.heart_rate > 0]
+        valid_spo2s = [float(v.spo2) for v in vitals if v.spo2 is not None and v.spo2 > 0]
+        valid_temps = [float(v.skin_temp_max) for v in vitals if v.skin_temp_max is not None and v.skin_temp_max > 0]
+
+        hr_avg: Any = int(round(sum(valid_hrs) / len(valid_hrs))) if valid_hrs else "—"
+        hr_min: Any = min(valid_hrs) if valid_hrs else "—"
+        hr_max: Any = max(valid_hrs) if valid_hrs else "—"
+        spo2_avg: Any = round(sum(valid_spo2s) / len(valid_spo2s), 1) if valid_spo2s else "—"
+        spo2_min: Any = int(round(min(valid_spo2s))) if valid_spo2s else "—"
+        temp_avg: Optional[float] = round(sum(valid_temps) / len(valid_temps), 1) if valid_temps else None
+
+        # Trạng thái tổng quát
+        if not vitals and not valid_incidents:
+            status_level = "watch"
+            status_label = "CHƯA CÓ DỮ LIỆU"
+            status_text = f"Chưa ghi nhận bản ghi sinh hiệu nào trong {period_days} ngày qua."
+        elif total_falls > 0 or critical_count > 0:
+            status_level = "alert"
+            status_label = "NGUY CẤP"
+            parts = []
+            if total_falls > 0:
+                parts.append(f"{total_falls} sự kiện té ngã")
+            if critical_count > 0:
+                parts.append(f"{critical_count} cảnh báo nguy kịch")
+            status_text = f"Phát hiện {', '.join(parts)}. Cần kiểm tra và theo dõi sát."
+        elif (isinstance(hr_avg, int) and (hr_avg > 100 or hr_avg < 55)) or len(valid_incidents) > 0 or total_anomalies > 3:
+            status_level = "watch"
+            status_label = "CẦN THEO DÕI"
+            status_text = f"Có {len(valid_incidents)} cảnh báo và {total_anomalies} bản ghi lệch ngưỡng an toàn; không có té ngã."
+        else:
+            status_level = "ok"
+            status_label = "ỔN ĐỊNH"
+            status_text = "Các chỉ số nhịp tim và SpO₂ nằm trong ngưỡng an toàn; không ghi nhận cảnh báo bất thường."
+
+        # Thời điểm đồng bộ gần nhất
+        latest_vital_dt = cls._to_vn_dt(vitals[0].time) if vitals and getattr(vitals[0], "time", None) else None
+        last_sync_dt = latest_vital_dt or (cls._to_vn_dt(getattr(device, "last_seen", None)) if device else None)
+        last_sync_str = last_sync_dt.strftime("%d/%m/%Y %H:%M") if last_sync_dt else None
+        gap_hours = int((now_vn - last_sync_dt).total_seconds() // 3600) if last_sync_dt else None
+
+        # Vùng nhịp tim
+        if valid_hrs:
+            total_hr_n = len(valid_hrs)
+            z1 = round(sum(1 for h in valid_hrs if h < 60) * 100 / total_hr_n, 1)
+            z2 = round(sum(1 for h in valid_hrs if 60 <= h <= 100) * 100 / total_hr_n, 1)
+            z3 = round(sum(1 for h in valid_hrs if 101 <= h <= 120) * 100 / total_hr_n, 1)
+            z4 = round(max(0.0, 100.0 - z1 - z2 - z3), 1)
+        else:
+            z1 = z2 = z3 = z4 = 0.0
+        hr_zones = [
+            {"label": "Dưới 60 bpm", "pct": z1},
+            {"label": "60–100 bpm", "pct": z2},
+            {"label": "101–120 bpm", "pct": z3},
+            {"label": "Trên 120 bpm", "pct": z4},
+        ]
+
+        # Chuỗi dữ liệu theo ngày
+        by_day: Dict[Any, Dict[str, List[float]]] = defaultdict(lambda: {"hr": [], "spo2": []})
+        for v in vitals:
+            dt = cls._to_vn_dt(getattr(v, "time", None))
+            if not dt:
+                continue
+            d_key = dt.date()
+            if v.heart_rate is not None and v.heart_rate > 0:
+                by_day[d_key]["hr"].append(float(v.heart_rate))
+            if v.spo2 is not None and v.spo2 > 0:
+                by_day[d_key]["spo2"].append(float(v.spo2))
+
+        daily: List[Dict[str, Any]] = []
+        for i in range(period_days):
+            d_cur = start_date + timedelta(days=i)
+            bucket = by_day.get(d_cur)
+            hrs = bucket["hr"] if bucket else []
+            spo2s = bucket["spo2"] if bucket else []
+            daily.append({
+                "label": d_cur.strftime("%d/%m"),
+                "hr_min": int(round(min(hrs))) if hrs else None,
+                "hr_avg": int(round(sum(hrs) / len(hrs))) if hrs else None,
+                "hr_max": int(round(max(hrs))) if hrs else None,
+                "spo2_min": int(round(min(spo2s))) if spo2s else None,
+                "spo2_avg": round(sum(spo2s) / len(spo2s), 1) if spo2s else None,
+            })
+
+        # Tổng hợp & chi tiết cảnh báo
+        type_name_map = {
+            "HIGH_HEART_RATE": "Nhịp tim cao",
+            "LOW_HEART_RATE": "Nhịp tim chậm",
+            "LOW_SPO2": "SpO₂ thấp",
+            "SPO2_LOW": "SpO₂ thấp",
+            "SPO2_CRITICAL": "SpO₂ nguy kịch",
+            "FALL_DETECTED": "Phát hiện té ngã",
+            "FALL": "Phát hiện té ngã",
+            "HIGH_FEVER": "Sốt cao",
+            "CRITICAL_TRIAD": "Tam chứng nguy kịch",
+            "SOS_EMERGENCY": "Khẩn cấp SOS",
+            "EMERGENCY_SOS": "Khẩn cấp SOS",
+        }
+        sev_rank = {"CRITICAL": 3, "HIGH": 2, "MEDIUM": 1, "LOW": 0}
+        grouped: Dict[str, Dict[str, Any]] = {}
+        alerts_list: List[Dict[str, Any]] = []
+
+        for idx, inc in enumerate(valid_incidents):
+            raw_type = str(getattr(inc, "alert_type", None) or "ALERT").upper()
+            label_vi = type_name_map.get(raw_type, raw_type.replace("_", " ").title())
+            level = str(getattr(inc, "alert_level", None) or "HIGH").upper()
+            if level not in sev_rank:
+                level = "HIGH"
+            dt = cls._to_vn_dt(getattr(inc, "created_at", None))
+            time_str = dt.strftime("%d/%m %H:%M") if dt else "—"
+            handled = bool(getattr(inc, "is_acknowledged", False))
+            raw_msg = getattr(inc, "message", None) or ""
+            clean_msg = re.sub(
+                r"[\U00010000-\U0010ffff\u2600-\u27bf\u2300-\u23ff\u2b50-\u2b55\u200d\ufe0f]",
+                "",
+                raw_msg,
+            ).strip()
+
+            if idx < 25:
+                alerts_list.append({
+                    "time": time_str,
+                    "type_label": label_vi,
+                    "level": level,
+                    "handled": handled,
+                    "message": clean_msg or label_vi,
+                })
+
+            g = grouped.setdefault(raw_type, {
+                "label": f"{label_vi} ({raw_type})",
+                "level": level,
+                "count": 0,
+                "handled_count": 0,
+                "times": [],
+                "vals": [],
+            })
+            g["count"] += 1
+            if handled:
+                g["handled_count"] += 1
+            if sev_rank.get(level, 0) > sev_rank.get(g["level"], 0):
+                g["level"] = level
+            if dt:
+                g["times"].append(dt)
+            m_val = re.search(r"(\d+(?:\.\d+)?)\s*(?:bpm|%|°C)", clean_msg)
+            if m_val:
+                g["vals"].append(float(m_val.group(1)))
+
+        alert_groups = []
+        for g in grouped.values():
+            if g["vals"]:
+                lo_v, hi_v = min(g["vals"]), max(g["vals"])
+                val_range = f"{int(lo_v)}–{int(hi_v)}" if lo_v != hi_v else f"{int(lo_v)}"
+            else:
+                val_range = "—"
+            if g["times"]:
+                t_min, t_max = min(g["times"]), max(g["times"])
+                when_str = (
+                    t_min.strftime("%d/%m %H:%M")
+                    if t_min.date() == t_max.date() and t_min == t_max
+                    else f"{t_min.strftime('%d/%m')}–{t_max.strftime('%d/%m')}"
+                )
+            else:
+                when_str = "—"
+            alert_groups.append({
+                "label": g["label"],
+                "level": g["level"],
+                "count": g["count"],
+                "range": val_range,
+                "when": when_str,
+                "handled": f"{g['handled_count']}/{g['count']}",
+            })
+
+        # Chỉ số gần nhất (tối đa 10 bản ghi)
+        vitals_recent = []
+        for v in vitals[:10]:
+            dt = cls._to_vn_dt(getattr(v, "time", None))
+            if getattr(v, "fall_detected", False):
+                st_txt, st_lv = "Té ngã", "bad"
+            elif v.spo2 and v.spo2 < 90:
+                st_txt, st_lv = "SpO₂ thấp", "bad"
+            elif v.heart_rate and (v.heart_rate > 120 or v.heart_rate < 45):
+                st_txt, st_lv = "Nhịp tim nguy cấp", "bad"
+            elif (v.heart_rate and (v.heart_rate > 100 or v.heart_rate < 55)) or (v.spo2 and v.spo2 < 95):
+                st_txt, st_lv = "Cần theo dõi", "warn"
+            else:
+                st_txt, st_lv = "Bình thường", "ok"
+            vitals_recent.append({
+                "time": dt.strftime("%d/%m %H:%M") if dt else "—",
+                "hr": int(round(v.heart_rate)) if v.heart_rate else "—",
+                "spo2": int(round(v.spo2)) if v.spo2 else "—",
+                "temp": round(v.skin_temp_max, 1) if v.skin_temp_max else None,
+                "fall": bool(getattr(v, "fall_detected", False)),
+                "status": st_txt,
+                "level": st_lv,
+            })
+
+        # Đánh giá sơ bộ của AI (tổng hợp trung thực từ số liệu thực tế)
+        findings = []
+        if valid_hrs:
+            if isinstance(hr_max, int) and hr_max > 100:
+                findings.append({
+                    "level": "warn",
+                    "title": "Ghi nhận nhịp tim vượt ngưỡng 100 bpm",
+                    "detail": f"Nhịp tim trung bình {hr_avg} bpm, mức cao nhất đạt {hr_max} bpm.",
+                    "evidence": f"{len(valid_incidents)} sự kiện cảnh báo trong kỳ; {z3 + z4:.1f}% số mẫu trên 100 bpm.",
+                })
+            else:
+                findings.append({
+                    "level": "ok",
+                    "title": "Nhịp tim ổn định trong ngưỡng nghỉ",
+                    "detail": f"Nhịp tim dao động {hr_min}–{hr_max} bpm, trung bình {hr_avg} bpm.",
+                    "evidence": f"{z2:.1f}% số mẫu nằm trong vùng an toàn 60–100 bpm.",
+                })
+        if valid_spo2s:
+            if isinstance(spo2_min, int) and spo2_min < 95:
+                findings.append({
+                    "level": "bad" if spo2_min < 90 else "warn",
+                    "title": "Có thời điểm SpO₂ giảm dưới 95%",
+                    "detail": f"SpO₂ thấp nhất ghi nhận {spo2_min}%, trung bình {spo2_avg}%.",
+                    "evidence": f"Tổng hợp từ {len(valid_spo2s)} mẫu đo SpO₂ trong kỳ.",
+                })
+            else:
+                findings.append({
+                    "level": "ok",
+                    "title": "SpO₂ ổn định",
+                    "detail": "Không ghi nhận đợt tụt oxy máu dưới 95%.",
+                    "evidence": f"SpO₂ trung bình {spo2_avg}%, thấp nhất {spo2_min}%.",
+                })
+        if gap_hours is not None and gap_hours >= 6:
+            findings.append({
+                "level": "info",
+                "title": f"Dữ liệu tạm ngưng đồng bộ khoảng {gap_hours} giờ",
+                "detail": f"Bản ghi cuối lúc {last_sync_str}; nên kiểm tra pin và kết nối Bluetooth của thiết bị.",
+                "evidence": f"Khoảng cách tới thời điểm xuất báo cáo ({now_vn.strftime('%d/%m %H:%M')}).",
+            })
+        if not findings:
+            findings.append({
+                "level": "info",
+                "title": "Chưa đủ dữ liệu sinh hiệu để phân tích xu hướng",
+                "detail": "Thiết bị chưa gửi bản ghi đo trong kỳ báo cáo này.",
+                "evidence": "0 bản ghi trong cơ sở dữ liệu.",
+            })
+
+        ai_headline = (
+            f"Nhịp tim TB {hr_avg} bpm, SpO₂ TB {spo2_avg}% · {len(valid_incidents)} cảnh báo trong {period_days} ngày."
+            if valid_hrs else
+            "Chưa đủ dữ liệu sinh hiệu để đánh giá tổng quan."
+        )
+        ai_summary = (
+            f"Trong {period_days} ngày ({start_date.strftime('%d/%m')}–{end_date.strftime('%d/%m')}), hệ thống ghi nhận {len(vitals)} bản ghi sinh hiệu. "
+            f"Nhịp tim dao động {hr_min}–{hr_max} bpm (TB {hr_avg} bpm), SpO₂ thấp nhất {spo2_min}%. "
+            f"Tổng cộng {len(valid_incidents)} cảnh báo ({critical_count} nguy kịch) và {total_falls} sự kiện té ngã."
+            if vitals else
+            f"Chưa ghi nhận dữ liệu sinh hiệu trong kỳ {period_days} ngày."
+        )
+
+        recommendations = [
+            "Đo lại nhịp tim và SpO₂ khi người cao tuổi ngồi nghỉ 5 phút nếu thấy chỉ số vượt ngưỡng an toàn.",
+            "Ghi chú hoạt động, bữa ăn hoặc thuốc đang dùng tại thời điểm phát sinh cảnh báo để bác sĩ đối chiếu.",
+            "Kiểm tra định kỳ pin và kết nối Bluetooth/Edge Hub để dữ liệu đồng bộ liên tục.",
+            "Mang báo cáo này đến lần tái khám gần nhất để bác sĩ đánh giá lâm sàng.",
+        ]
+
+        quality = [
+            {"label": "Số bản ghi", "value": f"{len(vitals)} trong {period_days} ngày", "level": "ok" if vitals else "warn"},
+            {
+                "label": "Bản ghi cuối",
+                "value": f"{last_sync_str} (cách ~{gap_hours} giờ)" if last_sync_str and gap_hours is not None else "Chưa có đồng bộ",
+                "level": "warn" if (gap_hours is None or gap_hours >= 6) else "ok",
+            },
+            {
+                "label": "Nhiệt độ da",
+                "value": f"có {len(valid_temps)} mẫu đo" if valid_temps else "thiết bị không đo, không dùng để đánh giá sốt",
+                "level": "ok" if valid_temps else "warn",
+            },
+            {"label": "Huyết áp", "value": "thiết bị không đo", "level": "warn"},
+        ]
+
+        # Thông tin bệnh nhân & thiết bị
+        age_val: Any = (now_vn.year - elderly.birth_year) if (elderly and getattr(elderly, "birth_year", None)) else "—"
+        gender_raw = str(getattr(elderly, "gender", "") or "").upper() if elderly else ""
+        sex_str = "Nam" if gender_raw in ("MALE", "NAM") else ("Nữ" if gender_raw in ("FEMALE", "NU") else "—")
+        house_name = None
+        if elderly and "house" in elderly.__dict__ and elderly.__dict__["house"]:
+            house_name = getattr(elderly.__dict__["house"], "name", None)
+        elif device and "house" in device.__dict__ and device.__dict__["house"]:
+            house_name = getattr(device.__dict__["house"], "name", None)
+
+        return {
+            "report": {
+                "id": f"RPT-{now_vn.strftime('%Y%m%d-%H%M')}",
+                "period_label": f"{start_date.strftime('%d/%m/%Y')} – {end_date.strftime('%d/%m/%Y')}",
+                "period_days": period_days,
+                "generated_at": now_vn.strftime("%d/%m/%Y %H:%M"),
+                "is_sample": False,
+            },
+            "patient": {
+                "name": getattr(elderly, "full_name", None) or "Người cao tuổi",
+                "age": age_val,
+                "sex": sex_str,
+                "blood_type": getattr(elderly, "blood_type", None) if elderly else None,
+                "house": house_name,
+            },
+            "device": {
+                "name": getattr(device, "name", None) or str(device_id),
+                "id": getattr(device, "device_id", None) or str(device_id),
+                "last_sync": last_sync_str,
+            },
+            "summary": {
+                "status_level": status_level,
+                "status_label": status_label,
+                "status_text": status_text,
+                "records": len(vitals),
+                "abnormal": total_anomalies,
+                "alerts_total": len(valid_incidents),
+                "alerts_critical": critical_count,
+                "falls": total_falls,
+                "hr_avg": hr_avg,
+                "hr_min": hr_min,
+                "hr_max": hr_max,
+                "spo2_avg": spo2_avg,
+                "spo2_min": spo2_min,
+                "temp_avg": temp_avg,
+            },
+            "ai": {
+                "headline": ai_headline,
+                "summary": ai_summary,
+                "findings": findings,
+                "recommendations": recommendations,
+                "red_flags": "đau ngực, khó thở, ngất hoặc choáng nặng, lú lẫn đột ngột, yếu liệt một bên cơ thể, hoặc nhịp tim nhanh kéo dài kèm khó chịu.",
+                "model": "SmartCare AI",
+                "generated_at": now_vn.strftime("%d/%m/%Y %H:%M"),
+                "confidence": "Trung bình" if len(vitals) >= 50 else "Thấp (ít dữ liệu)",
+            },
+            "hr_zones": hr_zones,
+            "daily": daily,
+            "alert_groups": alert_groups,
+            "alerts": alerts_list,
+            "vitals_recent": vitals_recent,
+            "quality": quality,
+        }
+
+    @staticmethod
     def generate_pdf(
         device_id: Union[UUID, str],
         vitals: List[VitalSign],
@@ -732,8 +1174,48 @@ class ReportService:
         elderly: Optional[ElderlyProfile] = None,
         language: str = "vi",
         period_days: int = 7,
+        device: Optional[Device] = None,
     ) -> bytes:
-        """Tạo PDF report tóm tắt các chỉ số sinh hiệu và sự kiện cảnh báo (bao gồm Cảnh báo nguy kịch)."""
+        """Tạo PDF report theo mẫu HTML/SVG chuyên sâu, fallback về ReportLab nếu thiếu trình render HTML."""
+        template_dir = Path(__file__).resolve().parent
+        template_path = template_dir / "health_report_template.html"
+        if template_path.exists():
+            try:
+                ctx = ReportService._build_html_report_context(
+                    device_id=device_id,
+                    vitals=vitals,
+                    incidents=incidents,
+                    elderly=elderly,
+                    period_days=period_days,
+                    device=device,
+                )
+                env = Environment(loader=FileSystemLoader(template_dir), autoescape=select_autoescape(["html"]))
+                html = env.get_template("health_report_template.html").render(**ctx)
+                pdf_bytes = ReportService._render_html_to_pdf_bytes(html, template_dir)
+                if pdf_bytes:
+                    return pdf_bytes
+            except Exception:
+                pass
+
+        return ReportService._generate_pdf_reportlab(
+            device_id=device_id,
+            vitals=vitals,
+            incidents=incidents,
+            elderly=elderly,
+            language=language,
+            period_days=period_days,
+        )
+
+    @staticmethod
+    def _generate_pdf_reportlab(
+        device_id: Union[UUID, str],
+        vitals: List[VitalSign],
+        incidents: List[Incident],
+        elderly: Optional[ElderlyProfile] = None,
+        language: str = "vi",
+        period_days: int = 7,
+    ) -> bytes:
+        """Fallback ReportLab PDF report khi môi trường không có WeasyPrint hoặc trình duyệt headless."""
         font_name, bold_font_name = _setup_pdf_fonts()
         labels = ReportService._labels(language)
         buffer = io.BytesIO()
