@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.Ringtone
 import android.media.RingtoneManager
@@ -46,6 +47,7 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
         private var activeRingtone: Ringtone? = null
         private var activeMediaPlayer: MediaPlayer? = null
         private var stopAlarmRunnable: Runnable? = null
+        private var previousAlarmVolume: Int = -1
         private val mainHandler = Handler(Looper.getMainLooper())
         private val activeNotificationIds = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
 
@@ -91,6 +93,27 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                         )
                         wakeLock?.acquire(autoCallDelayMs + 5000L)
                     } catch (_: Exception) {}
+
+                    // Đảm bảo âm lượng luồng báo thức khẩn cấp (STREAM_ALARM) luôn đủ lớn kể cả khi máy đang để im lặng/rung hoặc thanh âm lượng bị kéo nhỏ
+                    if (isCritical) {
+                        try {
+                            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                            if (audioManager != null) {
+                                val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+                                val curVol = audioManager.getStreamVolume(AudioManager.STREAM_ALARM)
+                                if (previousAlarmVolume == -1) {
+                                    previousAlarmVolume = curVol
+                                }
+                                val targetVol = (maxVol * 0.85).toInt().coerceAtLeast(1)
+                                if (curVol < targetVol) {
+                                    audioManager.setStreamVolume(AudioManager.STREAM_ALARM, targetVol, 0)
+                                    Log.d(TAG, "Đã tự động nâng âm lượng STREAM_ALARM từ $curVol lên $targetVol/$maxVol để báo động khẩn cấp.")
+                                }
+                            }
+                        } catch (ae: Exception) {
+                            Log.w(TAG, "Không thể điều chỉnh STREAM_ALARM: ${ae.message}")
+                        }
+                    }
 
                     // 1. Phát âm thanh chuông báo động (Ưu tiên MediaPlayer để lặp liên tục ở âm lượng tối đa)
                     val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
@@ -206,6 +229,16 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                     activeRingtone = null
                     stopAlarmRunnable?.let { mainHandler.removeCallbacks(it) }
                     stopAlarmRunnable = null
+
+                    // Khôi phục lại mức âm lượng báo thức ban đầu của người dùng
+                    if (previousAlarmVolume != -1) {
+                        try {
+                            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                            audioManager?.setStreamVolume(AudioManager.STREAM_ALARM, previousAlarmVolume, 0)
+                            Log.d(TAG, "Đã khôi phục âm lượng STREAM_ALARM về $previousAlarmVolume.")
+                        } catch (_: Exception) {}
+                        previousAlarmVolume = -1
+                    }
 
                     // Xóa tất cả thông báo cảnh báo khẩn cấp đang hiển thị trên thanh thông báo
                     val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
