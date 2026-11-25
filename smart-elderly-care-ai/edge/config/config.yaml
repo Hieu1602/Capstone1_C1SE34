@@ -32,9 +32,9 @@ ai:
     fallback_model: src/ai/vision/models/yolov8n-pose.onnx
     model_path: src/ai/vision/models/yolov8n-pose.rknn
 ble:
-  auth_key: 2BC7D23FAA60E6E2F974B8420C56234B
+  auth_key: 7d964ff812ce46b4b1c0656e6438f0f0
   characteristic_uuid: 00002a37-0000-1000-8000-00805f9b34fb
-  device_mac: FA:88:9E:79:77:13
+  device_mac: CC:EB:B4:44:D1:ED
   device_name: Xiaomi Smart Band 7 7713
   enabled: true
   poll_interval_sec: 5
