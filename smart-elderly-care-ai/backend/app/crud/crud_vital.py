@@ -286,7 +286,7 @@ class CRUDVital:
                         is_battery_dead = True
                         alerts_to_create.append((
                             "DEVICE_BATTERY_DEAD",
-                            "CRITICAL",
+                            "HIGH",
                             f"Vòng đeo tay ({dev_name}) đã cạn pin (0%) và ngắt kết nối! Hãy cắm sạc cho cụ.",
                             15  # chống spam lặp lại trong 15 phút
                         ))
@@ -329,7 +329,7 @@ class CRUDVital:
                 is_stale = False
                 age_seconds = 0.0
                 hr = obj.heart_rate
-                hr_high_limit = 100
+                hr_high_limit = 120
                 hr_low_limit = 50
                 if sample_time:
                     age_seconds = (datetime.now(timezone.utc) - sample_time).total_seconds()
@@ -385,8 +385,8 @@ class CRUDVital:
                         ))
                     else:
                         # 3. KIỂM TRA CHỈ SỐ ĐƠN LẺ VỚI BỘ LỌC NGỮ CẢNH (CONTEXT-AWARE GATING)
-                        # Đọc ngưỡng cấu hình từ DeviceConfig nếu có
-                        hr_high_limit = 100
+                        # Đọc ngưỡng cấu hình từ DeviceConfig nếu có (fallback 120 bpm khớp DeviceConfig)
+                        hr_high_limit = 120
                         hr_low_limit = 50
                         try:
                             if dev and dev.config:
@@ -396,6 +396,19 @@ class CRUDVital:
                                     hr_low_limit = dev.config.hr_threshold_low
                         except Exception:
                             pass
+
+                        # Lấy 2 mẫu liền trước để lọc nhiễu đơn lẻ (HR & SpO2) và kiểm tra biến thiên đột ngột
+                        prev_rows = []
+                        try:
+                            prev_res = await db.execute(
+                                select(VitalSign.heart_rate, VitalSign.time, VitalSign.spo2)
+                                .where(VitalSign.device_id == uuid_val, VitalSign.id != obj.id)
+                                .order_by(VitalSign.time.desc())
+                                .limit(2)
+                            )
+                            prev_rows = prev_res.fetchall()
+                        except Exception as e_prev:
+                            logger.warning(f"[CRUDVital] Lỗi truy vấn mẫu sinh hiệu trước: {e_prev}")
 
                         # A. Nhịp tim bất thường:
                         if hr and hr > 0:
@@ -408,16 +421,28 @@ class CRUDVital:
                                 ))
                             elif hr > hr_high_limit:
                                 # LỌC TẦNG 3: Vận động thể lực sinh lý (Tập thể dục, đi bộ, dưỡng sinh)
-                                # Nhịp tim người cao tuổi tăng sinh lý trong khoảng 100 - 130 bpm khi vận động là bình thường nếu SpO2 tốt (>= 92%)
                                 if is_exercising and (spo2 is None or spo2 >= 92) and hr <= 130:
                                     logger.info(f"[CRUDVital] Nhịp tim {hr} bpm trong lúc vận động thể dục sinh lý (SpO2: {spo2}%) -> Bỏ qua báo động giả.")
-                                else:
+                                elif hr >= 125:
                                     alerts_to_create.append((
                                         "HIGH_HEART_RATE",
-                                        "CRITICAL" if hr >= 120 else "HIGH",
-                                        f"Cảnh báo: Nhịp tim đo được từ {dev_name} tăng cao ({hr} bpm)! Vượt ngưỡng an toàn ({hr_high_limit} bpm).",
+                                        "CRITICAL",
+                                        f"Cảnh báo khẩn cấp: Nhịp tim đo được từ {dev_name} tăng rất cao ({hr} bpm)! Vượt ngưỡng an toàn ({hr_high_limit} bpm).",
                                         5
                                     ))
+                                else:
+                                    # Mức HIGH nhẹ: yêu cầu duy trì >= 3 mẫu liên tiếp vượt ngưỡng & cooldown 15 phút
+                                    prev_hrs = [r[0] for r in prev_rows if r[0] is not None and r[0] > 0]
+                                    sustained_high = len(prev_hrs) >= 2 and all(h > hr_high_limit for h in prev_hrs[:2])
+                                    if sustained_high:
+                                        alerts_to_create.append((
+                                            "HIGH_HEART_RATE",
+                                            "HIGH",
+                                            f"Cảnh báo: Nhịp tim đo được từ {dev_name} tăng cao liên tục ({hr} bpm)! Vượt ngưỡng an toàn ({hr_high_limit} bpm).",
+                                            15
+                                        ))
+                                    else:
+                                        logger.info(f"[CRUDVital] Nhịp tim {hr} bpm vượt {hr_high_limit} nhưng chưa duy trì đủ 3 mẫu liên tiếp -> Chưa bắn thông báo.")
                             elif hr < hr_low_limit:
                                 alerts_to_create.append((
                                     "LOW_HEART_RATE",
@@ -428,16 +453,10 @@ class CRUDVital:
 
                             # D. Kiểm tra biến thiên đột ngột (Sudden HR Delta / Loạn nhịp kịch phát)
                             try:
-                                prev_res = await db.execute(
-                                    select(VitalSign.heart_rate, VitalSign.time)
-                                    .where(VitalSign.device_id == uuid_val, VitalSign.id != obj.id, VitalSign.heart_rate.is_not(None))
-                                    .order_by(VitalSign.time.desc())
-                                    .limit(1)
-                                )
-                                prev_row = prev_res.first()
-                                if prev_row and prev_row[0] and prev_row[0] > 0:
-                                    prev_hr = prev_row[0]
-                                    prev_time = prev_row[1]
+                                prev_hr_row = next((r for r in prev_rows if r[0] is not None and r[0] > 0), None)
+                                if prev_hr_row:
+                                    prev_hr = prev_hr_row[0]
+                                    prev_time = prev_hr_row[1]
                                     t1 = obj.time if (obj.time and obj.time.tzinfo) else (obj.time.replace(tzinfo=timezone.utc) if obj.time else datetime.now(timezone.utc))
                                     t0 = prev_time if (prev_time and prev_time.tzinfo) else (prev_time.replace(tzinfo=timezone.utc) if prev_time else t1)
                                     t_diff = abs((t1 - t0).total_seconds())
@@ -461,14 +480,18 @@ class CRUDVital:
                             except Exception as e_delta:
                                 logger.warning(f"[CRUDVital] Lỗi kiểm tra biến thiên nhịp tim: {e_delta}")
 
-                        # B. SpO2 đơn lẻ tụt sâu:
+                        # B. SpO2 đơn lẻ tụt sâu (yêu cầu >= 2 mẫu liên tiếp < 90% hoặc tụt sâu < 85% để tránh nhiễu cử động cổ tay):
                         if spo2 and 0 < spo2 < 90:
-                            alerts_to_create.append((
-                                "LOW_SPO2",
-                                "CRITICAL",
-                                f"Nguy cấp: Nồng độ oxy trong máu (SpO₂) đo được từ {dev_name} tụt xuống {spo2}% (Dưới ngưỡng 90%)! Cần kiểm tra ngay.",
-                                5
-                            ))
+                            prev_spo2_row = next((r[2] for r in prev_rows if r[2] is not None and r[2] > 0), None)
+                            if spo2 < 85 or (prev_spo2_row is not None and prev_spo2_row < 90):
+                                alerts_to_create.append((
+                                    "LOW_SPO2",
+                                    "CRITICAL",
+                                    f"Nguy cấp: Nồng độ oxy trong máu (SpO₂) đo được từ {dev_name} tụt xuống {spo2}% (Dưới ngưỡng 90%)! Cần kiểm tra ngay.",
+                                    5
+                                ))
+                            else:
+                                logger.info(f"[CRUDVital] SpO2 {spo2}% tụt 1 mẫu đơn lẻ (trước đó: {prev_spo2_row}%) -> Chờ xác nhận mẫu kế tiếp.")
 
                         # C. Sốt cao đơn lẻ:
                         if temp and temp >= 38.3:

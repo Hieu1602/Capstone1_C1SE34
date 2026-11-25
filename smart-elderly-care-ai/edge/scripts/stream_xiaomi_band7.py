@@ -892,7 +892,10 @@ async def run_stream(
                 continue
 
             logger.info("Đang kết nối BLE tới %s...", target_mac)
-            async with BleakClient(target_mac, timeout=12.0) as client:
+            client_kwargs: Dict[str, Any] = {"timeout": 20.0}
+            if sys.platform == "win32":
+                client_kwargs["winrt"] = {"use_cached_services": False}
+            async with BleakClient(target_mac, **client_kwargs) as client:
                 mtu = getattr(client, "mtu_size", 247) or 247
                 logger.info("✅ Đã kết nối BLE thành công tới %s (MTU=%d)!", target_mac, mtu)
 
@@ -1092,8 +1095,20 @@ async def run_stream(
                         except Exception:
                             pass
 
-                    # 5e. Kích hoạt đo nhịp tim PPG liên tục từng giây trên endpoint 0x001d (ZeppOsHeartRateService)
+                    # 5e. Kích hoạt đo nhịp tim PPG liên tục từng giây trên endpoint 0x001d (ZeppOsHeartRateService) và GATT 0x2A39
                     state["wh"], state["seq"] = await _zeppos_send_chunked(client, state["wh"], 0x001D, bytes([0x04, 0x01]), mtu)
+                    if HUAMI_HR_CTRL_UUID in char_uuids:
+                        for cmd in (b"\x15\x02\x00", b"\x15\x01\x01"):
+                            try:
+                                await client.write_gatt_char(HUAMI_HR_CTRL_UUID, cmd, response=True)
+                            except Exception:
+                                pass
+                    send_device_status_to_backend(
+                        backend_url,
+                        device_name,
+                        is_online=True,
+                        status_text=f"Trực tuyến • Đã kết nối BLE ({telemetry.get('battery_level') or '--'}% pin)",
+                    )
                     logger.info("🚀 Đã bật FULL STREAM toàn bộ dữ liệu từ Xiaomi Band 7 (HR 1s + SpO2 + Bước chân + Quãng đường + Calo + Pin chi tiết + Trạng thái vận động)!")
 
                     tick = 0
@@ -1102,6 +1117,21 @@ async def run_stream(
                         tick += 1
                         # Duy trì đo nhịp tim thực mỗi chu kỳ (mặc định: 5.0s / 1 lần)
                         state["wh"], state["seq"] = await _zeppos_send_chunked(client, state["wh"], 0x001D, bytes([0x04, 0x02]), mtu)
+                        if tick % 2 == 0 and HUAMI_HR_CTRL_UUID in char_uuids:
+                            try:
+                                await client.write_gatt_char(HUAMI_HR_CTRL_UUID, b"\x16", response=True)
+                            except Exception:
+                                pass
+
+                        # Nếu chưa có gói nhịp tim > 0 sau 15s (vòng chưa đeo lên tay), gửi heartbeat giữ trạng thái Online
+                        if tick % 3 == 0 and (time.time() - last_emit_ts) >= 15.0:
+                            logger.info("⌚ Vòng tay đang kết nối BLE (Pin %s%%) — chờ cảm biến đo nhịp tim trên cổ tay...", telemetry.get("battery_level") or "--")
+                            send_device_status_to_backend(
+                                backend_url,
+                                device_name,
+                                is_online=True,
+                                status_text=f"Trực tuyến • Chờ đo nhịp tim ({telemetry.get('battery_level') or '--'}% pin)",
+                            )
 
                         # Mỗi 3 giây truy vấn lại Bước chân / Quãng đường / Calo thời gian thực qua ZeppOsStepsService (0x0016)
                         if tick % 3 == 0:

@@ -95,58 +95,57 @@ export const MedicationReminderWidget: React.FC<MedicationReminderWidgetProps> =
   };
 
   return (
-    <View
+    <TouchableOpacity
       style={[
         styles.reminderWidgetCard,
         isDarkMode && { backgroundColor: colors.card, borderColor: colors.border },
         isMedDone && styles.reminderWidgetCardDone,
       ]}
+      activeOpacity={0.85}
+      onPress={() => navigation.navigate('MedicationReminder')}
     >
-      <TouchableOpacity
-        style={styles.reminderWidgetMain}
-        activeOpacity={0.8}
-        onPress={() => navigation.navigate('MedicationReminder')}
-      >
-        <View style={styles.reminderWidgetHeader}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <View
-              style={[
-                styles.reminderIconCircle,
-                { backgroundColor: isMedDone ? '#DCFCE7' : isDarkMode ? '#432005' : '#FFF7ED' },
-              ]}
-            >
-              <Ionicons
-                name={isMedDone ? 'checkmark-circle' : 'medical'}
-                size={15}
-                color={isMedDone ? '#10B981' : Colors.primary}
-              />
-            </View>
-            <Text style={[styles.reminderWidgetTitle, isDarkMode && { color: colors.textPrimary }]}>
-              Lịch nhắc nhở tiếp theo
-            </Text>
+      {/* Hàng trên: Tiêu đề đầy đủ + Nút Phát lại */}
+      <View style={styles.reminderWidgetHeader}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+          <View
+            style={[
+              styles.reminderIconCircle,
+              { backgroundColor: isMedDone ? '#DCFCE7' : isDarkMode ? '#432005' : '#FFF7ED' },
+            ]}
+          >
+            <Ionicons
+              name={isMedDone ? 'checkmark-circle' : 'medical'}
+              size={15}
+              color={isMedDone ? '#10B981' : Colors.primary}
+            />
           </View>
-
-          {/* Phần điều khiển Loa Hub & Phát lại nhắc nhở */}
-          <View style={styles.reminderRightHeader}>
-            <TouchableOpacity
-              style={[styles.replaySpeakerBtn, isPlayingSpeaker && styles.replaySpeakerBtnActive]}
-              onPress={handleReplaySpeaker}
-              activeOpacity={0.7}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons
-                name={isPlayingSpeaker ? 'volume-high' : 'volume-medium'}
-                size={13}
-                color={isPlayingSpeaker ? '#FFFFFF' : '#0284C7'}
-              />
-              <Text style={[styles.replaySpeakerText, isPlayingSpeaker && { color: '#FFFFFF' }]}>
-                {isPlayingSpeaker ? 'Đang phát...' : 'Phát lại'}
-              </Text>
-            </TouchableOpacity>
-            <Ionicons name="chevron-forward" size={14} color={isDarkMode ? colors.textSecondary : '#94A3B8'} />
-          </View>
+          <Text style={[styles.reminderWidgetTitle, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
+            Lịch nhắc nhở tiếp theo
+          </Text>
         </View>
 
+        <View style={styles.reminderRightHeader}>
+          <TouchableOpacity
+            style={[styles.replaySpeakerBtn, isPlayingSpeaker && styles.replaySpeakerBtnActive]}
+            onPress={handleReplaySpeaker}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons
+              name={isPlayingSpeaker ? 'volume-high' : 'volume-medium'}
+              size={13}
+              color={isPlayingSpeaker ? '#FFFFFF' : '#0284C7'}
+            />
+            <Text style={[styles.replaySpeakerText, isPlayingSpeaker && { color: '#FFFFFF' }]}>
+              {isPlayingSpeaker ? 'Đang phát...' : 'Phát lại'}
+            </Text>
+          </TouchableOpacity>
+          <Ionicons name="chevron-forward" size={14} color={isDarkMode ? colors.textSecondary : '#94A3B8'} />
+        </View>
+      </View>
+
+      {/* Hàng dưới: Giờ + Tên thuốc bên trái, Nút trạng thái bên phải */}
+      <View style={styles.reminderBottomRow}>
         {nextMedication?.name ? (
           <View style={styles.reminderContentRow}>
             <View style={[styles.reminderClockBox, isMedDone && { backgroundColor: '#DCFCE7' }]}>
@@ -173,48 +172,47 @@ export const MedicationReminderWidget: React.FC<MedicationReminderWidgetProps> =
             </Text>
           </View>
         )}
-      </TouchableOpacity>
 
-      {/* Nút thao tác chính: Xác nhận đã uống / Đã hoàn thành hoặc Thêm lịch nhắc */}
-      {nextMedication?.name ? (
-        <TouchableOpacity
-          style={[
-            styles.actionBtn,
-            isMedDone ? styles.actionBtnDone : styles.actionBtnPending,
-            isDarkMode && !isMedDone && { backgroundColor: '#1E293B', borderColor: '#FF6B00' },
-          ]}
-          onPress={handlePressActionButton}
-          activeOpacity={0.75}
-        >
-          <Ionicons
-            name={isMedDone ? 'checkmark-circle' : 'checkmark'}
-            size={16}
-            color={isMedDone ? '#10B981' : '#FFFFFF'}
-          />
-          <Text
+        {nextMedication?.name ? (
+          <TouchableOpacity
             style={[
-              styles.actionBtnText,
-              { color: isMedDone ? '#10B981' : '#FFFFFF' },
+              styles.actionBtn,
+              isMedDone ? styles.actionBtnDone : styles.actionBtnPending,
+              isDarkMode && !isMedDone && { backgroundColor: '#1E293B', borderColor: '#FF6B00' },
             ]}
+            onPress={handlePressActionButton}
+            activeOpacity={0.75}
           >
-            {isMedDone ? 'Đã hoàn thành' : 'Xác nhận đã uống'}
-          </Text>
-        </TouchableOpacity>
-      ) : (
-        <TouchableOpacity
-          style={[
-            styles.actionBtn,
-            { backgroundColor: isDarkMode ? colors.card : '#F8FAFC', borderWidth: 1, borderColor: isDarkMode ? colors.border : '#E2E8F0' },
-          ]}
-          onPress={() => navigation.navigate('MedicationReminder')}
-          activeOpacity={0.75}
-        >
-          <Ionicons name="add-circle-outline" size={16} color={Colors.primary} />
-          <Text style={[styles.actionBtnText, { color: Colors.primary }]}>
-            + Thêm lịch nhắc uống thuốc
-          </Text>
-        </TouchableOpacity>
-      )}
+            <Ionicons
+              name={isMedDone ? 'checkmark-circle' : 'checkmark'}
+              size={15}
+              color={isMedDone ? '#10B981' : '#FFFFFF'}
+            />
+            <Text
+              style={[
+                styles.actionBtnText,
+                { color: isMedDone ? '#10B981' : '#FFFFFF' },
+              ]}
+            >
+              {isMedDone ? 'Đã hoàn thành' : 'Xác nhận đã uống'}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[
+              styles.actionBtn,
+              { backgroundColor: isDarkMode ? colors.card : '#F8FAFC', borderWidth: 1, borderColor: isDarkMode ? colors.border : '#E2E8F0' },
+            ]}
+            onPress={() => navigation.navigate('MedicationReminder')}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="add-circle-outline" size={15} color={Colors.primary} />
+            <Text style={[styles.actionBtnText, { color: Colors.primary }]}>
+              + Thêm lịch
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
       {/* Modal xác nhận đã uống thuốc ngắn gọn */}
       <Modal
@@ -278,7 +276,7 @@ export const MedicationReminderWidget: React.FC<MedicationReminderWidgetProps> =
           </View>
         </View>
       </Modal>
-    </View>
+    </TouchableOpacity>
   );
 };
 
@@ -287,12 +285,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 14,
-    marginTop: 10,
+    marginTop: 14,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
@@ -303,15 +299,18 @@ const styles = StyleSheet.create({
     borderColor: '#86EFAC',
     backgroundColor: '#F0FDF4',
   },
-  reminderWidgetMain: {
-    flex: 1,
-    marginRight: 10,
+  reminderBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
   },
   reminderWidgetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    gap: 8,
+    marginBottom: 10,
   },
   reminderIconCircle: {
     width: 26,
@@ -323,6 +322,7 @@ const styles = StyleSheet.create({
   reminderWidgetTitle: {
     fontSize: 13,
     fontWeight: '700',
+    flexShrink: 1,
   },
   reminderRightHeader: {
     flexDirection: 'row',
@@ -350,6 +350,8 @@ const styles = StyleSheet.create({
     color: '#0284C7',
   },
   reminderContentRow: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
