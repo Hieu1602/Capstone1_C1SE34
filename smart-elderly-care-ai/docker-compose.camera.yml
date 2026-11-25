@@ -4,7 +4,8 @@ services:
     init: true
     restart: unless-stopped
     env_file:
-      - .env
+      - path: .env
+        required: false
       - path: .env.camera
         required: false
     networks:
@@ -24,7 +25,8 @@ services:
     cpus: 2.0
     mem_limit: 2g
     env_file:
-      - .env
+      - path: .env
+        required: false
       - path: .env.camera
         required: false
     environment:
@@ -34,7 +36,7 @@ services:
       MQTT_PASSWORD: "${MQTT_PASSWORD:-mqtt_secure_pass_123}"
       FALL_DETECTION_ENABLED: "${FALL_DETECTION_ENABLED:-true}"
       CAMERA_DEVICE_ID: "${CAMERA_DEVICE_ID:-camera-main}"
-      AI_INFERENCE_FPS: "${AI_INFERENCE_FPS:-5}"
+      AI_INFERENCE_FPS: "${AI_INFERENCE_FPS:-25}"
       AI_NUM_THREADS: "${AI_NUM_THREADS:-2}"
       TAPO_STREAM: "${TAPO_STREAM:-stream2}"
       CAMERA_RETENTION_HOURS: "${CAMERA_RETENTION_HOURS:-48}"

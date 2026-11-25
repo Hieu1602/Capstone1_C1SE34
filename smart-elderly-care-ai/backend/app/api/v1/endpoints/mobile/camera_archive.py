@@ -101,10 +101,14 @@ async def ingest(body: RecordingMetadata, authorization: str = Header(default=""
         if existing is None or any(getattr(existing, key) != value for key, value in body.model_dump().items()):
             await db.rollback()
             raise HTTPException(409, "Recording metadata is immutable")
-    if body.kind == "incident" and body.incident_id:
+    if body.kind in ("incident", "snapshot") and body.incident_id:
         incident = await db.get(Incident, body.incident_id)
-        if incident and not incident.video_clip_url:
-            incident.video_clip_url = f"/api/v1/mobile/camera/archive/{body.id}/playback"
+        if incident:
+            playback_url = f"/api/v1/camera/archive/{body.id}/playback"
+            if body.kind == "incident" and (not incident.video_clip_url or incident.video_clip_url.startswith("/recordings/")):
+                incident.video_clip_url = playback_url
+            elif body.kind == "snapshot" and (not incident.thumbnail_url or incident.thumbnail_url.startswith("/recordings/")):
+                incident.thumbnail_url = playback_url
     await db.commit()
     return {"id": str(body.id)}
 

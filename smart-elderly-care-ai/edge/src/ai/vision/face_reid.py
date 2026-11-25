@@ -19,6 +19,63 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+_FACE_CASCADE = None
+
+
+def _get_face_cascade():
+    global _FACE_CASCADE
+    if _FACE_CASCADE is None:
+        import cv2  # type: ignore
+        cls = getattr(cv2, "CascadeClassifier", None)
+        data = getattr(cv2, "data", None)
+        xml_path = (getattr(data, "haarcascades", "") + "haarcascade_frontalface_default.xml") if data else ""
+        if cls is not None and xml_path:
+            cascade = cls(xml_path)
+            _FACE_CASCADE = cascade if not cascade.empty() else False
+        else:
+            _FACE_CASCADE = False
+    return _FACE_CASCADE or None
+
+
+def detect_face_in_portrait(image_bgr: np.ndarray) -> np.ndarray:
+    """
+    Phát hiện và cắt vùng khuôn mặt từ ảnh chân dung hồ sơ bệnh án.
+    Nếu Haar Cascade không bắt được mặt (ảnh nghiêng/mờ), fallback về vùng trung tâm-trên của ảnh.
+    """
+    if image_bgr is None or image_bgr.size == 0:
+        return image_bgr
+    import cv2  # type: ignore
+
+    h_img, w_img = image_bgr.shape[:2]
+    cascade = _get_face_cascade()
+    if cascade is not None:
+        gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+        gray = cv2.equalizeHist(gray)
+        min_side = max(24, min(h_img, w_img) // 8)
+        faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(min_side, min_side))
+        if len(faces) > 0:
+            # Chọn khuôn mặt lớn nhất (chính diện nhất trong ảnh hồ sơ)
+            x, y, w, h = max(faces, key=lambda f: int(f[2]) * int(f[3]))
+            pad_x = int(w * 0.12)
+            pad_y_top = int(h * 0.15)
+            pad_y_bot = int(h * 0.12)
+            x1 = max(0, x - pad_x)
+            y1 = max(0, y - pad_y_top)
+            x2 = min(w_img, x + w + pad_x)
+            y2 = min(h_img, y + h + pad_y_bot)
+            if x2 > x1 + 15 and y2 > y1 + 15:
+                return image_bgr[y1:y2, x1:x2]
+
+    # Fallback: cắt gọn vùng chân dung giữa-trên nếu ảnh quá rộng (tránh nền & vai áo)
+    if max(h_img, w_img) > 160:
+        x1 = int(w_img * 0.2)
+        x2 = int(w_img * 0.8)
+        y1 = int(h_img * 0.08)
+        y2 = int(h_img * 0.72)
+        if x2 > x1 + 20 and y2 > y1 + 20:
+            return image_bgr[y1:y2, x1:x2]
+    return image_bgr
+
 
 def extract_face_roi(
     frame: np.ndarray,
@@ -26,7 +83,7 @@ def extract_face_roi(
     padding_scale: float = 0.5,
 ) -> Optional[np.ndarray]:
     """
-    Cắt vùng mặt (Face ROI) từ frame dựa trên 5 keypoints đầu của COCO Pose:
+    Cắt và căn chỉnh thẳng góc vùng mặt (Face ROI) từ frame dựa trên 5 keypoints đầu:
     0: nose, 1: left_eye, 2: right_eye, 3: left_ear, 4: right_ear.
     """
     if len(keypoints) < 5 or frame is None or frame.size == 0:
@@ -56,34 +113,52 @@ def extract_face_roi(
     center_y = float(np.mean(ys))
 
     # Tỷ lệ nhân trắc học khuôn mặt: 5 keypoints đầu (mắt, mũi, tai) nằm ở nửa trên khuôn mặt.
-    # Chiều rộng khuôn mặt ước lượng theo khoảng cách 2 tai hoặc mắt.
     face_size = max(w_pts * 1.25, h_pts * 2.2, 40.0)
-    half_w = face_size * 0.55
-    half_h = face_size * 0.65
+    half_w = face_size * 0.52
+    half_h = face_size * 0.62
 
     x1 = max(0, int(center_x - half_w))
     y1 = max(0, int(center_y - half_h * 0.85))  # trán và đỉnh đầu
     x2 = min(w_img, int(center_x + half_w))
     y2 = min(h_img, int(center_y + half_h * 1.15)) # cằm và hàm dưới
 
-    if x2 <= x1 + 15 or y2 <= y1 + 15:
+    if x2 <= x1 + 20 or y2 <= y1 + 20:
         return None
 
-    return frame[y1:y2, x1:x2]
+    crop = frame[y1:y2, x1:x2]
+
+    # Căn chỉnh xoay thẳng mặt dựa theo đường nối 2 mắt (giúp nhận diện ngay cả khi nghiêng đầu/té ngã)
+    le = keypoints[1]
+    re = keypoints[2]
+    le_conf = le[2] if len(le) > 2 else 1.0
+    re_conf = re[2] if len(re) > 2 else 1.0
+    if le_conf > 0.25 and re_conf > 0.25:
+        dx = float(le[0]) - float(re[0])
+        dy = float(le[1]) - float(re[1])
+        if math.hypot(dx, dy) >= 8.0:
+            angle = math.degrees(math.atan2(dy, dx))
+            if abs(angle) > 5.0:
+                import cv2  # type: ignore
+                ch, cw = crop.shape[:2]
+                mat = cv2.getRotationMatrix2D((cw / 2.0, ch / 2.0), angle, 1.0)
+                crop = cv2.warpAffine(crop, mat, (cw, ch), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+
+    return crop
 
 
 def compute_face_embedding(face_bgr: np.ndarray, target_dim: int = 128) -> np.ndarray:
     """
     Trích xuất vector đặc trưng khuôn mặt 128 chiều (Face Embedding) chuẩn hóa L2.
-    Sử dụng biểu diễn đa thang không gian màu và gradient (Spatial Color-Gradient Descriptor),
-    đáp ứng độ nhạy cao với cùng một khuôn mặt và bất biến với biến đổi nhỏ của ánh sáng.
+    Sử dụng Gaussian Blur giảm nhiễu + CLAHE cân bằng sáng cục bộ + Sobel 4x4 8-bin HOG.
     """
     import cv2  # type: ignore
 
-    # 1. Chuẩn hóa kích thước khuôn mặt về 112 x 112 chuẩn nhận diện
-    aligned = cv2.resize(face_bgr, (112, 112))
+    # 1. Chuẩn hóa kích thước khuôn mặt về 112 x 112 và cân bằng sáng cục bộ (CLAHE)
+    aligned = cv2.resize(face_bgr, (112, 112), interpolation=cv2.INTER_LINEAR)
     gray = cv2.cvtColor(aligned, cv2.COLOR_BGR2GRAY)
-    gray = cv2.equalizeHist(gray)
+    gray = cv2.GaussianBlur(gray, (3, 3), 0)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
+    gray = clahe.apply(gray)
 
     # 2. Rút trích đặc trưng Gradient Sobel (Đường nét mắt, mũi, miệng)
     gx = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
@@ -169,11 +244,12 @@ class FaceReIDManager:
         image_bgr: np.ndarray,
         avatar_url: Optional[str] = None,
     ) -> bool:
-        """Trích xuất embedding từ ảnh chân dung và đăng ký hồ sơ."""
+        """Phát hiện mặt từ ảnh chân dung, trích xuất embedding và đăng ký hồ sơ."""
         if image_bgr is None or image_bgr.size == 0:
             return False
 
-        embedding = compute_face_embedding(image_bgr)
+        face_crop = detect_face_in_portrait(image_bgr)
+        embedding = compute_face_embedding(face_crop)
         self.enroll_elderly(elderly_id, name, embedding, avatar_url)
         return True
 
@@ -189,6 +265,8 @@ class FaceReIDManager:
             hoặc (None, "Khách / Người nhà", 0.0) nếu không khớp.
         """
         if not self.enrolled_elderly or face_crop is None or face_crop.size == 0:
+            return None, "Khách / Người nhà", 0.0
+        if min(face_crop.shape[:2]) < 20:
             return None, "Khách / Người nhà", 0.0
 
         target_emb = compute_face_embedding(face_crop)

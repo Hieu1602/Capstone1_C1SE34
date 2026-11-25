@@ -17,7 +17,7 @@ LOG = logging.getLogger(__name__)
 
 
 class VideoArchive:
-    def __init__(self, fps=15):
+    def __init__(self, fps=25):
         self.fps = fps
         self.device_id = str(UUID(os.environ["CAMERA_DEVICE_ID"]))
         self.endpoint = os.environ["VIDEO_METADATA_URL"]

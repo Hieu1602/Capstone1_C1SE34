@@ -235,3 +235,37 @@ export const cameraApi = {
         return BASE_URL.replace(/\/$/, "") + data.path;
     },
 };
+
+/**
+ * Chuyển đổi đường dẫn media sự cố (`/recordings/...`, `/api/v1/.../playback`, hoặc URL đầy đủ)
+ * thành URL trực tiếp (presigned S3 hoặc ticket camera) để `<Image>` / `<Video>` phát được.
+ */
+export async function resolveIncidentMediaUrl(
+    rawUrl?: string | null,
+    cameraId?: string,
+): Promise<string | null> {
+    if (!rawUrl || !rawUrl.trim()) return null;
+    const clean = rawUrl.trim();
+    if (/^(https?:|data:|file:)/i.test(clean)) return clean;
+
+    const archiveMatch = clean.match(/\/camera\/archive\/([0-9a-fA-F-]{36})\/playback/);
+    if (archiveMatch) {
+        try {
+            const { data } = await cameraApi.playback(archiveMatch[1], cameraId);
+            if (data?.url) return data.url;
+        } catch {
+            // Fallback xuống ghép URL gốc nếu không lấy được presigned URL
+        }
+    }
+
+    if (clean.startsWith("/recordings/")) {
+        try {
+            return await cameraApi.media(clean.slice(1), cameraId);
+        } catch {
+            // Fallback xuống ghép URL gốc nếu không xin được ticket
+        }
+    }
+
+    const origin = (BASE_URL || "").replace(/\/api\/v1\/?$/, "");
+    return `${origin}${clean.startsWith("/") ? "" : "/"}${clean}`;
+}
