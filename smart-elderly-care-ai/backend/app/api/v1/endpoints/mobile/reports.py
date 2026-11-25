@@ -5,6 +5,7 @@ Vị trí: backend/app/api/v1/endpoints/mobile/reports.py
 
 import io
 import re
+import unicodedata
 from typing import Optional
 from uuid import UUID
 
@@ -22,6 +23,17 @@ from app.schemas.report import HealthReportSummaryOut
 from app.services.reports.report_service import report_service
 
 router = APIRouter()
+
+
+def _patient_filename_tag(elderly) -> str:
+    """Chuyển tên người cao tuổi sang ASCII an toàn cho HTTP Content-Disposition (latin-1)."""
+    full_name = getattr(elderly, "full_name", None) if elderly else None
+    if not full_name:
+        return ""
+    s = unicodedata.normalize("NFD", str(full_name).strip().replace("đ", "d").replace("Đ", "D"))
+    ascii_name = "".join(c for c in s if unicodedata.category(c) != "Mn")
+    clean_name = re.sub(r"[^A-Za-z0-9\-]+", "_", ascii_name).strip("_")
+    return f"_{clean_name}" if clean_name else ""
 
 
 @router.get("/summary", response_model=HealthReportSummaryOut)
@@ -104,12 +116,9 @@ async def export_default_pdf(
         elderly=elderly,
         language=get_request_language(request),
         period_days=calc_days,
+        device=device,
     )
-    patient_tag = ""
-    if elderly and getattr(elderly, "full_name", None):
-        clean_name = re.sub(r"[^\w\-]", "_", elderly.full_name.strip()).strip("_")
-        if clean_name:
-            patient_tag = f"_{clean_name}"
+    patient_tag = _patient_filename_tag(elderly)
     pdf_filename = f"report_health{patient_tag}_{calc_days}d.pdf"
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
@@ -171,11 +180,7 @@ async def export_default_excel(
         language=get_request_language(request),
         period_days=calc_days,
     )
-    patient_tag = ""
-    if elderly and getattr(elderly, "full_name", None):
-        clean_name = re.sub(r"[^\w\-]", "_", elderly.full_name.strip()).strip("_")
-        if clean_name:
-            patient_tag = f"_{clean_name}"
+    patient_tag = _patient_filename_tag(elderly)
     excel_filename = f"report_health{patient_tag}_{calc_days}d.xlsx"
     return StreamingResponse(
         io.BytesIO(excel_bytes),

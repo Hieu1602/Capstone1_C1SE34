@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8">
+<title>Báo cáo sức khỏe – {{ patient.name }}</title>
+<style>
+@page{size:A4;margin:13mm 12mm 15mm;@bottom-center{content:"SmartCare AI · Trang " counter(page) " / " counter(pages);font-size:8pt;color:#64748b}}
+:root{--ink:#14213d;--mut:#64748b;--line:#e2e8f0;--bg:#f8fafc;--brand:#0f766e;--navy:#1e3a5f;--ok:#15803d;--okbg:#dcfce7;--warn:#b45309;--warnbg:#fef3c7;--bad:#b91c1c;--badbg:#fee2e2}
+*{box-sizing:border-box}html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{margin:0;font:10pt/1.45 "Segoe UI","Helvetica Neue",Arial,"Noto Sans",sans-serif;color:var(--ink)}
+h2{font-size:11.5pt;margin:20px 0 8px;color:var(--navy);border-bottom:2px solid var(--brand);padding-bottom:3px}
+.mut{color:var(--mut)}.sm{font-size:8.5pt}
+header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid var(--navy);padding-bottom:8px}
+.brand{font-weight:700;color:var(--brand);letter-spacing:.5px;font-size:10pt}
+header h1{margin:2px 0 0;font-size:19pt;color:var(--navy)}
+.meta{text-align:right;font-size:8.5pt;color:var(--mut)}
+.sample{position:fixed;top:6px;right:10px;background:#fef3c7;color:#92400e;font-size:8pt;font-weight:700;padding:2px 8px;border-radius:10px}
+.pt{display:grid;grid-template-columns:repeat(4,1fr);gap:6px 14px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:9px 12px;margin-top:10px}
+.pt b{display:block;font-size:8pt;font-weight:600;color:var(--mut);text-transform:uppercase}
+.pt .wide{grid-column:span 2}
+.banner{display:flex;gap:12px;align-items:center;border-radius:6px;padding:10px 14px;margin-top:12px;break-inside:avoid}
+.st-ok{background:var(--okbg);color:var(--ok)}.st-watch{background:var(--warnbg);color:var(--warn)}.st-alert{background:var(--badbg);color:var(--bad)}
+.banner .lab{font-weight:800;font-size:12pt;white-space:nowrap}.banner p{margin:0;color:var(--ink);font-size:9.5pt}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.kpi{border:1px solid var(--line);border-radius:6px;padding:8px 11px;break-inside:avoid}
+.kpi .v{font-size:17pt;font-weight:700;color:var(--navy);line-height:1.1}.kpi .v small{font-size:9pt;font-weight:500;color:var(--mut)}
+.kpi .l{font-size:8.5pt;color:var(--mut)}
+.ai{border:1px solid #99c4c0;border-left:5px solid var(--brand);border-radius:6px;background:#f0fdfa;padding:11px 14px;margin-top:4px}
+.ai .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ai .tag{font-size:8pt;background:#fff;border:1px solid #99c4c0;color:var(--brand);border-radius:10px;padding:1px 8px;white-space:nowrap}
+.ai h3{margin:6px 0 2px;font-size:11pt}.ai h4{margin:10px 0 4px;font-size:9pt;color:var(--navy);text-transform:uppercase;letter-spacing:.4px}
+.find{display:flex;gap:8px;margin:5px 0;break-inside:avoid}
+.dot{flex:none;width:9px;height:9px;border-radius:50%;margin-top:5px}.dot.ok{background:var(--ok)}.dot.warn{background:#d97706}.dot.bad{background:var(--bad)}.dot.info{background:#64748b}
+.find .ev{font-size:8.5pt;color:var(--mut)}
+.ai ol{margin:4px 0 0;padding-left:18px}.ai li{margin:2px 0}
+.redflag{margin-top:9px;background:#fff;border:1px dashed var(--bad);border-radius:5px;padding:6px 10px;font-size:9pt;color:var(--bad)}
+.aifoot{margin-top:8px;font-size:8pt;color:var(--mut)}
+.two{display:grid;grid-template-columns:2fr 1fr;gap:14px}.lc{width:100%;height:auto;display:block}
+.zones{display:flex;height:14px;border-radius:7px;overflow:hidden;margin:6px 0}.z1{background:#60a5fa}.z2{background:#34d399}.z3{background:#fbbf24}.z4{background:#ef4444}
+.leg{font-size:8.5pt;list-style:none;padding:0;margin:0}.leg li{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:2px 0}
+table{width:100%;border-collapse:collapse;font-size:8.5pt}thead{display:table-header-group}tr{break-inside:avoid}
+th{background:var(--navy);color:#fff;text-align:left;padding:5px 7px;font-weight:600}td{padding:4px 7px;border-bottom:1px solid var(--line)}
+tbody tr:nth-child(even){background:var(--bg)}.c{text-align:center}
+.chip{display:inline-block;padding:0 7px;border-radius:9px;font-size:8pt;font-weight:700}
+.chip.ok{background:var(--okbg);color:var(--ok)}.chip.warn{background:var(--warnbg);color:var(--warn)}.chip.bad{background:var(--badbg);color:var(--bad)}
+.q li{margin:2px 0}.q .bad{color:var(--bad)}.q .warn{color:var(--warn)}
+.disc{margin-top:16px;border-top:1px solid var(--line);padding-top:8px;font-size:8pt;color:var(--mut);break-inside:avoid}
+</style></head><body>
+{% set sev = {'CRITICAL':'bad','HIGH':'warn','MEDIUM':'warn','LOW':'ok'} %}
+{% macro line_chart(days,kmin,kavg,kmax,lo,hi,bl,bh,step,ref) %}
+{% set W = 520 %}{% set H = 158 %}{% set L = 30 %}{% set R = 8 %}{% set T = 8 %}{% set B = 20 %}
+{% set pw = W - L - R %}{% set ph = H - T - B %}{% set n = days|length %}{% set den = (n - 1) if n > 1 else 1 %}
+{% set ns = namespace(avg=[], top=[], bot=[], segs=[]) %}
+{% for d in days %}
+  {% set x = (L + pw * loop.index0 / den)|round(1) %}
+  {% if d[kavg] is none %}
+    {% if ns.avg %}{% set ns.segs = ns.segs + [dict(avg=ns.avg, top=ns.top, bot=ns.bot)] %}{% set ns.avg = [] %}{% set ns.top = [] %}{% set ns.bot = [] %}{% endif %}
+  {% else %}
+    {% set va = [[d[kavg],lo]|max,hi]|min %}
+    {% set ns.avg = ns.avg + [x ~ ',' ~ ((T + (1 - (va - lo) / (hi - lo)) * ph)|round(1))] %}
+    {% if d[kmin] is not none %}{% set vb = [[d[kmin],lo]|max,hi]|min %}
+      {% set ns.bot = ns.bot + [x ~ ',' ~ ((T + (1 - (vb - lo) / (hi - lo)) * ph)|round(1))] %}
+    {% endif %}
+    {% if kmax and d[kmax] is not none %}{% set vt = [[d[kmax],lo]|max,hi]|min %}
+      {% set ns.top = ns.top + [x ~ ',' ~ ((T + (1 - (vt - lo) / (hi - lo)) * ph)|round(1))] %}
+    {% endif %}
+  {% endif %}
+{% endfor %}
+{% if ns.avg %}{% set ns.segs = ns.segs + [dict(avg=ns.avg, top=ns.top, bot=ns.bot)] %}{% endif %}
+<svg class="lc" viewBox="0 0 {{ W }} {{ H }}" xmlns="http://www.w3.org/2000/svg" role="img">
+  <rect x="{{ L }}" y="{{ (T + (1 - (bh - lo) / (hi - lo)) * ph)|round(1) }}" width="{{ pw }}" height="{{ ((bh - bl) / (hi - lo) * ph)|round(1) }}" fill="#ecfdf5"/>
+  {% for t in range(lo, hi + 1, step) %}{% set gy = (T + (1 - (t - lo) / (hi - lo)) * ph)|round(1) %}
+  <line x1="{{ L }}" x2="{{ L + pw }}" y1="{{ gy }}" y2="{{ gy }}" stroke="#e2e8f0" stroke-width=".6"/>
+  <text x="{{ L - 4 }}" y="{{ gy + 2.6 }}" text-anchor="end" font-size="8" fill="#64748b">{{ t }}</text>{% endfor %}
+  {% if ref %}{% set ry = (T + (1 - (ref - lo) / (hi - lo)) * ph)|round(1) %}
+  <line x1="{{ L }}" x2="{{ L + pw }}" y1="{{ ry }}" y2="{{ ry }}" stroke="#b91c1c" stroke-width=".9" stroke-dasharray="3 2"/>
+  <text x="{{ L + pw }}" y="{{ ry - 2 }}" text-anchor="end" font-size="7.5" fill="#b91c1c">ngưỡng {{ ref }}</text>{% endif %}
+  <line x1="{{ L }}" x2="{{ L }}" y1="{{ T }}" y2="{{ T + ph }}" stroke="#94a3b8" stroke-width=".8"/>
+  <line x1="{{ L }}" x2="{{ L + pw }}" y1="{{ T + ph }}" y2="{{ T + ph }}" stroke="#94a3b8" stroke-width=".8"/>
+  {% for s in ns.segs %}
+    {% if kmax and s.top|length > 1 %}<polygon points="{{ (s.top + (s.bot|reverse|list))|join(' ') }}" fill="#99c4c0" fill-opacity=".5"/>
+    {% elif not kmax and s.bot|length > 1 %}<polyline points="{{ s.bot|join(' ') }}" fill="none" stroke="#7aa6a1" stroke-width="1" stroke-dasharray="3 2"/>{% endif %}
+    {% if s.avg|length > 1 %}<polyline points="{{ s.avg|join(' ') }}" fill="none" stroke="#1e3a5f" stroke-width="1.6" stroke-linejoin="round"/>{% endif %}
+    {% for p in s.avg %}{% set xy = p.split(',') %}<circle cx="{{ xy[0] }}" cy="{{ xy[1] }}" r="1.8" fill="#1e3a5f"/>{% endfor %}
+  {% endfor %}
+  {% for d in days %}{% if loop.index0 % 5 == 0 or loop.last %}<text x="{{ (L + pw * loop.index0 / den)|round(1) }}" y="{{ H - 6 }}" text-anchor="middle" font-size="8" fill="#64748b">{{ d.label }}</text>{% endif %}{% endfor %}
+</svg>
+{% endmacro %}
+
+{% if report.is_sample %}<div class="sample">DỮ LIỆU MINH HỌA</div>{% endif %}
+<header>
+  <div><div class="brand">SMARTCARE AI</div><h1>Báo cáo theo dõi sức khỏe người cao tuổi</h1></div>
+  <div class="meta">Mã báo cáo: {{ report.id }}<br>Kỳ báo cáo: {{ report.period_label }} ({{ report.period_days }} ngày)<br>Xuất lúc: {{ report.generated_at }}</div>
+</header>
+
+<section class="pt">
+  <div><b>Họ tên</b>{{ patient.name }}</div><div><b>Tuổi / Giới</b>{{ patient.age }} · {{ patient.sex }}</div>
+  <div><b>Nhóm máu</b>{{ patient.blood_type or '—' }}</div><div><b>Ngôi nhà</b>{{ patient.house or '—' }}</div>
+  <div class="wide"><b>Thiết bị đeo</b>{{ device.name }} ({{ device.id }})</div>
+  <div class="wide"><b>Đồng bộ gần nhất</b>{{ device.last_sync or '—' }}</div>
+</section>
+
+<section class="banner st-{{ summary.status_level }}">
+  <div class="lab">{{ summary.status_label }}</div>
+  <p>{{ summary.status_text }}</p>
+</section>
+
+<section class="kpis">
+  <div class="kpi"><div class="v">{{ summary.hr_avg }} <small>bpm</small></div><div class="l">Nhịp tim trung bình (thấp nhất {{ summary.hr_min }} · cao nhất {{ summary.hr_max }})</div></div>
+  <div class="kpi"><div class="v">{{ summary.spo2_avg }}<small>%</small></div><div class="l">SpO₂ trung bình (thấp nhất {{ summary.spo2_min }}%)</div></div>
+  <div class="kpi"><div class="v">{{ summary.alerts_total }}</div><div class="l">Cảnh báo · nguy kịch: {{ summary.alerts_critical }}</div></div>
+  <div class="kpi"><div class="v">{{ summary.falls }}</div><div class="l">Sự kiện té ngã</div></div>
+  <div class="kpi"><div class="v">{{ summary.abnormal }} <small>/ {{ summary.records }}</small></div><div class="l">Bản ghi bất thường ({{ ((summary.abnormal / summary.records) * 100)|round(1) if summary.records else 0 }}%)</div></div>
+  {% if summary.temp_avg is not none %}<div class="kpi"><div class="v">{{ summary.temp_avg }}<small>°C</small></div><div class="l">Nhiệt độ da trung bình</div></div>
+  {% else %}<div class="kpi"><div class="v">—</div><div class="l">Nhiệt độ: thiết bị không đo</div></div>{% endif %}
+</section>
+
+<h2>Đánh giá sơ bộ của AI</h2>
+<section class="ai">
+  <div class="top"><b>Tóm tắt dành cho người nhà và bác sĩ</b><span class="tag">Tham khảo · không phải chẩn đoán</span></div>
+  <h3>{{ ai.headline }}</h3>
+  <p style="margin:0">{{ ai.summary }}</p>
+  <h4>Phát hiện chính</h4>
+  {% for f in ai.findings %}<div class="find"><span class="dot {{ f.level }}"></span><div><b>{{ f.title }}</b><div>{{ f.detail }}</div><div class="ev">Căn cứ: {{ f.evidence }}</div></div></div>{% endfor %}
+  <h4>Gợi ý theo dõi</h4>
+  <ol>{% for r in ai.recommendations %}<li>{{ r }}</li>{% endfor %}</ol>
+  <div class="redflag"><b>Liên hệ cấp cứu (115) ngay nếu:</b> {{ ai.red_flags }}</div>
+  <div class="aifoot">Tạo bởi {{ ai.model }} lúc {{ ai.generated_at }} · Độ tin cậy: {{ ai.confidence }} · Dựa trên dữ liệu tổng hợp của kỳ báo cáo, không có hình ảnh hay hồ sơ bệnh án.</div>
+</section>
+
+{% set hl = daily|map(attribute='hr_min')|select('number')|list %}{% set hh = daily|map(attribute='hr_max')|select('number')|list %}
+{% set hlo = (([hl|min, 60]|min) // 10 * 10 - 10) if hl else 40 %}{% set hhi = (([hh|max, 100]|max) // 10 * 10 + 20) if hh else 140 %}
+<h2>Xu hướng nhịp tim theo ngày</h2>
+<div class="two">
+  <div>{{ line_chart(daily,'hr_min','hr_avg','hr_max',hlo,hhi,60,100,10,none) }}
+    <div class="sm mut">Đường đậm: nhịp tim trung bình mỗi ngày; vùng mờ: khoảng thấp nhất – cao nhất; nền xanh: 60–100 bpm (khoảng nghỉ thông thường). Đường đứt quãng = ngày không có dữ liệu.</div></div>
+  <div><div class="sm mut">Thời gian theo vùng nhịp tim</div>
+    <div class="zones">{% for z in hr_zones %}<span class="z{{ loop.index }}" style="flex:{{ z.pct }}"></span>{% endfor %}</div>
+    <ul class="leg">{% for z in hr_zones %}<li><span>{{ z.label }}</span><b>{{ z.pct }}%</b></li>{% endfor %}</ul></div>
+</div>
+<h2 style="margin-top:14px">Xu hướng SpO₂ theo ngày</h2>
+{{ line_chart(daily,'spo2_min','spo2_avg','',85,100,95,100,5,90) }}
+<div class="sm mut">Đường đậm: SpO₂ trung bình mỗi ngày; nét đứt: thấp nhất trong ngày; nền xanh: ≥ 95%; đường đỏ: ngưỡng cảnh báo 90%.</div>
+
+<h2>Tổng hợp cảnh báo</h2>
+<table><thead><tr><th>Loại cảnh báo</th><th>Mức</th><th class="c">Số lần</th><th>Giá trị</th><th>Thời điểm</th><th class="c">Đã xử lý</th></tr></thead><tbody>
+{% for g in alert_groups %}<tr><td>{{ g.label }}</td><td><span class="chip {{ sev.get(g.level,'warn') }}">{{ g.level }}</span></td><td class="c">{{ g.count }}</td><td>{{ g.range }}</td><td>{{ g.when }}</td><td class="c">{{ g.handled }}</td></tr>
+{% else %}<tr><td colspan="6" class="c mut">Không có cảnh báo trong kỳ báo cáo.</td></tr>{% endfor %}</tbody></table>
+
+<h2>Chi tiết sự kiện cảnh báo</h2>
+<table><thead><tr><th>Thời gian</th><th>Loại</th><th>Mức</th><th>Thông điệp</th><th class="c">Xử lý</th></tr></thead><tbody>
+{% for a in alerts %}<tr><td style="white-space:nowrap">{{ a.time }}</td><td>{{ a.type_label }}</td><td><span class="chip {{ sev.get(a.level,'warn') }}">{{ a.level }}</span></td><td>{{ a.message }}</td><td class="c">{{ '✓' if a.handled else 'Chưa' }}</td></tr>
+{% else %}<tr><td colspan="5" class="c mut">Không có sự kiện cảnh báo nào.</td></tr>{% endfor %}</tbody></table>
+
+<h2>Chỉ số gần nhất</h2>
+<table><thead><tr><th>Thời gian</th><th class="c">Nhịp tim</th><th class="c">SpO₂</th><th class="c">Nhiệt độ</th><th class="c">Té ngã</th><th>Đánh giá</th></tr></thead><tbody>
+{% for v in vitals_recent %}<tr><td>{{ v.time }}</td><td class="c">{{ v.hr }}</td><td class="c">{{ v.spo2 }}%</td><td class="c">{{ v.temp if v.temp is not none else '—' }}</td><td class="c">{{ 'Có' if v.fall else 'Không' }}</td><td><span class="chip {{ v.level }}">{{ v.status }}</span></td></tr>
+{% else %}<tr><td colspan="6" class="c mut">Chưa có bản ghi sinh hiệu.</td></tr>{% endfor %}</tbody></table>
+
+<h2>Chất lượng dữ liệu</h2>
+<ul class="q">{% for q in quality %}<li class="{{ q.level }}"><b>{{ q.label }}:</b> {{ q.value }}</li>{% endfor %}</ul>
+
+<div class="disc"><b>Lưu ý:</b> Báo cáo do hệ thống SmartCare AI tổng hợp từ thiết bị đeo tay (đo bằng cảm biến quang học ở cổ tay, không thay thế điện tâm đồ hay máy đo y tế). Đánh giá của AI chỉ mang tính tham khảo và không phải chẩn đoán hay chỉ định điều trị; mọi quyết định y khoa cần do bác sĩ đưa ra. Tài liệu chứa thông tin sức khỏe cá nhân, chỉ chia sẻ với người được người cao tuổi hoặc người giám hộ đồng ý.</div>
+</body></html>
