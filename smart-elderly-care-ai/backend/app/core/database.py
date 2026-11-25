@@ -140,7 +140,7 @@ async def init_db() -> None:
             await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_longitude;"))
             await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_latitude;"))
             await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS location_enabled;"))
-            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);"))
+            await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS email;"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(30) DEFAULT 'active';"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS lock_reason TEXT;"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ;"))
