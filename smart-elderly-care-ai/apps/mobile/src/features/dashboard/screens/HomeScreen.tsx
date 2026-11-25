@@ -427,7 +427,7 @@ export default function HomeScreen({ navigation }: any) {
   }
 
   const nextMedication = todayReminders?.medications?.find((m) => !m.taken) || todayReminders?.medications?.[0] || null;
-  const isMedDone = nextMedTaken || Boolean(nextMedication?.taken);
+  const isMedDone = Boolean(nextMedication?.taken);
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>

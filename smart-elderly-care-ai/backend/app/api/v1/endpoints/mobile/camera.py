@@ -1005,3 +1005,66 @@ async def media(resource: str, request: Request, ticket: str = Query(...), db: A
     else:
         headers["Cache-Control"] = "no-store"
     return StreamingResponse(chunks(), status_code=response.status_code, media_type=response.headers.get("content-type", "application/octet-stream"), headers=headers)
+
+
+class SpeakReminderRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=600)
+    force: StrictBool = False
+    volume: int | None = Field(default=None, ge=0, le=100)
+
+
+class SpeakerVolumeRequest(BaseModel):
+    volume: int = Field(ge=0, le=100)
+
+
+@router.get("/speaker/volume")
+async def get_speaker_volume(context=Depends(viewer)):
+    """Đọc mức âm lượng loa nhắc nhở đã cấu hình cho camera (0-100)."""
+    _, (device, _) = context
+    cfg = getattr(device, "config", None)
+    extra = (cfg.extra_settings or {}) if cfg else {}
+    return {"volume": int(extra.get("speaker_volume", 80))}
+
+
+@router.put("/speaker/volume")
+async def set_speaker_volume(
+    body: SpeakerVolumeRequest,
+    context=Depends(viewer),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lưu mức âm lượng loa nhắc nhở cho camera (0-100)."""
+    _, (device, permissions) = context
+    if not permissions["can_manage_devices"]:
+        raise HTTPException(403, "Bạn không có quyền điều chỉnh âm lượng loa camera")
+    from app.models.device_config import DeviceConfig
+    cfg = getattr(device, "config", None)
+    if cfg is None and hasattr(db, "get"):
+        cfg = await db.get(DeviceConfig, device.id)
+    if cfg is None:
+        cfg = DeviceConfig(device_id=device.id, extra_settings={"speaker_volume": body.volume})
+        db.add(cfg)
+    else:
+        cfg.extra_settings = {**(cfg.extra_settings or {}), "speaker_volume": body.volume}
+    await db.commit()
+    return {"volume": body.volume}
+
+
+@router.post("/speaker/speak")
+async def speak_via_camera(body: SpeakReminderRequest, context=Depends(viewer)):
+    """Phát câu nhắc nhở giọng nói tiếng Việt qua loa của camera."""
+    _, (device, permissions) = context
+    if not permissions["can_manage_devices"]:
+        raise HTTPException(403, "Bạn không có quyền phát âm thanh qua loa camera")
+    from app.services.camera_speaker import speak_to_camera
+    try:
+        result = await speak_to_camera(device, body.text, force=body.force, volume=body.volume)
+    except httpx.HTTPError as exc:
+        logger.error("Lỗi phát loa camera: %s", exc)
+        raise HTTPException(503, f"Không kết nối được loa camera ({exc})") from None
+    except Exception as exc:
+        logger.error("Lỗi TTS/loa camera: %s", exc)
+        raise HTTPException(502, f"Không thể phát giọng nói qua loa camera ({exc})") from None
+
+    if result.get("skipped"):
+        raise HTTPException(409, result.get("reason") or "Loa camera đang tạm tắt")
+    return result

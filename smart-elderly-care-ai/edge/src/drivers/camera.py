@@ -178,6 +178,15 @@ class CameraDriver:
                                 self.source = rtsp_url(new_host)
                                 logger.info("Đã cập nhật nguồn camera sang IP mới: %s", new_host)
                                 fail_count = 0
+                                try:
+                                    import hashlib, urllib.request, urllib.parse
+                                    cpwd = os.getenv("TAPO_CONTROL_PASSWORD") or os.getenv("TAPO_CLOUD_PASSWORD") or os.getenv("TAPO_PASSWORD", "")
+                                    if cpwd:
+                                        ph = hashlib.sha256(cpwd.encode("utf-8")).hexdigest().upper()
+                                        q = urllib.parse.urlencode({"name": "tapo_intercom", "src": f"tapo://admin:{ph}@{new_host}"})
+                                        urllib.request.urlopen(urllib.request.Request(f"http://tapo-audio:1984/api/streams?{q}", method="PUT"), timeout=3)
+                                except Exception:
+                                    pass
                         except Exception as e:
                             logger.debug("Auto-discovery error: %s", e)
                     self._stop.wait(self.reconnect_interval)
