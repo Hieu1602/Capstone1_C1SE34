@@ -156,6 +156,9 @@ async def test_create_and_update_reject_past_scheduled_at():
             assert "tương lai" in r_doc_put.json()["detail"].lower()
 
         state["user"] = fam_user
+        mock_db.execute.return_value = MagicMock(
+            scalar_one_or_none=MagicMock(return_value=SimpleNamespace(id=doc_id, full_name="BS. A"))
+        )
         r_pat_post = await client.post(
             f"/api/v1/patients/{pat_id}/appointments",
             json={"patient_id": str(pat_id), "scheduled_at": past.isoformat()},
@@ -514,9 +517,12 @@ async def test_rescheduled_appointment_confirm_and_incident_ack_sync():
 
     assert resched_inc.is_acknowledged is True
     assert resched_inc.acknowledged_by == fam_user.id
-    inc_query_sql = str(db.execute.call_args_list[1][0][0])
-    assert "APPOINTMENT_SCHEDULED" in inc_query_sql
-    assert "APPOINTMENT_RESCHEDULED" in inc_query_sql
+    inc_stmt = db.execute.call_args_list[1][0][0]
+    inc_query_sql = str(inc_stmt.compile(compile_kwargs={"literal_binds": False}))
+    inc_params = str(inc_stmt.compile().params)
+    assert "incidents.alert_type IN" in inc_query_sql
+    assert "APPOINTMENT_SCHEDULED" in inc_params
+    assert "APPOINTMENT_RESCHEDULED" in inc_params
     assert any(m.get("type") == "INCIDENT_RESOLVED" and m.get("incident_id") == str(inc_id) for m in ws_msgs)
 
     # Verify incidents.py acknowledge & acknowledge-all trigger confirm for APPOINTMENT_RESCHEDULED
@@ -531,6 +537,7 @@ async def test_rescheduled_appointment_confirm_and_incident_ack_sync():
         acknowledged_by=fam_user.id,
         acknowledged_by_name="Người nhà",
         detected_at=datetime.now(timezone.utc),
+        created_at=datetime.now(timezone.utc),
         video_url=None,
         notes=f"APT:{apt_id}|PATIENT:{pat_id}|BY_DOCTOR:{doc_id}",
     )
@@ -653,7 +660,7 @@ async def test_patients_busy_slots_pii_free_and_family_reschedule_cancel_guards(
 
         # Stranger without house membership -> 403
         state["user"] = stranger_user
-        with patch.object(crud_house, "get_member_by_user", AsyncMock(return_value=None)):
+        with patch.object(crud_house.crud_house, "get_member_by_user", AsyncMock(return_value=None)):
             r_slots_403 = await client.get(f"/api/v1/patients/{pat_id}/appointments/busy-slots")
             assert r_slots_403.status_code == 403
 
@@ -763,3 +770,56 @@ async def test_patients_busy_slots_pii_free_and_family_reschedule_cancel_guards(
             assert rel_inc.is_acknowledged is True
             assert m_ws_cancel.call_args[0][0]["type"] == "APPOINTMENT_CANCELLED"
             m_fcm_cancel.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_doctor_can_update_and_complete_confirmed_appointment():
+    doc_id = uuid.uuid4()
+    pat_id = uuid.uuid4()
+    house_id = uuid.uuid4()
+    apt_id = uuid.uuid4()
+    doc_user = SimpleNamespace(id=doc_id, role="doctor", full_name="BS. Minh", is_active=True)
+
+    confirmed_apt = _make_apt(
+        apt_id=apt_id, doctor_id=doc_id, patient_id=pat_id, house_id=house_id, status="CONFIRMED"
+    )
+    completed_apt = _make_apt(
+        apt_id=apt_id, doctor_id=doc_id, patient_id=pat_id, house_id=house_id, status="COMPLETED"
+    )
+    future_time = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
+
+    mock_db = AsyncMock()
+    mock_db.execute.return_value = MagicMock(
+        scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[]))),
+        scalar_one_or_none=MagicMock(return_value=None),
+    )
+    mock_db.get.return_value = SimpleNamespace(id=pat_id, full_name="Cụ An", house_id=house_id)
+    app = _build_test_app(mock_db, {"user": doc_user})
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        with (
+            patch.object(crud_appointment, "get_by_id", AsyncMock(return_value=confirmed_apt)),
+            patch.object(crud_appointment, "update_appointment", AsyncMock(return_value=confirmed_apt)),
+            patch("app.api.v1.endpoints.mobile.doctor._resolve_patient_info", AsyncMock(return_value=("Cụ An", house_id))),
+            patch("app.api.v1.endpoints.mobile.doctor._resolve_device_id", AsyncMock(return_value=None)),
+            patch("app.api.v1.endpoints.mobile.doctor.broadcast_alert_ws", AsyncMock()),
+            patch("app.api.v1.endpoints.mobile.doctor.send_appointment_fcm", AsyncMock()),
+        ):
+            r_put = await client.put(
+                f"/api/v1/doctor/appointments/{apt_id}",
+                json={"scheduled_at": future_time, "clinical_notes": "Dời lịch đã xác nhận"},
+            )
+            assert r_put.status_code == 200
+
+        with (
+            patch.object(crud_appointment, "get_by_id", AsyncMock(return_value=confirmed_apt)),
+            patch.object(crud_appointment, "mark_completed", AsyncMock(return_value=completed_apt)),
+            patch("app.api.v1.endpoints.mobile.doctor._resolve_patient_info", AsyncMock(return_value=("Cụ An", house_id))),
+            patch("app.api.v1.endpoints.mobile.doctor.broadcast_alert_ws", AsyncMock()),
+        ):
+            r_comp = await client.post(
+                f"/api/v1/doctor/appointments/{apt_id}/complete",
+                json={"clinical_notes": "Khám xong"},
+            )
+            assert r_comp.status_code == 200
+            assert r_comp.json()["status"] == "COMPLETED"

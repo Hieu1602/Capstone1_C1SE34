@@ -412,7 +412,7 @@ class CRUDAppointment:
         apt = await self.get_by_id(db, appointment_id)
         if not apt:
             return None
-        if apt.status != AppointmentStatusEnum.UPCOMING.value:
+        if apt.status not in (AppointmentStatusEnum.UPCOMING.value, AppointmentStatusEnum.CONFIRMED.value):
             raise ValueError("Lịch khám đã hoàn tất hoặc đã bị hủy trước đó.")
 
         apt.status = AppointmentStatusEnum.COMPLETED.value

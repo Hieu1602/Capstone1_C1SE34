@@ -89,21 +89,22 @@ export default function DoctorHomeScreen() {
   const upcomingAppointments = useMemo(
     () =>
       appointments
-        .filter((a) => a.status === 'UPCOMING')
+        .filter((a) => a.status === 'UPCOMING' || a.status === 'CONFIRMED')
         .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()),
     [appointments]
   );
   const nextAppointment = useMemo(() => {
     const cutoff = nowMs - 30 * 60 * 1000;
+    const isActiveStatus = (s?: string) => s === 'UPCOMING' || s === 'CONFIRMED';
     const activeToday = todayAppointments.find(
-      (a) => a.status === 'UPCOMING' && new Date(a.scheduled_at).getTime() >= cutoff
+      (a) => isActiveStatus(a.status) && new Date(a.scheduled_at).getTime() >= cutoff
     );
     if (activeToday) return activeToday;
     const activeUpcoming = upcomingAppointments.find(
       (a) => new Date(a.scheduled_at).getTime() >= cutoff
     );
     if (activeUpcoming) return activeUpcoming;
-    return todayAppointments.find((a) => a.status === 'UPCOMING') || upcomingAppointments[0] || null;
+    return todayAppointments.find((a) => isActiveStatus(a.status)) || upcomingAppointments[0] || null;
   }, [todayAppointments, upcomingAppointments, nowMs]);
 
   // 1. Nạp Cache tức thì (0ms) từ AsyncStorage khi mở màn hình
@@ -224,15 +225,18 @@ export default function DoctorHomeScreen() {
     fetchData();
     alertsWS.connect();
     const unsub = alertsWS.subscribe((event: any) => {
+      const evtType = String(event?.type || '');
+      const alertType = String(event?.alert_type || '');
       if (
-        event?.type === 'ALERT_NEW' ||
-        event?.type === 'INCIDENT_RESOLVED' ||
-        event?.type === 'INCIDENT_ESCALATED' ||
-        event?.type === 'vitals_update' ||
-        event?.type === 'TELEMETRY_UPDATE' ||
-        event?.type === 'DEVICE_STATUS' ||
-        event?.alert_type === 'MEDICAL_RECORD_UPDATED' ||
-        event?.alert_type === 'APPOINTMENT_SCHEDULED'
+        evtType === 'ALERT_NEW' ||
+        evtType === 'INCIDENT_RESOLVED' ||
+        evtType === 'INCIDENT_ESCALATED' ||
+        evtType === 'vitals_update' ||
+        evtType === 'TELEMETRY_UPDATE' ||
+        evtType === 'DEVICE_STATUS' ||
+        evtType.startsWith('APPOINTMENT_') ||
+        alertType === 'MEDICAL_RECORD_UPDATED' ||
+        alertType.startsWith('APPOINTMENT_')
       ) {
         setNowMs(Date.now());
         fetchData();

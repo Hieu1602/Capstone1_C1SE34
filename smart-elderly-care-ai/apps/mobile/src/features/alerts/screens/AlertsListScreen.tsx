@@ -48,7 +48,7 @@ export default function AlertsListScreen({ navigation, route }: any) {
   const { isDarkMode, colors } = useTheme();
 
   const { incidents, setIncidents, fetchNotifications, acknowledgeIncident, acknowledgeAll } = useAlertStore();
-  const { patientRecord, patientsList, fetchPatientsList, todayReminders, markMedicationTaken, snoozeMedication, fetchReminders } = usePatientStore();
+  const { patientRecord, activePatientId, patientsList, fetchPatientsList, todayReminders, markMedicationTaken, snoozeMedication, fetchReminders } = usePatientStore();
   const { userName, userId, userRole, role, permissions, fetchMyPermissions } = useAuthStore();
   const { house, iotDevices, fetchHouseFromBackend, fetchDevicesFromBackend } = useDeviceStore();
 
@@ -458,7 +458,8 @@ export default function AlertsListScreen({ navigation, route }: any) {
         if (found) pname = found.name || found.full_name;
       }
 
-      const finalPid = pid || (item.device_id && !isNaN(Number(item.device_id)) ? item.device_id : (patientRecord?.patient_id || 1));
+      const fallbackPid = patientRecord?.id || activePatientId || pList[0]?.id || pList[0]?.elderly_id || '';
+      const finalPid = pid || fallbackPid;
       const finalPname = pname || (pid && pList.find((p: any) => p.id === pid || p.elderly_id === pid)?.name) || patientRecord?.name || 'Bệnh nhân';
 
       setSelectedAppointmentPatientId(finalPid);
@@ -652,7 +653,7 @@ export default function AlertsListScreen({ navigation, route }: any) {
 
       <FamilyAppointmentsModal
         visible={familyAppointmentsModalVisible}
-        patientId={selectedAppointmentPatientId || patientRecord?.patient_id || 1}
+        patientId={selectedAppointmentPatientId || patientRecord?.id || activePatientId || patientsList?.[0]?.id || ''}
         patientName={selectedAppointmentPatientName || patientRecord?.name}
         onClose={() => {
           setFamilyAppointmentsModalVisible(false);

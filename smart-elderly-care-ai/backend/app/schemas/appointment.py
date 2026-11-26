@@ -31,6 +31,7 @@ class VisitTypeEnum(str, Enum):
 
 class AppointmentStatusEnum(str, Enum):
     UPCOMING = "UPCOMING"
+    CONFIRMED = "CONFIRMED"
     COMPLETED = "COMPLETED"
     CANCELLED = "CANCELLED"
 

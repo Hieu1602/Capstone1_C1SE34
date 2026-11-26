@@ -174,10 +174,17 @@ export default function DoctorAppointmentsScreen() {
     setPatientId(apt.patient_id);
     setPatientName(apt.patient_name);
     setScheduledAt(apt.scheduled_at);
-    setExamType(apt.exam_type || apt.clinical_notes || 'Khám tổng quát định kỳ');
+
+    // Strip family confirmation prefix and extract [examType] instructions if exam_type/instructions missing
+    const rawNotes = (apt.clinical_notes || '').replace(/\[ĐÃ XÁC NHẬN ĐÓN TIẾP\]\s*/g, '').trim();
+    const tagMatch = rawNotes.match(/^\[([^\]]+)\]\s*(.*)$/s);
+    const derivedExam = apt.exam_type || (tagMatch ? tagMatch[1].trim() : rawNotes) || 'Khám tổng quát định kỳ';
+    const derivedInst = apt.instructions ?? (tagMatch ? tagMatch[2].trim() : '');
+
+    setExamType(derivedExam);
     setVisitType((apt.visit_type as any) || 'HOME_VISIT');
     setLocation(apt.location || '');
-    setInstructions(apt.instructions || '');
+    setInstructions(derivedInst);
     setEnableSpeaker(apt.enable_speaker_reminder ?? true);
     setRecurrencePattern((apt.recurrence_pattern as any) || 'NONE');
     setRecurrenceOccurrences(apt.recurrence_occurrences || 1);
@@ -213,6 +220,10 @@ export default function DoctorAppointmentsScreen() {
       }
       const chosenPatientName = patientName.trim() || patients.find((p) => String(p.id) === String(chosenPatientId))?.name || 'Bệnh nhân';
 
+      const editingTarget = editingAptId ? appointments.find((a) => a.id === editingAptId) : null;
+      const hadFamilyConfirmTag = Boolean(editingTarget?.clinical_notes?.includes('[ĐÃ XÁC NHẬN ĐÓN TIẾP]'));
+      const baseNotes = instructions.trim() ? `[${examType.trim()}] ${instructions.trim()}` : examType.trim();
+
       const payload: any = {
         patient_id: chosenPatientId,
         patient_name: chosenPatientName,
@@ -220,7 +231,7 @@ export default function DoctorAppointmentsScreen() {
         visit_type: visitType,
         exam_type: examType.trim(),
         location: location.trim() || 'Tại nhà bệnh nhân',
-        clinical_notes: instructions.trim() ? `[${examType.trim()}] ${instructions.trim()}` : examType.trim(),
+        clinical_notes: hadFamilyConfirmTag ? `[ĐÃ XÁC NHẬN ĐÓN TIẾP] ${baseNotes}` : baseNotes,
         instructions: instructions.trim(),
         enable_speaker_reminder: enableSpeaker,
         recurrence_pattern: recurrencePattern,
@@ -237,7 +248,12 @@ export default function DoctorAppointmentsScreen() {
       } else {
         const res = await doctorApi.createAppointment(payload);
         if (res.data) {
-          const added = Array.isArray(res.data) ? res.data : [res.data];
+          const added =
+            Array.isArray(res.data.created_appointments) && res.data.created_appointments.length > 0
+              ? res.data.created_appointments
+              : Array.isArray(res.data)
+                ? res.data
+                : [res.data];
           upsertAppointments(added);
         }
         setModalVisible(false);
@@ -255,8 +271,16 @@ export default function DoctorAppointmentsScreen() {
       }
     } catch (err: any) {
       const status = err?.response?.status;
-      const detail = err?.response?.data?.detail;
-      if (status === 409 || (detail && typeof detail === 'string' && (detail.includes('trùng') || detail.includes('đã có lịch')))) {
+      const rawDetail = err?.response?.data?.detail;
+      const detail =
+        typeof rawDetail === 'string'
+          ? rawDetail
+          : Array.isArray(rawDetail)
+            ? rawDetail.map((d: any) => d?.msg || JSON.stringify(d)).join('\n')
+            : rawDetail && typeof rawDetail === 'object'
+              ? rawDetail.message || JSON.stringify(rawDetail)
+              : undefined;
+      if (status === 409 || (detail && (detail.includes('trùng') || detail.includes('đã có lịch')))) {
         LocalizedAlert.alert(
           'Trùng lịch khám',
           detail || 'Khung giờ này đã có lịch khám khác. Vui lòng chọn giờ khác.'
@@ -461,7 +485,7 @@ export default function DoctorAppointmentsScreen() {
               appointment={apt}
               isFirst={index === 0}
               isLast={index === filteredAppointments.length - 1}
-              isCurrentOrNext={apt.status === 'UPCOMING' && isAppointmentHappeningNow(apt.scheduled_at, nowMs)}
+              isCurrentOrNext={(apt.status === 'UPCOMING' || apt.status === 'CONFIRMED') && isAppointmentHappeningNow(apt.scheduled_at, nowMs)}
               isOverdue={isAppointmentOverdue(apt.scheduled_at, apt.status, nowMs)}
               onViewPatient={handleViewPatient}
               onMarkCompleted={handleOpenCompleteModal}

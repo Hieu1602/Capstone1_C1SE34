@@ -247,26 +247,37 @@ export default function DoctorPatientsScreen() {
 
   const handleSaveAppointment = async () => {
     if (!selectedPatientForApt) return;
+    const parsed = new Date(scheduledAt);
+    if (isNaN(parsed.getTime()) || parsed.getTime() <= Date.now()) {
+      LocalizedAlert.alert('Thời gian không hợp lệ', 'Vui lòng chọn thời gian hẹn ở tương lai.');
+      return;
+    }
     try {
       setIsSubmittingApt(true);
-      const parsed = new Date(scheduledAt);
-      const finalIso = !isNaN(parsed.getTime()) ? parsed.toISOString() : new Date(Date.now() + 2 * 3600000).toISOString();
+      const finalIso = parsed.toISOString();
+      const notes = instructions.trim() ? `[${examType.trim()}] ${instructions.trim()}` : examType.trim();
       const res = await doctorApi.createAppointment({
         patient_id: selectedPatientForApt.id,
         patient_name: selectedPatientForApt.name,
         scheduled_at: finalIso,
         visit_type: visitType,
-        exam_type: examType,
+        exam_type: examType.trim(),
         location: location,
-        clinical_notes: examType,
-        instructions: instructions,
+        clinical_notes: notes,
+        instructions: instructions.trim(),
         enable_speaker_reminder: enableSpeaker,
         recurrence_pattern: recurrencePattern,
-        recurrence_occurrences: recurrenceOccurrences,
+        ...(recurrencePattern !== 'NONE' ? { recurrence_occurrences: recurrenceOccurrences } : {}),
       });
       // Sync newly created appointment(s) into the shared store
       if (res.data) {
-        upsertAppointments(Array.isArray(res.data) ? res.data : [res.data]);
+        const added =
+          Array.isArray(res.data.created_appointments) && res.data.created_appointments.length > 0
+            ? res.data.created_appointments
+            : Array.isArray(res.data)
+              ? res.data
+              : [res.data];
+        upsertAppointments(added);
       }
       setAppointmentModalVisible(false);
       LocalizedAlert.alert('Thành công', 'Đã tạo lịch khám thành công cho bệnh nhân!');

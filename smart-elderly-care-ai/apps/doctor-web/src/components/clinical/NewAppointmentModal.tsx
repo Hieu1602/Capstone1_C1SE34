@@ -161,8 +161,17 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
       onSuccess();
       onClose();
     } catch (err: any) {
+      const rawDetail = err.response?.data?.detail;
+      const formattedDetail =
+        typeof rawDetail === 'string'
+          ? rawDetail
+          : Array.isArray(rawDetail)
+            ? rawDetail.map((d: any) => d?.msg || JSON.stringify(d)).join('; ')
+            : rawDetail && typeof rawDetail === 'object'
+              ? rawDetail.message || JSON.stringify(rawDetail)
+              : null;
       setErrorMsg(
-        err.response?.data?.detail ||
+        formattedDetail ||
           (isReschedule
             ? 'Không thể dời lịch hẹn. Vui lòng kiểm tra lại.'
             : 'Không thể tạo lịch hẹn. Vui lòng kiểm tra lại.')

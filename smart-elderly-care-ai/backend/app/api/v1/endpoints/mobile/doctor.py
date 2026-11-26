@@ -655,10 +655,10 @@ async def update_doctor_appointment(
             detail="Không tìm thấy lịch khám yêu cầu.",
         )
     _check_doctor_access(current_user, existing)
-    if existing.status != AppointmentStatusEnum.UPCOMING.value:
+    if existing.status not in (AppointmentStatusEnum.UPCOMING.value, AppointmentStatusEnum.CONFIRMED.value):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Chỉ có thể cập nhật lịch khám ở trạng thái sắp tới (UPCOMING).",
+            detail="Chỉ có thể cập nhật lịch khám ở trạng thái sắp tới (UPCOMING/CONFIRMED).",
         )
 
     try:
@@ -764,7 +764,7 @@ async def complete_doctor_appointment(
             detail="Không tìm thấy lịch khám yêu cầu.",
         )
     _check_doctor_access(current_user, existing)
-    if existing.status != AppointmentStatusEnum.UPCOMING.value:
+    if existing.status not in (AppointmentStatusEnum.UPCOMING.value, AppointmentStatusEnum.CONFIRMED.value):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Lịch khám đã hoàn tất hoặc đã bị hủy trước đó.",
