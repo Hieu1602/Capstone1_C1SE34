@@ -62,6 +62,7 @@ interface ComputeTabConfigParams {
   scrubberMinutes: number;
   dailyAvgHR: string;
   chartDataForDay: any[];
+  dailySteps?: number | null;
 }
 
 export function computeHealthTabConfig({
@@ -74,6 +75,7 @@ export function computeHealthTabConfig({
   scrubberMinutes,
   dailyAvgHR,
   chartDataForDay,
+  dailySteps,
 }: ComputeTabConfigParams): HealthTabConfigResult {
   switch (selectedRange) {
     case 'WEEK': {
@@ -388,18 +390,22 @@ export function computeHealthTabConfig({
           iconColor: '#0284C7',
           iconBg: '#E0F2FE',
         },
-        card3: {
-          label: 'Bước chân trong ngày',
-          value: stepsVal,
-          unit: stepsVal !== '--' ? 'bước' : '',
-          status: !closestVital || stepsVal === '--' ? (isFutureTime ? 'Chưa tới' : 'Chưa có dữ liệu') : Number(stepsVal) >= 3000 ? 'Đạt mục tiêu' : 'Tích cực',
-          statusColor: !closestVital || stepsVal === '--' ? '#64748B' : '#15803D',
-          statusBg: !closestVital || stepsVal === '--' ? '#F1F5F9' : '#DCFCE7',
-          range: hasData ? 'Mục tiêu: 3,000 - 5,000 bước/ngày' : 'Chưa ghi nhận',
-          icon: 'footsteps' as keyof typeof Ionicons.glyphMap,
-          iconColor: '#16A34A',
-          iconBg: '#DCFCE7',
-        },
+        card3: (() => {
+          const dayStepsVal = typeof dailySteps === 'number' ? String(dailySteps) : stepsVal;
+          const hasDaySteps = dayStepsVal !== '--';
+          return {
+            label: 'Bước chân trong ngày',
+            value: dayStepsVal,
+            unit: hasDaySteps ? 'bước' : '',
+            status: !hasDaySteps ? (isFutureTime ? 'Chưa tới' : 'Chưa có dữ liệu') : Number(dayStepsVal) >= 3000 ? 'Đạt mục tiêu' : 'Tích cực',
+            statusColor: !hasDaySteps ? '#64748B' : '#15803D',
+            statusBg: !hasDaySteps ? '#F1F5F9' : '#DCFCE7',
+            range: hasData || hasDaySteps ? 'Mục tiêu: 3,000 - 5,000 bước/ngày' : 'Chưa ghi nhận',
+            icon: 'footsteps' as keyof typeof Ionicons.glyphMap,
+            iconColor: '#16A34A',
+            iconBg: '#DCFCE7',
+          };
+        })(),
         card4: {
           label: 'Tư thế & An toàn',
           value: actVal,

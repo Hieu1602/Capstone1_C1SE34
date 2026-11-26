@@ -116,6 +116,7 @@ export const useHealthStore = create<HealthState>()((set, get) => ({
           person_count: d.person_count ?? 0,
           fall_detected: isFresh ? Boolean(d.fall_detected) : false,
           timestamp: isFresh ? (d.timestamp ?? timeMs) : null,
+          steps: isFresh ? (d.steps ?? null) : null,
           acoustic_status: d.sound ?? 'Bình thường',
           bracelet_battery: isConnected ? (d.bracelet_battery ?? null) : null,
           bracelet_connected: isConnected,
