@@ -93,6 +93,7 @@ interface PatientDrawerVitalsTabProps {
   initialHrHigh?: number;
   initialHrLow?: number;
   initialSpo2Low?: number;
+  onThresholdsSaved?: () => void;
   analytics: AnalyticsData | null;
   isLoading: boolean;
   vitalFilter?: VitalFilterState;
@@ -118,6 +119,7 @@ export const PatientDrawerVitalsTab: React.FC<PatientDrawerVitalsTabProps> = ({
   initialHrHigh = 120,
   initialHrLow = 50,
   initialSpo2Low = 90,
+  onThresholdsSaved,
   analytics,
   isLoading,
   vitalFilter,
@@ -158,6 +160,7 @@ export const PatientDrawerVitalsTab: React.FC<PatientDrawerVitalsTabProps> = ({
         hr_threshold_low: hrLow,
         spo2_threshold_low: spo2Low,
       });
+      onThresholdsSaved?.();
       setThresholdMsg({ ok: true, text: 'Đã lưu ngưỡng y tế & gửi thông báo cho bác sĩ, chủ nhà và người liên quan.' });
     } catch {
       setThresholdMsg({ ok: false, text: 'Không thể lưu cấu hình ngưỡng. Vui lòng thử lại.' });

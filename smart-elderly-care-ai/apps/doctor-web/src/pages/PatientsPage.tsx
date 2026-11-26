@@ -540,6 +540,7 @@ export const PatientsPage: React.FC = () => {
           onOpenRecordModal={() => setShowRecordModal(true)}
           onOpenPrescriptionModal={() => setShowPrescriptionModal(true)}
           onOpenAppointmentModal={() => setShowAppointmentModal(true)}
+          onThresholdsSaved={handleRefreshDetail}
         />
       )}
 

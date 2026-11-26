@@ -38,6 +38,7 @@ export interface PatientDetailDrawerProps {
   onOpenRecordModal: () => void;
   onOpenPrescriptionModal: () => void;
   onOpenAppointmentModal: () => void;
+  onThresholdsSaved?: () => void;
 }
 
 export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
@@ -58,6 +59,7 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
   onOpenRecordModal,
   onOpenPrescriptionModal,
   onOpenAppointmentModal,
+  onThresholdsSaved,
 }) => {
   const [activeTab, setActiveTab] = useState<DrawerTabKey>('RECORD');
 
@@ -149,6 +151,7 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
               initialHrHigh={patientDetail.hr_threshold_high}
               initialHrLow={patientDetail.hr_threshold_low}
               initialSpo2Low={patientDetail.spo2_threshold_low}
+              onThresholdsSaved={onThresholdsSaved}
               analytics={analytics}
               isLoading={isLoadingAnalytics}
               vitalFilter={vitalFilter}

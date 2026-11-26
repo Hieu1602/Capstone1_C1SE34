@@ -619,23 +619,21 @@ class CRUDDoctor:
             else (med_record.blood_type or clinical.get("blood_type"))
         )
 
-        # Đọc cấu hình ngưỡng sinh hiệu hiện hành từ DeviceConfig / _CLINICAL_STORE
-        cfg_hr_low = 50
-        cfg_hr_high = 120
-        cfg_spo2_low = 90
-        if band_device:
-            cfg_res = await db.execute(select(DeviceConfig).where(DeviceConfig.device_id == band_device.id))
+        # Đọc cấu hình ngưỡng sinh hiệu hiện hành (ưu tiên DeviceConfig trong PostgreSQL, fallback _CLINICAL_STORE)
+        cfg_hr_low = clinical.get("hr_threshold_low") if clinical.get("hr_threshold_low") is not None else 50
+        cfg_hr_high = clinical.get("hr_threshold_high") if clinical.get("hr_threshold_high") is not None else 120
+        cfg_spo2_low = clinical.get("spo2_threshold_low") if clinical.get("spo2_threshold_low") is not None else 90
+        cfg_device_id = band_device.id if band_device else None
+        if not cfg_device_id and elderly and elderly.house_id:
+            dev_res = await db.execute(select(Device.id).where(Device.house_id == elderly.house_id).limit(1))
+            cfg_device_id = dev_res.scalar_one_or_none()
+        if cfg_device_id:
+            cfg_res = await db.execute(select(DeviceConfig).where(DeviceConfig.device_id == cfg_device_id))
             d_cfg = cfg_res.scalar_one_or_none()
             if d_cfg:
                 cfg_hr_low = d_cfg.hr_threshold_low
                 cfg_hr_high = d_cfg.hr_threshold_high
                 cfg_spo2_low = d_cfg.spo2_threshold_low
-        if clinical.get("hr_threshold_low") is not None:
-            cfg_hr_low = clinical["hr_threshold_low"]
-        if clinical.get("hr_threshold_high") is not None:
-            cfg_hr_high = clinical["hr_threshold_high"]
-        if clinical.get("spo2_threshold_low") is not None:
-            cfg_spo2_low = clinical["spo2_threshold_low"]
 
         return DoctorPatientDetail(
             id=med_record.id,
@@ -1530,6 +1528,13 @@ class CRUDDoctor:
             db.add(new_incident)
             await db.commit()
             await db.refresh(new_incident)
+
+            try:
+                from app.services.redis import redis_service
+                await redis_service.invalidate_incidents_cache()
+                await redis_service.invalidate_doctor_patients()
+            except Exception:
+                pass
 
             try:
                 import json
