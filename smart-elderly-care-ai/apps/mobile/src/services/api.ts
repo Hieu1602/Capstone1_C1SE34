@@ -340,7 +340,7 @@ export const patientApi = {
     api.put(`/patients/${patientId}/medical-record`, data),
   getVitals: (patientId: number | string, target_date?: string) =>
     api.get(`/patients/${patientId}/vitals`, { params: { target_date, limit: 300 } }),
-  enrollFace: (patientId: number, formData: FormData) =>
+  enrollFace: (patientId: number | string, formData: FormData) =>
     api.post(`/patients/${patientId}/face-enroll`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
