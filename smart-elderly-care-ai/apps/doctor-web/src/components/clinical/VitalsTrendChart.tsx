@@ -18,6 +18,7 @@ import {
   formatDM,
   formatDMY,
   formatShortWeekdayDM,
+  formatYMD,
   parseFlexibleDate,
   parseYMD,
 } from '../../utils/dateFilter';
@@ -187,45 +188,67 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
     return m ? Number(m[1]) : new Date().getFullYear();
   })();
 
-  const chartData: ChartPoint[] =
-    isHourlyView && data[0]?.hourly_records && data[0].hourly_records.length > 0
-      ? data[0].hourly_records.map((h) => {
-          const { sys, dia } = parseBp(h.bp);
-          const dayDMY = selectedDate
-            ? formatDMY(parseFlexibleDate(selectedDate, referenceYear))
-            : data[0]?.date
-              ? formatDMY(parseFlexibleDate(data[0].date, referenceYear))
-              : '';
-          return {
-            date: h.time,
-            fullDateTime: dayDMY ? `${h.time} • ${dayDMY}` : h.time,
-            heartRate: h.heart_rate ?? null,
-            spo2: h.spo2 ?? null,
-            bpSys: sys,
-            bpDia: dia,
-            temp: h.skin_temp !== undefined ? Math.round(h.skin_temp * 10) / 10 : null,
-          };
-        })
-      : data.map((item) => {
-          const d = parseFlexibleDate(item.date, referenceYear);
-          const dateLabel =
-            effectiveMode === 'WEEK'
-              ? formatShortWeekdayDM(item.date, referenceYear)
-              : formatDM(d);
-          const fullDateTime =
-            effectiveMode === 'WEEK'
-              ? `${formatShortWeekdayDM(item.date, referenceYear)} • ${formatDMY(d)}`
-              : `Ngày ${formatDMY(d)}`;
-          return {
-            date: dateLabel,
-            fullDateTime,
-            heartRate: item.avg_heart_rate ? Math.round(item.avg_heart_rate) : null,
-            spo2: item.avg_spo2 ? Math.round(item.avg_spo2 * 10) / 10 : null,
-            bpSys: null,
-            bpDia: null,
-            temp: item.avg_skin_temp ? Math.round(item.avg_skin_temp * 10) / 10 : null,
-          };
-        });
+  const chartData: ChartPoint[] = (() => {
+    if (isHourlyView && data[0]?.hourly_records && data[0].hourly_records.length > 0) {
+      const dayDMY = selectedDate
+        ? formatDMY(parseFlexibleDate(selectedDate, referenceYear))
+        : data[0]?.date
+          ? formatDMY(parseFlexibleDate(data[0].date, referenceYear))
+          : '';
+      const byHour = new Map(data[0].hourly_records.map((h) => [h.time, h]));
+      // Đủ 00:00 -> 24:00 (25 mốc) để trục ngày luôn hiển thị tròn 0-24h
+      return Array.from({ length: 25 }, (_, hr) => {
+        const time = `${String(hr).padStart(2, '0')}:00`;
+        const h = byHour.get(time);
+        const { sys, dia } = parseBp(h?.bp);
+        return {
+          date: time,
+          fullDateTime: dayDMY ? `${time} • ${dayDMY}` : time,
+          heartRate: h?.heart_rate ?? null,
+          spo2: h?.spo2 ?? null,
+          bpSys: sys,
+          bpDia: dia,
+          temp: h?.skin_temp !== undefined ? Math.round(h.skin_temp * 10) / 10 : null,
+        };
+      });
+    }
+
+    const toPoint = (d: Date, item?: TrendItem): ChartPoint => {
+      const ymd = formatYMD(d);
+      const dateLabel =
+        effectiveMode === 'WEEK' ? formatShortWeekdayDM(ymd, referenceYear) : formatDM(d);
+      const fullDateTime =
+        effectiveMode === 'WEEK'
+          ? `${formatShortWeekdayDM(ymd, referenceYear)} • ${formatDMY(d)}`
+          : `Ngày ${formatDMY(d)}`;
+      return {
+        date: dateLabel,
+        fullDateTime,
+        heartRate: item?.avg_heart_rate ? Math.round(item.avg_heart_rate) : null,
+        spo2: item?.avg_spo2 ? Math.round(item.avg_spo2 * 10) / 10 : null,
+        bpSys: null,
+        bpDia: null,
+        temp: item?.avg_skin_temp ? Math.round(item.avg_skin_temp * 10) / 10 : null,
+      };
+    };
+
+    if ((effectiveMode === 'WEEK' || effectiveMode === 'MONTH') && startDate && endDate) {
+      const byYmd = new Map<string, TrendItem>();
+      data.forEach((item) => {
+        byYmd.set(formatYMD(parseFlexibleDate(item.date, referenceYear)), item);
+      });
+      const points: ChartPoint[] = [];
+      const cur = parseYMD(startDate);
+      const end = parseYMD(endDate);
+      while (cur.getTime() <= end.getTime()) {
+        points.push(toPoint(new Date(cur), byYmd.get(formatYMD(cur))));
+        cur.setDate(cur.getDate() + 1);
+      }
+      return points;
+    }
+
+    return data.map((item) => toPoint(parseFlexibleDate(item.date, referenceYear), item));
+  })();
 
   const showHR = selectedMetric === 'ALL' || selectedMetric === 'HR';
   const showSpO2 = selectedMetric === 'ALL' || selectedMetric === 'SPO2';
@@ -319,12 +342,17 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
               fontSize={11}
               tickLine={false}
               axisLine={{ stroke: '#475569' }}
-              interval={effectiveMode === 'MONTH' ? Math.max(0, Math.floor(chartData.length / 7)) : isHourlyView ? 'preserveStartEnd' : 0}
+              ticks={
+                isHourlyView
+                  ? ['00:00', '03:00', '06:00', '09:00', '12:00', '15:00', '18:00', '21:00', '24:00']
+                  : undefined
+              }
+              interval={effectiveMode === 'MONTH' ? Math.max(0, Math.floor(chartData.length / 7)) : 0}
             />
             {showHR && (
               <YAxis
                 yAxisId="left"
-                width={54}
+                width={62}
                 domain={[hrMin, hrMax]}
                 ticks={hrTicks}
                 stroke="#3B82F6"
