@@ -164,6 +164,15 @@ export const doctorApi = {
     return res.data;
   },
 
+  // Cập nhật ngưỡng cảnh báo nhịp tim & SpO2
+  updateThresholds: async (
+    elderlyId: string,
+    data: { hr_threshold_high: number; hr_threshold_low: number; spo2_threshold_low: number }
+  ) => {
+    const res = await api.put(`/doctor/patients/${elderlyId}/thresholds`, data);
+    return res.data;
+  },
+
   // Lấy dữ liệu phân tích sinh hiệu (TimescaleDB)
   getAnalytics: async (
     elderlyId: string,

@@ -101,6 +101,9 @@ export interface DoctorPatientDetail {
   dietary_notes?: string;
   conditions?: ConditionItem[];
   prescriptions?: PrescriptionItem[];
+  hr_threshold_low?: number;
+  hr_threshold_high?: number;
+  spo2_threshold_low?: number;
 }
 
 export interface AppointmentItem {

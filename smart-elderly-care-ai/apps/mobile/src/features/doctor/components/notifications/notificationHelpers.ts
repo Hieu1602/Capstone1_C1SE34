@@ -158,6 +158,7 @@ export function buildUnifiedNotifications(params: {
       inc.alert_type === 'HOUSE_INVITE_PENDING' ||
       Boolean(inc.notes?.includes('HOUSE_INVITE_PENDING')) ||
       ['lời mời bạn tham gia căn nhà', 'lời mời tham gia căn nhà', 'xác nhận vào nhà'].some((k) => msgLower.includes(k));
+    const isConfigUpdate = inc.alert_type === 'DEVICE_CONFIG_UPDATED';
 
     if (
       isMedicalRecordMsg &&
@@ -167,7 +168,7 @@ export function buildUnifiedNotifications(params: {
       return;
     }
 
-    if (!isCritical && !isHouseInvite && !isAppointmentMsg && !isAssignmentMsg) {
+    if (!isCritical && !isHouseInvite && !isAppointmentMsg && !isAssignmentMsg && !isConfigUpdate) {
       return;
     }
 
@@ -242,15 +243,15 @@ export function buildUnifiedNotifications(params: {
         id: `inc_${inc.id}`,
         rawIncidentId: inc.id,
         type: 'INCIDENT',
-        title: rawMsg || (isCritical ? 'Cảnh báo sự cố té ngã khẩn cấp' : 'Cảnh báo y tế'),
+        title: rawMsg || (isConfigUpdate ? 'Cập nhật ngưỡng y tế' : isCritical ? 'Cảnh báo sự cố té ngã khẩn cấp' : 'Cảnh báo y tế'),
         subtitle: inc.created_at ? formatDate(inc.created_at) : 'Vừa xong',
         timeStr: inc.created_at || '',
         sortTimestamp: sortTs,
-        badgeLabel: isCritical ? 'Khẩn cấp' : 'Cảnh báo',
-        badgeColor: isCritical ? '#DC2626' : '#D97706',
-        badgeBg: isCritical ? '#FEE2E2' : '#FEF3C7',
-        iconName: isCritical ? 'alert-circle' : 'warning',
-        iconColor: isCritical ? '#DC2626' : '#D97706',
+        badgeLabel: isConfigUpdate ? 'Cấu hình' : isCritical ? 'Khẩn cấp' : 'Cảnh báo',
+        badgeColor: isConfigUpdate ? '#2563EB' : isCritical ? '#DC2626' : '#D97706',
+        badgeBg: isConfigUpdate ? '#EFF6FF' : isCritical ? '#FEE2E2' : '#FEF3C7',
+        iconName: isConfigUpdate ? 'options-outline' : isCritical ? 'alert-circle' : 'warning',
+        iconColor: isConfigUpdate ? '#2563EB' : isCritical ? '#DC2626' : '#D97706',
         isRead,
         patientId: targetPatientId,
         targetScreen: targetPatientId ? 'DoctorPatientDetail' : 'DoctorPatients',

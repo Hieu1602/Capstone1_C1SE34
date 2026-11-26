@@ -212,6 +212,7 @@ class CRUDIncident:
                 Incident.alert_level == "CRITICAL",
                 Incident.alert_type.in_(critical_types),
                 Incident.alert_type.in_(appointment_invite_types),
+                Incident.alert_type == "DEVICE_CONFIG_UPDATED",
                 Incident.message.ilike("%lịch khám%"),
                 Incident.message.ilike("%lời mời%"),
                 Incident.message.ilike("%tái khám%"),

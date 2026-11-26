@@ -123,6 +123,9 @@ export function parseTitleAndBody(
   if (alertType === 'MEDICAL_RECORD_UPDATED' || lower.includes('bệnh án')) {
     return { title: 'Cập nhật hồ sơ bệnh án', desc: text };
   }
+  if (alertType === 'DEVICE_CONFIG_UPDATED' || lower.includes('ngưỡng cảnh báo sinh hiệu')) {
+    return { title: 'Cập nhật ngưỡng y tế', desc: text };
+  }
 
   const parts = text.split(/[:\.\n]/);
   if (parts.length > 1 && parts[0].trim().length >= 5 && parts[0].trim().length < 50) {
@@ -216,14 +219,15 @@ export function buildNotificationItems(
       lower.includes('lịch hẹn');
     const isAssignment = lower.includes('bệnh nhân mới') || lower.includes('phụ trách');
     const isMedicalRecord = inc.alert_type === 'MEDICAL_RECORD_UPDATED' || lower.includes('bệnh án');
+    const isConfigUpdate = inc.alert_type === 'DEVICE_CONFIG_UPDATED';
 
     // Chống tự làm phiền (No Self-Notification khi bác sĩ tự cập nhật)
     if (isMedicalRecord && (inc.acknowledged_by === doctorUserId || (doctorUserId && inc.notes?.includes(doctorUserId)))) {
       return;
     }
 
-    // Tuyệt đối ẩn dao động nhẹ; Bác sĩ chỉ nhận Cảnh báo Nguy cấp HOẶC Lịch khám / Lời mời
-    if (!isCrit && !isHouseInvite && !isAppointment && !isAssignment) {
+    // Tuyệt đối ẩn dao động nhẹ; Bác sĩ chỉ nhận Cảnh báo Nguy cấp, Lịch khám / Lời mời, hoặc Cập nhật ngưỡng
+    if (!isCrit && !isHouseInvite && !isAppointment && !isAssignment && !isConfigUpdate) {
       return;
     }
 
@@ -260,6 +264,9 @@ export function buildNotificationItems(
     } else if (isMedicalRecord) {
       label = 'Hồ sơ y tế';
       color = 'text-indigo-700 bg-indigo-50 border-indigo-200';
+    } else if (isConfigUpdate) {
+      label = 'Cấu hình ngưỡng';
+      color = 'text-blue-700 bg-blue-50 border-blue-200';
     }
 
     const patIdx = pats?.findIndex((p) => p.id === (inc as any).elderly_id || (inc.notes && inc.notes.includes(p.id)));

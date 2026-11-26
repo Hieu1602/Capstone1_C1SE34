@@ -145,6 +145,10 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
 
           {activeTab === 'VITALS' && (
             <PatientDrawerVitalsTab
+              patientId={patientDetail.id}
+              initialHrHigh={patientDetail.hr_threshold_high}
+              initialHrLow={patientDetail.hr_threshold_low}
+              initialSpo2Low={patientDetail.spo2_threshold_low}
               analytics={analytics}
               isLoading={isLoadingAnalytics}
               vitalFilter={vitalFilter}
