@@ -232,6 +232,15 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
   const showBP = selectedMetric === 'BP';
   const showTemp = selectedMetric === 'TEMP';
 
+  const hrValues = chartData.map((p) => p.heartRate).filter((v): v is number => v !== null);
+  const spo2Values = chartData.map((p) => p.spo2).filter((v): v is number => v !== null);
+  const hrMin = hrValues.length && Math.min(...hrValues) < 50 ? Math.max(20, Math.floor(Math.min(...hrValues) / 10) * 10) : 50;
+  const hrMax = hrValues.length && Math.max(...hrValues) > 130 ? Math.ceil(Math.max(...hrValues) / 10) * 10 : 130;
+  const hrTicks = hrMin === 50 && hrMax === 130 ? [50, 70, 90, 110, 130] : undefined;
+
+  const spo2Min = spo2Values.length && Math.min(...spo2Values) < 80 ? Math.max(0, Math.floor(Math.min(...spo2Values) / 5) * 5) : 80;
+  const spo2Ticks = spo2Min === 80 ? [80, 85, 90, 95, 100] : undefined;
+
   const hasBPPoints = chartData.some((p) => p.bpSys !== null);
   const hasTempPoints = chartData.some((p) => p.temp !== null);
 
@@ -316,7 +325,8 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
               <YAxis
                 yAxisId="left"
                 width={54}
-                domain={[50, 130]}
+                domain={[hrMin, hrMax]}
+                ticks={hrTicks}
                 stroke="#3B82F6"
                 fontSize={11}
                 tickLine={false}
@@ -329,7 +339,8 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
                 yAxisId="right"
                 width={44}
                 orientation={showHR ? 'right' : 'left'}
-                domain={[85, 100]}
+                domain={[spo2Min, 100]}
+                ticks={spo2Ticks}
                 stroke="#10B981"
                 fontSize={11}
                 tickLine={false}
