@@ -26,17 +26,19 @@ class SmartCareBackgroundService : Service() {
     private var serverBaseUrl: String = "http://192.168.10.248:8000/api/v1"
     private var authToken: String? = null
     private var workerThread: Thread? = null
-    private var lastNotifiedIncidentId: String? = null
+    private val notifiedIncidentIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private var isFirstPoll = true
 
     companion object {
         const val SERVICE_CHANNEL_ID = "smartcare_service_monitor_channel"
         const val SERVICE_CHANNEL_NAME = "Dịch vụ bảo vệ người cao tuổi trong nền"
         const val SERVICE_NOTIFICATION_ID = 999
-        const val ALERT_CHANNEL_ID = "emergency_alerts_v5"
+        const val ALERT_CHANNEL_ID = "emergency_alerts_v6"
         const val ALERT_CHANNEL_NAME = "Cảnh báo khẩn cấp SmartCare AI"
         private const val PREFS_NAME = "smartcare_bg_prefs"
         private const val KEY_AUTH_TOKEN = "auth_token"
         private const val KEY_SERVER_URL = "server_url"
+        private const val KEY_NOTIFIED_IDS = "notified_incident_ids"
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -66,6 +68,12 @@ class SmartCareBackgroundService : Service() {
             prefs.edit().putString(KEY_AUTH_TOKEN, token).apply()
         } else if (authToken.isNullOrBlank()) {
             authToken = prefs.getString(KEY_AUTH_TOKEN, null)
+        }
+
+        val savedIds = prefs.getStringSet(KEY_NOTIFIED_IDS, null)
+        if (!savedIds.isNullOrEmpty()) {
+            notifiedIncidentIds.addAll(savedIds)
+            isFirstPoll = false
         }
 
         // Chạy dưới dạng Foreground Service để duy trì trong nền ngay cả khi thoát app
@@ -205,9 +213,9 @@ class SmartCareBackgroundService : Service() {
         }
 
         val endpoint = if (serverBaseUrl.endsWith("/api/v1")) {
-            "$serverBaseUrl/incidents?limit=3"
+            "$serverBaseUrl/incidents?limit=10"
         } else {
-            "$serverBaseUrl/api/v1/incidents?limit=3"
+            "$serverBaseUrl/api/v1/incidents?limit=10"
         }
 
         var conn: HttpURLConnection? = null
@@ -233,43 +241,105 @@ class SmartCareBackgroundService : Service() {
                 reader.close()
 
                 val incidents = JSONArray(responseText)
-                if (incidents.length() > 0) {
-                    val latest = incidents.getJSONObject(0)
-                    val id = latest.optString("id")
-                    val isAck = latest.optBoolean("is_acknowledged", false)
-                    val alertType = latest.optString("alert_type", "")
-                    val alertLevel = latest.optString("alert_level", "HIGH")
-                    val message = latest.optString("message", "Phát hiện sự cố mới")
+                val emergencyTypes = setOf(
+                    "FALL_DETECTED",
+                    "AI_FALL_DETECTED",
+                    "CRITICAL_TRIAD",
+                    "CARDIO_COLLAPSE",
+                    "EXERTION_HYPOXIA",
+                    "FEVER_TACHYCARDIA",
+                    "HIGH_HEART_RATE",
+                    "LOW_HEART_RATE",
+                    "SUDDEN_HR_SPIKE",
+                    "SUDDEN_HR_DROP",
+                    "ARRHYTHMIA_RECURRENT",
+                    "ARRHYTHMIA_SUSPECT",
+                    "LOW_SPO2",
+                    "HIGH_FEVER",
+                    "ACOUSTIC_DISTRESS",
+                    "SOS_EMERGENCY",
+                    "EMERGENCY_SOS",
+                    "OUT_OF_RANGE_NO_PHONE"
+                )
 
-                    val isEmergency = alertType in listOf(
-                        "FALL_DETECTED",
-                        "AI_FALL_DETECTED",
-                        "CRITICAL_TRIAD",
-                        "CARDIO_COLLAPSE",
-                        "EXERTION_HYPOXIA",
-                        "FEVER_TACHYCARDIA",
-                        "HIGH_HEART_RATE",
-                        "LOW_HEART_RATE",
-                        "SUDDEN_HR_SPIKE",
-                        "SUDDEN_HR_DROP",
-                        "LOW_SPO2",
-                        "HIGH_FEVER"
-                    ) || alertLevel == "CRITICAL"
+                var hasActiveEmergency = false
+                val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-                    // Nếu sự cố đã được xử lý (trên web, app hoặc người dùng bấm Đã xử lý)
-                    // -> Ngay lập tức ngắt chuông, dừng rung và xóa thông báo (0ms)
-                    if (isAck) {
-                        NativeNotificationModule.stopAlarm(this)
-                    } else if (id != lastNotifiedIncidentId && id.isNotBlank()) {
-                        lastNotifiedIncidentId = id
-                        val contactPhone = latest.optString("emergency_contact_phone", "").takeIf { it.isNotBlank() }
-                            ?: NativeNotificationModule.DEFAULT_EMERGENCY_PHONE
-                        if (isEmergency) {
-                            triggerHighPriorityAlarm(id, alertType, alertLevel, message, contactPhone)
-                        } else {
-                            triggerRoutineNotification(id, alertType, message)
+                if (isFirstPoll) {
+                    isFirstPoll = false
+                    for (i in 0 until incidents.length()) {
+                        val item = incidents.getJSONObject(i)
+                        val id = item.optString("id")
+                        val isAck = item.optBoolean("is_acknowledged", false)
+                        val alertType = item.optString("alert_type", "")
+                        val alertLevel = item.optString("alert_level", "LOW")
+                        val message = item.optString("message", "Thông báo mới từ SmartCare AI")
+                        val isEmergency = (alertType in emergencyTypes || alertLevel == "CRITICAL") &&
+                            alertType != "LOW_BATTERY" && alertType != "DEVICE_BATTERY_DEAD"
+
+                        if (id.isNotBlank()) {
+                            notifiedIncidentIds.add(id)
+                            // Lần đầu tiên khởi chạy chỉ bắn thông báo cho sự kiện mới nhất chưa xử lý (i == 0)
+                            if (i == 0 && !isAck) {
+                                val contactPhone = item.optString("emergency_contact_phone", "").takeIf { it.isNotBlank() }
+                                    ?: NativeNotificationModule.DEFAULT_EMERGENCY_PHONE
+                                if (isEmergency) {
+                                    hasActiveEmergency = true
+                                    triggerHighPriorityAlarm(id, alertType, alertLevel, message, contactPhone)
+                                } else {
+                                    triggerRoutineNotification(id, alertType, message)
+                                }
+                            }
                         }
                     }
+                    prefs.edit().putStringSet(KEY_NOTIFIED_IDS, notifiedIncidentIds.toSet()).apply()
+                    return
+                }
+
+                // Duyệt qua các thông báo mới chưa từng bắn lên thanh thông báo Android
+                var updatedSet = false
+                for (i in (incidents.length() - 1) downTo 0) {
+                    val item = incidents.getJSONObject(i)
+                    val id = item.optString("id")
+                    val isAck = item.optBoolean("is_acknowledged", false)
+                    val alertType = item.optString("alert_type", "")
+                    val alertLevel = item.optString("alert_level", "LOW")
+                    val message = item.optString("message", "Thông báo mới từ SmartCare AI")
+
+                    val isEmergency = (alertType in emergencyTypes || alertLevel == "CRITICAL") &&
+                        alertType != "LOW_BATTERY" && alertType != "DEVICE_BATTERY_DEAD"
+
+                    if (!isAck && isEmergency) {
+                        hasActiveEmergency = true
+                    }
+
+                    if (id.isNotBlank() && !notifiedIncidentIds.contains(id)) {
+                        notifiedIncidentIds.add(id)
+                        updatedSet = true
+                        if (!isAck) {
+                            val contactPhone = item.optString("emergency_contact_phone", "").takeIf { it.isNotBlank() }
+                                ?: NativeNotificationModule.DEFAULT_EMERGENCY_PHONE
+                            if (isEmergency) {
+                                triggerHighPriorityAlarm(id, alertType, alertLevel, message, contactPhone)
+                            } else {
+                                triggerRoutineNotification(id, alertType, message)
+                            }
+                        }
+                    }
+                }
+
+                // Nếu không còn cảnh báo nguy hiểm nào chưa xử lý -> Tắt ngay chuông báo động
+                if (!hasActiveEmergency) {
+                    NativeNotificationModule.stopAlarm(this)
+                }
+
+                if (updatedSet) {
+                    if (notifiedIncidentIds.size > 150) {
+                        val trimmed = notifiedIncidentIds.toList().takeLast(100)
+                        notifiedIncidentIds.clear()
+                        notifiedIncidentIds.addAll(trimmed)
+                    }
+                    prefs.edit().putStringSet(KEY_NOTIFIED_IDS, notifiedIncidentIds.toSet()).apply()
                 }
             }
         } catch (e: Exception) {
@@ -400,10 +470,21 @@ class SmartCareBackgroundService : Service() {
             alertType == "APPOINTMENT_REQUESTED" -> "🗓️ YÊU CẦU LỊCH KHÁM TỪ GIA ĐÌNH"
             alertType == "APPOINTMENT_CONFIRMED" -> "🗓️ GIA ĐÌNH ĐÃ XÁC NHẬN LỊCH KHÁM"
             alertType == "APPOINTMENT_CANCELLED" -> "🗓️ LỊCH KHÁM ĐÃ BỊ HỦY"
+            alertType == "APPOINTMENT_RESCHEDULED" -> "🗓️ LỊCH KHÁM ĐÃ ĐƯỢC DỜI"
+            alertType == "APPOINTMENT_COMPLETED" -> "✅ ĐÃ HOÀN TẤT BUỔI KHÁM"
+            alertType == "APPOINTMENT_DELETED" -> "🗓️ LỊCH KHÁM ĐÃ ĐƯỢC XÓA"
+            alertType == "PRESCRIPTION_CREATED" || alertType == "PRESCRIPTION_UPDATED" -> "💊 ĐƠN THUỐC & LỊCH UỐNG THUỐC MỚI"
+            alertType == "MEDICATION_REMINDER" -> "💊 NHẮC NHỞ ĐẾN GIỜ UỐNG THUỐC"
             alertType == "MEDICAL_RECORD_UPDATED" -> "📋 HỒ SƠ BỆNH ÁN ĐƯỢC CẬP NHẬT"
+            alertType == "DEVICE_CONFIG_UPDATED" -> "⚙️ NGƯỠNG SINH HIỆU ĐƯỢC CẬP NHẬT"
             alertType == "DEVICE_BATTERY_DEAD" -> "🪫 VÒNG ĐEO TAY ĐÃ CẠN PIN (0%)"
             alertType == "LOW_BATTERY" -> "🔋 CẢNH BÁO PIN ĐỒNG HỒ YẾU"
-            alertType.startsWith("HOUSE_") -> "🏠 THÔNG BÁO GIA ĐÌNH"
+            alertType == "HOUSE_INVITE_PENDING" -> "🏠 LỜI MỜI THAM GIA CĂN NHÀ"
+            alertType == "HOUSE_JOIN_REQUEST" -> "🏠 YÊU CẦU THAM GIA CĂN NHÀ"
+            alertType == "HOUSE_JOIN_APPROVED" -> "🏠 ĐÃ ĐƯỢC DUYỆT VÀO CĂN NHÀ"
+            alertType == "HOUSE_JOIN_REJECTED" || alertType == "HOUSE_INVITE_REJECTED" -> "🏠 PHẢN HỒI LỜI MỜI CĂN NHÀ"
+            alertType.startsWith("HOUSE_") || alertType == "MEMBER_ADDED" -> "🏠 THÔNG BÁO THÀNH VIÊN GIA ĐÌNH"
+            alertType == "SYSTEM_NOTIFICATION" -> "📢 THÔNG BÁO TỪ BAN QUẢN TRỊ"
             else -> "🔔 THÔNG BÁO TỪ SMARTCARE AI"
         }
 
@@ -442,7 +523,8 @@ class SmartCareBackgroundService : Service() {
             .setContentText(message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_EVENT)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setSound(soundUri)
             .setAutoCancel(true)
@@ -450,6 +532,7 @@ class SmartCareBackgroundService : Service() {
             .setContentIntent(pendingIntent)
 
         notificationManager.notify(notifId, notification.build())
-        // KHÔNG gọi NativeNotificationModule.triggerAlarm -> Không hú còi, không rung liên tục
+        // Phát tiếng ting ting nhẹ nhàng của Android, KHÔNG hú còi báo động khẩn cấp
+        NativeNotificationModule.playTingTingSound(this)
     }
 }

@@ -236,14 +236,51 @@ class NotificationService {
   }
 
   /**
-   * Phân loại sự cố: Trả về true nếu là báo động nguy hiểm khẩn cấp (té ngã, nhịp tim nguy kịch, v.v.)
-   * Trả về false nếu là thông báo thường (lịch khám, tin nhắn, cập nhật bệnh án, pin yếu).
+   * Phân loại sự cố: Trả về true nếu là CẢNH BÁO nguy hiểm khẩn cấp (té ngã, nhịp tim nguy kịch, SpO2 tụt, SOS, v.v.)
+   * Trả về false nếu là THÔNG BÁO thường (lịch khám, đơn thuốc, cập nhật bệnh án, gia đình, pin, thông báo hệ thống) -> chỉ lên thanh thông báo Android kèm tiếng "ting ting".
    */
   isCriticalAlert(payload: NotificationPayload): boolean {
     const { title, data } = payload;
-    const alertType = data?.alert_type || data?.type || '';
+    const alertType = String(data?.alert_type || data?.type || '').toUpperCase();
 
-    // Danh sách các sự cố khẩn cấp nguy hiểm thực sự -> Phát chuông báo động & rung mạnh
+    // 1. Danh sách thông báo bình thường chắc chắn chỉ kêu "ting ting" nhẹ trên thanh thông báo Android (không hú còi báo động)
+    const normalTypes = [
+      'APPOINTMENT_SCHEDULED',
+      'APPOINTMENT_REQUESTED',
+      'APPOINTMENT_CONFIRMED',
+      'APPOINTMENT_CANCELLED',
+      'APPOINTMENT_RESCHEDULED',
+      'APPOINTMENT_COMPLETED',
+      'APPOINTMENT_DELETED',
+      'MEDICAL_RECORD_UPDATED',
+      'PRESCRIPTION_CREATED',
+      'PRESCRIPTION_UPDATED',
+      'PRESCRIPTION_DELETED',
+      'MEDICATION_REMINDER',
+      'HYDRATION_REMINDER',
+      'DEVICE_CONFIG_UPDATED',
+      'HOUSE_INVITE_PENDING',
+      'HOUSE_JOIN_REQUEST',
+      'HOUSE_MEMBER_ADDED',
+      'MEMBER_ADDED',
+      'HOUSE_MEMBER_REMOVED',
+      'HOUSE_JOIN_APPROVED',
+      'HOUSE_JOIN_REJECTED',
+      'HOUSE_INVITE_REJECTED',
+      'SYSTEM_NOTIFICATION',
+      'INFO',
+      'SYSTEM_MAINTENANCE',
+      'HEALTH_TIP',
+      'FEATURE_UPDATE',
+      'LOW_BATTERY',
+      'DEVICE_BATTERY_DEAD',
+    ];
+
+    if (normalTypes.includes(alertType) || alertType.startsWith('APPOINTMENT_') || alertType.startsWith('HOUSE_') || alertType.startsWith('PRESCRIPTION_')) {
+      return false;
+    }
+
+    // 2. Danh sách các cảnh báo sức khỏe / sự cố nguy hiểm thực sự -> Phát chuông báo động kêu to & rung mạnh
     const emergencyTypes = [
       'FALL_DETECTED',
       'AI_FALL_DETECTED',
@@ -253,40 +290,24 @@ class NotificationService {
       'LOW_HEART_RATE',
       'SUDDEN_HR_SPIKE',
       'SUDDEN_HR_DROP',
+      'ARRHYTHMIA_RECURRENT',
+      'ARRHYTHMIA_SUSPECT',
       'LOW_SPO2',
       'EXERTION_HYPOXIA',
       'HIGH_FEVER',
       'FEVER_TACHYCARDIA',
+      'ACOUSTIC_DISTRESS',
+      'SOS_EMERGENCY',
+      'EMERGENCY_SOS',
+      'OUT_OF_RANGE_NO_PHONE',
+      'EMERGENCY',
     ];
 
     if (emergencyTypes.includes(alertType)) {
       return true;
     }
 
-    // Danh sách thông báo bình thường chắc chắn không phải khẩn cấp -> Chỉ ting ting nhẹ
-    const normalTypes = [
-      'APPOINTMENT_SCHEDULED',
-      'APPOINTMENT_REQUESTED',
-      'APPOINTMENT_CONFIRMED',
-      'APPOINTMENT_CANCELLED',
-      'MEDICAL_RECORD_UPDATED',
-      'HOUSE_INVITE_PENDING',
-      'HOUSE_JOIN_REQUEST',
-      'HOUSE_MEMBER_ADDED',
-      'HOUSE_MEMBER_REMOVED',
-      'HOUSE_JOIN_APPROVED',
-      'HOUSE_JOIN_REJECTED',
-      'HOUSE_INVITE_REJECTED',
-      'MEDICATION_REMINDER',
-      'LOW_BATTERY',
-      'DEVICE_BATTERY_DEAD',
-    ];
-
-    if (normalTypes.includes(alertType)) {
-      return false;
-    }
-
-    // Tiêu đề có chứa các biểu tượng hoặc từ khóa khẩn cấp
+    // 3. Fallback kiểm tra tiêu đề có chứa các biểu tượng hoặc từ khóa cảnh báo nguy hiểm
     return (
       title.includes('🚨') ||
       title.includes('💓') ||
@@ -295,6 +316,17 @@ class NotificationService {
       title.includes('NGUY CẤP') ||
       title.includes('TÉ NGÃ')
     );
+  }
+
+  /**
+   * Hiển thị thông báo thường lên thanh thông báo Android kèm tiếng "ting ting" nhẹ nhàng (không hú còi báo động).
+   */
+  async showTingTingNotification(title: string, body: string, data?: Record<string, any>): Promise<void> {
+    return this.triggerEmergencyNotification({
+      title,
+      body,
+      data: { ...(data || {}), alert_type: data?.alert_type || data?.type || 'INFO' },
+    });
   }
 
   /**
