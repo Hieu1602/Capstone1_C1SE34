@@ -300,6 +300,14 @@ class CameraFallDetector:
                         if response.status == 200:
                             data = json.loads(response.read().decode("utf-8"))
                             base_url = url.rsplit("/api/v1/", 1)[0]
+                            active_ids = {str(item.get("elderly_id")) for item in data if item.get("elderly_id")} if isinstance(data, list) else set()
+                            if isinstance(data, list):
+                                stale_ids = [k for k in list(self.face_manager.enrolled_elderly.keys()) if k not in active_ids]
+                                for sk in stale_ids:
+                                    self.face_manager.enrolled_elderly.pop(sk, None)
+                                if stale_ids:
+                                    self.face_manager.save_cache()
+                                    LOG.info("[FaceReID] Đã xóa %d khuôn mặt cũ không còn trong DB.", len(stale_ids))
                             count = 0
                             for item in data:
                                 eid = item.get("elderly_id")
