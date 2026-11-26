@@ -554,10 +554,10 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
           <View style={styles.securityIconCircle}><Ionicons name="shield-checkmark" size={24} color="#0EA5E9" /></View>
           <View style={{ flex: 1 }}>
             <View style={styles.securityBadgeRow}>
-              <Text style={[styles.securityTitle, { color: isDarkMode ? '#38BDF8' : '#0369A1' }]}>Dữ liệu được mã hóa chuẩn y tế AES-256</Text>
-              <View style={styles.aesTag}><Ionicons name="lock-closed" size={10} color="#0EA5E9" /><Text style={styles.aesTagText}>AES-256 GCM</Text></View>
+              <Text style={[styles.securityTitle, { color: isDarkMode ? '#38BDF8' : '#0369A1' }]}>Hồ sơ y tế được bảo mật đa lớp</Text>
+              <View style={styles.aesTag}><Ionicons name="lock-closed" size={10} color="#0EA5E9" /><Text style={styles.aesTagText}>Bảo mật Y tế</Text></View>
             </View>
-            <Text style={[styles.securityDesc, { color: isDarkMode ? '#94A3B8' : '#0C4A6E' }]}>Hồ sơ bệnh án điện tử tuân thủ tiêu chuẩn an toàn HL7/FHIR, bảo mật đa lớp và chỉ chia sẻ với bác sĩ chỉ định.</Text>
+            <Text style={[styles.securityDesc, { color: isDarkMode ? '#94A3B8' : '#0C4A6E' }]}>Hồ sơ bệnh án được bảo vệ an toàn và chỉ chia sẻ với bác sĩ điều trị được chỉ định.</Text>
           </View>
         </View>
 

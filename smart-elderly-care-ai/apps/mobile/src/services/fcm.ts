@@ -142,36 +142,36 @@ class FCMService {
           console.log('[FCM] Foreground message:', remoteMessage);
 
           const { notification, data } = remoteMessage;
-          const level: AlertLevel = (data?.level as AlertLevel) || 'HIGH';
-          const title = notification?.title || data?.title || '🚨 Cảnh báo SmartCare AI';
-          const body = notification?.body || data?.body || data?.message || 'Phát hiện sự cố bất thường!';
+          const level: AlertLevel = (data?.level as AlertLevel) || 'LOW';
+          const title = notification?.title || data?.title || '🔔 Thông báo SmartCare AI';
+          const body = notification?.body || data?.body || data?.message || 'Bạn có thông báo mới từ hệ thống SmartCare AI.';
 
-          // 1. Luôn bắn thông báo lên thanh trạng thái (Notification Drawer) của điện thoại
+          // 1. Luôn bắn thông báo lên thanh thông báo (Notification Drawer) của điện thoại Android
+          // (Tự động phân loại: thông báo thường chỉ ting ting, cảnh báo mới kêu còi báo động)
           await notificationService.triggerEmergencyNotification({
             title,
             body,
             data,
           });
 
-          // 2. Rung điện thoại theo mức độ cảnh báo
-          if (level === 'CRITICAL' || level === 'HIGH') {
-            this._triggerVibrationPattern(level);
-          }
-
-          // 3. Hiển thị hộp thoại trong app
-          LocalizedAlert.alert(
-            title,
-            body,
-            [
-              {
-                text: 'Đã hiểu / Tắt chuông',
-                style: 'default',
-                onPress: () => {
-                  notificationService.stopEmergencyAlarm();
+          // 2. Chỉ rung liên tục và bật hộp thoại cảnh báo tắt chuông nếu thực sự là Cảnh báo khẩn cấp
+          const isCritical = notificationService.isCriticalAlert({ title, body, data });
+          if (isCritical) {
+            this._triggerVibrationPattern(level === 'CRITICAL' ? 'CRITICAL' : 'HIGH');
+            LocalizedAlert.alert(
+              title,
+              body,
+              [
+                {
+                  text: 'Đã hiểu / Tắt chuông',
+                  style: 'default',
+                  onPress: () => {
+                    notificationService.stopEmergencyAlarm();
+                  },
                 },
-              },
-            ]
-          );
+              ]
+            );
+          }
         },
       );
     } catch (e) {

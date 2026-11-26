@@ -228,7 +228,7 @@ export default function AlertsListScreen({ navigation, route }: any) {
       return item.alert_type.includes('HEART') || item.alert_type.includes('SPO2') || item.alert_type.includes('TEMP');
     }
     if (filterType === 'APPOINTMENT') {
-      return ['APPOINTMENT_SCHEDULED', 'APPOINTMENT_REQUESTED', 'APPOINTMENT_CONFIRMED', 'APPOINTMENT_CANCELLED'].includes(item.alert_type);
+      return ['APPOINTMENT_SCHEDULED', 'APPOINTMENT_REQUESTED', 'APPOINTMENT_CONFIRMED', 'APPOINTMENT_CANCELLED', 'APPOINTMENT_RESCHEDULED', 'APPOINTMENT_COMPLETED'].includes(item.alert_type);
     }
     return true;
   });
@@ -428,7 +428,7 @@ export default function AlertsListScreen({ navigation, route }: any) {
       navigation.navigate('HouseDetail');
       return;
     }
-    if (['APPOINTMENT_SCHEDULED', 'APPOINTMENT_REQUESTED', 'APPOINTMENT_CONFIRMED', 'APPOINTMENT_CANCELLED'].includes(item.alert_type)) {
+    if (['APPOINTMENT_SCHEDULED', 'APPOINTMENT_REQUESTED', 'APPOINTMENT_CONFIRMED', 'APPOINTMENT_CANCELLED', 'APPOINTMENT_RESCHEDULED', 'APPOINTMENT_COMPLETED'].includes(item.alert_type)) {
       let pid: any = null;
       let pname: string | null = null;
 
@@ -459,6 +459,10 @@ export default function AlertsListScreen({ navigation, route }: any) {
       setSelectedAppointmentPatientId(finalPid);
       setSelectedAppointmentPatientName(finalPname);
       setFamilyAppointmentsModalVisible(true);
+      return;
+    }
+    if (item.alert_type === 'PRESCRIPTION_CREATED' || item.alert_type === 'PRESCRIPTION_UPDATED' || item.alert_type === 'MEDICATION_REMINDER') {
+      navigation.navigate('MedicationReminder');
       return;
     }
     setSelectedAlertDetailItem(item);

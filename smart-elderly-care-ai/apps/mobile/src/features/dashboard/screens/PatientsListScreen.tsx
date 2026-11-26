@@ -24,6 +24,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { BirthYearPickerModal } from '../components/BirthYearPickerModal';
+import { formatGender } from '../../../utils/formatters';
 import { useVitalStore } from '../../../store/useVitalStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { BASE_URL } from '../../../services/api';
@@ -222,11 +223,11 @@ export default function PatientsListScreen({ navigation }: any) {
           <View style={{ flex: 1 }}>
             <View style={styles.securityBadgeRow}>
               <Text style={[styles.securityTitle, { color: isDarkMode ? '#38BDF8' : '#0369A1' }]}>
-                Bệnh án điện tử bảo mật AES-256
+                Hồ sơ y tế được bảo mật đa lớp
               </Text>
               <View style={styles.aesTag}>
                 <Ionicons name="lock-closed" size={10} color="#0EA5E9" />
-                <Text style={styles.aesTagText}>HL7/FHIR</Text>
+                <Text style={styles.aesTagText}>Bảo mật Y tế</Text>
               </View>
             </View>
             <Text style={[styles.securityDesc, { color: isDarkMode ? '#94A3B8' : '#0C4A6E' }]}>
@@ -291,7 +292,7 @@ export default function PatientsListScreen({ navigation }: any) {
             const mrCode = `MR-${String(idx + 1).padStart(3, '0')}`;
             const pName = patient.full_name || patient.name || 'Người cao tuổi';
             const pAge = patient.age ? `${patient.age} tuổi` : (patient.birth_year ? `${calculateAgeFromYear(String(patient.birth_year))} tuổi` : 'Cao tuổi');
-            const pGender = patient.gender || 'Nam';
+            const pGender = formatGender(patient.gender);
             const pBlood = patient.blood_type || 'A+';
             const avatarUri = patient.avatar_url
               ? (patient.avatar_url.startsWith('http') ? patient.avatar_url : `${BASE_URL.replace('/api/v1', '')}${patient.avatar_url}`)

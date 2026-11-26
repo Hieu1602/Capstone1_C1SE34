@@ -705,6 +705,18 @@ async def set_fall_detection(body: FallDetectionConfig, _=Depends(operator)):
     return await forward_camera(_, "/fall-detection", body.model_dump())
 
 
+@router.get("/audio-detection")
+async def get_audio_detection(context=Depends(viewer)):
+    """Đọc trạng thái phân tích âm thanh AI (YAMNet) từ camera."""
+    return await forward_camera(context, "/audio-detection")
+
+
+@router.post("/audio-detection")
+async def set_audio_detection(body: FallDetectionConfig, _=Depends(operator)):
+    """Bật/tắt chế độ phân tích âm thanh AI (YAMNet) từ camera."""
+    return await forward_camera(_, "/audio-detection", body.model_dump())
+
+
 class VideoMode(BaseModel):
     mode: Literal["day", "night", "auto"]
 
@@ -791,6 +803,7 @@ async def intercom_offer(request: Request, body: IntercomOffer, context=Depends(
     try:
         camera_id = str(device.id)
         target_src = "tapo_intercom"
+        tapo_talk = None
         if getattr(device, "config", None) and device.config.stream_url:
             from urllib.parse import urlparse, unquote
             u = urlparse(device.config.stream_url)
@@ -835,6 +848,29 @@ async def intercom_offer(request: Request, body: IntercomOffer, context=Depends(
                 "/api/webrtc", params={"src": target_src},
                 json={"type": "offer", "sdp": body.sdp},
             )
+            # Nếu IP trong DB bị cũ/timeout, tự lấy IP camera đang sống từ tapo-camera hoặc fallback tapo_intercom
+            if response.status_code >= 400:
+                live_host = None
+                try:
+                    async with (client(camera_id) if camera_id in extra_sources() else client()) as cam_cli:
+                        st = await cam_cli.get("/status")
+                        if st.status_code == 200:
+                            live_host = st.json().get("host")
+                except Exception:
+                    pass
+                if live_host and tapo_talk and "@" in tapo_talk:
+                    updated_talk = f"{tapo_talk.rsplit('@', 1)[0]}@{live_host}"
+                    await upstream.put("/api/streams", params={"name": target_src, "src": updated_talk})
+                    await upstream.put("/api/streams", params={"name": "tapo_intercom", "src": updated_talk})
+                    response = await upstream.post(
+                        "/api/webrtc", params={"src": target_src},
+                        json={"type": "offer", "sdp": body.sdp},
+                    )
+                elif target_src != "tapo_intercom":
+                    response = await upstream.post(
+                        "/api/webrtc", params={"src": "tapo_intercom"},
+                        json={"type": "offer", "sdp": body.sdp},
+                    )
             if response.status_code >= 400:
                 err_text = response.text or ""
                 logger.error("go2rtc trả về lỗi %s: %s", response.status_code, err_text)

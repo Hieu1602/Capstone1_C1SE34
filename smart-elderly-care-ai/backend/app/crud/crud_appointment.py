@@ -82,19 +82,22 @@ class CRUDAppointment:
         patient_id: uuid.UUID,
         doctor_id: Optional[uuid.UUID] = None,
         exclude_id: Optional[uuid.UUID] = None,
+        visit_type: Optional[str] = None,
     ) -> bool:
         """
         Kiểm tra xem khoảng thời gian [start_time, end_time) có bị trùng với
-        bất kỳ lịch khám UPCOMING nào khác của cùng Bác sĩ hoặc cùng Bệnh nhân hay không.
+        bất kỳ lịch khám nào (trạng thái khác CANCELLED) của cùng Bác sĩ hoặc Bệnh nhân.
+        Với lịch khám tại nhà (HOME_VISIT), áp dụng khoảng đệm ±60 phút cho thời gian di chuyển.
         Trả về True nếu bị trùng lịch (Conflict), ngược lại False.
         """
         norm_start = _to_utc(start_time)
         dur = duration_minutes if (duration_minutes and duration_minutes > 0) else 30
         norm_end = norm_start + timedelta(minutes=dur)
+        is_new_home = (visit_type or "").upper() == "HOME_VISIT"
 
         conflict_conditions = [
-            Appointment.status == AppointmentStatusEnum.UPCOMING.value,
-            Appointment.scheduled_at < norm_end,
+            Appointment.status != AppointmentStatusEnum.CANCELLED.value,
+            Appointment.scheduled_at < norm_end + timedelta(minutes=60),
             Appointment.scheduled_at >= norm_start - timedelta(days=1),
         ]
 
@@ -108,14 +111,20 @@ class CRUDAppointment:
         conflict_conditions.append(or_(*target_party))
 
         stmt = select(
-            Appointment.id, Appointment.scheduled_at, Appointment.duration_minutes
+            Appointment.id,
+            Appointment.scheduled_at,
+            Appointment.duration_minutes,
+            Appointment.visit_type,
         ).where(and_(*conflict_conditions))
         res = await db.execute(stmt)
-        for _, ex_start, ex_dur in res.all():
+        for _, ex_start, ex_dur, ex_visit_type in res.all():
             ex_start_utc = _to_utc(ex_start)
-            ex_end_utc = ex_start_utc + timedelta(
-                minutes=(ex_dur if (ex_dur and ex_dur > 0) else 30)
-            )
+            ex_dur_mins = ex_dur if (ex_dur and ex_dur > 0) else 30
+            ex_end_utc = ex_start_utc + timedelta(minutes=ex_dur_mins)
+            is_home_pair = is_new_home or ((ex_visit_type or "").upper() == "HOME_VISIT")
+            if is_home_pair:
+                if abs((ex_start_utc - norm_start).total_seconds()) < 60 * 60:
+                    return True
             if ex_start_utc < norm_end and ex_end_utc > norm_start:
                 return True
         return False
@@ -237,9 +246,10 @@ class CRUDAppointment:
             duration_minutes=obj_in.duration_minutes,
             patient_id=patient_uuid,
             doctor_id=doctor_id,
+            visit_type=obj_in.visit_type,
         )
         if is_conflict:
-            raise ValueError("Thời gian hẹn bị trùng với lịch khám khác của Bác sĩ hoặc Bệnh nhân.")
+            raise ValueError("Khung giờ này đã có lịch khám khác. Vui lòng chọn giờ khác.")
 
         # 3. Tạo cuộc hẹn chính (Root Appointment)
         pattern = (obj_in.recurrence_pattern or RecurrencePatternEnum.NONE.value).strip().upper()
@@ -285,6 +295,7 @@ class CRUDAppointment:
                     duration_minutes=obj_in.duration_minutes,
                     patient_id=patient_uuid,
                     doctor_id=doctor_id,
+                    visit_type=obj_in.visit_type,
                 )
                 if not c_conflict:
                     child_apt = Appointment(
@@ -331,7 +342,7 @@ class CRUDAppointment:
         new_time = _to_utc(obj_in.scheduled_at) if obj_in.scheduled_at is not None else _to_utc(apt.scheduled_at)
         new_duration = obj_in.duration_minutes if obj_in.duration_minutes is not None else apt.duration_minutes
 
-        if obj_in.scheduled_at is not None or obj_in.duration_minutes is not None:
+        if obj_in.scheduled_at is not None or obj_in.duration_minutes is not None or obj_in.visit_type is not None:
             is_conflict = await self.check_conflict(
                 db=db,
                 start_time=new_time,
@@ -339,9 +350,10 @@ class CRUDAppointment:
                 patient_id=apt.patient_id,
                 doctor_id=apt.doctor_id,
                 exclude_id=apt.id,
+                visit_type=obj_in.visit_type or apt.visit_type,
             )
             if is_conflict:
-                raise ValueError("Thời gian dời lịch bị trùng với cuộc hẹn khác.")
+                raise ValueError("Khung giờ này đã có lịch khám khác. Vui lòng chọn giờ khác.")
 
             apt.scheduled_at = new_time
             apt.duration_minutes = new_duration

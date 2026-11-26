@@ -6,6 +6,7 @@ import { AppState, Linking } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import axios from "axios";
 import {
+    AudioDetectionStatus,
     cameraApi,
     CameraRecordings,
     CameraStatus,
@@ -49,6 +50,8 @@ export function useCameraConnection(
     // Trạng thái nhận diện té ngã AI (YOLOv8-Pose); null khi chưa đọc được.
     const [fallDetection, setFallDetection] = useState<boolean | null>(null);
     const [fallStats, setFallStats] = useState<FallDetectionStatus | null>(null);
+    const [audioDetection, setAudioDetection] = useState<boolean | null>(null);
+    const [audioStats, setAudioStats] = useState<AudioDetectionStatus | null>(null);
     // Hiển thị khung xương AI (skeleton overlay) trên luồng camera
     const [overlay, setOverlay] = useState(false);
     // URL MJPEG có ticket ngắn hạn để img/WebView phát video.
@@ -176,7 +179,8 @@ export function useCameraConnection(
                         cameraApi.motion(cameraId),
                         cameraApi.recordings(cameraId),
                         cameraApi.fallDetection(cameraId),
-                    ]).then(([privRes, motRes, recRes, fallRes]) => {
+                        cameraApi.audioDetection(cameraId),
+                    ]).then(([privRes, motRes, recRes, fallRes, audioRes]) => {
                         if (cancelled) return;
                         if (privRes.status === "fulfilled") {
                             setPrivacy(privRes.value.data?.result?.enabled === "on");
@@ -190,6 +194,10 @@ export function useCameraConnection(
                         if (fallRes.status === "fulfilled") {
                             setFallDetection(fallRes.value.data.enabled);
                             setFallStats(fallRes.value.data);
+                        }
+                        if (audioRes.status === "fulfilled") {
+                            setAudioDetection(audioRes.value.data.enabled);
+                            setAudioStats(audioRes.value.data);
                         }
                     });
                 }
@@ -366,6 +374,21 @@ export function useCameraConnection(
         }
     }
     /**
+     * Bật hoặc tắt tính năng phân tích âm thanh YAMNet (Va đập & Kêu cứu).
+     */
+    async function toggleAudioDetection(desiredState?: boolean) {
+        try {
+            const next = desiredState !== undefined ? desiredState : !audioDetection;
+            const res = await cameraApi.setAudioDetection(next, cameraId);
+            const actual = res.data?.enabled ?? next;
+            setAudioDetection(actual);
+            return actual;
+        } catch (err) {
+            LocalizedAlert.alert("Chăm sóc AI", errorMessage(err));
+            return audioDetection;
+        }
+    }
+    /**
      * Đổi hướng UI thành bước PTZ và gửi lệnh có kiểm tra quyền.
      * @param direction - Một trong UP, DOWN, LEFT hoặc RIGHT.
      * @returns Promise<boolean> cho biết lệnh xoay đã được xác nhận hay chưa.
@@ -433,6 +456,9 @@ export function useCameraConnection(
         fallStats,
         toggleFallDetection,
         refreshFallDetection,
+        audioDetection,
+        audioStats,
+        toggleAudioDetection,
         overlay,
         setOverlay,
         toggleOverlay: () => setOverlay((prev) => !prev),

@@ -37,6 +37,8 @@ export default function AlgoConfigScreen({ navigation, route }: any) {
     Boolean(permissions?.is_owner) ||
     permissions?.role_in_house === 'OWNER';
   const canManageDevices = isOwnerOrAdmin || Boolean(permissions?.can_manage_devices);
+  const [isEditing, setIsEditing] = useState(false);
+  const canEditNow = canManageDevices && isEditing;
 
   const [maxHR, setMaxHR] = useState(algoSettings.maxHeartRate.toString());
   const [minHR, setMinHR] = useState(algoSettings.minHeartRate.toString());
@@ -111,6 +113,7 @@ export default function AlgoConfigScreen({ navigation, route }: any) {
       console.warn('Sync device config fallback:', e);
     }
 
+    setIsEditing(false);
     const title = 'Cập nhật ngưỡng thành công';
     const msg = 'Đã lưu và đồng bộ các ngưỡng an toàn y tế và thuật toán cảnh báo xuống AI Edge Hub.';
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -136,6 +139,34 @@ export default function AlgoConfigScreen({ navigation, route }: any) {
           <Ionicons name="chevron-back" size={24} color={isDarkMode ? '#F8FAFC' : Colors.textPrimary} />
         </TouchableOpacity>
         <LocalizedText style={[styles.headerTitle, isDarkMode && { color: '#F8FAFC' }]}>Cài Đặt Thuật Toán </LocalizedText>
+        {canManageDevices && (
+          <TouchableOpacity
+            style={[
+              styles.editBtn,
+              isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 },
+            ]}
+            onPress={() => {
+              if (isEditing) {
+                setMaxHR(algoSettings.maxHeartRate.toString());
+                setMinHR(algoSettings.minHeartRate.toString());
+                setMinSpO2(algoSettings.minSpO2.toString());
+                setMaxTemp(algoSettings.maxTemp.toString());
+                setFallAngle(algoSettings.fallAngle.toString());
+                setImmobilitySec(algoSettings.immobilitySec.toString());
+                setIsEditing(false);
+              } else {
+                setIsEditing(true);
+              }
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons
+              name={isEditing ? 'close' : 'create-outline'}
+              size={20}
+              color={isEditing ? (isDarkMode ? '#94A3B8' : '#64748B') : Colors.primary}
+            />
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView
@@ -153,26 +184,26 @@ export default function AlgoConfigScreen({ navigation, route }: any) {
           <LocalizedText style={styles.groupTitle}>1. Thuật toán phát hiện ngã</LocalizedText>
           <View style={styles.inputRow}>
             <LocalizedText style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Góc nghiêng cột sống tối đa:</LocalizedText>
-            <View style={[styles.inputBoxWrap, !canManageDevices && styles.inputBoxDisabled, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
+            <View style={[styles.inputBoxWrap, !canEditNow && styles.inputBoxDisabled, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
               <LocalizedTextInput
-                style={[styles.inputVal, !canManageDevices && { opacity: 0.6 }, isDarkMode && { color: '#F8FAFC' }]}
+                style={[styles.inputVal, !canEditNow && { opacity: 0.6 }, isDarkMode && { color: '#F8FAFC' }]}
                 keyboardType="numeric"
                 value={fallAngle}
                 onChangeText={setFallAngle}
-                editable={canManageDevices}
+                editable={canEditNow}
               />
               <LocalizedText style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>độ (°)</LocalizedText>
             </View>
           </View>
           <View style={styles.inputRow}>
             <LocalizedText style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Thời gian nằm bất động:</LocalizedText>
-            <View style={[styles.inputBoxWrap, !canManageDevices && styles.inputBoxDisabled, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
+            <View style={[styles.inputBoxWrap, !canEditNow && styles.inputBoxDisabled, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
               <LocalizedTextInput
-                style={[styles.inputVal, !canManageDevices && { opacity: 0.6 }, isDarkMode && { color: '#F8FAFC' }]}
+                style={[styles.inputVal, !canEditNow && { opacity: 0.6 }, isDarkMode && { color: '#F8FAFC' }]}
                 keyboardType="numeric"
                 value={immobilitySec}
                 onChangeText={setImmobilitySec}
-                editable={canManageDevices}
+                editable={canEditNow}
               />
               <LocalizedText style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>giây</LocalizedText>
             </View>
@@ -184,39 +215,39 @@ export default function AlgoConfigScreen({ navigation, route }: any) {
           <LocalizedText style={styles.groupTitle}>2. Thuật toán sức khoẻ vòng đeo tay</LocalizedText>
           <View style={styles.inputRow}>
             <LocalizedText style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Nhịp tim tối đa (Cảnh báo cao):</LocalizedText>
-            <View style={[styles.inputBoxWrap, !canManageDevices && styles.inputBoxDisabled, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
+            <View style={[styles.inputBoxWrap, !canEditNow && styles.inputBoxDisabled, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
               <LocalizedTextInput
-                style={[styles.inputVal, !canManageDevices && { opacity: 0.6 }, isDarkMode && { color: '#F8FAFC' }]}
+                style={[styles.inputVal, !canEditNow && { opacity: 0.6 }, isDarkMode && { color: '#F8FAFC' }]}
                 keyboardType="numeric"
                 value={maxHR}
                 onChangeText={setMaxHR}
-                editable={canManageDevices}
+                editable={canEditNow}
               />
               <LocalizedText style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>bpm</LocalizedText>
             </View>
           </View>
           <View style={styles.inputRow}>
             <LocalizedText style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Nhịp tim tối thiểu (Cảnh báo thấp):</LocalizedText>
-            <View style={[styles.inputBoxWrap, !canManageDevices && styles.inputBoxDisabled, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
+            <View style={[styles.inputBoxWrap, !canEditNow && styles.inputBoxDisabled, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
               <LocalizedTextInput
-                style={[styles.inputVal, !canManageDevices && { opacity: 0.6 }, isDarkMode && { color: '#F8FAFC' }]}
+                style={[styles.inputVal, !canEditNow && { opacity: 0.6 }, isDarkMode && { color: '#F8FAFC' }]}
                 keyboardType="numeric"
                 value={minHR}
                 onChangeText={setMinHR}
-                editable={canManageDevices}
+                editable={canEditNow}
               />
               <LocalizedText style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>bpm</LocalizedText>
             </View>
           </View>
           <View style={styles.inputRow}>
             <LocalizedText style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Nồng độ oxy SpO₂ tối thiểu:</LocalizedText>
-            <View style={[styles.inputBoxWrap, !canManageDevices && styles.inputBoxDisabled, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
+            <View style={[styles.inputBoxWrap, !canEditNow && styles.inputBoxDisabled, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
               <LocalizedTextInput
-                style={[styles.inputVal, !canManageDevices && { opacity: 0.6 }, isDarkMode && { color: '#F8FAFC' }]}
+                style={[styles.inputVal, !canEditNow && { opacity: 0.6 }, isDarkMode && { color: '#F8FAFC' }]}
                 keyboardType="numeric"
                 value={minSpO2}
                 onChangeText={setMinSpO2}
-                editable={canManageDevices}
+                editable={canEditNow}
               />
               <LocalizedText style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>%</LocalizedText>
             </View>
@@ -228,21 +259,21 @@ export default function AlgoConfigScreen({ navigation, route }: any) {
           <LocalizedText style={styles.groupTitle}>3. Thuật toán nhiệt độ trán</LocalizedText>
           <View style={styles.inputRow}>
             <LocalizedText style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Ngưỡng sốt cao bất thường:</LocalizedText>
-            <View style={[styles.inputBoxWrap, !canManageDevices && styles.inputBoxDisabled, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
+            <View style={[styles.inputBoxWrap, !canEditNow && styles.inputBoxDisabled, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
               <LocalizedTextInput
-                style={[styles.inputVal, !canManageDevices && { opacity: 0.6 }, isDarkMode && { color: '#F8FAFC' }]}
+                style={[styles.inputVal, !canEditNow && { opacity: 0.6 }, isDarkMode && { color: '#F8FAFC' }]}
                 keyboardType="numeric"
                 value={maxTemp}
                 onChangeText={setMaxTemp}
-                editable={canManageDevices}
+                editable={canEditNow}
               />
               <LocalizedText style={[styles.inputUnit, isDarkMode && { color: '#94A3B8' }]}>°C</LocalizedText>
             </View>
           </View>
         </View>
 
-        {/* Nút lưu cấu hình thuật toán (chỉ hiển thị khi có quyền) */}
-        {canManageDevices && (
+        {/* Nút lưu cấu hình thuật toán (chỉ hiển thị khi đã bấm biểu tượng chỉnh sửa) */}
+        {canEditNow && (
           <TouchableOpacity
             style={styles.saveBtn}
             onPress={handleSave}
@@ -279,6 +310,16 @@ const styles = StyleSheet.create({
     left: 10,
     width: 36,
     height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editBtn: {
+    position: 'absolute',
+    right: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFF7ED',
     alignItems: 'center',
     justifyContent: 'center',
   },

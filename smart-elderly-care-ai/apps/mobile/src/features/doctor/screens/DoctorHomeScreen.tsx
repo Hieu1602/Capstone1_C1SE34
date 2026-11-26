@@ -1,7 +1,7 @@
 // DoctorHomeScreen.tsx
 // Trang chủ Bác sĩ gia đình
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -21,7 +21,9 @@ import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useAlertStore } from '../../../store/useAlertStore';
+import { useDoctorAppointmentsStore } from '../../../store/useDoctorAppointmentsStore';
 import { doctorApi, householdApi, usersApi } from '../../../services/api';
+import { toLocalYMD, getLocalTodayYMD } from '../utils/dateUtils';
 import { alertsWS } from '../../../services/websocket';
 import { resolveAvatarUrl } from '../../auth/hooks/useProfileManager';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
@@ -60,18 +62,49 @@ export default function DoctorHomeScreen() {
   })();
   const { incidents, fetchNotifications: fetchIncidents } = useAlertStore();
 
+  const {
+    appointments,
+    fetchAppointments: fetchSharedAppointments,
+    setAppointments: setSharedAppointments,
+  } = useDoctorAppointmentsStore();
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [patients, setPatients] = useState<PatientCardData[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
-  const [todayAppointments, setTodayAppointments] = useState<AppointmentItem[]>([]);
-  const [upcomingAppointments, setUpcomingAppointments] = useState<AppointmentItem[]>([]);
-  const [nextAppointment, setNextAppointment] = useState<AppointmentItem | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [notifModalVisible, setNotifModalVisible] = useState(false);
   const [hasUnreadNotifs, setHasUnreadNotifs] = useState(false);
   const [respondingInviteId, setRespondingInviteId] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
+
+  const todayYMD = getLocalTodayYMD();
+  const todayAppointments = useMemo(
+    () =>
+      appointments
+        .filter((apt) => apt.scheduled_at && apt.status !== 'CANCELLED' && toLocalYMD(apt.scheduled_at) === todayYMD)
+        .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()),
+    [appointments, todayYMD]
+  );
+  const upcomingAppointments = useMemo(
+    () =>
+      appointments
+        .filter((a) => a.status === 'UPCOMING')
+        .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()),
+    [appointments]
+  );
+  const nextAppointment = useMemo(() => {
+    const cutoff = nowMs - 30 * 60 * 1000;
+    const activeToday = todayAppointments.find(
+      (a) => a.status === 'UPCOMING' && new Date(a.scheduled_at).getTime() >= cutoff
+    );
+    if (activeToday) return activeToday;
+    const activeUpcoming = upcomingAppointments.find(
+      (a) => new Date(a.scheduled_at).getTime() >= cutoff
+    );
+    if (activeUpcoming) return activeUpcoming;
+    return todayAppointments.find((a) => a.status === 'UPCOMING') || upcomingAppointments[0] || null;
+  }, [todayAppointments, upcomingAppointments, nowMs]);
 
   // 1. Nạp Cache tức thì (0ms) từ AsyncStorage khi mở màn hình
   useEffect(() => {
@@ -83,13 +116,13 @@ export default function DoctorHomeScreen() {
           setPatients(parsed.patients);
           setSelectedPatientId((curr) => curr || parsed.selectedPatientId || parsed.patients[0]?.id || null);
         }
-        if (Array.isArray(parsed.todayAppointments)) setTodayAppointments(parsed.todayAppointments);
-        if (Array.isArray(parsed.upcomingAppointments)) setUpcomingAppointments(parsed.upcomingAppointments);
-        if (parsed.nextAppointment) setNextAppointment(parsed.nextAppointment);
+        if (useDoctorAppointmentsStore.getState().appointments.length === 0 && Array.isArray(parsed.appointments)) {
+          setSharedAppointments(parsed.appointments);
+        }
         setLoading(false);
       })
       .catch(() => {});
-  }, []);
+  }, [setSharedAppointments]);
 
   // 2. Bộ đếm 10s kiểm tra độ trễ sinh hiệu
   useEffect(() => {
@@ -105,7 +138,7 @@ export default function DoctorHomeScreen() {
     try {
       const [patRes, aptRes, meRes] = await Promise.allSettled([
         withTimeout(doctorApi.getPatients(), 5000),
-        withTimeout(doctorApi.getAppointments(), 5000),
+        withTimeout(fetchSharedAppointments(), 5000),
         withTimeout(usersApi.getMe(), 5000),
         withTimeout(fetchIncidents(), 5000),
       ]);
@@ -133,29 +166,7 @@ export default function DoctorHomeScreen() {
         });
       }
 
-      let nextTodays: AppointmentItem[] | null = null;
-      let nextUpcoming: AppointmentItem[] | null = null;
-      let nextAptObj: AppointmentItem | null = null;
-      if (aptRes.status === 'fulfilled' && Array.isArray(aptRes.value.data)) {
-        const allApts: AppointmentItem[] = aptRes.value.data;
-        const toLocalYMD = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        const todayStr = toLocalYMD(new Date());
-        nextTodays = allApts
-          .filter((apt) => {
-            if (!apt.scheduled_at || apt.status === 'CANCELLED') return false;
-            const parsed = new Date(apt.scheduled_at);
-            return (!isNaN(parsed.getTime()) ? toLocalYMD(parsed) : apt.scheduled_at.slice(0, 10)) === todayStr;
-          })
-          .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
-        nextUpcoming = allApts
-          .filter((a) => a.status === 'UPCOMING')
-          .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
-        nextAptObj = nextTodays.find((a) => a.status === 'UPCOMING') || nextUpcoming[0] || null;
-
-        setTodayAppointments(nextTodays);
-        setUpcomingAppointments(nextUpcoming);
-        setNextAppointment(nextAptObj);
-      }
+      const fetchedApts = aptRes.status === 'fulfilled' && Array.isArray(aptRes.value) ? aptRes.value : null;
 
       setNowMs(Date.now());
 
@@ -167,9 +178,7 @@ export default function DoctorHomeScreen() {
             JSON.stringify({
               patients: nextPatients ?? prev.patients ?? [],
               selectedPatientId: nextSelId ?? prev.selectedPatientId ?? null,
-              todayAppointments: nextTodays ?? prev.todayAppointments ?? [],
-              upcomingAppointments: nextUpcoming ?? prev.upcomingAppointments ?? [],
-              nextAppointment: nextAptObj ?? null,
+              appointments: fetchedApts ?? prev.appointments ?? [],
             })
           );
         })
@@ -180,7 +189,7 @@ export default function DoctorHomeScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [fetchIncidents]);
+  }, [fetchIncidents, fetchSharedAppointments]);
 
   const handleRespondHouseInvite = async (incident: any, action: 'accept' | 'reject') => {
     try {

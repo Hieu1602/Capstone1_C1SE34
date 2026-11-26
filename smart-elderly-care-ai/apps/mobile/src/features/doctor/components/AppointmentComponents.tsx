@@ -4,11 +4,19 @@
 // 2. WeekCalendarStrip: Dải chọn 7 ngày trong tuần nằm ngang kèm chấm trạng thái ca khám (Ảnh 2 & 3)
 // 3. AppointmentCard: Thẻ hiển thị lịch hẹn theo dòng thời gian (Vertical Timeline - Ảnh 4)
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Image, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
 import { AppointmentItem, getPatientAvatarUrl } from './types';
+import {
+  toLocalYMD,
+  isTodayLocal,
+  isSameLocalDay,
+  getLocalToday,
+  getCleanAppointmentTitle,
+  isAppointmentFamilyConfirmed,
+} from '../utils/dateUtils';
 
 // =============================================================
 // 1. THỐNG KÊ LỊCH HẸN & BỘ LỌC (AppointmentStatsSummary)
@@ -152,8 +160,7 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
   };
 
   const weekDays = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = getLocalToday();
     const anchor = new Date(today);
     anchor.setDate(today.getDate() + weekOffset * 7);
     const monday = getWeekMonday(anchor);
@@ -168,26 +175,26 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
         label: labels[i],
         dayNum: d.getDate(),
         monthNum: d.getMonth() + 1,
-        dateString: d.toDateString(),
-        isToday: d.toDateString() === today.toDateString(),
+        dateYMD: toLocalYMD(d),
+        isToday: isTodayLocal(d),
       });
     }
     return days;
   }, [weekOffset]);
 
-  const toLocalDateStr = (d: Date) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  };
+  useEffect(() => {
+    if (!selectedDate) return;
+    const todayMonday = getWeekMonday(getLocalToday());
+    const targetMonday = getWeekMonday(selectedDate);
+    const diffWeeks = Math.round((targetMonday.getTime() - todayMonday.getTime()) / (7 * 24 * 60 * 60 * 1000));
+    setWeekOffset(diffWeeks);
+  }, [selectedDate]);
 
   const getDotsForDate = (dateObj: Date) => {
-    const dayStr = toLocalDateStr(dateObj);
+    const dayStr = toLocalYMD(dateObj);
     const dayApts = appointments.filter((a) => {
       if (!a.scheduled_at) return false;
-      const aptDate = new Date(a.scheduled_at);
-      return !isNaN(aptDate.getTime()) ? toLocalDateStr(aptDate) === dayStr : a.scheduled_at.startsWith(dayStr);
+      return toLocalYMD(a.scheduled_at) === dayStr;
     });
     const dots: string[] = [];
     if (dayApts.some((a) => a.status === 'UPCOMING')) dots.push('#F59E0B');
@@ -197,7 +204,7 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
   };
 
   const jumpToDateWeek = (targetDate: Date) => {
-    const todayMonday = getWeekMonday(new Date());
+    const todayMonday = getWeekMonday(getLocalToday());
     const targetMonday = getWeekMonday(targetDate);
     const diffWeeks = Math.round((targetMonday.getTime() - todayMonday.getTime()) / (7 * 24 * 60 * 60 * 1000));
     setWeekOffset(diffWeeks);
@@ -219,8 +226,8 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
       return {
         date: d,
         current: isCurrent,
-        selected: isCurrent && selectedDate ? d.toDateString() === selectedDate.toDateString() : false,
-        isToday: isCurrent && d.toDateString() === new Date().toDateString(),
+        selected: isCurrent && selectedDate ? isSameLocalDay(d, selectedDate) : false,
+        isToday: isCurrent && isTodayLocal(d),
         dots,
       };
     });
@@ -423,7 +430,7 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
         contentContainerStyle={styles.weekDaysRow}
       >
         {weekDays.map((item) => {
-          const isSelected = selectedDate ? item.dateString === selectedDate.toDateString() : false;
+          const isSelected = selectedDate ? isSameLocalDay(item.date, selectedDate) : false;
           const dots = getDotsForDate(item.date);
           return (
             <TouchableOpacity
@@ -498,6 +505,7 @@ export interface AppointmentCardProps {
   isFirst?: boolean;
   isLast?: boolean;
   isCurrentOrNext?: boolean;
+  isOverdue?: boolean;
   onViewPatient: (patientId: string) => void;
   onMarkCompleted: (aptId: string) => void;
   onEdit: (apt: AppointmentItem) => void;
@@ -512,6 +520,7 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
   isFirst = false,
   isLast = false,
   isCurrentOrNext = false,
+  isOverdue = false,
   onViewPatient,
   onMarkCompleted,
   onEdit,
@@ -523,7 +532,7 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
   const isUpcoming = apt.status === 'UPCOMING';
   const isCompleted = apt.status === 'COMPLETED';
   const isCancelled = apt.status === 'CANCELLED';
-  const isFamilyConfirmed = (apt.clinical_notes || '').includes('[ĐÃ XÁC NHẬN ĐÓN TIẾP]');
+  const isFamilyConfirmed = isAppointmentFamilyConfirmed(apt);
 
   const cleanInstructions = (apt.instructions || '')
     .replace(/\[ĐÃ XÁC NHẬN ĐÓN TIẾP\]/g, '')
@@ -531,18 +540,7 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
   const initial = (apt.patient_name || 'B').trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'B';
   const isHomeVisit = apt.visit_type === 'HOME_VISIT' || apt.exam_type === 'HOME_VISIT';
 
-  const getExamDisplayTitle = () => {
-    if (apt.exam_type && apt.exam_type !== 'HOME_VISIT' && apt.exam_type !== 'CLINIC') {
-      return apt.exam_type;
-    }
-    if (isHomeVisit) {
-      return 'Khám bệnh tại nhà';
-    }
-    if (apt.visit_type === 'CLINIC' || apt.exam_type === 'CLINIC') {
-      return 'Khám tại phòng khám SECA';
-    }
-    return 'Khám tổng quát định kỳ';
-  };
+  const getExamDisplayTitle = () => getCleanAppointmentTitle(apt);
 
   const recurrenceLabel =
     apt.recurrence_pattern === 'WEEKLY'
@@ -641,16 +639,32 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
               <View
                 style={[
                   styles.statusPill,
-                  { backgroundColor: isUpcoming ? '#FEF3C7' : isCompleted ? '#D1FAE5' : '#FEE2E2' },
+                  {
+                    backgroundColor: isUpcoming
+                      ? isOverdue
+                        ? '#FFF7ED'
+                        : '#FEF3C7'
+                      : isCompleted
+                      ? '#D1FAE5'
+                      : '#FEE2E2',
+                  },
                 ]}
               >
                 <LocalizedText
                   style={[
                     styles.statusPillText,
-                    { color: isUpcoming ? '#D97706' : isCompleted ? '#059669' : '#DC2626' },
+                    {
+                      color: isUpcoming
+                        ? isOverdue
+                          ? '#C2410C'
+                          : '#D97706'
+                        : isCompleted
+                        ? '#059669'
+                        : '#DC2626',
+                    },
                   ]}
                 >
-                  {isUpcoming ? 'SẮP TỚI' : isCompleted ? 'ĐÃ KHÁM XONG' : 'ĐÃ HỦY'}
+                  {isUpcoming ? (isOverdue ? 'QUÁ GIỜ' : 'SẮP TỚI') : isCompleted ? 'ĐÃ KHÁM XONG' : 'ĐÃ HỦY'}
                 </LocalizedText>
               </View>
             </View>
@@ -678,8 +692,7 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
               </LocalizedText>
               {apt.location ? (
                 <LocalizedText
-                  style={[styles.aptMetaText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}
-                  numberOfLines={1}
+                  style={[styles.aptMetaText, { color: isDarkMode ? '#94A3B8' : '#64748B', lineHeight: 17 }]}
                 >
                   📍 {apt.location}
                 </LocalizedText>

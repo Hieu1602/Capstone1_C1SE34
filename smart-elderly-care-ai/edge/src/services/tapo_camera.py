@@ -10,6 +10,7 @@ import re
 import subprocess
 import uuid
 import time
+from urllib.parse import urlparse
 
 from aiohttp import BasicAuth, web
 import cv2
@@ -603,6 +604,143 @@ class CameraFallDetector:
                 pass
 
 
+class CameraAudioDetector:
+    """Phân tích âm thanh RTSP camera theo thời gian thực bằng YAMNet (Va đập & Kêu cứu)."""
+
+    def __init__(self, camera_driver, fall_detector=None):
+        self.camera = camera_driver
+        self.fall_detector = fall_detector
+        self.enabled = os.getenv("AUDIO_DETECTION_ENABLED", "true").lower() in ("1", "true", "yes")
+        self.last_event_time = 0.0
+        self.event_count = 0
+        self.last_class: str | None = None
+        self.last_category: str | None = None
+        self.last_confidence: float | None = None
+        self.task = None
+        self._proc = None
+        self.classifier = None
+        try:
+            from src.ai.audio.sound_classifier import SoundClassifier
+            thresh = float(os.getenv("YAMNET_CONFIDENCE_THRESHOLD", "0.25"))
+            self.classifier = SoundClassifier({"alert_confidence_threshold": thresh})
+            self.classifier.load_model()
+        except Exception as e:
+            LOG.warning("[YAMNet] Không thể nạp SoundClassifier: %s", e)
+            self.classifier = None
+
+    def start(self):
+        if self.task is None or self.task.done():
+            self.task = asyncio.create_task(self._loop())
+
+    async def _loop(self):
+        import numpy as np
+        from src.ai.audio.sound_classifier import CLASS_VI_LABELS
+
+        while True:
+            try:
+                if not self.enabled or not self.classifier:
+                    await asyncio.sleep(1.0)
+                    continue
+
+                pop_fn = getattr(self.camera, "pop_audio_chunk", None)
+                raw = pop_fn() if pop_fn else None
+                if not raw:
+                    await asyncio.sleep(0.15)
+                    continue
+
+                waveform = np.frombuffer(raw, dtype=np.float32)
+                rms = float(np.sqrt(np.mean(waveform ** 2)))
+                if rms > 0.002:
+                    results = await asyncio.to_thread(self.classifier.classify, waveform)
+                    LOG.info("[YAMNet] rms=%.4f top2=%s", rms, [(n, round(s, 2)) for n, s in results[:2]])
+                event = await asyncio.to_thread(self.classifier.classify_emergency, waveform)
+                if event is not None:
+                    await self._handle_audio_event(event, CLASS_VI_LABELS)
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                await asyncio.sleep(1.0)
+
+    async def _terminate_proc(self):
+        if self._proc and self._proc.returncode is None:
+            try:
+                self._proc.terminate()
+                await asyncio.wait_for(self._proc.wait(), timeout=2.0)
+            except Exception:
+                try:
+                    self._proc.kill()
+                except Exception:
+                    pass
+        self._proc = None
+
+    async def _handle_audio_event(self, event, vi_labels: dict):
+        now = time.time()
+        if now - self.last_event_time < 20.0:
+            return
+        self.last_event_time = now
+        self.event_count += 1
+        self.last_class = event.class_name
+        self.last_category = event.category
+        self.last_confidence = round(float(event.confidence), 3)
+
+        vi_desc = vi_labels.get(event.class_name, event.class_name)
+        cat_label = "Va đập" if event.category == "IMPACT" else "Kêu cứu"
+        msg = f"Cảnh báo âm thanh ({cat_label}): {vi_desc} ({int(event.confidence * 100)}%)"
+        LOG.warning("[YAMNet] %s", msg)
+
+        event_id = str(uuid.uuid4())
+        clip_name = None
+        clip_path = None
+        thumb_name = None
+        thumb_path = None
+        if self.fall_detector is not None:
+            frames = list(self.fall_detector.frame_buffer)
+            if frames:
+                clip_name = f"{event_id}.mp4"
+                clip_path = self.fall_detector.recorder.directory / clip_name
+                await asyncio.to_thread(self.fall_detector._save_clip, frames, clip_path)
+                thumb_name = f"{event_id}.jpg"
+                thumb_path = self.fall_detector.recorder.directory / thumb_name
+                try:
+                    cv2.imwrite(str(thumb_path), frames[-1], [cv2.IMWRITE_JPEG_QUALITY, 90])
+                except Exception:
+                    thumb_path = None
+
+        mqtt = getattr(self.fall_detector, "mqtt", None)
+        if mqtt:
+            payload = {
+                "id": event_id,
+                "device_id": os.getenv("CAMERA_DEVICE_ID", os.getenv("DEVICE_ID", "camera-main")),
+                "alert_type": "ACOUSTIC_DISTRESS",
+                "alert_level": "HIGH",
+                "confidence": float(event.confidence),
+                "timestamp": now,
+                "message": msg,
+                "sources": ["yamnet_audio"],
+                "notes": json.dumps({
+                    "category": event.category,
+                    "class_name": event.class_name,
+                    "vi_label": vi_desc,
+                }, ensure_ascii=False),
+            }
+            if clip_name and clip_path:
+                payload["video_clip_url"] = f"/recordings/{clip_name}"
+                payload["clip_path"] = str(clip_path)
+            if thumb_name and thumb_path:
+                payload["thumbnail_url"] = f"/recordings/{thumb_name}"
+                payload["thumbnail_path"] = str(thumb_path)
+            try:
+                mqtt.publish_alert(payload)
+            except Exception as e:
+                LOG.error("[YAMNet] Lỗi gửi MQTT alert: %s", e)
+
+    async def close(self):
+        if self.task and not self.task.done():
+            self.task.cancel()
+            await asyncio.gather(self.task, return_exceptions=True)
+        await self._terminate_proc()
+
+
 def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> web.Application:
     """Lắp middleware, endpoint và vòng đời dịch vụ camera.
 
@@ -667,6 +805,7 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
     recorder = recorder or Recorder(rec_url, Path("/recordings"))
     fall_detector = fall_detector or CameraFallDetector(camera, recorder)
     fall_detector.get_active_driver_fn = get_active_driver
+    audio_detector = CameraAudioDetector(camera, fall_detector)
 
     @web.middleware
     async def authentication(request, handler):
@@ -790,7 +929,11 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
                 await asyncio.sleep(0.1)
                 if cam.is_connected():
                     break
-        return web.json_response({"connected": cam.is_connected()})
+        live_host = None
+        src_val = getattr(cam, "source", None)
+        if isinstance(src_val, str) and "://" in src_val:
+            live_host = urlparse(src_val).hostname
+        return web.json_response({"connected": cam.is_connected(), **({"host": live_host} if live_host else {})})
 
     async def snapshot(request):
         """Chụp JPEG từ frame hiện tại ngoài event loop.
@@ -1177,6 +1320,27 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         fall_detector.enabled = data["enabled"]
         return web.json_response({"enabled": fall_detector.enabled})
 
+    async def get_audio(request):
+        """Đọc tình trạng phân tích âm thanh AI (YAMNet)."""
+        return web.json_response({
+            "enabled": audio_detector.enabled,
+            "model_loaded": audio_detector.classifier is not None,
+            "detected": time.time() - audio_detector.last_event_time < 15.0 if audio_detector.last_event_time else False,
+            "last_event": audio_detector.last_event_time if audio_detector.last_event_time else None,
+            "event_count": audio_detector.event_count,
+            "last_class": audio_detector.last_class,
+            "last_category": audio_detector.last_category,
+            "last_confidence": audio_detector.last_confidence,
+        })
+
+    async def set_audio(request):
+        """Bật hoặc tắt tính năng phân tích âm thanh AI (YAMNet)."""
+        data = await body(request)
+        if "enabled" not in data or not isinstance(data["enabled"], bool):
+            raise ValueError("enabled must be boolean")
+        audio_detector.enabled = data["enabled"]
+        return web.json_response({"enabled": audio_detector.enabled})
+
     async def discover(request):
         """Dò quét camera RTSP trong mạng nội bộ của Edge."""
         from src.drivers.tapo import discover_tapo_host
@@ -1396,10 +1560,12 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         if camera.source != 0 or os.getenv("CAMERA_SOURCE") or os.getenv("TAPO_HOST") or os.getenv("TAPO_USERNAME"):
             camera.start()
         fall_detector.start()
+        audio_detector.start()
         recorder.start_cleanup()
         try:
             yield
         finally:
+            await audio_detector.close()
             await fall_detector.close()
             await recorder.close()
             for d in list(camera_pool.values()):
@@ -1420,6 +1586,7 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         web.get("/coverage", get_coverage),
         web.get("/archive/session", get_archive_session),
         web.get("/fall-detection", get_fall), web.post("/fall-detection", set_fall),
+        web.get("/audio-detection", get_audio), web.post("/audio-detection", set_audio),
         web.get("/discover", discover), web.post("/probe", probe),
         web.post("/speaker/play", speaker_play),
         web.get("/speaker/clip/{clip_id}.mp3", speaker_clip),

@@ -45,6 +45,28 @@ export const formatDM = (d: Date): string => {
   return `${day}/${m}`;
 };
 
+const WEEKDAY_LABELS_FULL = [
+  'Chủ Nhật',
+  'Thứ Hai',
+  'Thứ Ba',
+  'Thứ Tư',
+  'Thứ Năm',
+  'Thứ Sáu',
+  'Thứ Bảy',
+];
+
+const WEEKDAY_LABELS_SHORT = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+
+export const formatVietnameseWeekdayDMY = (ymd: string): string => {
+  const d = parseYMD(ymd);
+  return `${WEEKDAY_LABELS_FULL[d.getDay()]}, ${formatDMY(d)}`;
+};
+
+export const formatShortWeekdayDM = (ymd: string): string => {
+  const d = parseYMD(ymd);
+  return `${WEEKDAY_LABELS_SHORT[d.getDay()]} ${formatDM(d)}`;
+};
+
 export function computeVitalFilter(
   mode: VitalRangeMode,
   anchorDateStr: string
@@ -75,15 +97,16 @@ export function computeVitalFilter(
   }
 
   if (mode === 'WEEK') {
-    // 7 ngày kết thúc vào anchor (nếu anchor là hôm nay thì là 7 ngày gần nhất)
+    // Tuần chuẩn từ Thứ 2 đến Chủ Nhật chứa anchor
+    const dayOfWeek = anchor.getDay();
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     const start = new Date(anchor);
-    start.setDate(anchor.getDate() - 6);
+    start.setDate(anchor.getDate() + mondayOffset);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
     const startStr = formatYMD(start);
-    const endStr = dateStr;
-    const isCurrentWeek = endStr === todayStr;
-    const titleOverride = isCurrentWeek
-      ? 'Xu hướng Sinh hiệu 7 ngày gần nhất'
-      : `Xu hướng Sinh hiệu tuần (${formatDM(start)} - ${formatDMY(anchor)})`;
+    const endStr = formatYMD(end);
+    const titleOverride = `Xu hướng Sinh hiệu tuần (${formatDMY(start)} – ${formatDMY(end)})`;
     return {
       mode: 'WEEK',
       selectedDate: dateStr,
@@ -110,4 +133,19 @@ export function computeVitalFilter(
     days: end.getDate(),
     titleOverride,
   };
+}
+
+export function stepVitalFilter(
+  current: VitalFilterState,
+  delta: -1 | 1
+): VitalFilterState {
+  const anchor = parseYMD(current.selectedDate);
+  if (current.mode === 'DAY') {
+    anchor.setDate(anchor.getDate() + delta);
+  } else if (current.mode === 'WEEK') {
+    anchor.setDate(anchor.getDate() + delta * 7);
+  } else {
+    anchor.setMonth(anchor.getMonth() + delta, 1);
+  }
+  return computeVitalFilter(current.mode, formatYMD(anchor));
 }

@@ -2,6 +2,7 @@ import React from 'react';
 import { Home, Heart, Activity, PhoneCall, ChevronRight } from 'lucide-react';
 import { DoctorPatientCard } from '../../types';
 import { getPatientAvatar } from '../../utils/patientAvatar';
+import { formatGender } from '../../utils/formatters';
 
 export interface PatientCardProps {
   patient: DoctorPatientCard;
@@ -62,7 +63,7 @@ export const PatientCard: React.FC<PatientCardProps> = ({
                 </h3>
               </div>
               <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                {patient.age} tuổi • {patient.gender} • Nhóm máu {patient.blood_type || 'O+'}
+                {patient.age} tuổi • {formatGender(patient.gender)} • Nhóm máu {patient.blood_type || 'O+'}
               </p>
             </div>
           </div>

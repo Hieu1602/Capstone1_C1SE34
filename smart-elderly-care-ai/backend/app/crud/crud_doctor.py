@@ -733,7 +733,103 @@ class CRUDDoctor:
         if elderly_id not in _PRESCRIPTION_STORE:
             _PRESCRIPTION_STORE[elderly_id] = []
         _PRESCRIPTION_STORE[elderly_id].insert(0, item)
+
+        await self._notify_family_prescription(
+            db=db,
+            patient_uuid=patient_uuid,
+            doctor_name=doctor_name or "Bác sĩ phụ trách",
+            med_summary=f"{obj_in.medication_name} ({obj_in.dosage})",
+            diagnosis=obj_in.diagnosis,
+        )
         return item
+
+    async def _notify_family_prescription(
+        self,
+        db: AsyncSession,
+        patient_uuid: Optional[uuid.UUID],
+        doctor_name: str,
+        med_summary: str,
+        diagnosis: Optional[str] = None,
+    ) -> None:
+        """Tạo Incident, phát WebSocket và bắn FCM thông báo đơn thuốc mới lên thanh thông báo Android của gia đình (ting ting)."""
+        if not patient_uuid:
+            return
+        try:
+            from app.models.incident import Incident
+            from app.api.websockets.vitals_ws import alert_clients
+            from app.services.notification.appointment_notify import send_appointment_fcm
+            from app.services.redis import redis_service
+
+            eld = await db.get(ElderlyProfile, patient_uuid)
+            if not eld:
+                return
+            patient_name = eld.full_name or "người cao tuổi"
+            house_id = eld.house_id
+
+            dev_stmt = (
+                select(Device.id).where(Device.house_id == house_id).limit(1)
+                if house_id
+                else select(Device.id).limit(1)
+            )
+            device_id = (await db.execute(dev_stmt)).scalar_one_or_none() or (
+                await db.execute(select(Device.id).limit(1))
+            ).scalar_one_or_none()
+
+            diag_str = f" điều trị '{diagnosis}'" if diagnosis else ""
+            notif_msg = f"💊 {doctor_name} đã kê đơn thuốc mới{diag_str} cho cụ {patient_name}: {med_summary}. Lịch nhắc uống thuốc đã được đồng bộ."
+
+            new_incident = None
+            if device_id:
+                new_incident = Incident(
+                    device_id=device_id,
+                    alert_type="PRESCRIPTION_CREATED",
+                    alert_level="LOW",
+                    message=notif_msg,
+                    is_acknowledged=False,
+                    notes=f"PATIENT:{patient_uuid}|PRESCRIPTION_CREATED",
+                )
+                db.add(new_incident)
+                await db.commit()
+                await db.refresh(new_incident)
+                try:
+                    await redis_service.invalidate_incidents_cache()
+                except Exception:
+                    pass
+
+            ws_payload = json.dumps({
+                "type": "ALERT_NEW",
+                "alert_type": "PRESCRIPTION_CREATED",
+                "data": {
+                    "id": str(new_incident.id) if new_incident else f"inc-rx-{uuid.uuid4().hex[:8]}",
+                    "alert_type": "PRESCRIPTION_CREATED",
+                    "alert_level": "LOW",
+                    "message": notif_msg,
+                    "patient_id": str(patient_uuid),
+                    "created_at": new_incident.created_at.isoformat() if (new_incident and new_incident.created_at) else None,
+                }
+            }, ensure_ascii=False)
+            for client_ws in list(alert_clients):
+                try:
+                    await client_ws.send_text(ws_payload)
+                except Exception:
+                    if client_ws in alert_clients:
+                        alert_clients.remove(client_ws)
+
+            if house_id:
+                await send_appointment_fcm(
+                    db=db,
+                    target_house_id=house_id,
+                    doctor_id=None,
+                    title="💊 Đơn thuốc & Lịch uống thuốc mới",
+                    body=notif_msg,
+                    data={
+                        "type": "PRESCRIPTION_CREATED",
+                        "alert_type": "PRESCRIPTION_CREATED",
+                        "patient_id": str(patient_uuid),
+                    },
+                )
+        except Exception:
+            pass
 
     async def add_batch_prescriptions_db(
         self,
@@ -782,6 +878,17 @@ class CRUDDoctor:
             _PRESCRIPTION_STORE[elderly_id] = []
         for it in reversed(created_items):
             _PRESCRIPTION_STORE[elderly_id].insert(0, it)
+
+        med_names = ", ".join(f"{m.medication_name} ({m.dosage})" for m in batch.medications[:3])
+        if len(batch.medications) > 3:
+            med_names += f" và {len(batch.medications) - 3} thuốc khác"
+        await self._notify_family_prescription(
+            db=db,
+            patient_uuid=patient_uuid,
+            doctor_name=doctor_name or "Bác sĩ phụ trách",
+            med_summary=med_names,
+            diagnosis=batch.diagnosis,
+        )
         return created_items
 
     async def update_prescription_db(

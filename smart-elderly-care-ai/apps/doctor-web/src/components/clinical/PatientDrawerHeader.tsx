@@ -2,6 +2,7 @@ import React from 'react';
 import { Home, PhoneCall, Printer, X, Watch } from 'lucide-react';
 import { DoctorPatientDetail, DoctorPatientCard } from '../../types';
 import { getPatientAvatar } from '../../utils/patientAvatar';
+import { formatGender } from '../../utils/formatters';
 
 interface PatientDrawerHeaderProps {
   patientDetail: DoctorPatientDetail;
@@ -113,7 +114,7 @@ export const PatientDrawerHeader: React.FC<PatientDrawerHeaderProps> = ({
               {patientDetail.name}
             </h3>
             <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 truncate">
-              {patientDetail.age || selectedPatientCard?.age} tuổi • {patientDetail.gender || selectedPatientCard?.gender} • Nhóm máu{' '}
+              {patientDetail.age || selectedPatientCard?.age} tuổi • {formatGender(patientDetail.gender || selectedPatientCard?.gender)} • Nhóm máu{' '}
               <span className="font-bold text-slate-800 dark:text-white">{activeBloodType}</span>
             </p>
             <div className="mt-1 flex items-center space-x-1.5 text-xs text-slate-500 dark:text-slate-400 truncate">

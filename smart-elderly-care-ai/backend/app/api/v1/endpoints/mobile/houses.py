@@ -974,6 +974,7 @@ async def respond_to_join_request(
         await db.flush()
 
         # Tạo thông báo đã duyệt cho Thành viên
+        approved_inc = None
         if device_id:
             approved_inc = Incident(
                 device_id=device_id,
@@ -986,10 +987,36 @@ async def respond_to_join_request(
             db.add(approved_inc)
 
         await db.commit()
+        if approved_inc:
+            await db.refresh(approved_inc)
+            try:
+                from app.api.websockets.vitals_ws import alert_clients
+                ws_payload = json.dumps({
+                    "type": "ALERT_NEW",
+                    "alert_type": "HOUSE_JOIN_APPROVED",
+                    "data": {
+                        "id": str(approved_inc.id),
+                        "alert_type": "HOUSE_JOIN_APPROVED",
+                        "alert_level": "LOW",
+                        "message": approved_inc.message,
+                        "target_user_id": str(target_user_id),
+                        "house_id": str(member.house_id),
+                        "created_at": approved_inc.created_at.isoformat() if approved_inc.created_at else None,
+                    }
+                }, ensure_ascii=False)
+                for client_ws in list(alert_clients):
+                    try:
+                        await client_ws.send_text(ws_payload)
+                    except Exception:
+                        if client_ws in alert_clients:
+                            alert_clients.remove(client_ws)
+            except Exception:
+                pass
         return {"status": "accepted", "message": f"Đã phê duyệt cho {m_name} vào căn nhà thành công."}
     else:
         # Reject
         await db.delete(member)
+        reject_inc = None
         if device_id:
             reject_inc = Incident(
                 device_id=device_id,
@@ -1002,4 +1029,29 @@ async def respond_to_join_request(
             db.add(reject_inc)
 
         await db.commit()
+        if reject_inc:
+            await db.refresh(reject_inc)
+            try:
+                from app.api.websockets.vitals_ws import alert_clients
+                ws_payload = json.dumps({
+                    "type": "ALERT_NEW",
+                    "alert_type": "HOUSE_JOIN_REJECTED",
+                    "data": {
+                        "id": str(reject_inc.id),
+                        "alert_type": "HOUSE_JOIN_REJECTED",
+                        "alert_level": "LOW",
+                        "message": reject_inc.message,
+                        "target_user_id": str(target_user_id),
+                        "house_id": str(member.house_id),
+                        "created_at": reject_inc.created_at.isoformat() if reject_inc.created_at else None,
+                    }
+                }, ensure_ascii=False)
+                for client_ws in list(alert_clients):
+                    try:
+                        await client_ws.send_text(ws_payload)
+                    except Exception:
+                        if client_ws in alert_clients:
+                            alert_clients.remove(client_ws)
+            except Exception:
+                pass
         return {"status": "rejected", "message": f"Đã từ chối yêu cầu tham gia của {m_name}."}

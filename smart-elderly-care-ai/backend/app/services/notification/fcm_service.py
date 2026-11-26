@@ -107,28 +107,38 @@ class FCMService:
 
             notification = messaging.Notification(title=title, body=body)
 
-            # Phân loại kênh thông báo: Báo động nguy hiểm (emergency_alerts_v5) vs Thông báo thường ting ting (smartcare_normal_v5)
-            alert_type = (data or {}).get("alert_type") or (data or {}).get("type") or ""
-            is_emergency = alert_type in (
-                "FALL_DETECTED",
-                "AI_FALL_DETECTED",
-                "CRITICAL_TRIAD",
-                "CARDIO_COLLAPSE",
-                "HIGH_HEART_RATE",
-                "LOW_HEART_RATE",
-                "SUDDEN_HR_SPIKE",
-                "SUDDEN_HR_DROP",
-                "LOW_SPO2",
-                "EXERTION_HYPOXIA",
-                "HIGH_FEVER",
-                "FEVER_TACHYCARDIA",
-            ) or any(k in title for k in ("🚨", "💓", "KHẨN CẤP", "BÁO ĐỘNG", "NGUY CẤP", "TÉ NGÃ"))
+            # Phân loại kênh thông báo: Báo động nguy hiểm (emergency_alerts_v6) vs Thông báo thường ting ting (smartcare_normal_v6)
+            alert_type = str((data or {}).get("alert_type") or (data or {}).get("type") or "").upper()
+            is_emergency = (
+                alert_type in (
+                    "FALL_DETECTED",
+                    "AI_FALL_DETECTED",
+                    "CRITICAL_TRIAD",
+                    "CARDIO_COLLAPSE",
+                    "HIGH_HEART_RATE",
+                    "LOW_HEART_RATE",
+                    "SUDDEN_HR_SPIKE",
+                    "SUDDEN_HR_DROP",
+                    "ARRHYTHMIA_RECURRENT",
+                    "ARRHYTHMIA_SUSPECT",
+                    "LOW_SPO2",
+                    "EXERTION_HYPOXIA",
+                    "HIGH_FEVER",
+                    "FEVER_TACHYCARDIA",
+                    "ACOUSTIC_DISTRESS",
+                    "SOS_EMERGENCY",
+                    "EMERGENCY_SOS",
+                    "OUT_OF_RANGE_NO_PHONE",
+                    "EMERGENCY",
+                )
+                or any(k in title for k in ("🚨", "💓", "KHẨN CẤP", "BÁO ĐỘNG", "NGUY CẤP", "TÉ NGÃ"))
+            ) and alert_type not in ("LOW_BATTERY", "DEVICE_BATTERY_DEAD")
 
-            chosen_channel_id = "emergency_alerts_v5" if is_emergency else "smartcare_normal_v5"
+            chosen_channel_id = "emergency_alerts_v6" if is_emergency else "smartcare_normal_v6"
 
-            # Android config: Báo động nguy hiểm dùng priority max; Thông báo thường chỉ ting ting
+            # Android config: Báo động nguy hiểm dùng priority max; Thông báo thường chỉ ting ting trên thanh thông báo
             android_config = messaging.AndroidConfig(
-                priority="high" if is_emergency else "normal",
+                priority="high",
                 notification=messaging.AndroidNotification(
                     title=title,
                     body=body,

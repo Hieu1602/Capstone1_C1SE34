@@ -11,14 +11,17 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { LocalizedText as Text } from "../../../i18n/LocalizedComponents";
 import { useTheme } from "../../../store/useThemeStore";
-import type { FallDetectionStatus } from "../../../services/camera";
+import type { AudioDetectionStatus, FallDetectionStatus } from "../../../services/camera";
 
 interface Props {
     enabled: boolean | null;
     stats: FallDetectionStatus | null;
+    audioEnabled?: boolean | null;
+    audioStats?: AudioDetectionStatus | null;
     connected: boolean;
     overlay?: boolean;
     onToggle: () => Promise<void>;
+    onToggleAudio?: () => Promise<void>;
     onToggleOverlay?: () => void;
     onViewIncidents?: () => void;
 }
@@ -26,14 +29,18 @@ interface Props {
 export default function CameraAiCareSettings({
     enabled,
     stats,
+    audioEnabled = null,
+    audioStats = null,
     connected,
     overlay = false,
     onToggle,
+    onToggleAudio,
     onToggleOverlay,
     onViewIncidents,
 }: Props) {
     const { colors, isDarkMode } = useTheme();
     const [loading, setLoading] = useState(false);
+    const [audioLoading, setAudioLoading] = useState(false);
 
     const handleToggle = async () => {
         if (loading) return;
@@ -44,6 +51,18 @@ export default function CameraAiCareSettings({
             setLoading(false);
         }
     };
+
+    const handleToggleAudio = async () => {
+        if (!onToggleAudio || audioLoading) return;
+        setAudioLoading(true);
+        try {
+            await onToggleAudio();
+        } finally {
+            setAudioLoading(false);
+        }
+    };
+
+    const isAudioEnabled = audioEnabled === true;
 
     const isEnabled = enabled === true;
     const accentColor = isEnabled ? "#10B981" : "#64748B";
@@ -168,6 +187,129 @@ export default function CameraAiCareSettings({
                     )}
                 </TouchableOpacity>
             </View>
+
+            {/* 1b. Thẻ Phân tích Âm thanh AI (YAMNet - Va đập & Kêu cứu) */}
+            {onToggleAudio && (
+                <View
+                    style={[
+                        styles.card,
+                        {
+                            backgroundColor: colors.card,
+                            borderColor: isAudioEnabled ? "#8B5CF6" : colors.border,
+                        },
+                    ]}
+                >
+                    <View style={styles.cardHeader}>
+                        <View
+                            style={[
+                                styles.iconWrapper,
+                                {
+                                    backgroundColor: isAudioEnabled
+                                        ? isDarkMode
+                                            ? "rgba(139, 92, 246, 0.2)"
+                                            : "rgba(139, 92, 246, 0.1)"
+                                        : colors.surfaceSubtle,
+                                },
+                            ]}
+                        >
+                            <Ionicons
+                                name={isAudioEnabled ? "ear" : "ear-outline"}
+                                size={26}
+                                color={isAudioEnabled ? "#8B5CF6" : "#64748B"}
+                            />
+                        </View>
+                        <View style={styles.headerInfo}>
+                            <Text style={[styles.title, textStyle]}>
+                                Nhận diện âm thanh YAMNet
+                            </Text>
+                            <View style={styles.badgeRow}>
+                                <View
+                                    style={[
+                                        styles.statusDot,
+                                        { backgroundColor: isAudioEnabled ? "#8B5CF6" : "#94A3B8" },
+                                    ]}
+                                />
+                                <Text
+                                    style={[
+                                        styles.statusBadge,
+                                        { color: isAudioEnabled ? "#8B5CF6" : "#94A3B8" },
+                                    ]}
+                                >
+                                    {audioEnabled === null
+                                        ? "ĐANG TẢI..."
+                                        : isAudioEnabled
+                                          ? "ĐANG BẬT"
+                                          : "ĐÃ TẮT"}
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+
+                    <Text style={[styles.description, { color: colors.textSecondary }]}>
+                        Mô hình YAMNet phân tích liên tục âm thanh từ micro camera để phát
+                        hiện tiếng va đập mạnh, đổ vỡ hoặc tiếng kêu cứu, la hét và gửi
+                        cảnh báo khẩn cấp tức thì.
+                    </Text>
+
+                    <View style={[styles.statRow, { borderBottomColor: colors.border }]}>
+                        <Text style={{ color: colors.textSecondary }}>Âm thanh bất thường:</Text>
+                        <Text style={[styles.statValue, textStyle]}>
+                            {audioStats?.event_count ?? 0} lần
+                        </Text>
+                    </View>
+                    <View style={styles.statRow}>
+                        <Text style={{ color: colors.textSecondary }}>Phân loại gần nhất:</Text>
+                        <Text style={[styles.statValue, { color: "#8B5CF6" }]}>
+                            {audioStats?.last_class
+                                ? `${audioStats.last_category === "IMPACT" ? "Va đập" : "Kêu cứu"} (${audioStats.last_class})`
+                                : "Chưa có"}
+                        </Text>
+                    </View>
+
+                    <TouchableOpacity
+                        accessibilityRole="button"
+                        activeOpacity={0.8}
+                        style={[
+                            styles.toggleButton,
+                            {
+                                backgroundColor: isAudioEnabled
+                                    ? isDarkMode
+                                        ? "rgba(239, 68, 68, 0.15)"
+                                        : "rgba(239, 68, 68, 0.1)"
+                                    : "#8B5CF6",
+                                borderColor: isAudioEnabled ? "#EF4444" : "#8B5CF6",
+                            },
+                        ]}
+                        onPress={handleToggleAudio}
+                        disabled={audioLoading}
+                    >
+                        {audioLoading ? (
+                            <ActivityIndicator
+                                size="small"
+                                color={isAudioEnabled ? "#EF4444" : "#FFFFFF"}
+                            />
+                        ) : (
+                            <>
+                                <Ionicons
+                                    name={isAudioEnabled ? "power" : "checkmark-circle"}
+                                    size={20}
+                                    color={isAudioEnabled ? "#EF4444" : "#FFFFFF"}
+                                />
+                                <Text
+                                    style={[
+                                        styles.toggleButtonText,
+                                        { color: isAudioEnabled ? "#EF4444" : "#FFFFFF" },
+                                    ]}
+                                >
+                                    {isAudioEnabled
+                                        ? "Tắt nhận diện âm thanh YAMNet"
+                                        : "Bật nhận diện âm thanh YAMNet"}
+                                </Text>
+                            </>
+                        )}
+                    </TouchableOpacity>
+                </View>
+            )}
 
             {/* 2. Thẻ Hiển thị khung xương AI (Skeleton Overlay) */}
             <View

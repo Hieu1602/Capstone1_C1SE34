@@ -4,6 +4,7 @@
 import React from 'react';
 import { ShieldCheck, Camera, Edit3, Users, Calendar, Award, Monitor } from 'lucide-react';
 import type { DoctorProfileInfo } from '../../types';
+import { formatGender } from '../../utils/formatters';
 
 const maskPhone = (phone?: string) => {
   const c = phone?.trim() || '';
@@ -57,7 +58,7 @@ export const DoctorProfileColumn: React.FC<DoctorProfileColumnProps> = ({
       valueClass:
         'rounded-md border border-blue-200 bg-blue-50 px-2.5 py-0.5 font-bold text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/50 dark:text-blue-300',
     },
-    { label: 'Giới tính:', value: docInfo.gender || 'Nam', valueClass: 'font-semibold text-slate-900 dark:text-white' },
+    { label: 'Giới tính:', value: formatGender(docInfo.gender), valueClass: 'font-semibold text-slate-900 dark:text-white' },
     { label: 'Đơn vị công tác:', value: docInfo.hospital, valueClass: 'font-semibold text-slate-900 dark:text-white' },
     {
       label: 'Chuyên khoa phụ trách:',

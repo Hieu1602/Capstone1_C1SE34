@@ -838,10 +838,15 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                         <CameraAiCareSettings
                                             enabled={connection.fallDetection}
                                             stats={connection.fallStats}
+                                            audioEnabled={connection.audioDetection}
+                                            audioStats={connection.audioStats}
                                             connected={!!connection.status?.connected}
                                             overlay={connection.overlay}
                                             onToggle={async () => {
                                                 await connection.toggleFallDetection();
+                                            }}
+                                            onToggleAudio={async () => {
+                                                await connection.toggleAudioDetection();
                                             }}
                                             onToggleOverlay={connection.toggleOverlay}
                                             onViewIncidents={() => {
