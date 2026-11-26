@@ -106,7 +106,11 @@ export const DoctorKpiCards: React.FC<DoctorKpiCardsProps> = ({
 
               <button
                 type="button"
-                className={`flex h-8 w-8 items-center justify-center rounded-xl transition ${kpi.arrowBg}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  kpi.onClick();
+                }}
+                className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-xl transition cursor-pointer ${kpi.arrowBg}`}
                 title="Xem chi tiết"
               >
                 <ArrowUpRight className="h-4 w-4" />

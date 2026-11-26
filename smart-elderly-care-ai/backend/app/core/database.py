@@ -128,6 +128,7 @@ async def init_db() -> None:
                 await conn.execute(text("ALTER TABLE vital_signs ADD COLUMN IF NOT EXISTS elderly_id UUID REFERENCES elderly_profiles(id) ON DELETE CASCADE;"))
                 await conn.execute(text("ALTER TABLE vital_signs ADD COLUMN IF NOT EXISTS recorded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_vital_signs_elderly_id ON vital_signs(elderly_id);"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_vital_signs_elderly_recorded_desc ON vital_signs(elderly_id, recorded_at DESC NULLS LAST);"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_vital_signs_recorded_at_desc ON vital_signs(recorded_at DESC NULLS LAST);"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_vital_signs_time_desc ON vital_signs(\"time\" DESC);"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_vital_signs_device_time_desc ON vital_signs(device_id, \"time\" DESC);"))
