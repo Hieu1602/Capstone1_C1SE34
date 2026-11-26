@@ -11,11 +11,9 @@ import { useDoctorAuthStore } from '../store/useDoctorAuthStore';
 import { removeVietnameseTones } from '../utils/text';
 import {
   getStoredReadIds,
-  markAllAsReadWithUndo,
-  restorePreviousReadState,
+  markAllAsRead,
   markAsRead,
   toggleReadStatus,
-  hasUndoSnapshot,
   NOTIFS_SYNC_EVENT,
   SyncPayload,
 } from '../utils/notificationSync';
@@ -31,7 +29,7 @@ import { NotificationDetailModal, UnifiedNotification } from '../components/clin
 import { NotificationRow } from '../components/clinical/NotificationRow';
 import { NotificationPagination } from '../components/clinical/NotificationPagination';
 import type { Incident } from '../types';
-import { Bell, CheckCheck, RefreshCw, Search, ShieldAlert, Inbox, X, RotateCcw } from 'lucide-react';
+import { Bell, CheckCheck, RefreshCw, Search, ShieldAlert, Inbox, X } from 'lucide-react';
 
 const PAGE_SIZE = 10;
 
@@ -49,7 +47,6 @@ export const NotificationsPage: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
 
   const [readIds, setReadIds] = useState<Set<string>>(() => getStoredReadIds());
-  const [canUndo, setCanUndo] = useState<boolean>(() => hasUndoSnapshot());
 
   // Lắng nghe sự kiện đồng bộ từ thanh Navbar hoặc các tab/component khác (0ms)
   useEffect(() => {
@@ -57,7 +54,6 @@ export const NotificationsPage: React.FC = () => {
       const customEvent = e as CustomEvent<SyncPayload>;
       const nextSet = customEvent.detail?.readIds ? new Set(customEvent.detail.readIds) : getStoredReadIds();
       setReadIds(nextSet);
-      setCanUndo(customEvent.detail?.canUndo ?? hasUndoSnapshot());
       setNotifications((prev) =>
         prev.map((n) => ({ ...n, isRead: isNotificationReadInSet(n, nextSet) }))
       );
@@ -148,27 +144,14 @@ export const NotificationsPage: React.FC = () => {
     );
   };
 
-  // Đánh dấu tất cả đã đọc (có lưu snapshot Hoàn tác)
+  // Đánh dấu tất cả đã đọc
   const handleMarkAllRead = async () => {
     incidentsApi.acknowledgeAll().catch(console.warn);
     const allIds = notifications.map((n) => n.id);
     const rawIds = notifications.map((n) => n.rawIncidentId || '').filter(Boolean);
-    const next = markAllAsReadWithUndo(allIds, rawIds);
+    const next = markAllAsRead(allIds, rawIds);
     setReadIds(next);
-    setCanUndo(true);
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-  };
-
-  // Khôi phục trạng thái chưa đọc trước đó (Hoàn tác)
-  const handleUndoMarkAll = () => {
-    const restored = restorePreviousReadState();
-    if (restored) {
-      setReadIds(restored);
-      setCanUndo(false);
-      setNotifications((prev) =>
-        prev.map((n) => ({ ...n, isRead: isNotificationReadInSet(n, restored) }))
-      );
-    }
   };
 
   const handleRespondInvite = async (incident: Incident, action: 'accept' | 'reject') => {
@@ -265,17 +248,6 @@ export const NotificationsPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {canUndo && (
-            <button
-              type="button"
-              onClick={handleUndoMarkAll}
-              className="flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 shadow-2xs transition-colors dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 cursor-pointer"
-              title="Khôi phục trạng thái chưa đọc trước khi bấm Đã đọc tất cả"
-            >
-              <RotateCcw className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-              <span>Khôi phục</span>
-            </button>
-          )}
           {unreadCount > 0 && (
             <button
               type="button"

@@ -11,11 +11,9 @@ import type { Incident } from '../../types';
 import { NotificationDetailModal, UnifiedNotification } from '../clinical/NotificationDetailModal';
 import {
   getStoredReadIds,
-  markAllAsReadWithUndo,
-  restorePreviousReadState,
+  markAllAsRead,
   markAsRead,
   toggleReadStatus,
-  hasUndoSnapshot,
   NOTIFS_SYNC_EVENT,
   SyncPayload,
 } from '../../utils/notificationSync';
@@ -45,7 +43,6 @@ export const DoctorNavbar: React.FC = () => {
   const [notifications, setNotifications] = useState<UnifiedNotification[]>([]);
   const [selectedNotif, setSelectedNotif] = useState<UnifiedNotification | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [canUndo, setCanUndo] = useState<boolean>(() => hasUndoSnapshot());
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const notifDropdownRef = useRef<HTMLDivElement | null>(null);
@@ -102,7 +99,6 @@ export const DoctorNavbar: React.FC = () => {
       const nextSet = customEvent.detail?.readIds
         ? new Set(customEvent.detail.readIds)
         : getStoredReadIds();
-      setCanUndo(customEvent.detail?.canUndo ?? hasUndoSnapshot());
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: isNotificationReadInSet(n, nextSet) })));
     };
 
@@ -170,7 +166,7 @@ export const DoctorNavbar: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showNotifMenu]);
 
-  // Đánh dấu đã đọc tất cả (có hỗ trợ Hoàn tác / Khôi phục)
+  // Đánh dấu đã đọc tất cả
   const handleMarkAllRead = async () => {
     try {
       incidentsApi.acknowledgeAll().catch(console.warn);
@@ -179,18 +175,8 @@ export const DoctorNavbar: React.FC = () => {
     }
     const allIds = notifications.map((n) => n.id);
     const rawIds = notifications.map((n) => n.rawIncidentId || '').filter(Boolean);
-    markAllAsReadWithUndo(allIds, rawIds);
-    setCanUndo(true);
+    markAllAsRead(allIds, rawIds);
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-  };
-
-  // Khôi phục trạng thái chưa đọc (Hoàn tác khi lỡ bấm nhầm Đã đọc tất cả)
-  const handleUndoMarkAll = () => {
-    const restored = restorePreviousReadState();
-    if (restored) {
-      setCanUndo(false);
-      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: isNotificationReadInSet(n, restored) })));
-    }
   };
 
   // Đảo trạng thái Đã đọc <-> Chưa đọc cho một thông báo cụ thể
@@ -334,9 +320,7 @@ export const DoctorNavbar: React.FC = () => {
             if (!showNotifMenu) fetchNotifData();
           }}
           notifications={notifications}
-          canUndo={canUndo}
           onMarkAllRead={handleMarkAllRead}
-          onUndoMarkAll={handleUndoMarkAll}
           onToggleSingleRead={handleToggleSingleRead}
           onNotificationClick={handleNotificationClick}
           onViewAll={() => {
