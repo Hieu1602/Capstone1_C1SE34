@@ -723,6 +723,36 @@ async def join_house_by_code(
 # 3. PHẢN HỒI LỜI MỜI / YÊU CẦU THAM GIA CĂN NHÀ
 # ==============================================================================
 
+@router.get("/my-invitations")
+async def get_my_house_invitations(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Trả về danh sách lời mời tham gia căn nhà đang chờ thành viên/bác sĩ xác nhận."""
+    stmt = (
+        select(HouseMember, House, User)
+        .join(House, HouseMember.house_id == House.id)
+        .outerjoin(User, House.owner_id == User.id)
+        .where(
+            HouseMember.user_id == current_user.id,
+            HouseMember.status == "PENDING_MEMBER_CONFIRM",
+        )
+        .order_by(HouseMember.joined_at.desc())
+    )
+    rows = (await db.execute(stmt)).all()
+    return [
+        {
+            "id": str(member.id),
+            "house_id": str(house.id),
+            "house_name": house.name or "Gia đình bệnh nhân",
+            "inviter_name": (owner.full_name if owner else None) or "Chủ hộ",
+            "message": f"Chủ hộ {(owner.full_name if owner else None) or 'Gia đình'} đã gửi lời mời bạn phụ trách theo dõi sức khỏe cho {house.name or 'gia đình'}.",
+            "created_at": member.joined_at.isoformat() if getattr(member, "joined_at", None) else None,
+        }
+        for member, house, owner in rows
+    ]
+
+
 @router.post("/invites/{member_id}/respond")
 async def respond_to_house_invite(
     member_id: str,

@@ -244,6 +244,15 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
     });
   };
 
+  const isSlotPast = (slotStr: string): boolean => {
+    if (!isSameLocalDay(selectedDate, new Date())) return false;
+    const m = slotStr.trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+    if (!m) return false;
+    const candidate = new Date(selectedDate);
+    candidate.setHours(Number(m[1]), Number(m[2]), 0, 0);
+    return candidate.getTime() <= Date.now();
+  };
+
   const fieldBg = isDarkMode ? '#0F172A' : '#F8FAFC';
 
   return (
@@ -407,7 +416,16 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
                         ].map((item) => {
                           const active = recurrencePattern === item.key;
                           return (
-                            <TouchableOpacity key={item.key} style={[styles.recurrenceOptionPill, active ? styles.activePill : { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border }]} onPress={() => onChangeRecurrencePattern?.(item.key as any)}>
+                            <TouchableOpacity
+                              key={item.key}
+                              style={[styles.recurrenceOptionPill, active ? styles.activePill : { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border }]}
+                              onPress={() => {
+                                onChangeRecurrencePattern?.(item.key as any);
+                                if (item.key !== 'NONE' && recurrenceOccurrences < 2) {
+                                  onChangeRecurrenceOccurrences?.(2);
+                                }
+                              }}
+                            >
                               <LocalizedText style={{ fontSize: 11, color: active ? '#FFFFFF' : colors.textPrimary, fontWeight: active ? '700' : '500' }}>{item.label}</LocalizedText>
                             </TouchableOpacity>
                           );
@@ -418,7 +436,7 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
                         <View style={[styles.occurrencesBox, { backgroundColor: isDarkMode ? '#1E293B' : '#EFF6FF' }]}>
                           <LocalizedText style={[styles.occurrencesLabel, { color: isDarkMode ? '#CBD5E1' : '#1E293B' }]}>Số đợt khám định kỳ tự động:</LocalizedText>
                           <View style={[styles.rowCenter, { gap: 10 }]}>
-                            <TouchableOpacity style={styles.stepperBtn} onPress={() => onChangeRecurrenceOccurrences?.(Math.max(1, recurrenceOccurrences - 1))}>
+                            <TouchableOpacity style={styles.stepperBtn} onPress={() => onChangeRecurrenceOccurrences?.(Math.max(2, recurrenceOccurrences - 1))}>
                               <Ionicons name="remove" size={16} color="#0284C7" />
                             </TouchableOpacity>
                             <LocalizedText style={[styles.stepperValue, { color: colors.textPrimary }]}>{recurrenceOccurrences}</LocalizedText>
@@ -639,13 +657,15 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
                 {group.slots.map((slot) => {
                   const active = selectedTimeSlot === slot;
                   const booked = isSlotBooked(slot);
+                  const past = isSlotPast(slot);
+                  const unavailable = booked || past;
                   return (
                     <TouchableOpacity
                       key={slot}
-                      disabled={booked}
+                      disabled={unavailable}
                       style={[
                         styles.timeSlotBtn,
-                        booked
+                        unavailable
                           ? {
                               backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9',
                               borderColor: isDarkMode ? '#334155' : '#CBD5E1',
@@ -664,16 +684,16 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
                       <LocalizedText
                         style={{
                           fontSize: 12,
-                          color: booked ? '#94A3B8' : active ? '#FFFFFF' : colors.textPrimary,
+                          color: unavailable ? '#94A3B8' : active ? '#FFFFFF' : colors.textPrimary,
                           fontWeight: active ? '700' : '500',
-                          textDecorationLine: booked ? 'line-through' : 'none',
+                          textDecorationLine: unavailable ? 'line-through' : 'none',
                         }}
                       >
                         {slot}
                       </LocalizedText>
-                      {booked && (
-                        <LocalizedText style={{ fontSize: 9.5, color: '#DC2626', fontWeight: '700', marginTop: 1 }}>
-                          Đã kín
+                      {unavailable && (
+                        <LocalizedText style={{ fontSize: 9.5, color: booked ? '#DC2626' : '#64748B', fontWeight: '700', marginTop: 1 }}>
+                          {booked ? 'Đã kín' : 'Đã qua'}
                         </LocalizedText>
                       )}
                     </TouchableOpacity>
@@ -696,6 +716,13 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
             style={styles.btnConfirmSmall}
             onPress={() => {
               const trimmed = customTimeInput.trim();
+              if (trimmed && isSlotPast(trimmed)) {
+                LocalizedAlert.alert(
+                  'Khung giờ đã qua',
+                  'Vui lòng chọn khung giờ ở tương lai.'
+                );
+                return;
+              }
               if (trimmed && isSlotBooked(trimmed)) {
                 LocalizedAlert.alert(
                   'Khung giờ đã kín',
@@ -748,6 +775,13 @@ export const AppointmentCancelModal: React.FC<AppointmentCancelModalProps> = ({
 }) => {
   const [reason, setReason] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    if (visible) {
+      setReason('');
+      setErrorMsg('');
+    }
+  }, [visible, appointment?.id]);
 
   const handleClose = () => { setReason(''); setErrorMsg(''); onClose(); };
   const handleConfirm = () => {
@@ -858,12 +892,15 @@ export const AppointmentDetailModal: React.FC<AppointmentDetailModalProps> = ({
   visible, appointment, patientInfo, onClose, onReschedule, onStartExam, formatAptTime, isDarkMode, colors,
 }) => {
   if (!appointment) return null;
+  const cleanNotes = (appointment.instructions || appointment.clinical_notes || '')
+    .replace(/\[ĐÃ XÁC NHẬN ĐÓN TIẾP\]/g, '')
+    .trim();
   const rows = [
     { icon: 'person-outline', label: 'Bệnh nhân:', val: `${appointment.patient_name || 'Bệnh nhân'}${patientInfo ? ` (${patientInfo.age ? `${patientInfo.age} tuổi` : ''}${patientInfo.gender ? ` • ${formatGenderVN(patientInfo.gender)}` : ''})` : ''}` },
     { icon: 'time-outline', label: 'Thời gian & Hình thức:', val: `${formatAppointmentDateTimeLabel(appointment.scheduled_at)} • ${appointment.visit_type === 'CLINIC' ? 'Tại phòng khám' : 'Khám tại nhà'}` },
     { icon: 'location-outline', label: 'Địa chỉ khám:', val: appointment.location || patientInfo?.house_address || 'Nhà riêng bệnh nhân' },
     { icon: 'call-outline', label: 'Số điện thoại người nhà:', val: maskPhoneNumber(patientInfo?.emergency_contact_phone) },
-    { icon: 'document-text-outline', label: 'Dặn dò y tế / Ghi chú:', val: appointment.instructions || appointment.clinical_notes || 'Khám sức khỏe định kỳ.' },
+    { icon: 'document-text-outline', label: 'Dặn dò y tế / Ghi chú:', val: cleanNotes || 'Khám sức khỏe định kỳ.' },
   ];
 
   return (

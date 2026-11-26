@@ -1,6 +1,6 @@
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 import pytest
 from fastapi import HTTPException
@@ -96,3 +96,26 @@ def test_crud_elderly_delete_profile_logic():
     assert mock_db.execute.awaited
     assert mock_db.delete.awaited
     assert mock_db.commit.awaited
+
+
+def test_get_my_house_invitations_returns_pending_invites():
+    from app.api.v1.endpoints.mobile.houses import get_my_house_invitations
+
+    user = SimpleNamespace(id=uuid4(), role="doctor")
+    member_id = uuid4()
+    house_id = uuid4()
+    member = SimpleNamespace(id=member_id, joined_at=None)
+    house = SimpleNamespace(id=house_id, name="Nhà Cụ An")
+    owner = SimpleNamespace(full_name="Nguyễn Văn B")
+
+    mock_result = MagicMock()
+    mock_result.all.return_value = [(member, house, owner)]
+    mock_db = AsyncMock()
+    mock_db.execute.return_value = mock_result
+
+    invites = asyncio.run(get_my_house_invitations(current_user=user, db=mock_db))
+    assert len(invites) == 1
+    assert invites[0]["id"] == str(member_id)
+    assert invites[0]["house_id"] == str(house_id)
+    assert invites[0]["house_name"] == "Nhà Cụ An"
+    assert invites[0]["inviter_name"] == "Nguyễn Văn B"

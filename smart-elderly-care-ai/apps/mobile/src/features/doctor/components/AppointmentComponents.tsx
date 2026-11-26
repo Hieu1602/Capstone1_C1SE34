@@ -197,7 +197,7 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
       return toLocalYMD(a.scheduled_at) === dayStr;
     });
     const dots: string[] = [];
-    if (dayApts.some((a) => a.status === 'UPCOMING')) dots.push('#F59E0B');
+    if (dayApts.some((a) => a.status === 'UPCOMING' || a.status === 'CONFIRMED')) dots.push('#F59E0B');
     if (dayApts.some((a) => a.status === 'COMPLETED')) dots.push('#10B981');
     if (dayApts.some((a) => a.status === 'CANCELLED')) dots.push('#EF4444');
     return dots;
@@ -529,7 +529,7 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
   isDarkMode,
   colors,
 }) => {
-  const isUpcoming = apt.status === 'UPCOMING';
+  const isUpcoming = apt.status === 'UPCOMING' || apt.status === 'CONFIRMED';
   const isCompleted = apt.status === 'COMPLETED';
   const isCancelled = apt.status === 'CANCELLED';
   const isFamilyConfirmed = isAppointmentFamilyConfirmed(apt);
