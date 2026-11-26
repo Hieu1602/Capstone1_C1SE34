@@ -96,7 +96,8 @@ async def lifespan(app: FastAPI):
                         except Exception as up_err:
                             logger.warning("[Lifespan] Không thể upload clip lên AWS S3: %s", up_err)
 
-                    thumb_path = payload.get("thumbnail_path")
+                    snapshots = payload.get("snapshots")
+                    thumb_path = payload.get("thumbnail_path") or (snapshots[0] if isinstance(snapshots, list) and snapshots else None)
                     if thumb_path:
                         try:
                             import asyncio
@@ -187,7 +188,10 @@ async def lifespan(app: FastAPI):
                             device = await session.get(Device, incident.device_id)
                             if device and device.house_id:
                                 house = await session.get(House, device.house_id)
-                                member_subq = select(HouseMember.user_id).where(HouseMember.house_id == device.house_id)
+                                member_subq = select(HouseMember.user_id).where(
+                                    HouseMember.house_id == device.house_id,
+                                    HouseMember.status == "ACTIVE",
+                                )
                                 user_query = select(User).where(
                                     User.is_active.is_(True),
                                     or_(
@@ -197,7 +201,13 @@ async def lifespan(app: FastAPI):
                                 )
                                 users_res = await session.execute(user_query)
                                 house_users = users_res.scalars().all()
-                                tokens = [u.fcm_token for u in house_users if u.fcm_token]
+                                tokens = list(dict.fromkeys(
+                                    u.fcm_token
+                                    for u in house_users
+                                    if u.fcm_token
+                                    and getattr(u, "notifications_enabled", True)
+                                    and getattr(u, "critical_alert_enabled", True)
+                                ))
                                 if tokens:
                                     fcm = FCMService()
                                     cred_path = Path(settings.FCM_SERVICE_ACCOUNT_PATH)

@@ -28,7 +28,7 @@ if hasattr(sys.stderr, "reconfigure"):
 import cv2
 import joblib
 import numpy as np
-from sklearn.ensemble import ExtraTreesClassifier, GradientBoostingClassifier, RandomForestClassifier
+from sklearn.ensemble import ExtraTreesClassifier, GradientBoostingClassifier, RandomForestClassifier, VotingClassifier
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score, precision_score, recall_score
 from sklearn.model_selection import train_test_split
 
@@ -220,14 +220,32 @@ def train_and_evaluate(
         X, y, test_size=0.20, random_state=42, stratify=y
     )
 
-    # 1. Khởi tạo mô hình Random Forest tối ưu cho Edge AI
-    clf = RandomForestClassifier(
-        n_estimators=100,
-        max_depth=12,
-        min_samples_split=4,
-        class_weight="balanced",
-        random_state=42,
-        n_jobs=-1,
+    # 1. Khởi tạo mô hình Ensemble (Random Forest + Extra Trees + Gradient Boosting)
+    clf = VotingClassifier(
+        estimators=[
+            ("rf", RandomForestClassifier(
+                n_estimators=100,
+                max_depth=12,
+                min_samples_split=4,
+                class_weight="balanced",
+                random_state=42,
+                n_jobs=-1,
+            )),
+            ("et", ExtraTreesClassifier(
+                n_estimators=300,
+                max_depth=16,
+                class_weight="balanced",
+                random_state=42,
+                n_jobs=-1,
+            )),
+            ("gb", GradientBoostingClassifier(
+                n_estimators=200,
+                max_depth=4,
+                learning_rate=0.08,
+                random_state=42,
+            )),
+        ],
+        voting="soft",
     )
 
     t0 = time.time()
@@ -245,6 +263,7 @@ def train_and_evaluate(
 
     report = classification_report(y_test, y_pred, target_names=["ADL", "FALL"], output_dict=True)
 
+    importances = np.mean([est.feature_importances_ for est in clf.estimators_], axis=0)
     metrics = {
         "accuracy": round(float(acc) * 100, 2),
         "precision": round(float(prec) * 100, 2),
@@ -261,14 +280,14 @@ def train_and_evaluate(
         "train_samples": len(y_train),
         "test_samples": len(y_test),
         "feature_importances": {
-            "aspect_ratio": round(float(clf.feature_importances_[0]), 4),
-            "norm_hip_y": round(float(clf.feature_importances_[1]), 4),
-            "spine_angle": round(float(clf.feature_importances_[2]), 4),
-            "torso_len": round(float(clf.feature_importances_[3]), 4),
-            "hip_velocity": round(float(clf.feature_importances_[4]), 4),
-            "head_hip_dist": round(float(clf.feature_importances_[5]), 4),
-            "hip_knee_dist": round(float(clf.feature_importances_[6]), 4),
-            "leg_spread_ratio": round(float(clf.feature_importances_[7]), 4),
+            "aspect_ratio": round(float(importances[0]), 4),
+            "norm_hip_y": round(float(importances[1]), 4),
+            "spine_angle": round(float(importances[2]), 4),
+            "torso_len": round(float(importances[3]), 4),
+            "hip_velocity": round(float(importances[4]), 4),
+            "head_hip_dist": round(float(importances[5]), 4),
+            "hip_knee_dist": round(float(importances[6]), 4),
+            "leg_spread_ratio": round(float(importances[7]), 4),
         },
         "classification_report": report,
     }
@@ -299,6 +318,7 @@ def main():
     parser.add_argument("--output-metrics", type=str, default="data/processed/training_metrics.json", help="Đường dẫn xuất metrics")
     parser.add_argument("--max-videos", type=int, default=15, help="Số video tối đa mỗi lớp để train nhanh (0 để chạy toàn bộ)")
     parser.add_argument("--stride", type=int, default=2, help="Khoảng bước frame khi trích xuất")
+    parser.add_argument("--from-cache", action="store_true", help="Huấn luyện trực tiếp từ data/processed/features_cache.npz")
     args = parser.parse_args()
 
     project_root = Path("smart-elderly-care-ai")
@@ -311,27 +331,35 @@ def main():
     output_metrics = project_root / args.output_metrics
     features_cache = project_root / "data/processed/features_cache.npz"
 
-    if not dataset_path.exists():
-        logger.error("Không tìm thấy thư mục dataset tại: %s", dataset_path)
-        sys.exit(1)
+    if args.from_cache:
+        if not features_cache.exists():
+            logger.error("Không tìm thấy cache đặc trưng tại: %s", features_cache)
+            sys.exit(1)
+        cached = np.load(features_cache)
+        X, y = cached["X"], cached["y"]
+        logger.info("Đã nạp %d mẫu từ cache: %s", len(X), features_cache)
+    else:
+        if not dataset_path.exists():
+            logger.error("Không tìm thấy thư mục dataset tại: %s", dataset_path)
+            sys.exit(1)
 
-    logger.info("Khởi tạo PoseDetector với mô hình: %s", pose_model_path)
-    cfg = {"fallback_model": str(pose_model_path), "confidence_threshold": 0.45}
-    detector = PoseDetector(cfg)
-    detector.load_model()
+        logger.info("Khởi tạo PoseDetector với mô hình: %s", pose_model_path)
+        cfg = {"fallback_model": str(pose_model_path), "confidence_threshold": 0.45}
+        detector = PoseDetector(cfg)
+        detector.load_model()
 
-    max_vids = None if args.max_videos <= 0 else args.max_videos
-    logger.info("Bắt đầu trích xuất đặc trưng từ GMDCSA-24 (max %s video/class, stride=%d)...", max_vids, args.stride)
-    
-    t_start = time.time()
-    X, y, sources = extract_features_from_dataset(dataset_path, detector, max_videos_per_class=max_vids, sample_stride=args.stride)
-    extract_time = time.time() - t_start
-    logger.info("Trích xuất xong %d mẫu trong %.1f giây.", len(X), extract_time)
+        max_vids = None if args.max_videos <= 0 else args.max_videos
+        logger.info("Bắt đầu trích xuất đặc trưng từ GMDCSA-24 (max %s video/class, stride=%d)...", max_vids, args.stride)
+        
+        t_start = time.time()
+        X, y, sources = extract_features_from_dataset(dataset_path, detector, max_videos_per_class=max_vids, sample_stride=args.stride)
+        extract_time = time.time() - t_start
+        logger.info("Trích xuất xong %d mẫu trong %.1f giây.", len(X), extract_time)
 
-    # Lưu cache đặc trưng
-    features_cache.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(features_cache, X=X, y=y)
-    logger.info("Đã lưu cache đặc trưng vào: %s", features_cache)
+        # Lưu cache đặc trưng
+        features_cache.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(features_cache, X=X, y=y)
+        logger.info("Đã lưu cache đặc trưng vào: %s", features_cache)
 
     # Huấn luyện mô hình
     metrics = train_and_evaluate(X, y, output_model, output_metrics)

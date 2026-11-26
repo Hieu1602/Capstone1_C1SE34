@@ -35,7 +35,7 @@ sys.path.insert(0, str(EDGE_DIR))
 
 import cv2
 from src.ai.vision.pose_detector import PoseDetector
-from src.ai.vision.utils import draw_pose
+from src.ai.vision.utils import draw_pose, draw_text_vi
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("PoseMonitor")
@@ -223,8 +223,8 @@ def main():
 
                 elapsed = time.time() - start_time
                 fps = frame_count / elapsed if elapsed > 0 else 0.0
-                info_text = f"FPS: {fps:.1f} | Nguoi: {res.person_count} | Nga: {'CO' if res.is_fall_detected else 'Khong'}"
-                cv2.putText(vis_frame, info_text, (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+                info_text = f"FPS: {fps:.1f} | Người: {res.person_count} | Ngã: {'CÓ' if res.is_fall_detected else 'Không'}"
+                draw_text_vi(vis_frame, info_text, (20, 35), color=(0, 255, 255), font_size=22)
 
                 h, w = vis_frame.shape[:2]
                 if w > 1280:
