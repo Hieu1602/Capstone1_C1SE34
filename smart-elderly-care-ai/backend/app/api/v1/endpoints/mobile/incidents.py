@@ -24,8 +24,8 @@ router = APIRouter()
 async def list_incidents(
     device_id: str | None = Query(default=None),
     alert_level: str | None = Query(default=None),
-    target_role: str | None = Query(default=None, description="Lọc đối tượng nhận: doctor | family | caregiver"),
-    limit: int = Query(default=20, le=100),
+    target_role: str | None = Query(default=None, description="Lọc đối tượng nhận: doctor | doctor_analytics | family | caregiver"),
+    limit: int = Query(default=20, le=500),
     offset: int = Query(default=0),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),

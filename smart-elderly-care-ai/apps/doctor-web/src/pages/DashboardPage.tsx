@@ -21,23 +21,6 @@ import { DoctorPatientTable } from '../components/dashboard/DoctorPatientTable';
 import { EscalationStatusBanner } from '../components/dashboard/EscalationStatusBanner';
 import { Sparkles } from 'lucide-react';
 
-const DEFAULT_ALERT_STATS_7D: AlertDayStat[] = [
-  { label: 'T2', fullLabel: 'Thứ Hai', fall: 1, heart_alert: 3, spo2_alert: 1, sos_alert: 0, total: 5 },
-  { label: 'T3', fullLabel: 'Thứ Ba', fall: 0, heart_alert: 2, spo2_alert: 2, sos_alert: 1, total: 5 },
-  { label: 'T4', fullLabel: 'Thứ Tư', fall: 2, heart_alert: 4, spo2_alert: 1, sos_alert: 0, total: 7 },
-  { label: 'T5', fullLabel: 'Thứ Năm', fall: 0, heart_alert: 1, spo2_alert: 1, sos_alert: 0, total: 2 },
-  { label: 'T6', fullLabel: 'Thứ Sáu', fall: 1, heart_alert: 3, spo2_alert: 2, sos_alert: 1, total: 7 },
-  { label: 'T7', fullLabel: 'Thứ Bảy', fall: 0, heart_alert: 2, spo2_alert: 0, sos_alert: 0, total: 2 },
-  { label: 'CN', fullLabel: 'Chủ Nhật', fall: 1, heart_alert: 2, spo2_alert: 1, sos_alert: 1, total: 5 },
-];
-
-const DEFAULT_ALERT_STATS_30D: AlertDayStat[] = [
-  { label: 'Tuần 1', fullLabel: 'Tuần 1 (01 - 07)', fall: 3, heart_alert: 12, spo2_alert: 5, sos_alert: 2, total: 22 },
-  { label: 'Tuần 2', fullLabel: 'Tuần 2 (08 - 14)', fall: 2, heart_alert: 15, spo2_alert: 7, sos_alert: 1, total: 25 },
-  { label: 'Tuần 3', fullLabel: 'Tuần 3 (15 - 21)', fall: 4, heart_alert: 11, spo2_alert: 4, sos_alert: 3, total: 22 },
-  { label: 'Tuần 4', fullLabel: 'Tuần 4 (22 - 30)', fall: 1, heart_alert: 9, spo2_alert: 3, sos_alert: 1, total: 14 },
-];
-
 function getMonday(d: Date): Date {
   const date = new Date(d);
   const day = date.getDay();
@@ -45,6 +28,44 @@ function getMonday(d: Date): Date {
   date.setDate(date.getDate() + diff);
   date.setHours(0, 0, 0, 0);
   return date;
+}
+
+function classifyAlertCategory(
+  alertType?: string
+): 'fall' | 'heart_alert' | 'spo2_alert' | 'sos_alert' | null {
+  const type = (alertType || '').toUpperCase();
+  if (!type) return null;
+  if (
+    type.startsWith('APPOINTMENT_') ||
+    type.startsWith('HOUSE_INVITE') ||
+    type.startsWith('PRESCRIPTION_') ||
+    type.startsWith('MEDICAL_RECORD_') ||
+    type.startsWith('DEVICE_') ||
+    type.startsWith('BATTERY_') ||
+    type.startsWith('CHARGER_') ||
+    type === 'DOCTOR_ASSIGNED' ||
+    type === 'INVITATION' ||
+    type === 'BLE_DISCONNECTED' ||
+    type === 'SENSOR_OFFLINE'
+  ) {
+    return null;
+  }
+  if (type.includes('FALL') || type.includes('TE_NGA')) return 'fall';
+  if (type.includes('SOS') || type.includes('EMERGENCY_BUTTON')) return 'sos_alert';
+  if (type.includes('SPO2') || type.includes('OXY') || type.includes('HYPOXIA')) return 'spo2_alert';
+  if (
+    type.includes('HEART') ||
+    type.includes('NHIP_TIM') ||
+    type.includes('_HR_') ||
+    type.startsWith('HR_') ||
+    type.includes('ARRHYTHMIA') ||
+    type.includes('TACHYCARDIA') ||
+    type.includes('BRADYCARDIA') ||
+    type.includes('CARDIO')
+  ) {
+    return 'heart_alert';
+  }
+  return null;
 }
 
 function computeAlertStats(incidents: any[], range: '7D' | '30D', anchorDate: Date): AlertDayStat[] {
@@ -60,37 +81,19 @@ function computeAlertStats(incidents: any[], range: '7D' | '30D', anchorDate: Da
       { label: 'Tuần 4', fullLabel: `Tuần 4 (22 - ${lastDay}/${m + 1})`, fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
     ];
 
-    if (!incidents || incidents.length === 0) {
-      const now = new Date();
-      return (y === now.getFullYear() && m === now.getMonth()) ? DEFAULT_ALERT_STATS_30D : weeks;
-    }
-
-    for (const inc of incidents) {
+    for (const inc of incidents || []) {
       const d = inc.created_at ? new Date(inc.created_at) : null;
       if (!d || isNaN(d.getTime())) continue;
       if (d.getFullYear() === y && d.getMonth() === m) {
+        const category = classifyAlertCategory(inc.alert_type);
+        if (!category) continue;
         const dayNum = d.getDate();
-        let targetWeek = 0;
-        if (dayNum <= 7) targetWeek = 0;
-        else if (dayNum <= 14) targetWeek = 1;
-        else if (dayNum <= 21) targetWeek = 2;
-        else targetWeek = 3;
-
-        const type = (inc.alert_type || '').toUpperCase();
-        if (type.includes('FALL')) weeks[targetWeek].fall++;
-        else if (type.includes('HEART') || type.includes('NHIP_TIM')) weeks[targetWeek].heart_alert++;
-        else if (type.includes('SPO2') || type.includes('OXY')) weeks[targetWeek].spo2_alert++;
-        else if (type.includes('SOS')) weeks[targetWeek].sos_alert++;
-        else weeks[targetWeek].heart_alert++;
+        const targetWeek = dayNum <= 7 ? 0 : dayNum <= 14 ? 1 : dayNum <= 21 ? 2 : 3;
+        weeks[targetWeek][category]++;
         weeks[targetWeek].total++;
       }
     }
 
-    const hasData = weeks.some((w) => w.total > 0);
-    const now = new Date();
-    if (!hasData && y === now.getFullYear() && m === now.getMonth()) {
-      return DEFAULT_ALERT_STATS_30D;
-    }
     return weeks;
   }
 
@@ -117,32 +120,19 @@ function computeAlertStats(incidents: any[], range: '7D' | '30D', anchorDate: Da
     };
   });
 
-  if (!incidents || incidents.length === 0) {
-    const currentMonday = getMonday(new Date());
-    return monday.getTime() === currentMonday.getTime() ? DEFAULT_ALERT_STATS_7D : days;
-  }
-
-  for (const inc of incidents) {
+  for (const inc of incidents || []) {
     const d = inc.created_at ? new Date(inc.created_at) : null;
     if (!d || isNaN(d.getTime())) continue;
     if (d.getTime() >= monday.getTime() && d.getTime() <= sunday.getTime()) {
+      const category = classifyAlertCategory(inc.alert_type);
+      if (!category) continue;
       const dayOfWeek = d.getDay(); // 0 is CN, 1 is T2
       const dayIdx = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-      const type = (inc.alert_type || '').toUpperCase();
-      if (type.includes('FALL')) days[dayIdx].fall++;
-      else if (type.includes('HEART') || type.includes('NHIP_TIM')) days[dayIdx].heart_alert++;
-      else if (type.includes('SPO2') || type.includes('OXY')) days[dayIdx].spo2_alert++;
-      else if (type.includes('SOS')) days[dayIdx].sos_alert++;
-      else days[dayIdx].heart_alert++;
+      days[dayIdx][category]++;
       days[dayIdx].total++;
     }
   }
 
-  const hasData = days.some((d) => d.total > 0);
-  const currentMonday = getMonday(new Date());
-  if (!hasData && monday.getTime() === currentMonday.getTime()) {
-    return DEFAULT_ALERT_STATS_7D;
-  }
   return days;
 }
 
@@ -156,6 +146,7 @@ export const DashboardPage: React.FC = () => {
     appointments,
     invites,
     incidents,
+    clinicalIncidents,
     isLoading,
     fetchAllData,
     setPatients,
@@ -233,8 +224,8 @@ export const DashboardPage: React.FC = () => {
   }, [appointments]);
 
   const alertStats = useMemo(() => {
-    return computeAlertStats(incidents, chartRange, chartAnchorDate);
-  }, [incidents, chartRange, chartAnchorDate]);
+    return computeAlertStats(clinicalIncidents, chartRange, chartAnchorDate);
+  }, [clinicalIncidents, chartRange, chartAnchorDate]);
 
   // Table search & filter
   const [tableSearch, setTableSearch] = useState('');

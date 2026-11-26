@@ -923,3 +923,51 @@ async def test_incident_list_hydrates_elderly_id_and_ack_preserves_patient_tag()
     assert f"USER:{doc_id}" in (updated.notes or "")
     assert f"PATIENT:{pat_id}" in (updated.notes or "")
     assert "Đã kiểm tra an toàn" in (updated.notes or "")
+
+
+@pytest.mark.asyncio
+async def test_incident_list_doctor_analytics_keeps_high_alerts_and_excludes_schedule_noise():
+    doc_id = uuid.uuid4()
+    house_id = uuid.uuid4()
+    dev_id = uuid.uuid4()
+    now = datetime.now(timezone.utc)
+    high_hr_1 = SimpleNamespace(
+        id=uuid.uuid4(),
+        device_id=dev_id,
+        elderly_id=None,
+        alert_type="HIGH_HEART_RATE",
+        alert_level="HIGH",
+        message="Nhịp tim cao 1",
+        notes=None,
+        is_acknowledged=True,
+        created_at=now,
+    )
+    high_hr_2 = SimpleNamespace(
+        id=uuid.uuid4(),
+        device_id=dev_id,
+        elderly_id=None,
+        alert_type="ARRHYTHMIA_SUSPECT",
+        alert_level="HIGH",
+        message="Loạn nhịp",
+        notes=None,
+        is_acknowledged=True,
+        created_at=now - timedelta(minutes=5),
+    )
+
+    analytics_db = AsyncMock()
+    analytics_db.get.return_value = SimpleNamespace(id=doc_id, role="doctor")
+    analytics_db.execute.side_effect = [
+        MagicMock(fetchall=MagicMock(return_value=[(house_id,)])),
+        MagicMock(fetchall=MagicMock(return_value=[(dev_id,)])),
+        MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[high_hr_1, high_hr_2])))),
+    ]
+    rows = await crud_incident.list(
+        analytics_db,
+        current_user_id=doc_id,
+        target_role="doctor_analytics",
+        limit=500,
+    )
+    assert len(rows) == 2
+    select_sql = str(analytics_db.execute.call_args_list[-1].args[0].compile(compile_kwargs={"literal_binds": True}))
+    assert "APPOINTMENT_SCHEDULED" in select_sql
+    assert "PRESCRIPTION_CREATED" in select_sql
