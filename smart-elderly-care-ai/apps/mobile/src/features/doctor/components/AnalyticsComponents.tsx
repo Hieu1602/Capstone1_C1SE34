@@ -374,49 +374,43 @@ export const DayVitalsDetailModal: React.FC<DayVitalsDetailModalProps> = ({
     );
   }
 
-  const baseHr = dayItem.avg_heart_rate || 71;
-  const baseSpo2 = dayItem.avg_spo2 || 97.8;
-  const baseBp = dayItem.bp || '113/71';
-  const baseTemp = dayItem.avg_skin_temp || 36.6;
+  const measuredHourly = (dayItem.hourly_records || []).filter(
+    (rec) =>
+      rec.heart_rate != null ||
+      rec.spo2 != null ||
+      rec.bp != null ||
+      rec.skin_temp != null
+  );
 
-  const timelineRecords = dayItem.hourly_records?.length
-    ? dayItem.hourly_records.map((rec) => ({
-        time: rec.time,
-        session: /^(06|07)/.test(rec.time)
-          ? 'Sáng sớm (Thức dậy)'
-          : /^(08|09|10)/.test(rec.time)
-          ? 'Buổi sáng (Sau ăn sáng/Uống thuốc)'
-          : /^(11|12|13)/.test(rec.time)
-          ? 'Buổi trưa (Nghỉ ngơi)'
-          : /^(14|15|16|17)/.test(rec.time)
-          ? 'Buổi chiều (Sinh hoạt nhẹ)'
-          : /^(18|19|20)/.test(rec.time)
-          ? 'Buổi tối (Sau ăn tối)'
-          : 'Ban đêm (Giấc ngủ)',
-        hr: rec.heart_rate ?? baseHr,
-        spo2: rec.spo2 ?? baseSpo2,
-        bp: rec.bp ?? baseBp,
-        temp: rec.skin_temp ?? baseTemp,
-        status: (rec.heart_rate && rec.heart_rate > 90) || (rec.spo2 && rec.spo2 < 94) ? 'Lưu ý' : 'Chuẩn',
-      }))
-    : [
-        { time: '06:30', session: 'Sáng sớm (Thức dậy)', hr: Math.max(55, baseHr - 4), spo2: Math.min(99, Math.round(baseSpo2 + 0.3)), bp: '112/70', temp: Number((baseTemp - 0.2).toFixed(1)), status: 'Chuẩn' },
-        { time: '09:15', session: 'Buổi sáng (Uống thuốc & Ăn sáng)', hr: Math.min(100, baseHr + 3), spo2: Math.min(99, Math.round(baseSpo2)), bp: '115/73', temp: Number((baseTemp + 0.1).toFixed(1)), status: 'Chuẩn' },
-        { time: '12:30', session: 'Buổi trưa (Nghỉ trưa tĩnh tại)', hr: Math.max(58, baseHr - 1), spo2: Math.min(99, Math.round(baseSpo2 - 0.1)), bp: '114/71', temp: Number(baseTemp.toFixed(1)), status: 'Chuẩn' },
-        { time: '15:45', session: 'Buổi chiều (Vận động nhẹ)', hr: Math.min(105, baseHr + 5), spo2: Math.min(99, Math.round(baseSpo2 + 0.2)), bp: '116/74', temp: Number((baseTemp + 0.2).toFixed(1)), status: 'Chuẩn' },
-        { time: '18:30', session: 'Buổi tối (Sau ăn tối)', hr: Math.max(60, baseHr + 1), spo2: Math.min(99, Math.round(baseSpo2)), bp: '113/71', temp: Number((baseTemp + 0.1).toFixed(1)), status: 'Chuẩn' },
-        { time: '22:00', session: 'Ban đêm (Trước khi ngủ)', hr: Math.max(52, baseHr - 5), spo2: Math.min(99, Math.round(baseSpo2 + 0.4)), bp: '110/69', temp: Number((baseTemp - 0.3).toFixed(1)), status: 'Chuẩn' },
-      ];
+  const timelineRecords = measuredHourly.map((rec) => ({
+    time: rec.time,
+    session: /^(06|07)/.test(rec.time)
+      ? 'Sáng sớm (Thức dậy)'
+      : /^(08|09|10)/.test(rec.time)
+      ? 'Buổi sáng (Sau ăn sáng/Uống thuốc)'
+      : /^(11|12|13)/.test(rec.time)
+      ? 'Buổi trưa (Nghỉ ngơi)'
+      : /^(14|15|16|17)/.test(rec.time)
+      ? 'Buổi chiều (Sinh hoạt nhẹ)'
+      : /^(18|19|20)/.test(rec.time)
+      ? 'Buổi tối (Sau ăn tối)'
+      : 'Ban đêm (Giấc ngủ)',
+    hr: rec.heart_rate ?? null,
+    spo2: rec.spo2 ?? null,
+    bp: rec.bp ?? null,
+    temp: rec.skin_temp ?? null,
+    status: (rec.heart_rate && rec.heart_rate > 90) || (rec.spo2 && rec.spo2 < 94) ? 'Lưu ý' : 'Chuẩn',
+  }));
 
-  const minHrDisplay = dayItem.min_heart_rate ?? (dayItem.avg_heart_rate ? dayItem.avg_heart_rate - 6 : '--');
-  const maxHrDisplay = dayItem.max_heart_rate ?? (dayItem.avg_heart_rate ? dayItem.avg_heart_rate + 10 : '--');
+  const minHrDisplay = dayItem.min_heart_rate ?? '--';
+  const maxHrDisplay = dayItem.max_heart_rate ?? '--';
   const minSpo2Display = dayItem.min_spo2 ?? dayItem.avg_spo2 ?? '--';
 
   const kpiList = [
     { icon: 'heart', color: '#EF4444', bg: '#FEF2F2', border: '#FCA5A5', unit: 'bpm', val: dayItem.avg_heart_rate ?? '--', lbl: 'Nhịp tim TB', sub: `Min: ${minHrDisplay} - Max: ${maxHrDisplay}` },
-    { icon: 'water', color: '#0284C7', bg: '#F0F9FF', border: '#BAE6FD', unit: '%', val: `${dayItem.avg_spo2 ?? '--'}%`, lbl: 'SpO₂ Trung bình', sub: `Thấp nhất: ${minSpo2Display}%` },
-    { icon: 'speedometer', color: '#10B981', bg: '#ECFDF5', border: '#A7F3D0', unit: 'mmHg', val: dayItem.bp || '113/71', lbl: 'Huyết áp', sub: 'Chỉ số mục tiêu' },
-    { icon: 'thermometer', color: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A', unit: '°C', val: dayItem.avg_skin_temp ? `${dayItem.avg_skin_temp}°C` : '36.6°C', lbl: 'Nhiệt độ da', sub: 'Thân nhiệt chuẩn' },
+    { icon: 'water', color: '#0284C7', bg: '#F0F9FF', border: '#BAE6FD', unit: '%', val: dayItem.avg_spo2 != null ? `${dayItem.avg_spo2}%` : '--%', lbl: 'SpO₂ Trung bình', sub: `Thấp nhất: ${minSpo2Display}%` },
+    { icon: 'speedometer', color: '#10B981', bg: '#ECFDF5', border: '#A7F3D0', unit: 'mmHg', val: dayItem.bp || '--', lbl: 'Huyết áp', sub: 'Chỉ số mục tiêu' },
+    { icon: 'thermometer', color: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A', unit: '°C', val: dayItem.avg_skin_temp != null ? `${dayItem.avg_skin_temp}°C` : '--°C', lbl: 'Nhiệt độ da', sub: 'Thân nhiệt chuẩn' },
   ];
 
   return (
@@ -466,7 +460,11 @@ export const DayVitalsDetailModal: React.FC<DayVitalsDetailModalProps> = ({
                 <LocalizedText style={[styles.timelineSectionSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>Tần suất ghi nhận tự động từ Smartband BLE</LocalizedText>
               </View>
 
-              {timelineRecords.map((item, idx) => (
+              {timelineRecords.length === 0 ? (
+                <LocalizedText style={{ color: isDarkMode ? '#94A3B8' : '#64748B', fontSize: 13 }}>
+                  Chưa có bản ghi chi tiết theo giờ trong ngày này.
+                </LocalizedText>
+              ) : timelineRecords.map((item, idx) => (
                 <View key={idx} style={styles.timelineRow}>
                   <View style={styles.timelineLeftCol}>
                     <View style={styles.timelineDot} />
@@ -489,10 +487,10 @@ export const DayVitalsDetailModal: React.FC<DayVitalsDetailModalProps> = ({
                     </View>
                     <View style={styles.timelineMetricsRow}>
                       {[
-                        { icon: 'heart', color: '#EF4444', text: `${item.hr} bpm` },
-                        { icon: 'water', color: '#0284C7', text: `${item.spo2}%` },
-                        { icon: 'speedometer', color: '#10B981', text: `${item.bp}` },
-                        { icon: 'thermometer', color: '#F59E0B', text: `${item.temp}°C` },
+                        { icon: 'heart', color: '#EF4444', text: item.hr != null ? `${item.hr} bpm` : '-- bpm' },
+                        { icon: 'water', color: '#0284C7', text: item.spo2 != null ? `${item.spo2}%` : '--%' },
+                        { icon: 'speedometer', color: '#10B981', text: item.bp || '--' },
+                        { icon: 'thermometer', color: '#F59E0B', text: item.temp != null ? `${item.temp}°C` : '--°C' },
                       ].map((chip, cIdx) => (
                         <View key={cIdx} style={styles.miniMetricChip}>
                           <Ionicons name={chip.icon as any} size={11} color={chip.color} />
