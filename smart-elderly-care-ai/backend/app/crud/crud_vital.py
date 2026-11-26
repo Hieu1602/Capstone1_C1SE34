@@ -225,15 +225,14 @@ class CRUDVital:
                     elif source == "EDGE_HUB":
                         dev.is_online = True
                         dev.status_text = "Trực tuyến • Tại nhà"
-                    elif battery is not None:
-                        dev.battery_level = battery
-                        dev.is_online = (battery > 0)
-                        if not dev.status_text or "Ngoại tuyến" in dev.status_text:
-                            dev.status_text = "Trực tuyến • Đang đeo"
                     else:
                         dev.is_online = True
                         if not dev.status_text or "Ngoại tuyến" in dev.status_text:
                             dev.status_text = "Trực tuyến • Đang đeo"
+                    if battery is not None:
+                        dev.battery_level = battery
+                        if battery <= 0:
+                            dev.is_online = False
                     dev.last_heartbeat = func.now()
                     await db.flush()
 
@@ -1112,6 +1111,22 @@ class CRUDVital:
         temp = latest_vital.skin_temp_max if (latest_vital and is_fresh) else None
         fall = bool(latest_vital.fall_detected) if (latest_vital and is_fresh) else False
 
+        cached_extra: dict = {}
+        if is_fresh and (device or latest_vital):
+            try:
+                from app.services.redis import redis_service
+                for key_id in [
+                    str(device.id) if device else None,
+                    device.device_id if device else None,
+                    str(latest_vital.device_id) if latest_vital else None,
+                ]:
+                    if key_id:
+                        cached_extra = await redis_service.get_latest_vitals(key_id) or {}
+                        if cached_extra:
+                            break
+            except Exception:
+                cached_extra = {}
+
         return {
             "heart_rate": hr,
             "spo2": sp,
@@ -1126,6 +1141,10 @@ class CRUDVital:
             "edge_hub_connected": True,
             "device_id": device.device_id if device else (str(latest_vital.device_id) if latest_vital else None),
             "time": v_time,
+            "steps": cached_extra.get("steps") if is_fresh else None,
+            "distance_m": cached_extra.get("distance_m") if is_fresh else None,
+            "calories_kcal": cached_extra.get("calories_kcal") if is_fresh else None,
+            "activity_state": cached_extra.get("activity_state") if is_fresh else None,
         }
 
     async def create_batch(self, db: AsyncSession, items: List[dict]) -> List[VitalSign]:

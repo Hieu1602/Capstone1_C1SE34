@@ -474,6 +474,14 @@ export default function HealthDetailScreen({ navigation, route }: any) {
       };
     }
 
+    if (best && isToday && Math.abs(scrubberMinutes - nowMinutes) <= 60 && isLiveFresh) {
+      return {
+        ...best,
+        steps: best.steps ?? (currentVitals as any)?.steps ?? null,
+        activity_state: best.activity_state || (currentVitals as any)?.activity_state || 'Sinh hoạt',
+      };
+    }
+
     return best;
   }, [parsedDayVitals, scrubberMinutes, selectedDate, currentVitals, assignedBand]);
 
@@ -541,6 +549,20 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     return { avgHR, avgSpO2, avgSteps, chart };
   }, [rangeVitals]);
 
+  // Tổng số bước chân trong ngày (không phụ thuộc vào vị trí thanh tua)
+  const dailySteps = useMemo(() => {
+    const dayStepValues = (dayVitals || [])
+      .map((v: any) => v?.steps)
+      .filter((s: any) => typeof s === 'number' && s >= 0);
+    const maxDay = dayStepValues.length > 0 ? Math.max(...dayStepValues) : null;
+    const isToday = selectedDate === getTodayStr();
+    const liveSteps = (currentVitals as any)?.steps;
+    if (isToday && assignedBand && typeof liveSteps === 'number' && liveSteps >= 0) {
+      return maxDay !== null ? Math.max(maxDay, liveSteps) : liveSteps;
+    }
+    return maxDay;
+  }, [dayVitals, selectedDate, assignedBand, currentVitals]);
+
   // Cấu hình tab theo mốc thời gian được chọn
   const currentTabConfig = useMemo(() => {
     return computeHealthTabConfig({
@@ -553,6 +575,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
       scrubberMinutes,
       dailyAvgHR,
       chartDataForDay,
+      dailySteps,
     });
   }, [
     selectedRange,
@@ -564,6 +587,7 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     scrubberMinutes,
     dailyAvgHR,
     chartDataForDay,
+    dailySteps,
   ]);
 
   const hasData = dayVitals && dayVitals.length > 0;
