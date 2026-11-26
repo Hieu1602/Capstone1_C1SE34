@@ -329,11 +329,15 @@ export const DashboardPage: React.FC = () => {
       if (data?.type === 'VITALS_UPDATE' || data?.heart_rate || data?.spo2) {
         const liveHr = data.heart_rate ? Number(data.heart_rate) : undefined;
         const liveSpo2 = data.spo2 ? Number(data.spo2) : undefined;
-        if (liveHr || liveSpo2) {
+        const hasTarget = Boolean(data?.patient_id || data?.device_id);
+        if ((liveHr || liveSpo2) && hasTarget) {
           const curPatients = useDoctorDataStore.getState().patients;
           setPatients(
-            curPatients.map((p, idx) =>
-              idx === 0
+            curPatients.map((p) => {
+              const matched =
+                (data?.patient_id && String(p.id) === String(data.patient_id)) ||
+                (data?.device_id && p.device_id === data.device_id);
+              return matched
                 ? {
                     ...p,
                     is_online: true,
@@ -341,8 +345,8 @@ export const DashboardPage: React.FC = () => {
                     spo2: liveSpo2 ?? p.spo2,
                     last_updated: 'Vừa xong (Trực tuyến)',
                   }
-                : p
-            )
+                : p;
+            })
           );
         }
       }

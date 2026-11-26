@@ -65,13 +65,13 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
     patientDetail.blood_type || selectedPatientCard?.blood_type || 'O+';
   const activeAvatar =
     patientDetail.avatar_url || selectedPatientCard?.avatar_url || null;
-  const activeBmi = patientDetail.bmi ? patientDetail.bmi.toFixed(1) : '21.5';
-  const activeBp = patientDetail.blood_pressure || selectedPatientCard?.blood_pressure || '120/80';
+  const activeBmi = patientDetail.bmi ? patientDetail.bmi.toFixed(1) : '—';
+  const activeBp = patientDetail.blood_pressure || selectedPatientCard?.blood_pressure || '—';
   const activeSkinTemp = patientDetail.skin_temp_max
     ? `${patientDetail.skin_temp_max}°C`
     : selectedPatientCard?.skin_temp_max
       ? `${selectedPatientCard.skin_temp_max}°C`
-      : '36.5°C';
+      : '—';
   const activeEmergencyPhone = selectedPatientCard?.emergency_contact_phone || '';
 
   const isSelectedDanger = Boolean(

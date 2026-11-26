@@ -409,7 +409,7 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
             <Ionicons name="heart" size={14} color="#EF4444" style={{ marginRight: 4 }} />
             <View>
               <LocalizedText style={[cardStyles.vitalValue, { color: colors.textPrimary }]}>
-                {patient.heart_rate ? `${patient.heart_rate} bpm` : '76 bpm'}
+                {patient.heart_rate != null ? `${patient.heart_rate} bpm` : '-- bpm'}
               </LocalizedText>
               <LocalizedText style={cardStyles.vitalSub}>Nhịp tim</LocalizedText>
             </View>
@@ -422,7 +422,7 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
             <Ionicons name="water" size={14} color="#0284C7" style={{ marginRight: 4 }} />
             <View>
               <LocalizedText style={[cardStyles.vitalValue, { color: colors.textPrimary }]}>
-                {patient.spo2 ? `${patient.spo2}%` : '98%'}
+                {patient.spo2 != null ? `${patient.spo2}%` : '--%'}
               </LocalizedText>
               <LocalizedText style={cardStyles.vitalSub}>SpO2</LocalizedText>
             </View>

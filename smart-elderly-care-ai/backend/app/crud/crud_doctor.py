@@ -44,6 +44,34 @@ def _is_smartband_fresh(band_device: Any, ts_val: Any, now_utc: datetime) -> tup
     diff_sec = abs((now_utc - dt).total_seconds())
     return diff_sec <= SMARTBAND_STALE_SECONDS, dt
 
+
+def _merge_device_vitals(cached_vs: Optional[Dict[str, Any]], latest_vs: Any) -> tuple[Any, Any, Any, Optional[str], Any, Optional[str]]:
+    """Kết hợp sinh hiệu từ Redis cache và bản ghi VitalSign mới nhất trong DB."""
+    hr = cached_vs.get("heart_rate") if cached_vs else None
+    spo2 = cached_vs.get("spo2") if cached_vs else None
+    temp = (cached_vs.get("skin_temp_max") or cached_vs.get("temperature")) if cached_vs else None
+    bp_str: Optional[str] = None
+    if cached_vs and cached_vs.get("bp_systolic") is not None and cached_vs.get("bp_diastolic") is not None:
+        bp_str = f"{cached_vs['bp_systolic']}/{cached_vs['bp_diastolic']} mmHg"
+    ts_candidate = (cached_vs.get("time") or cached_vs.get("cached_at_iso")) if cached_vs else None
+    last_updated_str: Optional[str] = (ts_candidate or "Vừa xong (Trực tuyến)") if cached_vs else None
+
+    if latest_vs:
+        if hr is None:
+            hr = latest_vs.heart_rate
+        if spo2 is None:
+            spo2 = latest_vs.spo2
+        if temp is None:
+            temp = latest_vs.skin_temp_max
+        if bp_str is None and latest_vs.bp_systolic is not None and latest_vs.bp_diastolic is not None:
+            bp_str = f"{latest_vs.bp_systolic}/{latest_vs.bp_diastolic} mmHg"
+        if not ts_candidate and latest_vs.time:
+            ts_candidate = latest_vs.time
+        if not last_updated_str and latest_vs.time:
+            last_updated_str = latest_vs.time.isoformat()
+
+    return hr, spo2, temp, bp_str, ts_candidate, last_updated_str
+
 import uuid
 from uuid import UUID
 
@@ -362,39 +390,22 @@ class CRUDDoctor:
                 except Exception:
                     pass
 
-                ts_candidate = None
-                if cached_vitals:
-                    hr = cached_vitals.get("heart_rate")
-                    spo2 = cached_vitals.get("spo2")
-                    temp = cached_vitals.get("skin_temp_max") or cached_vitals.get("temperature")
-                    if cached_vitals.get("bp_systolic") is not None and cached_vitals.get("bp_diastolic") is not None:
-                        bp_str = f"{cached_vitals['bp_systolic']}/{cached_vitals['bp_diastolic']} mmHg"
-                    ts_candidate = cached_vitals.get("time") or cached_vitals.get("cached_at_iso")
-                    last_updated_str = ts_candidate or "Vừa xong (Trực tuyến)"
-                else:
-                    # Sử dụng dữ liệu sinh hiệu đã tải lô (Zero SQL query chạy trong vòng lặp)
-                    latest_vs = latest_vitals_map.get(band_device.id)
-                    if latest_vs:
-                        hr = latest_vs.heart_rate
-                        spo2 = latest_vs.spo2
-                        temp = latest_vs.skin_temp_max
-                        if latest_vs.bp_systolic is not None and latest_vs.bp_diastolic is not None:
-                            bp_str = f"{latest_vs.bp_systolic}/{latest_vs.bp_diastolic} mmHg"
-                        if latest_vs.time:
-                            ts_candidate = latest_vs.time
-                            last_updated_str = latest_vs.time.isoformat()
-                        # Cập nhật ngầm vào Redis Cache cho các lần gọi sau
-                        try:
-                            await redis_service.set_latest_vitals(str(band_device.id), {
-                                "heart_rate": hr,
-                                "spo2": spo2,
-                                "skin_temp_max": temp,
-                                "bp_systolic": latest_vs.bp_systolic,
-                                "bp_diastolic": latest_vs.bp_diastolic,
-                                "cached_at_iso": latest_vs.time.isoformat() if latest_vs.time else None,
-                            })
-                        except Exception:
-                            pass
+                latest_vs = latest_vitals_map.get(band_device.id)
+                hr, spo2, temp, bp_str, ts_candidate, last_updated_str = _merge_device_vitals(cached_vitals, latest_vs)
+
+                # Cập nhật ngầm vào Redis Cache nếu Redis chưa có và DB có dữ liệu thực
+                if not cached_vitals and latest_vs:
+                    try:
+                        await redis_service.set_latest_vitals(str(band_device.id), {
+                            "heart_rate": hr,
+                            "spo2": spo2,
+                            "skin_temp_max": temp,
+                            "bp_systolic": latest_vs.bp_systolic,
+                            "bp_diastolic": latest_vs.bp_diastolic,
+                            "cached_at_iso": latest_vs.time.isoformat() if latest_vs.time else None,
+                        })
+                    except Exception:
+                        pass
 
                 # Single Source of Truth: Smartband chỉ Online khi thiết bị không bị ngắt kết nối BLE VÀ dữ liệu mới <= 45 giây
                 is_fresh, latest_dt = _is_smartband_fresh(band_device, ts_candidate, now_utc)
@@ -404,9 +415,8 @@ class CRUDDoctor:
                 is_smartband_online = bool(band_device.is_online and is_fresh and cache_connected_ok)
 
                 if not is_smartband_online:
-                    hr = None
-                    spo2 = None
-                    temp = None
+                    # shortcut: giữ lại vitals lịch sử để hiển thị (không phải realtime),
+                    # frontend phân biệt qua is_online=False
                     if latest_dt:
                         last_updated_str = latest_dt.isoformat()
 
@@ -452,7 +462,7 @@ class CRUDDoctor:
                     skin_temp_max=temp,
                     blood_pressure=bp_str,
                     blood_type=ep.blood_type or "A+",
-                    bmi=round(ep.weight_kg / ((ep.height_cm / 100) ** 2), 1) if (ep.weight_kg and ep.height_cm and ep.height_cm > 0) else 23.4,
+                    bmi=round(ep.weight_kg / ((ep.height_cm / 100) ** 2), 1) if (ep.weight_kg and ep.height_cm and ep.height_cm > 0) else None,
                     health_status=health_status,
                     last_updated=last_updated_str or "Chưa có dữ liệu",
                 )
@@ -540,16 +550,8 @@ class CRUDDoctor:
             except Exception:
                 pass
 
-            ts_candidate = None
-            if cached_vs:
-                hr = cached_vs.get("heart_rate")
-                spo2 = cached_vs.get("spo2")
-                temp = cached_vs.get("skin_temp_max") or cached_vs.get("temperature")
-                if cached_vs.get("bp_systolic") is not None and cached_vs.get("bp_diastolic") is not None:
-                    bp_str = f"{cached_vs['bp_systolic']}/{cached_vs['bp_diastolic']} mmHg"
-                ts_candidate = cached_vs.get("time") or cached_vs.get("cached_at_iso")
-                last_updated_str = ts_candidate or "Vừa xong (Trực tuyến)"
-            else:
+            latest_vs = None
+            if not cached_vs or cached_vs.get("heart_rate") is None or cached_vs.get("spo2") is None:
                 vs_res = await db.execute(
                     select(VitalSign)
                     .where(VitalSign.device_id == band_device.id)
@@ -557,15 +559,8 @@ class CRUDDoctor:
                     .limit(1)
                 )
                 latest_vs = vs_res.scalar_one_or_none()
-                if latest_vs:
-                    hr = latest_vs.heart_rate
-                    spo2 = latest_vs.spo2
-                    temp = latest_vs.skin_temp_max
-                    if latest_vs.bp_systolic is not None and latest_vs.bp_diastolic is not None:
-                        bp_str = f"{latest_vs.bp_systolic}/{latest_vs.bp_diastolic} mmHg"
-                    if latest_vs.time:
-                        ts_candidate = latest_vs.time
-                        last_updated_str = latest_vs.time.isoformat()
+
+            hr, spo2, temp, bp_str, ts_candidate, last_updated_str = _merge_device_vitals(cached_vs, latest_vs)
 
             is_fresh, latest_dt = _is_smartband_fresh(band_device, ts_candidate, now_utc)
             cache_connected_ok = True
@@ -574,9 +569,8 @@ class CRUDDoctor:
             is_smartband_online = bool(band_device.is_online and is_fresh and cache_connected_ok)
 
             if not is_smartband_online:
-                hr = None
-                spo2 = None
-                temp = None
+                # shortcut: giữ lại vitals lịch sử để hiển thị (không phải realtime),
+                # frontend phân biệt qua is_online=False
                 if latest_dt:
                     last_updated_str = latest_dt.isoformat()
 

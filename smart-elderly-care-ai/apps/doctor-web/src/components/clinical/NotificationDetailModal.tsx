@@ -381,7 +381,7 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
                     </span>
                   </div>
                   <p className="mt-1 text-xl font-extrabold text-rose-700 dark:text-rose-300">
-                    {notif.heartRate && notif.heartRate > 0 ? notif.heartRate : (isCritical ? '128' : '76')}{' '}
+                    {notif.heartRate && notif.heartRate > 0 ? notif.heartRate : '—'}{' '}
                     <span className="text-xs font-medium text-slate-500">bpm</span>
                   </p>
                 </div>
@@ -392,11 +392,11 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
                       <Activity className="h-3.5 w-3.5 text-emerald-500" /> Nồng độ oxy SpO2
                     </span>
                     <span className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400 bg-emerald-100/80 px-1.5 py-0.5 rounded">
-                      Ổn định
+                      {notif.spo2 && notif.spo2 > 0 ? (notif.spo2 < 95 ? 'Thấp' : 'Ổn định') : 'Chưa đo'}
                     </span>
                   </div>
                   <p className="mt-1 text-xl font-extrabold text-emerald-700 dark:text-emerald-300">
-                    {notif.spo2 && notif.spo2 > 0 ? notif.spo2 : '98'}{' '}
+                    {notif.spo2 && notif.spo2 > 0 ? notif.spo2 : '—'}{' '}
                     <span className="text-xs font-medium text-slate-500">%</span>
                   </p>
                 </div>
