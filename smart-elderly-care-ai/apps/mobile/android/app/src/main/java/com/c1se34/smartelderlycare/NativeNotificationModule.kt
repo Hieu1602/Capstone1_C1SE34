@@ -36,9 +36,9 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
 
     companion object {
         private const val TAG = "NativeNotificationModule"
-        const val CHANNEL_ID = "smartcare_normal_v5"
-        const val EMERGENCY_CHANNEL_ID = "emergency_alerts_v5"
-        const val CHANNEL_NAME = "Thông báo thường SmartCare AI"
+        const val CHANNEL_ID = "smartcare_normal_v6"
+        const val EMERGENCY_CHANNEL_ID = "emergency_alerts_v6"
+        const val CHANNEL_NAME = "Thông báo thường SmartCare AI (Ting ting)"
         const val EMERGENCY_CHANNEL_NAME = "Cảnh báo khẩn cấp SmartCare AI"
         const val DEFAULT_EMERGENCY_PHONE = "0898230852"
         const val DEFAULT_AUTO_CALL_DELAY_MS = 30000L // 30s reo chuông khẩn cấp trước khi tự động quay số
@@ -54,6 +54,33 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
         @JvmStatic
         fun registerActiveNotification(id: Int) {
             activeNotificationIds.add(id)
+        }
+
+        /**
+         * Phát tiếng chuông "ting ting" thông báo tiêu chuẩn của hệ thống Android.
+         * Dành cho tất cả các thông báo thường (Lịch khám, Đơn thuốc, Cập nhật bệnh án, Gia đình, Pin, Hệ thống).
+         */
+        @JvmStatic
+        fun playTingTingSound(context: Context) {
+            mainHandler.post {
+                try {
+                    val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                        ?: return@post
+                    val ringtone = RingtoneManager.getRingtone(context.applicationContext, soundUri)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        ringtone?.audioAttributes = AudioAttributes.Builder()
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                            .build()
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        ringtone?.isLooping = false
+                    }
+                    ringtone?.play()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Không thể phát âm thanh ting ting: ${e.message}")
+                }
+            }
         }
 
         /**
@@ -469,28 +496,21 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
             // ID thông báo và Request Code luôn là số nguyên dương hợp lệ
             val notifId = ((System.currentTimeMillis() % 1000000L).toInt() + 1000).let { if (it < 0) -it else it }
             val reqCode = (System.currentTimeMillis() % 100000L).toInt().let { if (it < 0) -it else it }
-            registerActiveNotification(notifId)
+            if (isEmergency) {
+                registerActiveNotification(notifId)
+            }
 
-            // Intent khi người dùng bấm vào thông báo -> Mở app và dừng chuông/rung
+            // Intent khi người dùng bấm vào thông báo -> Mở app (chỉ dừng chuông báo động nếu là cảnh báo khẩn cấp)
             val intent = Intent(reactContext, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra("STOP_ALARM", true)
+                if (isEmergency) {
+                    putExtra("STOP_ALARM", true)
+                }
             }
             val pendingIntent = PendingIntent.getActivity(
                 reactContext,
                 reqCode,
                 intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
-            )
-
-            // DeleteIntent khi người dùng vuốt xóa thông báo -> Tự động dừng rung liên tục & chuông
-            val dismissIntent = Intent(reactContext, AlarmDismissReceiver::class.java).apply {
-                action = "com.c1se34.smartelderlycare.ACTION_DISMISS_ALARM"
-            }
-            val deletePendingIntent = PendingIntent.getBroadcast(
-                reactContext,
-                reqCode + 1,
-                dismissIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
             )
 
@@ -510,17 +530,27 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                 .setContentText(message)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(message))
                 .setPriority(if (isEmergency) NotificationCompat.PRIORITY_MAX else NotificationCompat.PRIORITY_HIGH)
-                .setCategory(if (isEmergency) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_EVENT)
+                .setCategory(if (isEmergency) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_MESSAGE)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setDefaults(NotificationCompat.DEFAULT_ALL)
                 .setSound(soundUri)
                 .setAutoCancel(true)
                 .setOngoing(false) // Cho phép vuốt xóa bất kỳ lúc nào
                 .setContentIntent(pendingIntent)
-                .setDeleteIntent(deletePendingIntent)
 
-            // CHỈ THÊM NÚT "ĐÃ XỬ LÝ (TẮT CHUÔNG)" NẾU LÀ BÁO ĐỘNG NGUY HIỂM KHẨN CẤP
+            // CHỈ THÊM DELETE_INTENT VÀ NÚT "ĐÃ XỬ LÝ (TẮT CHUÔNG)" NẾU LÀ BÁO ĐỘNG NGUY HIỂM KHẨN CẤP
             if (isEmergency) {
+                val dismissIntent = Intent(reactContext, AlarmDismissReceiver::class.java).apply {
+                    action = "com.c1se34.smartelderlycare.ACTION_DISMISS_ALARM"
+                }
+                val deletePendingIntent = PendingIntent.getBroadcast(
+                    reactContext,
+                    reqCode + 1,
+                    dismissIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+                )
+                builder.setDeleteIntent(deletePendingIntent)
+
                 val ackIntent = Intent(reactContext, AlarmDismissReceiver::class.java).apply {
                     action = "com.c1se34.smartelderlycare.ACTION_ACKNOWLEDGE_ALARM"
                     putExtra("NOTIFICATION_ID", notifId)
@@ -544,7 +574,7 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                     builder.setFullScreenIntent(pendingIntent, true)
                 }
                 manager.notify(notifId, builder.build())
-                Log.d(TAG, "Đã gửi thông báo thành công: $title (ID: $notifId, isEmergency: $isEmergency)")
+                Log.d(TAG, "Đã gửi thông báo lên thanh thông báo Android: $title (ID: $notifId, isEmergency: $isEmergency)")
             } catch (se: SecurityException) {
                 // Trên Android 14+ nếu chưa có quyền đặc biệt USE_FULL_SCREEN_INTENT, fallback gửi thông báo tiêu chuẩn
                 Log.w(TAG, "Không có quyền fullScreenIntent trên Android 14, gửi lại thông báo tiêu chuẩn: ${se.message}")
@@ -552,10 +582,12 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                 manager.notify(notifId, builder.build())
             }
 
-            // CHỈ PHÁT CHUÔNG BÁO ĐỘNG VÀ RUNG LIÊN TỤC NẾU LÀ BÁO ĐỘNG NGUY HIỂM
-            // Thông báo thường (Lịch khám, Tin nhắn) chỉ phát tiếng ting ting nhẹ nhàng của hệ thống
+            // CHỈ PHÁT CHUÔNG BÁO ĐỘNG VÀ RUNG LIÊN TỤC NẾU LÀ CẢNH BÁO NGUY HIỂM KHẨN CẤP
+            // Tất cả các thông báo còn lại đều lên thanh thông báo Android kèm tiếng "ting ting" nhẹ nhàng
             if (isEmergency) {
                 triggerAlarm(reactContext, isCritical = isCritical, emergencyPhone = emergencyPhone, autoCallDelayMs = autoCallDelayMs)
+            } else {
+                playTingTingSound(reactContext)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Lỗi khi gửi thông báo: ${e.message}", e)

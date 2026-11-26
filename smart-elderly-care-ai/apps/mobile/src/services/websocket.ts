@@ -344,12 +344,141 @@ class AlertsWebSocket {
       return;
     }
 
-    // 0.2b. Lịch khám đổi giờ / hoàn tất / xóa -> bỏ qua còi báo động khẩn cấp
+    // 0.2b. Lịch khám đổi giờ / hoàn tất / xóa -> Bắn lên thanh thông báo Android với tiếng ting ting nhẹ nhàng (không hú còi báo động)
     if (
       ['APPOINTMENT_RESCHEDULED', 'APPOINTMENT_COMPLETED', 'APPOINTMENT_DELETED'].includes(
         String(event.alert_type || event.type || '')
       )
     ) {
+      const aType = String(event.alert_type || event.type || '');
+      const incData = event.data || {};
+      const aptId = event.appointment_id || incData.appointment_id;
+      const msg =
+        incData.message ||
+        (aType === 'APPOINTMENT_RESCHEDULED'
+          ? '🗓️ Lịch khám của người cao tuổi vừa được Bác sĩ dời sang khung giờ mới.'
+          : aType === 'APPOINTMENT_COMPLETED'
+          ? '✅ Buổi khám bệnh cho người cao tuổi đã hoàn tất.'
+          : '🗓️ Một lịch khám đã được xóa khỏi hệ thống.');
+      const title =
+        aType === 'APPOINTMENT_RESCHEDULED'
+          ? '🗓️ LỊCH KHÁM ĐÃ ĐƯỢC DỜI'
+          : aType === 'APPOINTMENT_COMPLETED'
+          ? '✅ ĐÃ HOÀN TẤT BUỔI KHÁM'
+          : '🗓️ LỊCH KHÁM ĐÃ ĐƯỢC XÓA';
+
+      if (aType === 'APPOINTMENT_RESCHEDULED') {
+        const reschedIncident: Incident = {
+          id: incData.id || `inc-resched-${Date.now()}`,
+          device_id: incData.device_id || 'system',
+          alert_type: 'APPOINTMENT_RESCHEDULED',
+          alert_level: 'LOW',
+          message: msg,
+          video_clip_url: null,
+          thumbnail_url: null,
+          is_acknowledged: false,
+          created_at: incData.created_at || new Date().toISOString(),
+          notes: `APT:${aptId || ''}|PATIENT:${incData.patient_id || ''}`,
+        };
+        store.addIncident(reschedIncident);
+      }
+
+      notificationService.triggerEmergencyNotification({
+        title,
+        body: msg,
+        data: {
+          alert_type: aType,
+          appointment_id: aptId,
+          patient_id: event.patient_id || incData.patient_id,
+        },
+      });
+      return;
+    }
+
+    // 0.5. Đơn thuốc mới / Cập nhật đơn thuốc / Nhắc uống thuốc -> Bắn lên thanh thông báo Android (ting ting)
+    if (
+      ['PRESCRIPTION_CREATED', 'PRESCRIPTION_UPDATED', 'PRESCRIPTION_DELETED', 'MEDICATION_REMINDER'].includes(
+        String(event.alert_type || event.type || '')
+      )
+    ) {
+      const aType = String(event.alert_type || event.type || '');
+      const incData = event.data || {};
+      const newIncident: Incident = {
+        id: incData.id || `inc-rx-${Date.now()}`,
+        device_id: incData.device_id || 'system',
+        alert_type: aType,
+        alert_level: 'LOW',
+        message: incData.message || '💊 Bác sĩ vừa cập nhật đơn thuốc và lịch nhắc uống thuốc mới.',
+        video_clip_url: null,
+        thumbnail_url: null,
+        is_acknowledged: false,
+        created_at: incData.created_at || new Date().toISOString(),
+        notes: incData.patient_id ? `PATIENT:${incData.patient_id}` : null,
+      };
+      store.addIncident(newIncident);
+      store.fetchReminders?.(incData.patient_id).catch(() => {});
+
+      notificationService.triggerEmergencyNotification({
+        title:
+          aType === 'MEDICATION_REMINDER'
+            ? '💊 ĐẾN GIỜ UỐNG THUỐC'
+            : '💊 ĐƠN THUỐC & LỊCH UỐNG THUỐC MỚI',
+        body: newIncident.message,
+        data: {
+          incident_id: newIncident.id,
+          alert_type: aType,
+          patient_id: incData.patient_id,
+        },
+      });
+      return;
+    }
+
+    // 0.6. Cập nhật ngưỡng cảnh báo sinh hiệu (DEVICE_CONFIG_UPDATED) -> Bắn lên thanh thông báo Android (ting ting)
+    if (event.alert_type === 'DEVICE_CONFIG_UPDATED' || event.type === 'DEVICE_CONFIG_UPDATED') {
+      const incData = event.data || {};
+      const newIncident: Incident = {
+        id: incData.id || `inc-cfg-${Date.now()}`,
+        device_id: incData.device_id || 'system',
+        alert_type: 'DEVICE_CONFIG_UPDATED',
+        alert_level: 'LOW',
+        message: incData.message || '⚙️ Ngưỡng cảnh báo sinh hiệu của người cao tuổi vừa được cập nhật.',
+        video_clip_url: null,
+        thumbnail_url: null,
+        is_acknowledged: false,
+        created_at: incData.created_at || new Date().toISOString(),
+        notes: incData.patient_id ? `PATIENT:${incData.patient_id}` : null,
+      };
+      store.addIncident(newIncident);
+
+      notificationService.triggerEmergencyNotification({
+        title: '⚙️ CẬP NHẬT NGƯỠNG SINH HIỆU',
+        body: newIncident.message,
+        data: {
+          incident_id: newIncident.id,
+          alert_type: 'DEVICE_CONFIG_UPDATED',
+          patient_id: incData.patient_id,
+        },
+      });
+      return;
+    }
+
+    // 0.7. Thông báo toàn hệ thống từ Ban Quản trị (SYSTEM_NOTIFICATION) -> Bắn lên thanh thông báo Android
+    if (event.type === 'SYSTEM_NOTIFICATION' || event.alert_type === 'SYSTEM_NOTIFICATION') {
+      const notifData = event.data || {};
+      if (notifData.status && notifData.status !== 'published') {
+        return;
+      }
+      const isEmergencyBroadcast = notifData.type === 'emergency';
+      notificationService.triggerEmergencyNotification({
+        title: isEmergencyBroadcast
+          ? `🚨 [KHẨN CẤP] ${notifData.title || 'Thông báo từ Quản trị viên'}`
+          : `📢 ${notifData.title || 'Thông báo từ Ban Quản trị'}`,
+        body: notifData.body || notifData.message || 'Bạn có thông báo hệ thống mới.',
+        data: {
+          id: notifData.id,
+          alert_type: isEmergencyBroadcast ? 'EMERGENCY' : 'SYSTEM_NOTIFICATION',
+        },
+      });
       return;
     }
 

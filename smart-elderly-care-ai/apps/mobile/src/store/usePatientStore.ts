@@ -98,6 +98,8 @@ interface PatientState {
   resetPatientStore: () => void;
 }
 
+const notifiedMedDueIds = new Set<string>();
+
 export const usePatientStore = create<PatientState>()((set, get) => ({
   patientRecord: null,
   patientsList: [],
@@ -238,6 +240,31 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
           completed_medications: completed,
         };
         set({ todayReminders: normalized, isLoadingReminders: false });
+
+        // Bắn thông báo lên thanh thông báo Android (ting ting) khi có cữ thuốc đến giờ uống (±15 phút) chưa uống
+        try {
+          const { notificationService } = require('../services/notificationService');
+          const now = new Date();
+          const todayKey = normalized.date || now.toISOString().split('T')[0];
+          for (const med of meds) {
+            if (!med.taken && med.time) {
+              const [h, m] = med.time.split(':').map((v: string) => parseInt(v, 10) || 0);
+              const medDate = new Date();
+              medDate.setHours(h, m, 0, 0);
+              const diffMin = Math.floor((now.getTime() - medDate.getTime()) / 60000);
+              const dedupKey = `${todayKey}_${med.id || med.name}_${med.time}`;
+              if (diffMin >= -15 && diffMin <= 60 && !notifiedMedDueIds.has(dedupKey)) {
+                notifiedMedDueIds.add(dedupKey);
+                notificationService.showTingTingNotification?.(
+                  `💊 Nhắc uống thuốc (${med.time})`,
+                  `Đã đến giờ uống thuốc "${med.name}" (${med.dose || '1 liều'}). Cụ nhớ uống thuốc đúng giờ nhé!`,
+                  { alert_type: 'MEDICATION_REMINDER', reminder_id: med.id }
+                );
+              }
+            }
+          }
+        } catch {}
+
         return normalized;
       }
     } catch (e) {
