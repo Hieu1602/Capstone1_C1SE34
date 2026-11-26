@@ -236,7 +236,10 @@ async def execute_escalation_decision(incident_id: str | UUID, force_escalate: b
                 dev = await session.get(Device, incident.device_id)
                 if dev and dev.house_id:
                     # 1. Tìm tất cả thành viên & bác sĩ trong căn nhà qua HouseMember
-                    stmt_members = select(HouseMember.user_id).where(HouseMember.house_id == dev.house_id)
+                    stmt_members = select(HouseMember.user_id).where(
+                        HouseMember.house_id == dev.house_id,
+                        HouseMember.status == "ACTIVE",
+                    )
                     mem_res = await session.execute(stmt_members)
                     user_ids = set(mem_res.scalars().all())
 
@@ -249,7 +252,11 @@ async def execute_escalation_decision(incident_id: str | UUID, force_escalate: b
                         stmt_users = select(User).where(User.id.in_(user_ids), User.is_active.is_(True))
                         u_res = await session.execute(stmt_users)
                         for u in u_res.scalars().all():
-                            if u.fcm_token:
+                            if (
+                                u.fcm_token
+                                and getattr(u, "notifications_enabled", True)
+                                and getattr(u, "critical_alert_enabled", True)
+                            ):
                                 fcm_tokens.append(u.fcm_token)
 
             unique_tokens = list(dict.fromkeys(fcm_tokens))
