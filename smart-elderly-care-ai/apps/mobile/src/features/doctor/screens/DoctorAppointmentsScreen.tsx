@@ -17,10 +17,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 
 import { useTheme } from '../../../store/useThemeStore';
+import { useDoctorAppointmentsStore } from '../../../store/useDoctorAppointmentsStore';
 import { doctorApi } from '../../../services/api';
 import { alertsWS } from '../../../services/websocket';
 import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
 import AdminMarqueeBanner from '../../../components/AdminMarqueeBanner';
+import {
+  getLocalToday,
+  isSameLocalDay,
+  isTodayLocal,
+  isAppointmentHappeningNow,
+  isAppointmentOverdue,
+} from '../utils/dateUtils';
 
 import {
   AppointmentItem,
@@ -39,12 +47,21 @@ export default function DoctorAppointmentsScreen() {
   const navigation = useNavigation<any>();
   const { isDarkMode, colors } = useTheme();
 
-  const [loading, setLoading] = useState(false);
+  const {
+    appointments,
+    loading: storeLoading,
+    fetchAppointments: fetchStoreAppointments,
+    upsertAppointments,
+    updateAppointmentStatus,
+    removeAppointment,
+  } = useDoctorAppointmentsStore();
+
   const [refreshing, setRefreshing] = useState(false);
-  const [appointments, setAppointments] = useState<AppointmentItem[]>([]);
   const [filterTab, setFilterTab] = useState<'ALL' | 'UPCOMING' | 'COMPLETED' | 'CANCELLED'>('ALL');
-  const [selectedWeekDate, setSelectedWeekDate] = useState<Date | null>(null);
+  const [selectedWeekDate, setSelectedWeekDate] = useState<Date | null>(() => getLocalToday());
   const [patients, setPatients] = useState<any[]>([]);
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
+  const loading = storeLoading;
 
   // Create / Edit Modal State
   const [modalVisible, setModalVisible] = useState(false);
@@ -73,26 +90,17 @@ export default function DoctorAppointmentsScreen() {
 
   const fetchAppointments = useCallback(async () => {
     try {
-      setLoading(true);
-      const [aptRes, patRes] = await Promise.allSettled([
-        doctorApi.getAppointments(),
+      const [, patRes] = await Promise.allSettled([
+        fetchStoreAppointments(),
         doctorApi.getPatients(),
       ]);
-      if (aptRes.status === 'fulfilled' && aptRes.value.data && Array.isArray(aptRes.value.data)) {
-        setAppointments(
-          [...aptRes.value.data].sort(
-            (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
-          )
-        );
-      }
       if (patRes.status === 'fulfilled' && patRes.value.data && Array.isArray(patRes.value.data)) {
         setPatients(patRes.value.data);
       }
     } catch {} finally {
-      setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [fetchStoreAppointments]);
 
   useEffect(() => {
     fetchAppointments();
@@ -103,13 +111,16 @@ export default function DoctorAppointmentsScreen() {
         fetchAppointments();
       }
     });
+    const timer = setInterval(() => setNowMs(Date.now()), 30000);
     return () => {
       unsub();
+      clearInterval(timer);
     };
   }, [fetchAppointments]);
 
   useFocusEffect(
     useCallback(() => {
+      setNowMs(Date.now());
       fetchAppointments();
     }, [fetchAppointments])
   );
@@ -219,11 +230,7 @@ export default function DoctorAppointmentsScreen() {
       if (editingAptId) {
         const res = await doctorApi.updateAppointment(editingAptId, payload);
         if (res.data) {
-          setAppointments((prev) =>
-            prev
-              .map((a) => (a.id === editingAptId ? res.data : a))
-              .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
-          );
+          upsertAppointments([res.data]);
         }
         setModalVisible(false);
         LocalizedAlert.alert('Thành công', 'Đã cập nhật lịch hẹn tái khám.');
@@ -231,11 +238,7 @@ export default function DoctorAppointmentsScreen() {
         const res = await doctorApi.createAppointment(payload);
         if (res.data) {
           const added = Array.isArray(res.data) ? res.data : [res.data];
-          setAppointments((prev) =>
-            [...added, ...prev].sort(
-              (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
-            )
-          );
+          upsertAppointments(added);
         }
         setModalVisible(false);
         const displayTime = new Date(finalScheduledAt).toLocaleTimeString('vi-VN', {
@@ -253,10 +256,10 @@ export default function DoctorAppointmentsScreen() {
     } catch (err: any) {
       const status = err?.response?.status;
       const detail = err?.response?.data?.detail;
-      if (status === 409 || (detail && typeof detail === 'string' && detail.includes('trùng'))) {
+      if (status === 409 || (detail && typeof detail === 'string' && (detail.includes('trùng') || detail.includes('đã có lịch')))) {
         LocalizedAlert.alert(
           'Trùng lịch khám',
-          detail || 'Khoảng thời gian này đã có một lịch khám khác. Vui lòng chọn thời gian khám khác.'
+          detail || 'Khung giờ này đã có lịch khám khác. Vui lòng chọn giờ khác.'
         );
       } else {
         LocalizedAlert.alert('Lỗi', detail || 'Không thể kết nối lưu lịch hẹn.');
@@ -279,9 +282,7 @@ export default function DoctorAppointmentsScreen() {
     try {
       setIsCompleting(true);
       await doctorApi.completeAppointment(targetCompleteApt.id);
-      setAppointments((prev) =>
-        prev.map((a) => (a.id === targetCompleteApt.id ? { ...a, status: 'COMPLETED' } : a))
-      );
+      updateAppointmentStatus(targetCompleteApt.id, 'COMPLETED');
       setCompleteModalVisible(false);
       LocalizedAlert.alert('Đã khám xong', 'Đã ghi nhận hoàn tất buổi khám.');
     } catch (err: any) {
@@ -301,11 +302,7 @@ export default function DoctorAppointmentsScreen() {
     try {
       setIsCancelling(true);
       await doctorApi.cancelAppointment(targetCancelApt.id, { cancellation_reason: reason });
-      setAppointments((prev) =>
-        prev.map((a) =>
-          a.id === targetCancelApt.id ? { ...a, status: 'CANCELLED', cancellation_reason: reason } : a
-        )
-      );
+      updateAppointmentStatus(targetCancelApt.id, 'CANCELLED', { cancellation_reason: reason });
       setCancelModalVisible(false);
       LocalizedAlert.alert(
         'Đã hủy lịch khám',
@@ -331,7 +328,7 @@ export default function DoctorAppointmentsScreen() {
     const doDelete = async () => {
       try {
         await doctorApi.deleteAppointment(aptId);
-        setAppointments((prev) => prev.filter((a) => a.id !== aptId));
+        removeAppointment(aptId);
         if (Platform.OS !== 'web') {
           LocalizedAlert.alert('Đã xóa', 'Đã xóa bản ghi lịch hẹn thành công.');
         }
@@ -374,13 +371,10 @@ export default function DoctorAppointmentsScreen() {
     if (filterTab === 'COMPLETED' && a.status !== 'COMPLETED') return false;
     if (filterTab === 'CANCELLED' && a.status !== 'CANCELLED') return false;
 
-    if (selectedWeekDate && a.scheduled_at) {
-      try {
-        const aptDate = new Date(a.scheduled_at);
-        if (aptDate.toDateString() !== selectedWeekDate.toDateString()) {
-          return false;
-        }
-      } catch {}
+    if (selectedWeekDate) {
+      if (!a.scheduled_at || !isSameLocalDay(a.scheduled_at, selectedWeekDate)) {
+        return false;
+      }
     }
     return true;
   });
@@ -405,7 +399,7 @@ export default function DoctorAppointmentsScreen() {
             <LocalizedText style={[styles.headerTitle, { color: colors.textPrimary }]}>
               Lịch Khám
             </LocalizedText>
-            <LocalizedText style={[styles.headerSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]} numberOfLines={1}>
+            <LocalizedText style={[styles.headerSub, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
               Theo dõi lịch định kỳ & Tự động phát loa nhắc qua Hub AI
             </LocalizedText>
           </View>
@@ -453,7 +447,11 @@ export default function DoctorAppointmentsScreen() {
           <View style={styles.emptyBox}>
             <Ionicons name="calendar-outline" size={44} color="#94A3B8" />
             <LocalizedText style={[styles.emptyText, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-              Không có lịch khám nào trong danh mục này.
+              {selectedWeekDate
+                ? isTodayLocal(selectedWeekDate)
+                  ? 'Hôm nay không có lịch khám nào.'
+                  : 'Không có lịch khám nào trong ngày đã chọn.'
+                : 'Không có lịch khám nào trong danh mục này.'}
             </LocalizedText>
           </View>
         ) : (
@@ -463,7 +461,8 @@ export default function DoctorAppointmentsScreen() {
               appointment={apt}
               isFirst={index === 0}
               isLast={index === filteredAppointments.length - 1}
-              isCurrentOrNext={index === 0 && apt.status === 'UPCOMING'}
+              isCurrentOrNext={apt.status === 'UPCOMING' && isAppointmentHappeningNow(apt.scheduled_at, nowMs)}
+              isOverdue={isAppointmentOverdue(apt.scheduled_at, apt.status, nowMs)}
               onViewPatient={handleViewPatient}
               onMarkCompleted={handleOpenCompleteModal}
               onEdit={handleOpenEditModal}
@@ -481,6 +480,8 @@ export default function DoctorAppointmentsScreen() {
         visible={modalVisible}
         isEditing={!!editingAptId}
         patients={patients}
+        appointments={appointments}
+        editingAppointmentId={editingAptId}
         patientId={patientId}
         patientName={patientName}
         scheduledAt={scheduledAt}

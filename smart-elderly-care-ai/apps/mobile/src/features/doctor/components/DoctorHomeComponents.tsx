@@ -3,6 +3,11 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIn
 import { Ionicons } from '@expo/vector-icons';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
 import { PatientCardData, AppointmentItem, getPatientAvatarUrl } from './types';
+import {
+  formatAppointmentDateTimeLabel,
+  getCleanAppointmentTitle,
+  isAppointmentFamilyConfirmed,
+} from '../utils/dateUtils';
 
 const doctorBannerImg = require('../../../../assets/images/doctor-banner.png');
 const STALE_THRESHOLD_MS = 45 * 1000;
@@ -172,19 +177,42 @@ export const TodayScheduleBanner: React.FC<TodayScheduleBannerProps> = ({
       <TouchableOpacity style={styles.scheduleBannerCard} activeOpacity={0.92} onPress={onPressAppointment}>
         <View style={styles.cardGradientLayer} />
         <View style={styles.bannerLeftContent}>
-          <View style={styles.nextTagBadge}>
-            <Ionicons name="calendar" size={11} color="#FFFFFF" style={{ marginRight: 4 }} />
-            <LocalizedText style={styles.nextTagText}>Lịch khám kế tiếp</LocalizedText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+            <View style={[styles.nextTagBadge, { marginBottom: 0 }]}>
+              <Ionicons name="calendar" size={11} color="#FFFFFF" style={{ marginRight: 4 }} />
+              <LocalizedText style={styles.nextTagText}>Lịch khám kế tiếp</LocalizedText>
+            </View>
+            <View
+              style={[
+                styles.nextTagBadge,
+                {
+                  marginBottom: 0,
+                  backgroundColor: isAppointmentFamilyConfirmed(nextAppointment)
+                    ? 'rgba(16,185,129,0.28)'
+                    : 'rgba(245,158,11,0.28)',
+                },
+              ]}
+            >
+              <Ionicons
+                name={isAppointmentFamilyConfirmed(nextAppointment) ? 'checkmark-circle' : 'hourglass-outline'}
+                size={11}
+                color="#FFFFFF"
+                style={{ marginRight: 3 }}
+              />
+              <LocalizedText style={styles.nextTagText}>
+                {isAppointmentFamilyConfirmed(nextAppointment) ? 'Đã xác nhận' : 'Chờ xác nhận'}
+              </LocalizedText>
+            </View>
           </View>
           <LocalizedText style={styles.bannerPatientName} numberOfLines={1}>
             {nextAppointment.patient_name || 'Bệnh nhân'}
           </LocalizedText>
-          <LocalizedText style={styles.bannerReasonText} numberOfLines={1}>
-            {nextAppointment.clinical_notes || nextAppointment.exam_type || 'Khám sức khỏe'} • {nextAppointment.visit_type === 'CLINIC' ? 'Phòng khám' : 'Tại nhà'}
+          <LocalizedText style={styles.bannerReasonText} numberOfLines={2}>
+            {getCleanAppointmentTitle(nextAppointment)} • {nextAppointment.visit_type === 'CLINIC' ? 'Phòng khám' : 'Tại nhà'}
           </LocalizedText>
           <View style={styles.bannerTimeContainer}>
             <Ionicons name="time" size={13} color="#FFFFFF" style={{ marginRight: 5 }} />
-            <LocalizedText style={styles.bannerTimeText}>Hôm nay, {formatAptTime(nextAppointment.scheduled_at)}</LocalizedText>
+            <LocalizedText style={styles.bannerTimeText}>{formatAppointmentDateTimeLabel(nextAppointment.scheduled_at)}</LocalizedText>
           </View>
         </View>
         <View style={styles.bannerRightImageWrap}>

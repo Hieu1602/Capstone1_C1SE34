@@ -12,9 +12,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
+import { LocalizedText, LocalizedTextInput, LocalizedAlert } from '../../../i18n/LocalizedComponents';
 import { formatGenderVN } from '../../../utils/formatters';
 import { AppointmentItem, PatientCardData, getPatientAvatarUrl } from './types';
+import { formatAppointmentDateTimeLabel, isSameLocalDay } from '../utils/dateUtils';
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const DAYS_SHORT = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
@@ -137,6 +138,7 @@ const DialogModal: React.FC<ThemeProps & {
 // =============================================================
 export interface AppointmentFormModalProps extends ThemeProps {
   visible: boolean; isEditing: boolean; patients?: any[];
+  appointments?: AppointmentItem[]; editingAppointmentId?: string | null;
   patientId: string; patientName: string; scheduledAt: string;
   examType: string; visitType?: 'HOME_VISIT' | 'CLINIC';
   location: string; instructions: string; enableSpeaker: boolean;
@@ -156,7 +158,7 @@ export interface AppointmentFormModalProps extends ThemeProps {
 }
 
 export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
-  visible, isEditing, patients = [], patientId, patientName, scheduledAt,
+  visible, isEditing, patients = [], appointments = [], editingAppointmentId = null, patientId, patientName, scheduledAt,
   examType, visitType = 'HOME_VISIT', location, instructions, enableSpeaker,
   recurrencePattern = 'NONE', recurrenceOccurrences = 1, isSubmitting,
   onSelectPatient, onChangePatientName, onChangeScheduledAt, onChangeExamType,
@@ -222,6 +224,25 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
       return { date: d, current: idx >= firstDay, selected: idx >= firstDay && d.toDateString() === selectedDate.toDateString(), past: d < today };
     });
   }, [calendarViewDate, selectedDate]);
+
+  const isSlotBooked = (slotStr: string): boolean => {
+    const m = slotStr.trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+    if (!m) return false;
+    const slotMins = Number(m[1]) * 60 + Number(m[2]);
+    return appointments.some((apt) => {
+      if (apt.status === 'CANCELLED') return false;
+      if (editingAppointmentId && String(apt.id) === String(editingAppointmentId)) return false;
+      if (!apt.scheduled_at || !isSameLocalDay(apt.scheduled_at, selectedDate)) return false;
+      const d = new Date(apt.scheduled_at);
+      if (isNaN(d.getTime())) return false;
+      const aptMins = d.getHours() * 60 + d.getMinutes();
+      const bufferMins =
+        visitType === 'HOME_VISIT' || apt.visit_type === 'HOME_VISIT'
+          ? 60
+          : apt.duration_minutes || 30;
+      return Math.abs(slotMins - aptMins) < bufferMins;
+    });
+  };
 
   const fieldBg = isDarkMode ? '#0F172A' : '#F8FAFC';
 
@@ -617,12 +638,20 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
               <View style={styles.timeSlotGrid}>
                 {group.slots.map((slot) => {
                   const active = selectedTimeSlot === slot;
+                  const booked = isSlotBooked(slot);
                   return (
                     <TouchableOpacity
                       key={slot}
+                      disabled={booked}
                       style={[
                         styles.timeSlotBtn,
-                        active
+                        booked
+                          ? {
+                              backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9',
+                              borderColor: isDarkMode ? '#334155' : '#CBD5E1',
+                              opacity: 0.55,
+                            }
+                          : active
                           ? { backgroundColor: '#2563EB', borderColor: '#2563EB' }
                           : { backgroundColor: fieldBg, borderColor: colors.border },
                       ]}
@@ -635,12 +664,18 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
                       <LocalizedText
                         style={{
                           fontSize: 12,
-                          color: active ? '#FFFFFF' : colors.textPrimary,
+                          color: booked ? '#94A3B8' : active ? '#FFFFFF' : colors.textPrimary,
                           fontWeight: active ? '700' : '500',
+                          textDecorationLine: booked ? 'line-through' : 'none',
                         }}
                       >
                         {slot}
                       </LocalizedText>
+                      {booked && (
+                        <LocalizedText style={{ fontSize: 9.5, color: '#DC2626', fontWeight: '700', marginTop: 1 }}>
+                          Đã kín
+                        </LocalizedText>
+                      )}
                     </TouchableOpacity>
                   );
                 })}
@@ -660,7 +695,15 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
           <TouchableOpacity
             style={styles.btnConfirmSmall}
             onPress={() => {
-              if (customTimeInput.trim()) syncScheduledAt(selectedDate, customTimeInput.trim());
+              const trimmed = customTimeInput.trim();
+              if (trimmed && isSlotBooked(trimmed)) {
+                LocalizedAlert.alert(
+                  'Khung giờ đã kín',
+                  'Khung giờ này đã có lịch khám khác. Vui lòng chọn giờ khác.'
+                );
+                return;
+              }
+              if (trimmed) syncScheduledAt(selectedDate, trimmed);
               setActivePopover('NONE');
             }}
           >
@@ -817,7 +860,7 @@ export const AppointmentDetailModal: React.FC<AppointmentDetailModalProps> = ({
   if (!appointment) return null;
   const rows = [
     { icon: 'person-outline', label: 'Bệnh nhân:', val: `${appointment.patient_name || 'Bệnh nhân'}${patientInfo ? ` (${patientInfo.age ? `${patientInfo.age} tuổi` : ''}${patientInfo.gender ? ` • ${formatGenderVN(patientInfo.gender)}` : ''})` : ''}` },
-    { icon: 'time-outline', label: 'Thời gian & Hình thức:', val: `Hôm nay, ${formatAptTime(appointment.scheduled_at)} • ${appointment.visit_type === 'CLINIC' ? 'Tại phòng khám' : 'Khám tại nhà'}` },
+    { icon: 'time-outline', label: 'Thời gian & Hình thức:', val: `${formatAppointmentDateTimeLabel(appointment.scheduled_at)} • ${appointment.visit_type === 'CLINIC' ? 'Tại phòng khám' : 'Khám tại nhà'}` },
     { icon: 'location-outline', label: 'Địa chỉ khám:', val: appointment.location || patientInfo?.house_address || 'Nhà riêng bệnh nhân' },
     { icon: 'call-outline', label: 'Số điện thoại người nhà:', val: maskPhoneNumber(patientInfo?.emergency_contact_phone) },
     { icon: 'document-text-outline', label: 'Dặn dò y tế / Ghi chú:', val: appointment.instructions || appointment.clinical_notes || 'Khám sức khỏe định kỳ.' },

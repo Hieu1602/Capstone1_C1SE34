@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { Incident } from '../../../../store/useAlertStore';
 import type { AppointmentItem, PatientCardData } from '../types';
+import { toLocalYMD, getLocalTodayYMD } from '../../utils/dateUtils';
 
 export type TabType = 'ALL' | 'UNREAD' | 'ALERTS' | 'APPOINTMENTS';
 
@@ -40,7 +41,7 @@ export function formatDate(dateStr?: string): string {
   try {
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return '';
-    return dateStr.slice(0, 10) === new Date().toISOString().slice(0, 10)
+    return toLocalYMD(d) === getLocalTodayYMD()
       ? `Hôm nay, ${formatTime(dateStr)}`
       : `${d.getDate()}/${d.getMonth() + 1} lúc ${formatTime(dateStr)}`;
   } catch {
@@ -221,9 +222,9 @@ export function buildUnifiedNotifications(params: {
     if (!allApts.some((a) => a.id === apt.id)) allApts.push(apt);
   });
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getLocalTodayYMD();
   allApts.forEach((apt) => {
-    const isToday = apt.scheduled_at?.slice(0, 10) === todayStr;
+    const isToday = toLocalYMD(apt.scheduled_at) === todayStr;
     const isCompleted = apt.status === 'COMPLETED';
     const isCancelled = apt.status === 'CANCELLED';
     const color = isCompleted ? '#16A34A' : isCancelled ? '#DC2626' : '#0284C7';

@@ -309,7 +309,7 @@ def _map_appointment_value_error(exc: ValueError) -> HTTPException:
         return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
     if "không tìm thấy" in low:
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
-    if "trùng" in low:
+    if "trùng" in low or "đã có lịch khám" in low or "khung giờ này" in low:
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=msg)
     return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 

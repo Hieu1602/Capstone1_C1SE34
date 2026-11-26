@@ -9,6 +9,9 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useAlertStore } from '../store/useAlertStore';
 import { useEscalationStore } from '../store/useEscalationStore';
 import { notificationService } from './notificationService';
+import { dialEmergencyNumber, EMERGENCY_TEST_PHONE } from './emergency';
+
+const _autoDialedIncidentIds = new Set<string>();
 
 
 const getWsBaseUrl = (): string => {
@@ -683,7 +686,15 @@ class AlertsWebSocket {
     else if (event.type === 'INCIDENT_ESCALATED') {
       const incId = event.incident_id || event.data?.id;
       if (incId) {
+        const incKey = String(incId);
         useEscalationStore.getState().markEscalated(incId);
+        if (Platform.OS !== 'web' && !_autoDialedIncidentIds.has(incKey)) {
+          _autoDialedIncidentIds.add(incKey);
+          const targetPhone = (event.data as any)?.target_phone || EMERGENCY_TEST_PHONE;
+          void dialEmergencyNumber(targetPhone).catch((err) => {
+            console.warn('[WS] Không thể tự động quay số khẩn cấp:', err);
+          });
+        }
       }
     }
 

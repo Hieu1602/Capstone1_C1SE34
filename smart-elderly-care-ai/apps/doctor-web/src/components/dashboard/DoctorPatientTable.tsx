@@ -1,6 +1,7 @@
 import React from 'react';
 import { Search, Filter, Heart, Activity } from 'lucide-react';
 import { DoctorPatientCard } from '../../types';
+import { formatGender } from '../../utils/formatters';
 
 export interface DoctorPatientTableProps {
   patients: DoctorPatientCard[];
@@ -182,7 +183,7 @@ export const DoctorPatientTable: React.FC<DoctorPatientTableProps> = ({
                       </div>
                     </td>
                     <td className="py-3.5 px-3 font-medium text-slate-600 dark:text-slate-300">
-                      {patient.age} tuổi • {patient.gender}
+                      {patient.age} tuổi • {formatGender(patient.gender)}
                     </td>
                     <td className="py-3.5 px-3 text-slate-600 dark:text-slate-300">
                       {patient.house_name || 'Gia đình bệnh nhân'}
