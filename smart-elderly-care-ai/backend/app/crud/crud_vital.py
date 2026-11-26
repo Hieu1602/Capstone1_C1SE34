@@ -384,15 +384,18 @@ class CRUDVital:
                         ))
                     else:
                         # 3. KIỂM TRA CHỈ SỐ ĐƠN LẺ VỚI BỘ LỌC NGỮ CẢNH (CONTEXT-AWARE GATING)
-                        # Đọc ngưỡng cấu hình từ DeviceConfig nếu có (fallback 120 bpm khớp DeviceConfig)
+                        # Đọc ngưỡng cấu hình từ DeviceConfig nếu có (fallback 120/50 bpm, 90% SpO2)
                         hr_high_limit = 120
                         hr_low_limit = 50
+                        spo2_low_limit = 90
                         try:
                             if dev and dev.config:
                                 if dev.config.hr_threshold_high and dev.config.hr_threshold_high > 60:
                                     hr_high_limit = dev.config.hr_threshold_high
                                 if dev.config.hr_threshold_low and dev.config.hr_threshold_low > 30:
                                     hr_low_limit = dev.config.hr_threshold_low
+                                if dev.config.spo2_threshold_low and 70 <= dev.config.spo2_threshold_low <= 99:
+                                    spo2_low_limit = dev.config.spo2_threshold_low
                         except Exception:
                             pass
 
@@ -479,14 +482,14 @@ class CRUDVital:
                             except Exception as e_delta:
                                 logger.warning(f"[CRUDVital] Lỗi kiểm tra biến thiên nhịp tim: {e_delta}")
 
-                        # B. SpO2 đơn lẻ tụt sâu (yêu cầu >= 2 mẫu liên tiếp < 90% hoặc tụt sâu < 85% để tránh nhiễu cử động cổ tay):
-                        if spo2 and 0 < spo2 < 90:
+                        # B. SpO2 đơn lẻ tụt sâu (yêu cầu >= 2 mẫu liên tiếp < spo2_low_limit hoặc tụt sâu < 85% để tránh nhiễu cử động cổ tay):
+                        if spo2 and 0 < spo2 < spo2_low_limit:
                             prev_spo2_row = next((r[2] for r in prev_rows if r[2] is not None and r[2] > 0), None)
-                            if spo2 < 85 or (prev_spo2_row is not None and prev_spo2_row < 90):
+                            if spo2 < 85 or (prev_spo2_row is not None and prev_spo2_row < spo2_low_limit):
                                 alerts_to_create.append((
                                     "LOW_SPO2",
                                     "CRITICAL",
-                                    f"Nguy cấp: Nồng độ oxy trong máu (SpO₂) đo được từ {dev_name} tụt xuống {spo2}% (Dưới ngưỡng 90%)! Cần kiểm tra ngay.",
+                                    f"Nguy cấp: Nồng độ oxy trong máu (SpO₂) đo được từ {dev_name} tụt xuống {spo2}% (Dưới ngưỡng {spo2_low_limit}%)! Cần kiểm tra ngay.",
                                     5
                                 ))
                             else:

@@ -159,6 +159,5 @@ class ThresholdsUpdate(BaseModel):
     hr_threshold_high: Optional[int] = Field(None, ge=70, le=220)
     hr_threshold_low: Optional[int] = Field(None, ge=30, le=100)
     spo2_threshold_low: Optional[int] = Field(None, ge=70, le=99)
-    immobility_seconds: Optional[int] = Field(None, ge=10, le=600)
 
 
