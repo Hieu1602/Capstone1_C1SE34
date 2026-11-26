@@ -237,7 +237,21 @@ class CRUDIncident:
                 setattr(inc, "repeat_badge", None)
                 grouped_incidents.append(inc)
 
-        return grouped_incidents[:limit]
+        top_incidents = grouped_incidents[:limit]
+        # Bổ sung elderly_id từ Device để Web/App nhận diện đúng bệnh nhân kể cả khi notes bị ghi đè
+        try:
+            dev_ids = {inc.device_id for inc in top_incidents if getattr(inc, "device_id", None)}
+            if dev_ids:
+                from app.models.device import Device
+
+                dev_rows = await db.execute(select(Device.id, Device.elderly_id).where(Device.id.in_(list(dev_ids))))
+                dev_map = {row[0]: row[1] for row in dev_rows.fetchall() if row[1] is not None}
+                for inc in top_incidents:
+                    if not getattr(inc, "elderly_id", None):
+                        setattr(inc, "elderly_id", dev_map.get(inc.device_id))
+        except Exception:
+            pass
+        return top_incidents
 
     async def create(self, db: AsyncSession, data: dict) -> Incident:
         obj = Incident(**data)
@@ -267,10 +281,13 @@ class CRUDIncident:
         preserved_tags = []
         user_tag_match = re.search(r'(USER:[0-9a-fA-F-]+)', existing_notes)
         apt_tag_match = re.search(r'(APT:[0-9a-fA-F-]+)', existing_notes)
+        patient_tag_match = re.search(r'(PATIENT:[0-9a-fA-F-]+)', existing_notes)
         if user_tag_match:
             preserved_tags.append(user_tag_match.group(1))
         if apt_tag_match:
             preserved_tags.append(apt_tag_match.group(1))
+        if patient_tag_match:
+            preserved_tags.append(patient_tag_match.group(1))
         if "APPOINTMENT_REQUESTED" in existing_notes:
             preserved_tags.append("APPOINTMENT_REQUESTED")
         if notes:

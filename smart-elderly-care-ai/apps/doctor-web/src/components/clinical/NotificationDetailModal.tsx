@@ -109,7 +109,8 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
     Boolean(notif.rawIncident?.is_acknowledged) ||
     notif.badgeLabel === 'Đã xử lý' ||
     notif.badgeLabel === 'Đã tham gia' ||
-    notif.badgeLabel === 'Đã khám';
+    notif.badgeLabel === 'Đã khám' ||
+    notif.badgeLabel === 'Đã hủy';
 
   const handleAcknowledgeClick = async () => {
     if (!onAcknowledge || isAlreadyHandled) return;
@@ -354,12 +355,14 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
                     </span>
                   </div>
                 )}
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500 dark:text-slate-400">Thiết bị giám sát:</span>
-                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                    CooSpo HW706 BLE Smartband (Online)
-                  </span>
-                </div>
+                {!isAppointment && !isInvite && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 dark:text-slate-400">Thiết bị giám sát:</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">
+                      Cảm biến Smartband theo dõi
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -433,10 +436,12 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
                     ? `Đã xử lý bởi ${notif.rawIncident.acknowledged_by_name}`
                     : notif.rawIncident?.acknowledged_by && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(notif.rawIncident.acknowledged_by))
                     ? `Đã xử lý bởi ${notif.rawIncident.acknowledged_by}`
+                    : isAppointment
+                    ? `Trạng thái lịch: ${notif.badgeLabel}`
                     : 'Bác sĩ đã xác nhận & xử lý'}
                 </span>
               ) : (
-                <span>Cần xác nhận xử lý y khoa</span>
+                <span>{isAppointment ? `Trạng thái lịch: ${notif.badgeLabel || 'Sắp tới'}` : 'Cần xác nhận xử lý y khoa'}</span>
               )}
             </div>
 

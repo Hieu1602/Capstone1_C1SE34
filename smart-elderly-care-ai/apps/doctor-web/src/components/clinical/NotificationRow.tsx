@@ -88,7 +88,7 @@ export const NotificationRow: React.FC<NotificationRowProps> = ({ item, onSelect
                 {item.repeatBadge}
               </span>
             )}
-            {isCrit && (
+            {isCrit && item.badgeLabel !== 'Khẩn cấp' && item.badgeLabel !== 'Nguy cấp' && (
               <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-rose-600">
                 <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse" />
                 Khẩn cấp

@@ -127,10 +127,19 @@ export const NotificationDetailView: React.FC<NotificationDetailViewProps> = ({
                   {linkedPatient?.house_address || linkedPatient?.house_name || item.rawAppointment?.location || 'Nhà riêng bệnh nhân'}
                 </Text>
               </View>
-              <View style={styles.infoRow}>
-                <Text style={[styles.infoLabel, { color: textSub }]}>Thiết bị theo dõi:</Text>
-                <Text style={[styles.infoValue, { color: '#059669', fontWeight: '700' }]}>CooSpo HW706 BLE Smartband</Text>
-              </View>
+              {(item.type === 'INCIDENT' || item.type === 'PATIENT_WARNING') && (
+                <View style={styles.infoRow}>
+                  <Text style={[styles.infoLabel, { color: textSub }]}>Thiết bị theo dõi:</Text>
+                  <Text
+                    style={[
+                      styles.infoValue,
+                      { color: (linkedPatient as any)?.is_online ? '#059669' : textSub, fontWeight: '700' },
+                    ]}
+                  >
+                    {(linkedPatient as any)?.is_online ? 'Smartband (Đang kết nối)' : 'Smartband (Ngoại tuyến)'}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
         )}

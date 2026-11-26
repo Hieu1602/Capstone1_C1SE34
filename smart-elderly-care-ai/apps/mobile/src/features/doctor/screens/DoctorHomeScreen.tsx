@@ -145,7 +145,7 @@ export default function DoctorHomeScreen() {
         const list = buildUnifiedNotifications({
           incidents,
           warningPatients: warnPats,
-          appointments: todayAppointments,
+          appointments,
           upcomingAppointments,
           readIds: readSet,
           doctorUserId: userId || undefined,
@@ -153,7 +153,7 @@ export default function DoctorHomeScreen() {
         setHasUnreadNotifs(list.some((i) => !i.isRead));
       })
       .catch(() => {});
-  }, [incidents, patients, todayAppointments, upcomingAppointments, userId]);
+  }, [incidents, patients, appointments, upcomingAppointments, userId]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -409,8 +409,9 @@ export default function DoctorHomeScreen() {
         visible={notifModalVisible}
         onClose={() => closeNotifAndRun()}
         hasUnread={hasUnreadNotifs}
-        appointments={todayAppointments}
+        appointments={appointments}
         upcomingAppointments={upcomingAppointments}
+        patients={patients}
         warningPatients={warningPatients}
         incidents={incidents}
         onSelectPatient={(pId) => closeNotifAndRun(() => navigation.navigate('DoctorPatientDetail', { patientId: pId }))}

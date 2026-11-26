@@ -26,6 +26,7 @@ interface Props {
   onClose: () => void;
   appointments: AppointmentItem[];
   upcomingAppointments?: AppointmentItem[];
+  patients?: PatientCardData[];
   warningPatients?: PatientCardData[];
   incidents?: Incident[];
   onSelectPatient?: (patientId: string) => void;
@@ -44,6 +45,7 @@ export default function NotificationsBottomSheet({
   onClose,
   appointments = [],
   upcomingAppointments = [],
+  patients = [],
   warningPatients = [],
   incidents = [],
   onSelectPatient,
@@ -159,11 +161,11 @@ export default function NotificationsBottomSheet({
   };
 
   const handleItemPress = async (item: UnifiedNotification) => {
-    // Không tự động acknowledge lời mời tham gia nhà khi mới bấm xem chi tiết
+    // Không tự động acknowledge lời mời tham gia nhà hoặc sự cố đã xử lý sẵn khi mới bấm xem chi tiết
     if (item.type !== 'HOUSE_INVITE') {
       const updated = new Set(readIds);
       addReadId(updated, item);
-      if (item.rawIncidentId) {
+      if (item.rawIncidentId && !item.isRead && !item.rawIncident?.is_acknowledged) {
         useAlertStore.getState().acknowledgeIncident(item.rawIncidentId);
       }
       await persistReadIds(updated);
@@ -214,7 +216,7 @@ export default function NotificationsBottomSheet({
         {selectedNotification ? (
           <NotificationDetailView
             item={selectedNotification}
-            warningPatients={warningPatients}
+            warningPatients={patients.length > 0 ? patients : warningPatients}
             respondingId={respondingId}
             isDarkMode={isDarkMode}
             colors={colors}

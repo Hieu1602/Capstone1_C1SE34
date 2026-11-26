@@ -874,3 +874,52 @@ async def test_acknowledge_all_skips_house_invite_and_doctor_ack_skips_family_co
         )
     assert res.id == inc_id
     mock_confirm.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_incident_list_hydrates_elderly_id_and_ack_preserves_patient_tag():
+    doc_id = uuid.uuid4()
+    house_id = uuid.uuid4()
+    dev_id = uuid.uuid4()
+    pat_id = uuid.uuid4()
+    inc_id = uuid.uuid4()
+
+    inc = SimpleNamespace(
+        id=inc_id,
+        device_id=dev_id,
+        elderly_id=None,
+        alert_type="HIGH_HEART_RATE_CRITICAL",
+        alert_level="CRITICAL",
+        message="Nhịp tim cao",
+        notes=f"USER:{doc_id}|PATIENT:{pat_id}",
+        is_acknowledged=False,
+        acknowledged_at=None,
+        acknowledged_by=None,
+        created_at=datetime.now(timezone.utc),
+    )
+
+    list_db = AsyncMock()
+    list_db.get.return_value = SimpleNamespace(id=doc_id, role="doctor")
+    list_db.execute.side_effect = [
+        MagicMock(fetchall=MagicMock(return_value=[(house_id,)])),
+        MagicMock(fetchall=MagicMock(return_value=[(dev_id,)])),
+        MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[inc])))),
+        MagicMock(fetchall=MagicMock(return_value=[(dev_id, pat_id)])),
+    ]
+    rows = await crud_incident.list(list_db, current_user_id=doc_id)
+    assert len(rows) == 1
+    assert rows[0].elderly_id == pat_id
+
+    ack_db = AsyncMock()
+    with patch.object(crud_incident, "get", AsyncMock(return_value=inc)):
+        updated = await crud_incident.acknowledge(
+            ack_db,
+            incident_id=inc_id,
+            notes="Đã kiểm tra an toàn",
+            acknowledged_by=doc_id,
+        )
+    assert updated is inc
+    assert updated.is_acknowledged is True
+    assert f"USER:{doc_id}" in (updated.notes or "")
+    assert f"PATIENT:{pat_id}" in (updated.notes or "")
+    assert "Đã kiểm tra an toàn" in (updated.notes or "")
