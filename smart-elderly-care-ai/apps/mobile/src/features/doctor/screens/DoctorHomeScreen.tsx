@@ -30,7 +30,6 @@ import { LocalizedText } from '../../../i18n/LocalizedComponents';
 import AdminMarqueeBanner from '../../../components/AdminMarqueeBanner';
 import {
   PatientCardData,
-  AppointmentItem,
   STANDARD_PATIENT_NAMES,
   normalizePatientsList,
 } from '../components/types';

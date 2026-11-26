@@ -1328,7 +1328,7 @@ class CRUDDoctor:
                 if temps:
                     avg_temp = round(sum(temps) / len(temps), 1)
 
-                by_date: Dict[str, List[VitalSign]] = {}
+                by_date: Dict[str, List[Any]] = {}
                 for r in records:
                     local_dt = r.time.astimezone(vn_tz) if r.time.tzinfo else r.time.replace(tzinfo=timezone.utc).astimezone(vn_tz)
                     date_key = local_dt.strftime("%d/%m")

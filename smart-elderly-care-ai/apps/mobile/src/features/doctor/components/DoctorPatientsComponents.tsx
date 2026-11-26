@@ -7,7 +7,6 @@ import React, { useState, RefObject } from 'react';
 import { View, StyleSheet, TouchableOpacity, Modal, Image, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Circle } from 'react-native-svg';
-import { Colors } from '../../../theme/colors';
 import { LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
 import { PatientCardData, getPatientAvatarUrl } from './types';
 import { formatGenderVN } from '../../../utils/formatters';
