@@ -225,7 +225,12 @@ export default function AlertsListScreen({ navigation, route }: any) {
       );
     }
     if (filterType === 'VITAL') {
-      return item.alert_type.includes('HEART') || item.alert_type.includes('SPO2') || item.alert_type.includes('TEMP');
+      return (
+        item.alert_type.includes('HEART') ||
+        item.alert_type.includes('SPO2') ||
+        item.alert_type.includes('TEMP') ||
+        item.alert_type.includes('ARRHYTHMIA')
+      );
     }
     if (filterType === 'APPOINTMENT') {
       return ['APPOINTMENT_SCHEDULED', 'APPOINTMENT_REQUESTED', 'APPOINTMENT_CONFIRMED', 'APPOINTMENT_CANCELLED', 'APPOINTMENT_RESCHEDULED', 'APPOINTMENT_COMPLETED'].includes(item.alert_type);

@@ -79,7 +79,13 @@ class VitalStateMachine:
     # ==========================================================================
     # 2. HÀM PHÂN LOẠI MẪU (TẦNG 1 & TẦNG 3)
     # ==========================================================================
-    def classify_sample(self, s: VitalSample, baseline_rest: int) -> str:
+    def classify_sample(
+        self,
+        s: VitalSample,
+        baseline_rest: int,
+        hr_high_limit: Optional[int] = None,
+        hr_low_limit: Optional[int] = None,
+    ) -> str:
         """
         Phân loại mẫu đo:
         - INVALID: Dữ liệu nhiễu (tháo đồng hồ, hr=0, sqi < SQI_MIN) -> Không phá hủy cơn hiện tại.
@@ -98,7 +104,12 @@ class VitalStateMachine:
             "tập" in s.activity_state.lower() or "exercise" in s.activity_state.lower()
         )
 
-        is_tachy = hr >= (baseline_rest + ENTER_DELTA) or hr >= ABS_HIGH
+        # Tôn trọng ngưỡng hr_high_limit người dùng cấu hình (AlgoConfig) nếu cao hơn baseline + 30
+        enter_high = max(baseline_rest + ENTER_DELTA, hr_high_limit) if hr_high_limit else (baseline_rest + ENTER_DELTA)
+        exit_high = max(baseline_rest + EXIT_DELTA, enter_high - 15)
+        low_limit = hr_low_limit if hr_low_limit else ABS_LOW
+
+        is_tachy = hr >= enter_high or hr >= ABS_HIGH
 
         if is_tachy:
             # Nếu đang vận động và SpO2 ổn định thì coi là đáp ứng sinh lý
@@ -107,10 +118,10 @@ class VitalStateMachine:
             return "ABNORMAL"
 
         # Ngưỡng thoát cơn (Hysteresis)
-        if hr <= (baseline_rest + EXIT_DELTA) and hr >= ABS_LOW:
+        if hr <= exit_high and hr >= low_limit:
             return "NORMAL"
 
-        if hr < ABS_LOW:
+        if hr < low_limit:
             # Nhịp tim chậm sâu nguy hiểm
             return "ABNORMAL"
 
@@ -124,6 +135,8 @@ class VitalStateMachine:
         elder_id: str,
         s: VitalSample,
         baseline_rest: Optional[int] = None,
+        hr_high_limit: Optional[int] = None,
+        hr_low_limit: Optional[int] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Xử lý 1 mẫu sinh hiệu tuần tự cho từng cụ qua Redis Distributed Lock.
@@ -150,7 +163,7 @@ class VitalStateMachine:
                 await self._close_episode(redis, elder_id, st, s, reason="data_gap")
                 st = self._init_state(s.ts)
 
-            kind = self.classify_sample(s, baseline)
+            kind = self.classify_sample(s, baseline, hr_high_limit=hr_high_limit, hr_low_limit=hr_low_limit)
 
             # Mất dữ liệu ngắn (<= 45s) hoặc mẫu nhiễu: Cập nhật last_ts và giữ nguyên trạng thái
             if kind == "INVALID" or (gap <= GAP_TOLERANCE_SEC and kind == "INVALID"):
