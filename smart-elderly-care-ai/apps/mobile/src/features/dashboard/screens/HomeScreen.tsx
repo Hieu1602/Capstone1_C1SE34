@@ -4,7 +4,7 @@
 // TÁC GIẢ: Phan Nguyễn Giáng My
 // ==============================================================================
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, useWindowDimensions } from 'react-native';
 import { LocalizedAlert as Alert, LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -426,7 +426,33 @@ export default function HomeScreen({ navigation }: any) {
     else snoozeButtonLabel = 'Tắt chuông: Đang bật';
   }
 
-  const nextMedication = todayReminders?.medications?.find((m) => !m.taken) || todayReminders?.medications?.[0] || null;
+  // Cập nhật phút hiện tại mỗi 30s để widget nhắc uống thuốc tự hiện đúng trước 15 phút
+  const [nowMinutes, setNowMinutes] = useState(() => {
+    const d = new Date();
+    return d.getHours() * 60 + d.getMinutes();
+  });
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const d = new Date();
+      setNowMinutes(d.getHours() * 60 + d.getMinutes());
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const nextMedication = useMemo(() => {
+    const meds = todayReminders?.medications || [];
+    const dueMeds = meds
+      .filter((m) => {
+        if (m.taken) return false;
+        const match = /^(\d{1,2}):(\d{2})$/.exec((m.time || '').trim());
+        if (!match) return false;
+        const medMins = Number(match[1]) * 60 + Number(match[2]);
+        const diff = medMins - nowMinutes; // > 0 nghĩa là sắp tới giờ uống
+        return diff <= 15 && diff >= -60;
+      })
+      .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+    return dueMeds[0] || null;
+  }, [todayReminders?.medications, nowMinutes]);
   const isMedDone = Boolean(nextMedication?.taken);
 
   return (
