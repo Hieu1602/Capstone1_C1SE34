@@ -14,8 +14,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 from uuid import UUID
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
-
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from reportlab.lib import colors
@@ -1189,6 +1187,7 @@ class ReportService:
                     period_days=period_days,
                     device=device,
                 )
+                from jinja2 import Environment, FileSystemLoader, select_autoescape
                 env = Environment(loader=FileSystemLoader(template_dir), autoescape=select_autoescape(["html"]))
                 html = env.get_template("health_report_template.html").render(**ctx)
                 pdf_bytes = ReportService._render_html_to_pdf_bytes(html, template_dir)

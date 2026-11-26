@@ -316,10 +316,16 @@ async def test_broadcast_alert_ws_prunes_dead_sockets():
 async def test_check_conflict_overlap_and_back_to_back_matrix():
     existing_start = datetime(2026, 11, 21, 9, 0, tzinfo=timezone.utc)
 
-    async def _run_check(cand_start: datetime, cand_dur: int, stored_dur: int = 30) -> bool:
+    async def _run_check(
+        cand_start: datetime,
+        cand_dur: int,
+        stored_dur: int = 30,
+        stored_visit_type: str = "CLINIC",
+        new_visit_type: str = "CLINIC",
+    ) -> bool:
         db = AsyncMock()
         res_mock = MagicMock()
-        res_mock.all.return_value = [(uuid.uuid4(), existing_start, stored_dur)]
+        res_mock.all.return_value = [(uuid.uuid4(), existing_start, stored_dur, stored_visit_type)]
         db.execute.return_value = res_mock
         return await crud_appointment.check_conflict(
             db=db,
@@ -327,21 +333,40 @@ async def test_check_conflict_overlap_and_back_to_back_matrix():
             duration_minutes=cand_dur,
             patient_id=uuid.uuid4(),
             doctor_id=uuid.uuid4(),
+            visit_type=new_visit_type,
         )
 
-    # Same day non-overlapping (14:00 vs 09:00)
+    # CLINIC: Same day non-overlapping (14:00 vs 09:00)
     assert await _run_check(datetime(2026, 11, 21, 14, 0, tzinfo=timezone.utc), 30) is False
-    # Back-to-back after (09:30 vs 09:00 30m)
+    # CLINIC: Back-to-back after (09:30 vs 09:00 30m) -> False
     assert await _run_check(datetime(2026, 11, 21, 9, 30, tzinfo=timezone.utc), 30) is False
-    # Back-to-back before (08:30 30m vs 09:00)
+    # CLINIC: Back-to-back before (08:30 30m vs 09:00) -> False
     assert await _run_check(datetime(2026, 11, 21, 8, 30, tzinfo=timezone.utc), 30) is False
-    # Partial overlap (09:15 30m vs 09:00 30m)
+    # CLINIC: Partial overlap (09:15 30m vs 09:00 30m) -> True
     assert await _run_check(datetime(2026, 11, 21, 9, 15, tzinfo=timezone.utc), 30) is True
-    # Duration overlap (09:30 30m vs 09:00 60m)
+    # CLINIC: Duration overlap (09:30 30m vs 09:00 60m) -> True
     assert await _run_check(datetime(2026, 11, 21, 9, 30, tzinfo=timezone.utc), 30, stored_dur=60) is True
-    # Naive +07:00 equivalence: 16:00+07:00 == 09:00Z
+    # Naive +07:00 equivalence: 16:00+07:00 == 09:00Z -> True
     vn_tz = timezone(timedelta(hours=7))
     assert await _run_check(datetime(2026, 11, 21, 16, 0, tzinfo=vn_tz), 30) is True
+
+    # HOME_VISIT ±60m travel buffer rules
+    assert await _run_check(
+        datetime(2026, 11, 21, 9, 30, tzinfo=timezone.utc), 30,
+        stored_visit_type="HOME_VISIT", new_visit_type="CLINIC",
+    ) is True
+    assert await _run_check(
+        datetime(2026, 11, 21, 8, 30, tzinfo=timezone.utc), 30,
+        stored_visit_type="CLINIC", new_visit_type="HOME_VISIT",
+    ) is True
+    assert await _run_check(
+        datetime(2026, 11, 21, 10, 0, tzinfo=timezone.utc), 30,
+        stored_visit_type="HOME_VISIT", new_visit_type="HOME_VISIT",
+    ) is False
+    assert await _run_check(
+        datetime(2026, 11, 21, 8, 0, tzinfo=timezone.utc), 30,
+        stored_visit_type="HOME_VISIT", new_visit_type="HOME_VISIT",
+    ) is False
 
 
 @pytest.mark.asyncio
@@ -817,8 +842,9 @@ async def test_appointment_scheduler_dispatches_ws_fcm_and_marks_sent():
 async def test_postgres_full_appointment_lifecycle_and_conflict_cleanup():
     """
     Consolidated real-PostgreSQL integration test:
-    - Same-day multi-hour (09:00 30m + 14:00 30m) -> 201
-    - Back-to-back (09:30 30m) -> 201
+    - Same-day multi-hour (09:00 CLINIC 30m + 14:00 HOME->HOME_VISIT 30m) -> 201
+    - CLINIC back-to-back (09:30 CLINIC 30m after 09:00 CLINIC) -> 201
+    - HOME_VISIT ±60m buffer (14:30 CLINIC against 14:00 HOME_VISIT) -> 409
     - Overlap (09:15 30m & 09:45 30m) -> 409
     - GET ?status=ALL, PUT reschedule (+ overlap 409), family incident confirm,
       POST /complete with clinical_notes, POST /cancel, DELETE 200 -> DELETE 404.
@@ -882,44 +908,59 @@ async def test_postgres_full_appointment_lifecycle_and_conflict_cleanup():
     try:
         with patch.object(redis_service, "_client", AsyncMock(return_value=fake_redis)):
           async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            # 1. Create 09:00 (30m)
+            # 1. Create 09:00 CLINIC (30m)
             r1 = await client.post(
                 "/api/v1/doctor/appointments",
                 json={
                     "patient_id": str(elderly_id),
                     "scheduled_at": day.isoformat(),
                     "duration_minutes": 30,
-                    "visit_type": "HOME",
+                    "visit_type": "CLINIC",
                 },
             )
             assert r1.status_code == 201
             apt1_id = r1.json()["id"]
-            assert r1.json()["visit_type"] == "HOME_VISIT"
+            assert r1.json()["visit_type"] == "CLINIC"
             assert r1.json()["patient_name"] == "Cụ Test Đồng Bộ"
 
-            # 2. Same-day different hour 14:00 (30m) -> 201
+            # 2. Same-day different hour 14:00 HOME -> HOME_VISIT (30m) -> 201
             r2 = await client.post(
                 "/api/v1/doctor/appointments",
                 json={
                     "patient_id": str(elderly_id),
                     "scheduled_at": day.replace(hour=14, minute=0).isoformat(),
                     "duration_minutes": 30,
+                    "visit_type": "HOME",
                 },
             )
             assert r2.status_code == 201
             apt2_id = r2.json()["id"]
+            assert r2.json()["visit_type"] == "HOME_VISIT"
 
-            # 3. Back-to-back 09:30 (30m) -> 201
+            # 3. Back-to-back CLINIC 09:30 (30m) after 09:00 CLINIC -> 201
             r3 = await client.post(
                 "/api/v1/doctor/appointments",
                 json={
                     "patient_id": str(elderly_id),
                     "scheduled_at": day.replace(hour=9, minute=30).isoformat(),
                     "duration_minutes": 30,
+                    "visit_type": "CLINIC",
                 },
             )
             assert r3.status_code == 201
             apt3_id = r3.json()["id"]
+
+            # 3b. HOME_VISIT ±60m buffer: 14:30 against 14:00 HOME_VISIT -> 409
+            r_home_buf = await client.post(
+                "/api/v1/doctor/appointments",
+                json={
+                    "patient_id": str(elderly_id),
+                    "scheduled_at": day.replace(hour=14, minute=30).isoformat(),
+                    "duration_minutes": 30,
+                    "visit_type": "CLINIC",
+                },
+            )
+            assert r_home_buf.status_code == 409
 
             # 4. Overlapping slots -> 409
             r_ov1 = await client.post(
@@ -928,6 +969,7 @@ async def test_postgres_full_appointment_lifecycle_and_conflict_cleanup():
                     "patient_id": str(elderly_id),
                     "scheduled_at": day.replace(hour=9, minute=15).isoformat(),
                     "duration_minutes": 30,
+                    "visit_type": "CLINIC",
                 },
             )
             assert r_ov1.status_code == 409
@@ -938,6 +980,7 @@ async def test_postgres_full_appointment_lifecycle_and_conflict_cleanup():
                     "patient_id": str(elderly_id),
                     "scheduled_at": day.replace(hour=9, minute=45).isoformat(),
                     "duration_minutes": 30,
+                    "visit_type": "CLINIC",
                 },
             )
             assert r_ov2.status_code == 409

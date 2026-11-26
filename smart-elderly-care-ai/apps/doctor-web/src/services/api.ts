@@ -233,8 +233,9 @@ export const doctorApi = {
     return res.data;
   },
 
-  completeAppointment: async (appointmentId: string, _clinicalNotes?: string) => {
-    const res = await api.post(`/doctor/appointments/${appointmentId}/complete`);
+  completeAppointment: async (appointmentId: string, clinicalNotes?: string) => {
+    const payload = clinicalNotes?.trim() ? { clinical_notes: clinicalNotes.trim() } : undefined;
+    const res = await api.post(`/doctor/appointments/${appointmentId}/complete`, payload);
     return res.data;
   },
 };

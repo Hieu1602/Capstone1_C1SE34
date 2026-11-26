@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { AppointmentItem } from '../../types';
+import { parseAppointmentNotes } from '../../utils/appointmentHelpers';
 import { Calendar, Clock, MapPin, Volume2, ChevronRight, Stethoscope } from 'lucide-react';
 
 interface ScheduleBannerProps {
@@ -66,7 +67,7 @@ export const ScheduleBanner: React.FC<ScheduleBannerProps> = ({
             <p className="mt-1 text-xs md:text-sm text-blue-100/90 flex items-center space-x-2">
               <Stethoscope className="h-4 w-4 shrink-0 text-blue-200" />
               <span>
-                {appointment.clinical_notes || appointment.exam_type || 'Khám sức khỏe tổng quát'}
+                {parseAppointmentNotes(appointment.clinical_notes).cleanNotes || appointment.exam_type || 'Khám sức khỏe tổng quát'}
               </span>
               <span>•</span>
               <span className="font-semibold text-white">

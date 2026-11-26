@@ -362,12 +362,12 @@ export default function DoctorAppointmentsScreen() {
   };
 
   const totalCount = appointments.length;
-  const upcomingCount = appointments.filter((a) => a.status === 'UPCOMING').length;
+  const upcomingCount = appointments.filter((a) => a.status === 'UPCOMING' || a.status === 'CONFIRMED').length;
   const completedCount = appointments.filter((a) => a.status === 'COMPLETED').length;
   const cancelledCount = appointments.filter((a) => a.status === 'CANCELLED').length;
 
   const filteredAppointments = appointments.filter((a) => {
-    if (filterTab === 'UPCOMING' && a.status !== 'UPCOMING') return false;
+    if (filterTab === 'UPCOMING' && a.status !== 'UPCOMING' && a.status !== 'CONFIRMED') return false;
     if (filterTab === 'COMPLETED' && a.status !== 'COMPLETED') return false;
     if (filterTab === 'CANCELLED' && a.status !== 'CANCELLED') return false;
 

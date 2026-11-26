@@ -6,6 +6,7 @@ import { useSearchParams } from 'react-router-dom';
 import { doctorApi } from '../services/api';
 import { useDoctorDataStore } from '../store/useDoctorDataStore';
 import { removeVietnameseTones } from '../utils/text';
+import { getAppointmentTabCounts, isUpcomingAppointmentStatus } from '../utils/appointmentHelpers';
 import { AppointmentItem } from '../types';
 import { NewAppointmentModal } from '../components/clinical/NewAppointmentModal';
 import { CancelAppointmentModal } from '../components/clinical/CancelAppointmentModal';
@@ -96,19 +97,11 @@ export const AppointmentsPage: React.FC = () => {
     setShowCreateModal(true);
   };
 
-  const handleBroadcastReminder = (apt: AppointmentItem) => {
-    showToast(`Đã phát giọng nói nhắc lịch khám qua Loa Hub nhà bệnh nhân ${apt.patient_name || ''}!`);
+  const handleBroadcastReminder = (_apt: AppointmentItem) => {
+    showToast('Chưa hỗ trợ phát loa trực tiếp từ Web — hệ thống tự động phát trước 24 giờ & 2 giờ.');
   };
 
-  const counts = useMemo(
-    () => ({
-      UPCOMING: appointments.filter((a) => a.status === 'UPCOMING').length,
-      COMPLETED: appointments.filter((a) => a.status === 'COMPLETED').length,
-      CANCELLED: appointments.filter((a) => a.status === 'CANCELLED').length,
-      ALL: appointments.length,
-    }),
-    [appointments]
-  );
+  const counts = useMemo(() => getAppointmentTabCounts(appointments), [appointments]);
 
   const q = removeVietnameseTones(searchQuery.trim());
   const filteredAppointments = appointments
@@ -122,7 +115,7 @@ export const AppointmentsPage: React.FC = () => {
         statusFilter === 'ALL'
           ? true
           : statusFilter === 'UPCOMING'
-            ? apt.status === 'UPCOMING' || apt.status === 'CONFIRMED'
+            ? isUpcomingAppointmentStatus(apt.status)
             : apt.status === statusFilter;
       const matchesDate = !selectedDateStr
         ? true
@@ -326,7 +319,7 @@ export const AppointmentsPage: React.FC = () => {
           completionRate={completionRate}
           hubEnabledCount={hubEnabledCount}
           onTestHubSpeaker={() =>
-            showToast('Đã gửi tín hiệu kiểm tra âm thanh tới Loa thông minh Hub tại nhà bệnh nhân!')
+            showToast('Chưa hỗ trợ phát loa trực tiếp từ Web — hệ thống tự động phát trước 24 giờ & 2 giờ.')
           }
         />
       </div>

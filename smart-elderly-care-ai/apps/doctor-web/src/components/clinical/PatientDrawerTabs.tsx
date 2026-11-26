@@ -11,6 +11,7 @@ import {
   LucideIcon,
 } from 'lucide-react';
 import { PrescriptionItem, AppointmentItem, AnalyticsData } from '../../types';
+import { parseAppointmentNotes } from '../../utils/appointmentHelpers';
 import { VitalsTrendChart, VitalMetricKey } from './VitalsTrendChart';
 import {
   VitalFilterState,
@@ -559,6 +560,11 @@ const APPOINTMENT_STATUS_BADGE: Record<string, { label: string; className: strin
     className:
       'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900/60',
   },
+  CONFIRMED: {
+    label: 'Đã xác nhận',
+    className:
+      'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/60 dark:text-teal-300 dark:border-teal-900/60',
+  },
 };
 
 const DEFAULT_APPOINTMENT_BADGE = {
@@ -592,19 +598,26 @@ export const PatientDrawerAppointmentsTab: React.FC<PatientDrawerAppointmentsTab
       .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
       .map((apt) => {
         const badge = APPOINTMENT_STATUS_BADGE[apt.status] ?? DEFAULT_APPOINTMENT_BADGE;
+        const { isFamilyConfirmedByNote, cleanNotes } = parseAppointmentNotes(apt.clinical_notes);
+        const isFamilyConfirmed = isFamilyConfirmedByNote || apt.status === 'CONFIRMED';
         return (
           <div
             key={apt.id}
             className="rounded-2xl border border-slate-200/80 bg-white dark:bg-[#0F172A] dark:border-slate-800/80 p-4 shadow-xs"
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className="font-extrabold text-slate-900 dark:text-white text-xs">
-                {apt.clinical_notes || 'Khám sức khỏe'}
+                {cleanNotes || 'Khám sức khỏe'}
               </span>
-              <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold border ${badge.className}`}>
+              <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-extrabold border ${badge.className}`}>
                 {badge.label}
               </span>
             </div>
+            {isFamilyConfirmed && (
+              <span className="mt-1 inline-block rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800/60 dark:text-emerald-300">
+                Gia đình đã xác nhận đón tiếp
+              </span>
+            )}
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               {new Date(apt.scheduled_at).toLocaleString('vi-VN')} • {apt.location}
             </p>

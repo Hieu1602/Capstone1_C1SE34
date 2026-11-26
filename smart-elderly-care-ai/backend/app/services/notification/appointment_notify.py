@@ -170,7 +170,7 @@ async def notify_doctor_appointment_confirmed(
     resolved_inc_ids: list[str] = []
     try:
         inc_stmt = select(Incident).where(
-            Incident.alert_type == "APPOINTMENT_SCHEDULED",
+            Incident.alert_type.in_(["APPOINTMENT_SCHEDULED", "APPOINTMENT_RESCHEDULED"]),
             or_(
                 Incident.notes == str(apt.id),
                 Incident.notes.contains(f"APT:{apt.id}"),

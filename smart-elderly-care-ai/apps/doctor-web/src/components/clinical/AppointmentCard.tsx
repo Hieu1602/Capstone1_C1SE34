@@ -13,6 +13,7 @@ import {
   Calendar as CalendarIcon,
 } from 'lucide-react';
 import type { AppointmentItem } from '../../types';
+import { isUpcomingAppointmentStatus, parseAppointmentNotes } from '../../utils/appointmentHelpers';
 
 const STATUS_BADGE_MAP: Record<string, { label: string; className: string }> = {
   COMPLETED: {
@@ -23,6 +24,10 @@ const STATUS_BADGE_MAP: Record<string, { label: string; className: string }> = {
     label: 'Đã hủy',
     className: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300',
   },
+  CONFIRMED: {
+    label: 'Đã xác nhận',
+    className: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300',
+  },
   UPCOMING: {
     label: 'Sắp tới',
     className: 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300',
@@ -31,7 +36,7 @@ const STATUS_BADGE_MAP: Record<string, { label: string; className: string }> = {
 
 interface AppointmentCardProps {
   apt: AppointmentItem;
-  onBroadcastReminder: (apt: AppointmentItem) => void;
+  onBroadcastReminder?: (apt: AppointmentItem) => void;
   onReschedule: (apt: AppointmentItem) => void;
   onCancel: (apt: AppointmentItem) => void;
   onComplete: (apt: AppointmentItem) => void;
@@ -47,6 +52,8 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
   const isClinic = apt.visit_type === 'CLINIC';
   const isTelehealth = apt.visit_type === 'TELEHEALTH';
   const statusBadge = STATUS_BADGE_MAP[apt.status] || STATUS_BADGE_MAP.UPCOMING;
+  const { isFamilyConfirmedByNote, cleanNotes } = parseAppointmentNotes(apt.clinical_notes);
+  const isFamilyConfirmed = isFamilyConfirmedByNote || apt.status === 'CONFIRMED';
 
   let timeStr = '--:--';
   let dateStr = apt.scheduled_at;
@@ -83,6 +90,12 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
               <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${statusBadge.className}`}>
                 {statusBadge.label}
               </span>
+              {isFamilyConfirmed && (
+                <span className="inline-flex items-center space-x-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800/60 dark:text-emerald-300">
+                  <CheckCircle2 className="h-3 w-3" />
+                  <span>Gia đình đã xác nhận đón tiếp</span>
+                </span>
+              )}
               <span
                 className={`inline-flex items-center space-x-1 rounded-lg px-2.5 py-0.5 text-[10px] font-bold ${
                   isClinic
@@ -99,7 +112,7 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
 
             <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
               <span className="font-bold text-slate-700 dark:text-slate-200">Triệu chứng / Ghi chú: </span>
-              {apt.clinical_notes || 'Khám sức khỏe định kỳ, kiểm tra huyết áp và tim mạch'}
+              {cleanNotes || 'Khám sức khỏe định kỳ, kiểm tra huyết áp và tim mạch'}
             </p>
             {apt.status === 'CANCELLED' && apt.cancellation_reason && (
               <p className="text-xs font-medium text-rose-600 dark:text-rose-400">
@@ -127,14 +140,16 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
       {/* Hàng nút thao tác nhanh */}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800/80 pt-3.5">
         <button
-          onClick={() => onBroadcastReminder(apt)}
-          className="inline-flex items-center space-x-1.5 rounded-xl border border-cyan-200 bg-cyan-50/70 px-3 py-1.5 text-xs font-bold text-cyan-700 hover:bg-cyan-100 transition cursor-pointer dark:border-cyan-800/50 dark:bg-cyan-950/30 dark:text-cyan-300 dark:hover:bg-cyan-900/40"
+          type="button"
+          disabled
+          title="Chưa hỗ trợ phát loa trực tiếp từ Web — hệ thống tự động phát trước 24 giờ & 2 giờ"
+          className="inline-flex items-center space-x-1.5 rounded-xl border border-slate-200 bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-400 cursor-not-allowed opacity-75 dark:border-slate-700/60 dark:bg-slate-800/60 dark:text-slate-500"
         >
           <Volume2 className="h-3.5 w-3.5" />
-          <span>Phát nhắc nhở</span>
+          <span>Phát loa trực tiếp (Chưa hỗ trợ)</span>
         </button>
 
-        {apt.status === 'UPCOMING' && (
+        {isUpcomingAppointmentStatus(apt.status) && (
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => onReschedule(apt)}

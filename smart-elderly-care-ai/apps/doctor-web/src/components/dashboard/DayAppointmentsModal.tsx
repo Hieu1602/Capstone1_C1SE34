@@ -19,6 +19,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import type { AppointmentItem } from '../../types';
+import { parseAppointmentNotes } from '../../utils/appointmentHelpers';
 
 interface DayAppointmentsModalProps {
   isOpen: boolean;
@@ -159,7 +160,8 @@ export const DayAppointmentsModal: React.FC<DayAppointmentsModalProps> = ({
               {appointments.map((apt) => {
                 const isCompleted = apt.status === 'COMPLETED';
                 const isCancelled = apt.status === 'CANCELLED';
-                const isUpcoming = apt.status === 'UPCOMING' || apt.status === 'CONFIRMED';
+                const { isFamilyConfirmedByNote, cleanNotes } = parseAppointmentNotes(apt.clinical_notes);
+                const isFamilyConfirmed = isFamilyConfirmedByNote || apt.status === 'CONFIRMED';
 
                 // Format thời gian
                 const timeStr = (() => {
@@ -245,9 +247,15 @@ export const DayAppointmentsModal: React.FC<DayAppointmentsModalProps> = ({
                           </div>
 
                           {/* Ghi chú lâm sàng nếu có */}
-                          {apt.clinical_notes && (
+                          {isFamilyConfirmed && (
+                            <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800/60 dark:text-emerald-300">
+                              <CheckCircle2 className="h-3 w-3" />
+                              <span>Gia đình đã xác nhận đón tiếp</span>
+                            </span>
+                          )}
+                          {cleanNotes && (
                             <p className="mt-2 rounded-lg bg-slate-50 p-2 text-xs italic text-slate-600 dark:bg-slate-800/50 dark:text-slate-300 border-l-2 border-blue-400">
-                              "{apt.clinical_notes}"
+                              "{cleanNotes}"
                             </p>
                           )}
                         </div>

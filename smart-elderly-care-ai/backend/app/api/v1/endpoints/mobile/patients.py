@@ -5,9 +5,9 @@ Vị trí: backend/app/api/v1/endpoints/patients.py
 """
 
 from typing import Any, Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user_optional
@@ -21,7 +21,13 @@ from app.schemas.patient import (
     PatientMedicalRecordOut,
     PatientMedicalRecordUpdate,
 )
-from app.schemas.appointment import AppointmentCreate, AppointmentResponse
+from app.schemas.appointment import (
+    AppointmentCreate,
+    AppointmentResponse,
+    AppointmentUpdate,
+    BusySlotItem,
+    FamilyAppointmentCancelRequest,
+)
 from app.schemas.vital import VitalOut
 
 router = APIRouter()
@@ -576,6 +582,150 @@ async def _ensure_house_access(
             )
 
 
+async def _resolve_assigned_doctor(
+    db: AsyncSession, house_id: Optional[uuid.UUID]
+) -> tuple[Optional[uuid.UUID], str]:
+    from app.models.house import HouseMember
+    from sqlalchemy import or_, select
+
+    if house_id:
+        doc_stmt = (
+            select(User)
+            .join(HouseMember, HouseMember.user_id == User.id)
+            .where(
+                HouseMember.house_id == house_id,
+                HouseMember.status == "ACTIVE",
+                or_(
+                    HouseMember.role_in_house.ilike("%doctor%"),
+                    User.role == "doctor",
+                ),
+            )
+            .limit(1)
+        )
+        doc_user = (await db.execute(doc_stmt)).scalar_one_or_none()
+        if doc_user:
+            return doc_user.id, doc_user.full_name
+
+    doc_sys = (
+        await db.execute(select(User).where(User.role == "doctor", User.is_active == True).limit(1))
+    ).scalar_one_or_none()
+    if doc_sys:
+        return doc_sys.id, doc_sys.full_name
+    return None, "Bác sĩ phụ trách"
+
+
+def _map_patient_apt_error(exc: ValueError) -> HTTPException:
+    msg = str(exc)
+    low = msg.lower()
+    if "không tìm thấy" in low:
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
+    if "trùng" in low or "đã có lịch khám" in low or "khung giờ này" in low:
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=msg)
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+
+
+async def _load_family_owned_appointment(
+    db: AsyncSession,
+    patient_id: str,
+    appointment_id: str,
+    current_user: Optional[User],
+):
+    from app.crud.crud_appointment import crud_appointment
+
+    try:
+        patient_uuid = uuid.UUID(patient_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ID bệnh nhân không hợp lệ.")
+    try:
+        apt_uuid = uuid.UUID(appointment_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ID lịch khám không hợp lệ.")
+
+    existing = await crud_appointment.get_by_id(db, apt_uuid)
+    if not existing or existing.patient_id != patient_uuid:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy lịch khám yêu cầu.")
+
+    await _ensure_house_access(db, current_user, existing.house_id)
+
+    is_family_created = existing.created_by is not None and existing.created_by != existing.doctor_id
+    if not is_family_created:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Chỉ có thể hủy hoặc dời lịch khám do gia đình tự đặt.",
+        )
+    if (
+        current_user is not None
+        and current_user.role not in ("admin", "doctor")
+        and not existing.house_id
+        and existing.created_by != current_user.id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn không có quyền thao tác trên lịch khám này.",
+        )
+
+    if existing.status not in ("UPCOMING", "CONFIRMED"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Chỉ có thể thao tác trên lịch khám đang ở trạng thái sắp tới.",
+        )
+    return patient_uuid, apt_uuid, existing
+
+
+@router.get(
+    "/{patient_id}/appointments/busy-slots",
+    response_model=List[BusySlotItem],
+    summary="Khung giờ bận của bác sĩ phụ trách (không lộ PII bệnh nhân khác)",
+)
+async def get_patient_doctor_busy_slots(
+    patient_id: str,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    from sqlalchemy import select
+    from app.models.appointment import Appointment
+    from app.models.elderly_profile import ElderlyProfile
+
+    try:
+        patient_uuid = uuid.UUID(patient_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ID bệnh nhân không hợp lệ.")
+
+    profile = await db.get(ElderlyProfile, patient_uuid)
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy hồ sơ người cao tuổi.")
+
+    await _ensure_house_access(db, current_user, profile.house_id)
+
+    doctor_id, _ = await _resolve_assigned_doctor(db, profile.house_id)
+    if not doctor_id:
+        return []
+
+    stmt = (
+        select(
+            Appointment.id,
+            Appointment.scheduled_at,
+            Appointment.duration_minutes,
+            Appointment.visit_type,
+        )
+        .where(
+            Appointment.doctor_id == doctor_id,
+            Appointment.status.in_(["UPCOMING", "CONFIRMED"]),
+        )
+        .order_by(Appointment.scheduled_at.asc())
+    )
+    rows = (await db.execute(stmt)).all()
+    return [
+        BusySlotItem(
+            id=str(aid),
+            scheduled_at=sat,
+            duration_minutes=dur or 30,
+            visit_type=vt or "HOME_VISIT",
+        )
+        for aid, sat, dur, vt in rows
+    ]
+
+
 @router.get(
     "/{patient_id}/appointments",
     response_model=List[Any],
@@ -588,7 +738,6 @@ async def get_patient_appointments(
     db: AsyncSession = Depends(get_db),
 ):
     """Người nhà xem danh sách các cuộc hẹn khám, tái khám của người cao tuổi ở chế độ chỉ đọc (Read-only)."""
-    import uuid
     from app.crud.crud_appointment import build_appointment_response, crud_appointment
     from app.models.elderly_profile import ElderlyProfile
 
@@ -636,17 +785,14 @@ async def request_patient_appointment(
     db: AsyncSession = Depends(get_db),
 ):
     """Người nhà đặt lịch hẹn hoặc yêu cầu lịch khám với Bác sĩ phụ trách."""
-    import uuid
     from app.crud.crud_appointment import build_appointment_response, crud_appointment
     from app.models.elderly_profile import ElderlyProfile
-    from app.models.house import HouseMember
-    from app.models.user import User
     from app.services.notification.appointment_notify import (
         broadcast_alert_ws,
         format_vn_dt,
         send_appointment_fcm,
     )
-    from sqlalchemy import select, or_
+    from sqlalchemy import select
 
     target_id_str = patient_id or appointment_in.patient_id
     try:
@@ -664,34 +810,7 @@ async def request_patient_appointment(
     appointment_in.patient_name = target_profile.full_name
 
     # 1. Tìm bác sĩ phụ trách ngôi nhà
-    doctor_id = None
-    doctor_name = "Bác sĩ phụ trách"
-    if target_profile.house_id:
-        doc_stmt = (
-            select(User)
-            .join(HouseMember, HouseMember.user_id == User.id)
-            .where(
-                HouseMember.house_id == target_profile.house_id,
-                HouseMember.status == "ACTIVE",
-                or_(
-                    HouseMember.role_in_house.ilike("%doctor%"),
-                    User.role == "doctor",
-                ),
-            )
-            .limit(1)
-        )
-        doc_res = await db.execute(doc_stmt)
-        doc_user = doc_res.scalar_one_or_none()
-        if doc_user:
-            doctor_id = doc_user.id
-            doctor_name = doc_user.full_name
-
-    if not doctor_id:
-        doc_sys_res = await db.execute(select(User).where(User.role == "doctor", User.is_active == True).limit(1))
-        doc_sys = doc_sys_res.scalar_one_or_none()
-        if doc_sys:
-            doctor_id = doc_sys.id
-            doctor_name = doc_sys.full_name
+    doctor_id, doctor_name = await _resolve_assigned_doctor(db, target_profile.house_id)
 
     created_by = current_user.id if current_user else None
 
@@ -703,14 +822,7 @@ async def request_patient_appointment(
             created_by=created_by,
         )
     except ValueError as e:
-        msg = str(e)
-        low = msg.lower()
-        code = (
-            status.HTTP_400_BAD_REQUEST
-            if "không hợp lệ" in low
-            else (status.HTTP_404_NOT_FOUND if "không tìm thấy" in low else status.HTTP_409_CONFLICT)
-        )
-        raise HTTPException(status_code=code, detail=msg)
+        raise _map_patient_apt_error(e)
 
     # 2. Tạo Incident & bắn WebSocket/FCM thông báo cho Bác sĩ & các thành viên
     try:
@@ -782,6 +894,232 @@ async def request_patient_appointment(
     return build_appointment_response(
         root_apt,
         patient_name=target_profile.full_name or "Bệnh nhân người cao tuổi",
+        doctor_name=doctor_name,
+    )
+
+
+@router.put(
+    "/{patient_id}/appointments/{appointment_id}",
+    response_model=AppointmentResponse,
+    summary="Người nhà dời/cập nhật lịch khám tự đặt",
+)
+async def update_patient_appointment(
+    patient_id: str,
+    appointment_id: str,
+    appointment_in: AppointmentUpdate,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    from sqlalchemy import select
+    from app.crud.crud_appointment import (
+        build_appointment_response,
+        crud_appointment,
+        get_patient_names_map,
+    )
+    from app.models.device import Device
+    from app.models.incident import Incident
+    from app.services.notification.appointment_notify import (
+        broadcast_alert_ws,
+        format_vn_dt,
+        send_appointment_fcm,
+    )
+
+    _, apt_uuid, _ = await _load_family_owned_appointment(db, patient_id, appointment_id, current_user)
+
+    try:
+        updated = await crud_appointment.update_appointment(
+            db=db, appointment_id=apt_uuid, obj_in=appointment_in
+        )
+    except ValueError as e:
+        raise _map_patient_apt_error(e)
+
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy lịch khám yêu cầu.")
+
+    patient_names = await get_patient_names_map(db, [updated.patient_id])
+    patient_name = patient_names.get(updated.patient_id, "Bệnh nhân người cao tuổi")
+    doctor_name = updated.doctor.full_name if updated.doctor else "Bác sĩ phụ trách"
+    req_user_name = current_user.full_name if current_user else "Người nhà"
+    scheduled_str = format_vn_dt(updated.scheduled_at, "thời gian đã hẹn")
+    notify_msg = f"🗓️ {req_user_name} đã dời lịch khám của {patient_name} sang {scheduled_str}."
+
+    try:
+        dev_stmt = (
+            select(Device.id).where(Device.house_id == updated.house_id).limit(1)
+            if updated.house_id
+            else select(Device.id).limit(1)
+        )
+        dev_id = (await db.execute(dev_stmt)).scalar_one_or_none()
+        if not dev_id:
+            dev_id = (await db.execute(select(Device.id).limit(1))).scalar_one_or_none()
+
+        inc_id_str = f"inc-rescheduled-{updated.id}"
+        doc_tag = f"USER:{updated.doctor_id}|" if updated.doctor_id else ""
+        notes_str = f"{doc_tag}APPOINTMENT_REQUESTED|PATIENT:{updated.patient_id}|APT:{updated.id}"
+        if dev_id:
+            resched_inc = Incident(
+                device_id=dev_id,
+                alert_type="APPOINTMENT_RESCHEDULED",
+                alert_level="LOW",
+                message=notify_msg,
+                is_acknowledged=False,
+                notes=notes_str,
+            )
+            db.add(resched_inc)
+            await db.commit()
+            await db.refresh(resched_inc)
+            inc_id_str = str(resched_inc.id)
+            try:
+                from app.services.redis import redis_service
+                await redis_service.invalidate_incidents_cache()
+            except Exception:
+                pass
+
+        await broadcast_alert_ws(
+            {
+                "type": "APPOINTMENT_RESCHEDULED",
+                "alert_type": "APPOINTMENT_RESCHEDULED",
+                "appointment_id": str(updated.id),
+                "patient_id": str(updated.patient_id),
+                "data": {
+                    "id": inc_id_str,
+                    "alert_type": "APPOINTMENT_RESCHEDULED",
+                    "appointment_id": str(updated.id),
+                    "patient_id": str(updated.patient_id),
+                    "doctor_id": str(updated.doctor_id) if updated.doctor_id else None,
+                    "scheduled_at": updated.scheduled_at.isoformat() if updated.scheduled_at else None,
+                    "message": notify_msg,
+                    "notes": notes_str,
+                },
+            }
+        )
+        if updated.doctor_id:
+            await send_appointment_fcm(
+                db=db,
+                target_house_id=None,
+                doctor_id=updated.doctor_id,
+                title="🗓️ Gia đình đã dời lịch khám",
+                body=notify_msg,
+                data={
+                    "type": "APPOINTMENT_RESCHEDULED",
+                    "appointment_id": str(updated.id),
+                    "patient_id": str(updated.patient_id),
+                },
+            )
+    except Exception:
+        pass
+
+    return build_appointment_response(
+        updated,
+        patient_name=patient_name,
+        doctor_name=doctor_name,
+    )
+
+
+@router.post(
+    "/{patient_id}/appointments/{appointment_id}/cancel",
+    response_model=AppointmentResponse,
+    summary="Người nhà hủy lịch khám tự đặt",
+)
+async def cancel_patient_appointment(
+    patient_id: str,
+    appointment_id: str,
+    cancel_in: Optional[FamilyAppointmentCancelRequest] = Body(default=None),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    from sqlalchemy import or_, select
+    from app.crud.crud_appointment import (
+        build_appointment_response,
+        crud_appointment,
+        get_patient_names_map,
+    )
+    from app.models.incident import Incident
+    from app.services.notification.appointment_notify import (
+        broadcast_alert_ws,
+        format_vn_dt,
+        send_appointment_fcm,
+    )
+
+    _, apt_uuid, _ = await _load_family_owned_appointment(db, patient_id, appointment_id, current_user)
+    reason = cancel_in.cancellation_reason if cancel_in else "Gia đình hủy yêu cầu lịch khám"
+
+    try:
+        cancelled = await crud_appointment.cancel_appointment(
+            db=db, appointment_id=apt_uuid, cancellation_reason=reason
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    if not cancelled:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy lịch khám yêu cầu.")
+
+    patient_names = await get_patient_names_map(db, [cancelled.patient_id])
+    patient_name = patient_names.get(cancelled.patient_id, "Bệnh nhân người cao tuổi")
+    doctor_name = cancelled.doctor.full_name if cancelled.doctor else "Bác sĩ phụ trách"
+    req_user_name = current_user.full_name if current_user else "Người nhà"
+    scheduled_str = format_vn_dt(cancelled.scheduled_at, "thời gian đã hẹn")
+    notify_msg = f"🗓️ {req_user_name} đã hủy lịch khám cho {patient_name} vào {scheduled_str}. Lý do: {cancelled.cancellation_reason}."
+
+    try:
+        inc_stmt = select(Incident).where(
+            Incident.alert_type.in_(["APPOINTMENT_SCHEDULED", "APPOINTMENT_RESCHEDULED"]),
+            or_(
+                Incident.notes == str(apt_uuid),
+                Incident.notes.contains(f"APT:{apt_uuid}"),
+            ),
+        )
+        related_incidents = list((await db.execute(inc_stmt)).scalars().all())
+        for inc in related_incidents:
+            inc.is_acknowledged = True
+            inc.acknowledged_at = datetime.now(timezone.utc)
+            inc.acknowledged_by = current_user.id if current_user else None
+        if related_incidents:
+            await db.commit()
+        try:
+            from app.services.redis import redis_service
+            await redis_service.invalidate_incidents_cache()
+        except Exception:
+            pass
+
+        await broadcast_alert_ws(
+            {
+                "type": "APPOINTMENT_CANCELLED",
+                "alert_type": "APPOINTMENT_CANCELLED",
+                "appointment_id": str(cancelled.id),
+                "patient_id": str(cancelled.patient_id),
+                "cancellation_reason": cancelled.cancellation_reason,
+                "data": {
+                    "id": f"inc-cancelled-{cancelled.id}",
+                    "appointment_id": str(cancelled.id),
+                    "patient_id": str(cancelled.patient_id),
+                    "patient_name": patient_name,
+                    "doctor_id": str(cancelled.doctor_id) if cancelled.doctor_id else None,
+                    "cancellation_reason": cancelled.cancellation_reason,
+                    "message": notify_msg,
+                },
+            }
+        )
+        if cancelled.doctor_id:
+            await send_appointment_fcm(
+                db=db,
+                target_house_id=None,
+                doctor_id=cancelled.doctor_id,
+                title="🗓️ Gia đình đã hủy lịch khám",
+                body=notify_msg,
+                data={
+                    "type": "APPOINTMENT_CANCELLED",
+                    "appointment_id": str(cancelled.id),
+                    "patient_id": str(cancelled.patient_id),
+                    "cancellation_reason": cancelled.cancellation_reason,
+                },
+            )
+    except Exception:
+        pass
+
+    return build_appointment_response(
+        cancelled,
+        patient_name=patient_name,
         doctor_name=doctor_name,
     )
 

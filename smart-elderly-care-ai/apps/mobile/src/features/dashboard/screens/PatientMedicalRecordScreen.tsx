@@ -200,7 +200,10 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
 
     try {
       setIsSubmittingAppointment(true);
-      const targetPatId = patientRecord?.id || 1;
+      const targetPatId = patientRecord?.id;
+      if (!targetPatId) {
+        return showAlert('Lỗi', 'Không tìm thấy thông tin bệnh nhân. Vui lòng thử lại.');
+      }
       await patientApi.requestAppointment(targetPatId, {
         patient_id: String(targetPatId),
         patient_name: patientName !== '--' ? patientName : 'Người cao tuổi',
@@ -224,7 +227,7 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
         'Thành công',
         `Đã đặt lịch hẹn khám với ${doctorName} thành công vào ${appointmentDraft.timeStr} ngày ${appointmentDraft.dateStr}. Hệ thống đã gửi thông báo đến Bác sĩ phụ trách!`
       );
-      fetchPatientRecord(1, selectedDate);
+      fetchPatientRecord(targetPatId, selectedDate);
     } catch (err: any) {
       showAlert(
         'Lỗi đặt lịch',

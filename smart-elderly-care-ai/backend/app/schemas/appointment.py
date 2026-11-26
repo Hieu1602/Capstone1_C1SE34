@@ -57,10 +57,13 @@ class AppointmentCreate(BaseModel):
     """Payload to schedule a new appointment or follow-up visit."""
     patient_id: str = Field(..., description="ID của bệnh nhân người cao tuổi")
     patient_name: Optional[str] = Field(None, description="Tên bệnh nhân")
+    doctor_id: Optional[uuid.UUID] = Field(None, description="ID bác sĩ phụ trách (tùy chọn khi admin chỉ định)")
     scheduled_at: datetime = Field(..., description="Thời gian hẹn (ISO 8601 UTC hoặc local with tz)")
     duration_minutes: int = Field(default=30, ge=5, le=240, description="Thời lượng dự kiến (phút)")
     visit_type: str = Field(default=VisitTypeEnum.HOME_VISIT.value, description="Hình thức khám (CLINIC | HOME_VISIT | TELEHEALTH)")
     location: str = Field(default="Tại nhà (Khám tại gia)", description="Địa điểm hoặc phòng khám")
+    exam_type: Optional[str] = Field(None, max_length=255, description="Loại/mục đích khám")
+    instructions: Optional[str] = Field(None, description="Hướng dẫn chuẩn bị cho bệnh nhân/gia đình")
     clinical_notes: Optional[str] = Field(None, description="Ghi chú dặn dò chuẩn bị của bác sĩ")
     enable_speaker_reminder: bool = Field(default=True, description="Kích hoạt phát loa thông minh tại nhà")
     recurrence_pattern: str = Field(default=RecurrencePatternEnum.NONE.value, description="Chu kỳ lặp (NONE | WEEKLY | MONTHLY | QUARTERLY)")
@@ -91,6 +94,8 @@ class AppointmentUpdate(BaseModel):
     duration_minutes: Optional[int] = Field(None, ge=5, le=240)
     visit_type: Optional[str] = None
     location: Optional[str] = None
+    exam_type: Optional[str] = Field(None, max_length=255)
+    instructions: Optional[str] = None
     clinical_notes: Optional[str] = None
     enable_speaker_reminder: Optional[bool] = None
 
@@ -110,6 +115,26 @@ class AppointmentCancelRequest(BaseModel):
     @classmethod
     def strip_cancellation_reason(cls, v):
         return v.strip() if isinstance(v, str) else v
+
+
+class FamilyAppointmentCancelRequest(BaseModel):
+    """Optional payload when family cancels a family-requested appointment."""
+    cancellation_reason: Optional[str] = Field(default="Gia đình hủy yêu cầu lịch khám", max_length=500)
+
+    @field_validator("cancellation_reason", mode="before")
+    @classmethod
+    def normalize_cancellation_reason(cls, v):
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return "Gia đình hủy yêu cầu lịch khám"
+        return v.strip() if isinstance(v, str) else v
+
+
+class BusySlotItem(BaseModel):
+    """Minimal busy-slot metadata for doctor availability (no patient PII)."""
+    id: str
+    scheduled_at: datetime
+    duration_minutes: int = 30
+    visit_type: str
 
 
 class AppointmentCompleteRequest(BaseModel):
@@ -138,10 +163,13 @@ class AppointmentResponse(BaseModel):
     patient_id: str
     patient_name: str
     house_id: Optional[str] = None
+    created_by: Optional[uuid.UUID] = None
     visit_type: str
     scheduled_at: datetime
     duration_minutes: int = 30
     location: str
+    exam_type: Optional[str] = None
+    instructions: Optional[str] = None
     clinical_notes: Optional[str] = None
     status: str = "UPCOMING"
     cancellation_reason: Optional[str] = None
@@ -150,6 +178,10 @@ class AppointmentResponse(BaseModel):
     enable_speaker_reminder: bool = True
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    created_appointments: Optional[List["AppointmentResponse"]] = None
+
+
+AppointmentResponse.model_rebuild()
 
 
 class AppointmentCreateResponse(BaseModel):
@@ -157,3 +189,6 @@ class AppointmentCreateResponse(BaseModel):
     primary_appointment: AppointmentResponse
     created_count: int = 1
     scheduled_reminders_count: int = 2
+
+
+AppointmentCreateResponse.model_rebuild()

@@ -89,11 +89,9 @@ class VoiceReminderSchedulerService:
 
     async def _get_redis_safe(self):
         try:
-            async for r in get_redis():
-                return r
+            return await get_redis()
         except Exception:
             return None
-        return None
 
     async def _already_spoken(self, redis, key: str) -> bool:
         if not redis:

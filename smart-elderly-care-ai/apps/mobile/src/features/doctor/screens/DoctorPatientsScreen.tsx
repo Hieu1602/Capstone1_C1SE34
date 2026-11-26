@@ -18,6 +18,7 @@ import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { doctorApi } from '../../../services/api';
+import { useDoctorAppointmentsStore } from '../../../store/useDoctorAppointmentsStore';
 import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
 import AdminMarqueeBanner from '../../../components/AdminMarqueeBanner';
 
@@ -123,6 +124,7 @@ export default function DoctorPatientsScreen() {
   const { isDarkMode, colors } = useTheme();
   const { userName } = useAuthStore();
   const searchRef = useRef<any>(null);
+  const { appointments, upsertAppointments } = useDoctorAppointmentsStore();
 
   const [patients, setPatients] = useState<PatientCardData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -249,7 +251,7 @@ export default function DoctorPatientsScreen() {
       setIsSubmittingApt(true);
       const parsed = new Date(scheduledAt);
       const finalIso = !isNaN(parsed.getTime()) ? parsed.toISOString() : new Date(Date.now() + 2 * 3600000).toISOString();
-      await doctorApi.createAppointment({
+      const res = await doctorApi.createAppointment({
         patient_id: selectedPatientForApt.id,
         patient_name: selectedPatientForApt.name,
         scheduled_at: finalIso,
@@ -262,6 +264,10 @@ export default function DoctorPatientsScreen() {
         recurrence_pattern: recurrencePattern,
         recurrence_occurrences: recurrenceOccurrences,
       });
+      // Sync newly created appointment(s) into the shared store
+      if (res.data) {
+        upsertAppointments(Array.isArray(res.data) ? res.data : [res.data]);
+      }
       setAppointmentModalVisible(false);
       LocalizedAlert.alert('Thành công', 'Đã tạo lịch khám thành công cho bệnh nhân!');
     } catch (err: any) {
@@ -363,6 +369,7 @@ export default function DoctorPatientsScreen() {
           onChangeRecurrenceOccurrences={setRecurrenceOccurrences}
           isSubmitting={isSubmittingApt}
           patients={patients}
+          appointments={appointments}
           isDarkMode={isDarkMode}
           colors={colors}
         />

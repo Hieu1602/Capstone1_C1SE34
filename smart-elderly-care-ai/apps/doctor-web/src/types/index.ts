@@ -114,12 +114,15 @@ export interface AppointmentItem {
   duration_minutes?: number;
   exam_type?: string;
   location?: string;
-  status: 'UPCOMING' | 'COMPLETED' | 'CANCELLED' | string;
+  status: 'UPCOMING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | string;
   clinical_notes?: string;
   instructions?: string;
   cancellation_reason?: string;
   recurrence_pattern?: 'NONE' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | string;
+  recurrence_occurrences?: number;
   enable_speaker_reminder?: boolean;
+  created_by?: string | null;
+  created_appointments?: AppointmentItem[] | null;
   created_at?: string;
   updated_at?: string;
 }
