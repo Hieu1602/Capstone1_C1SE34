@@ -50,7 +50,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
   const [containerWidth, setContainerWidth] = useState(SCREEN_WIDTH - 64);
 
   const chartHeight = 150;
-  const pointSpacing = 28;
+  const pointSpacing = 46;
   const safeChartData = useMemo(
     () =>
       (chartData || []).filter(
@@ -60,7 +60,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
   );
   const hasData = safeChartData.length > 0;
   const svgWidth = hasData
-    ? Math.max(containerWidth, Math.min(containerWidth * 2.2, safeChartData.length * pointSpacing))
+    ? Math.max(containerWidth, safeChartData.length * pointSpacing)
     : containerWidth;
 
   const padLeft = 24;
@@ -125,8 +125,35 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
     };
   }, [safeChartData, hasData, usableW, usableH, bottomY]);
 
+  // Chỉ highlight duy nhất 1 điểm gần nhất với mốc scrubber thay vì mọi điểm trong +/-45 phút
+  const closestIdx = useMemo(() => {
+    if (!closestVital || scrubberMinutes === undefined || coords.length === 0) return -1;
+    if (closestVital.id !== undefined) {
+      const byId = coords.findIndex((pt) => pt.id === closestVital.id);
+      if (byId !== -1) return byId;
+    }
+    let bestIdx = -1;
+    let bestDiff = 45;
+    coords.forEach((pt, idx) => {
+      if (pt.minute !== undefined) {
+        const diff = Math.abs(pt.minute - scrubberMinutes);
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          bestIdx = idx;
+        }
+      }
+    });
+    return bestIdx;
+  }, [coords, closestVital, scrubberMinutes]);
+
   return (
-    <View style={[styles.chartCard, isDarkMode && { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}>
+    <View
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width - 32;
+        if (w > 120) setContainerWidth(w);
+      }}
+      style={[styles.chartCard, isDarkMode && { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }]}
+    >
       <View style={styles.chartCardHeader}>
         <View style={{ flex: 1, marginRight: 8 }}>
           <Text style={[styles.chartCardTitle, isDarkMode && { color: colors.textPrimary }]}>{chartTitle}</Text>
@@ -193,12 +220,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
 
               {/* Các điểm đo và nhãn */}
               {coords.map((pt, idx) => {
-                const isClosest = Boolean(
-                  closestVital &&
-                  scrubberMinutes !== undefined &&
-                  (pt.id === closestVital.id ||
-                    (pt.minute !== undefined && Math.abs(pt.minute - scrubberMinutes) < 45))
-                );
+                const isClosest = idx === closestIdx;
 
                 return (
                   <React.Fragment key={`pt_${idx}`}>

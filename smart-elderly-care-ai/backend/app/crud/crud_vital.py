@@ -516,7 +516,12 @@ class CRUDVital:
                                 is_exercising=is_exercising,
                                 activity_state=activity,
                             )
-                            st_alert = await vital_state_machine.process_sample(str(uuid_val), v_sample)
+                            st_alert = await vital_state_machine.process_sample(
+                                str(uuid_val),
+                                v_sample,
+                                hr_high_limit=hr_high_limit,
+                                hr_low_limit=hr_low_limit,
+                            )
                             if st_alert:
                                 alerts_to_create.append((
                                     "ARRHYTHMIA_RECURRENT" if st_alert["level"] >= 2 else "ARRHYTHMIA_SUSPECT",
