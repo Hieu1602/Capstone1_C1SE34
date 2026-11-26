@@ -19,7 +19,7 @@ import { useTheme } from '../../../store/useThemeStore';
 import { Colors } from '../../../theme/colors';
 import { useVitalStore, MedicalConditionItem } from '../../../store/useVitalStore';
 import { useAuthStore } from '../../../store/useAuthStore';
-import { BASE_URL, patientApi, vitalsApi } from '../../../services/api';
+import { BASE_URL, patientApi } from '../../../services/api';
 import { alertsWS } from '../../../services/websocket';
 import { resolveAvatarUrl } from '../../auth/hooks/useProfileManager';
 import { handleHeaderBack } from '../../../navigation/navigationHelpers';
@@ -63,7 +63,6 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
     updatePatientRecord,
     patientRecord,
     enrollPatientFace,
-    patientsList,
     activePatientId,
     fetchPatientsList,
     setActivePatientId,

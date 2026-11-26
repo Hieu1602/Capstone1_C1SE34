@@ -19,7 +19,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import type { AppointmentItem } from '../../types';
-import { parseAppointmentNotes } from '../../utils/appointmentHelpers';
+import { isAppointmentOverdue, parseAppointmentNotes } from '../../utils/appointmentHelpers';
 
 interface DayAppointmentsModalProps {
   isOpen: boolean;
@@ -160,6 +160,7 @@ export const DayAppointmentsModal: React.FC<DayAppointmentsModalProps> = ({
               {appointments.map((apt) => {
                 const isCompleted = apt.status === 'COMPLETED';
                 const isCancelled = apt.status === 'CANCELLED';
+                const isOverdue = isAppointmentOverdue(apt.scheduled_at, apt.status);
                 const { isFamilyConfirmedByNote, cleanNotes } = parseAppointmentNotes(apt.clinical_notes);
                 const isFamilyConfirmed = isFamilyConfirmedByNote || apt.status === 'CONFIRMED';
 
@@ -205,6 +206,8 @@ export const DayAppointmentsModal: React.FC<DayAppointmentsModalProps> = ({
                                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-900/60'
                                   : isCancelled
                                   ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900/60'
+                                  : isOverdue
+                                  ? 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/60 dark:text-orange-300 dark:border-orange-900/60'
                                   : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-900/60'
                               }`}
                             >
@@ -217,6 +220,11 @@ export const DayAppointmentsModal: React.FC<DayAppointmentsModalProps> = ({
                                 <>
                                   <XCircle className="h-3 w-3" />
                                   <span>Đã hủy</span>
+                                </>
+                              ) : isOverdue ? (
+                                <>
+                                  <AlertCircle className="h-3 w-3" />
+                                  <span>Quá giờ</span>
                                 </>
                               ) : (
                                 <>

@@ -8,6 +8,7 @@ import { useDoctorDataStore } from '../store/useDoctorDataStore';
 import { householdApi, authApi } from '../services/api';
 import { doctorWebSocket } from '../services/websocket';
 import { removeVietnameseTones } from '../utils/text';
+import { isAppointmentOverdue, isUpcomingAppointmentStatus } from '../utils/appointmentHelpers';
 import { DoctorPatientCard, AppointmentItem, HouseInvite } from '../types';
 import { HouseInviteCard } from '../components/dashboard/HouseInviteCard';
 import { NewAppointmentModal } from '../components/clinical/NewAppointmentModal';
@@ -406,8 +407,10 @@ export const DashboardPage: React.FC = () => {
     for (let d = 1; d <= totalDays; d++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const dayApts = appointments.filter((a) => toLocalYMD(a.scheduled_at) === dateStr);
-      let dotStatus: 'COMPLETED' | 'UPCOMING' | 'CRITICAL' | null = null;
-      if (dayApts.some((a) => a.status === 'UPCOMING' || a.status === 'CONFIRMED')) {
+      let dotStatus: 'COMPLETED' | 'UPCOMING' | 'OVERDUE' | 'CRITICAL' | null = null;
+      if (dayApts.some((a) => isAppointmentOverdue(a.scheduled_at, a.status))) {
+        dotStatus = 'OVERDUE';
+      } else if (dayApts.some((a) => isUpcomingAppointmentStatus(a.status))) {
         dotStatus = 'UPCOMING';
       } else if (dayApts.some((a) => a.status === 'COMPLETED')) {
         dotStatus = 'COMPLETED';
@@ -562,7 +565,7 @@ export const DashboardPage: React.FC = () => {
         onSearchChange={setTableSearch}
         tableFilter={tableFilter}
         onFilterChange={setTableFilter}
-        onSelectPatient={() => navigate('/patients')}
+        onSelectPatient={(patientId) => navigate(`/patients?id=${patientId}`)}
         loading={isLoading && patients.length === 0}
       />
 

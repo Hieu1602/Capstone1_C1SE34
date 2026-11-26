@@ -74,18 +74,25 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
       : '—';
   const activeEmergencyPhone = selectedPatientCard?.emergency_contact_phone || '';
 
-  const isSelectedDanger = Boolean(
-    (selectedPatientCard?.heart_rate &&
-      (selectedPatientCard.heart_rate > 100 || selectedPatientCard.heart_rate < 50)) ||
-      (selectedPatientCard?.spo2 && selectedPatientCard.spo2 < 92)
-  );
+  const backendHealthStatus = patientDetail.health_status || selectedPatientCard?.health_status;
+  const isSelectedDanger = backendHealthStatus
+    ? backendHealthStatus === 'DANGER'
+    : Boolean(
+        selectedPatientCard?.is_online &&
+          ((selectedPatientCard?.heart_rate &&
+            (selectedPatientCard.heart_rate > 120 || selectedPatientCard.heart_rate < 50)) ||
+            (selectedPatientCard?.spo2 && selectedPatientCard.spo2 < 90))
+      );
 
-  const isSelectedWarning = Boolean(
-    !isSelectedDanger &&
-      ((selectedPatientCard?.heart_rate &&
-        (selectedPatientCard.heart_rate > 90 || selectedPatientCard.heart_rate < 60)) ||
-        (selectedPatientCard?.spo2 && selectedPatientCard.spo2 < 95))
-  );
+  const isSelectedWarning = backendHealthStatus
+    ? backendHealthStatus === 'WARNING'
+    : Boolean(
+        !isSelectedDanger &&
+          selectedPatientCard?.is_online &&
+          ((selectedPatientCard?.heart_rate &&
+            (selectedPatientCard.heart_rate > 100 || selectedPatientCard.heart_rate < 55)) ||
+            (selectedPatientCard?.spo2 && selectedPatientCard.spo2 < 95))
+      );
 
   useEffect(() => {
     document.body.classList.add('overflow-hidden');

@@ -6,7 +6,7 @@ export interface MiniCalendarCell {
   dateStr?: string;
   isToday?: boolean;
   isSelected?: boolean;
-  dotStatus?: 'COMPLETED' | 'UPCOMING' | 'CRITICAL' | null;
+  dotStatus?: 'COMPLETED' | 'UPCOMING' | 'OVERDUE' | 'CRITICAL' | null;
 }
 
 export interface DoctorMiniCalendarProps {
@@ -107,6 +107,8 @@ export const DoctorMiniCalendar: React.FC<DoctorMiniCalendarProps> = ({
                         ? 'bg-white'
                         : cell.dotStatus === 'COMPLETED'
                         ? 'bg-emerald-500'
+                        : cell.dotStatus === 'OVERDUE'
+                        ? 'bg-orange-600'
                         : cell.dotStatus === 'UPCOMING'
                         ? 'bg-amber-500'
                         : 'bg-rose-500'
@@ -120,7 +122,7 @@ export const DoctorMiniCalendar: React.FC<DoctorMiniCalendarProps> = ({
       </div>
 
       <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
-        <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold text-slate-600 dark:text-slate-400">
           <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
             Đã khám
@@ -130,8 +132,12 @@ export const DoctorMiniCalendar: React.FC<DoctorMiniCalendarProps> = ({
             Sắp tới
           </span>
           <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-orange-600" />
+            Quá giờ
+          </span>
+          <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-rose-500" />
-            Cần lưu ý
+            Đã hủy
           </span>
         </div>
 

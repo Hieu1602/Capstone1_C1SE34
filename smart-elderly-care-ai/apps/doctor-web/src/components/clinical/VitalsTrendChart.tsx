@@ -18,6 +18,7 @@ import {
   formatDM,
   formatDMY,
   formatShortWeekdayDM,
+  parseFlexibleDate,
   parseYMD,
 } from '../../utils/dateFilter';
 
@@ -180,14 +181,20 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
     };
   };
 
+  const referenceYear = (() => {
+    const src = startDate || selectedDate;
+    const m = src?.match(/^(\d{4})-/);
+    return m ? Number(m[1]) : new Date().getFullYear();
+  })();
+
   const chartData: ChartPoint[] =
     isHourlyView && data[0]?.hourly_records && data[0].hourly_records.length > 0
       ? data[0].hourly_records.map((h) => {
           const { sys, dia } = parseBp(h.bp);
           const dayDMY = selectedDate
-            ? formatDMY(parseYMD(selectedDate))
+            ? formatDMY(parseFlexibleDate(selectedDate, referenceYear))
             : data[0]?.date
-              ? formatDMY(parseYMD(data[0].date))
+              ? formatDMY(parseFlexibleDate(data[0].date, referenceYear))
               : '';
           return {
             date: h.time,
@@ -200,14 +207,14 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
           };
         })
       : data.map((item) => {
-          const d = parseYMD(item.date);
+          const d = parseFlexibleDate(item.date, referenceYear);
           const dateLabel =
             effectiveMode === 'WEEK'
-              ? formatShortWeekdayDM(item.date)
+              ? formatShortWeekdayDM(item.date, referenceYear)
               : formatDM(d);
           const fullDateTime =
             effectiveMode === 'WEEK'
-              ? `${formatShortWeekdayDM(item.date)} • ${formatDMY(d)}`
+              ? `${formatShortWeekdayDM(item.date, referenceYear)} • ${formatDMY(d)}`
               : `Ngày ${formatDMY(d)}`;
           return {
             date: dateLabel,
@@ -295,7 +302,7 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
       {/* Chart container */}
       <div className="h-72 w-full rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs dark:border-slate-800/80 dark:bg-[#0F172A]">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 10, right: 10, left: -16, bottom: 0 }}>
+          <LineChart data={chartData} margin={{ top: 10, right: 8, left: 4, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.25} vertical={false} />
             <XAxis
               dataKey="date"
@@ -308,6 +315,7 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
             {showHR && (
               <YAxis
                 yAxisId="left"
+                width={54}
                 domain={[50, 130]}
                 stroke="#3B82F6"
                 fontSize={11}
@@ -319,6 +327,7 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
             {showSpO2 && (
               <YAxis
                 yAxisId="right"
+                width={44}
                 orientation={showHR ? 'right' : 'left'}
                 domain={[85, 100]}
                 stroke="#10B981"
@@ -331,6 +340,7 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
             {showBP && (
               <YAxis
                 yAxisId="bp"
+                width={62}
                 domain={[50, 180]}
                 stroke="#F43F5E"
                 fontSize={11}
@@ -342,6 +352,7 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
             {showTemp && (
               <YAxis
                 yAxisId="temp"
+                width={44}
                 domain={[34, 40]}
                 stroke="#F97316"
                 fontSize={11}

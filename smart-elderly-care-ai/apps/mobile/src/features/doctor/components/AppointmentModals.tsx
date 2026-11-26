@@ -37,7 +37,6 @@ const TIME_GROUPS = [
     slots: ['17:30', '18:00', '18:30', '19:00', '19:30', '20:00'],
   },
 ];
-const TIME_PICKER_SLOTS = TIME_GROUPS.flatMap((g) => g.slots);
 
 const formatModalDateTime = (dateStr?: string) => {
   if (!dateStr) return '--:--';
@@ -889,7 +888,7 @@ export interface AppointmentDetailModalProps extends ThemeProps {
 }
 
 export const AppointmentDetailModal: React.FC<AppointmentDetailModalProps> = ({
-  visible, appointment, patientInfo, onClose, onReschedule, onStartExam, formatAptTime, isDarkMode, colors,
+  visible, appointment, patientInfo, onClose, onReschedule, onStartExam, isDarkMode, colors,
 }) => {
   if (!appointment) return null;
   const cleanNotes = (appointment.instructions || appointment.clinical_notes || '')

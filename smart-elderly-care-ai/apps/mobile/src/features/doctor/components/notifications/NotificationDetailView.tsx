@@ -98,40 +98,42 @@ export const NotificationDetailView: React.FC<NotificationDetailViewProps> = ({
         </View>
 
         {/* Thông tin bệnh nhân phụ trách */}
-        <View
-          style={[
-            styles.detailCard,
-            {
-              backgroundColor: isDarkMode ? '#1E293B' : '#EFF6FF88',
-              borderColor: isDarkMode ? '#1E3A8A' : '#BFDBFE',
-            },
-          ]}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Ionicons name="person-circle" size={18} color="#2563EB" />
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563EB', textTransform: 'uppercase' }}>
-              Thông tin bệnh nhân liên quan
-            </Text>
-          </View>
-          <View style={{ gap: 6, marginTop: 4 }}>
-            <View style={styles.infoRow}>
-              <Text style={[styles.infoLabel, { color: textSub }]}>Bệnh nhân:</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
-                {linkedPatient?.name || item.rawAppointment?.patient_name || 'Người cao tuổi'}
+        {item.type !== 'ADMIN' && (
+          <View
+            style={[
+              styles.detailCard,
+              {
+                backgroundColor: isDarkMode ? '#1E293B' : '#EFF6FF88',
+                borderColor: isDarkMode ? '#1E3A8A' : '#BFDBFE',
+              },
+            ]}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="person-circle" size={18} color="#2563EB" />
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563EB', textTransform: 'uppercase' }}>
+                Thông tin bệnh nhân liên quan
               </Text>
             </View>
-            <View style={styles.infoRow}>
-              <Text style={[styles.infoLabel, { color: textSub }]}>Khu vực / Căn nhà:</Text>
-              <Text style={[styles.infoValue, { color: colors.textPrimary }]} numberOfLines={1}>
-                {linkedPatient?.house_address || linkedPatient?.house_name || item.rawAppointment?.location || 'Nhà riêng bệnh nhân'}
-              </Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={[styles.infoLabel, { color: textSub }]}>Thiết bị theo dõi:</Text>
-              <Text style={[styles.infoValue, { color: '#059669', fontWeight: '700' }]}>CooSpo HW706 BLE Smartband</Text>
+            <View style={{ gap: 6, marginTop: 4 }}>
+              <View style={styles.infoRow}>
+                <Text style={[styles.infoLabel, { color: textSub }]}>Bệnh nhân:</Text>
+                <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
+                  {linkedPatient?.name || item.rawAppointment?.patient_name || 'Người cao tuổi'}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={[styles.infoLabel, { color: textSub }]}>Khu vực / Căn nhà:</Text>
+                <Text style={[styles.infoValue, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {linkedPatient?.house_address || linkedPatient?.house_name || item.rawAppointment?.location || 'Nhà riêng bệnh nhân'}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={[styles.infoLabel, { color: textSub }]}>Thiết bị theo dõi:</Text>
+                <Text style={[styles.infoValue, { color: '#059669', fontWeight: '700' }]}>CooSpo HW706 BLE Smartband</Text>
+              </View>
             </View>
           </View>
-        </View>
+        )}
 
         {/* Thẻ chỉ số sinh hiệu */}
         {(item.type === 'INCIDENT' || item.type === 'PATIENT_WARNING') && (
@@ -197,6 +199,10 @@ export const NotificationDetailView: React.FC<NotificationDetailViewProps> = ({
                 <Text style={styles.actionBtnAcceptText}>Đồng ý vào nhà</Text>
               </TouchableOpacity>
             </View>
+          ) : item.type === 'ADMIN' ? (
+            <TouchableOpacity style={[styles.actionBtnSecondary, { borderColor: border }]} onPress={onBack}>
+              <Text style={[styles.actionBtnSecondaryText, { color: colors.textPrimary }]}>Quay lại danh sách thông báo</Text>
+            </TouchableOpacity>
           ) : (
             <>
               <TouchableOpacity style={styles.actionBtnPrimary} onPress={() => onNavigate(item)}>

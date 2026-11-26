@@ -18,6 +18,18 @@ export function isUpcomingAppointmentStatus(status?: string | null): boolean {
   return status === 'UPCOMING' || status === 'CONFIRMED';
 }
 
+const OVERDUE_GRACE_MS = 30 * 60_000;
+
+export function isAppointmentOverdue(
+  scheduledAt?: string | null,
+  status?: string | null,
+  nowMs: number = Date.now()
+): boolean {
+  if (!isUpcomingAppointmentStatus(status) || !scheduledAt) return false;
+  const t = new Date(scheduledAt).getTime();
+  return !isNaN(t) && nowMs - t > OVERDUE_GRACE_MS;
+}
+
 export function getAppointmentTabCounts(appointments: ReadonlyArray<{ status?: string | null }>) {
   return {
     UPCOMING: appointments.filter((a) => isUpcomingAppointmentStatus(a.status)).length,

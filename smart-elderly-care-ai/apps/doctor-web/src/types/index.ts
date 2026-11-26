@@ -92,6 +92,8 @@ export interface DoctorPatientDetail {
   spo2?: number;
   blood_pressure?: string;
   skin_temp_max?: number;
+  is_online?: boolean;
+  health_status?: HealthStatus;
   doctor_notes?: string;
   next_appointment?: string;
   drug_allergies?: string;

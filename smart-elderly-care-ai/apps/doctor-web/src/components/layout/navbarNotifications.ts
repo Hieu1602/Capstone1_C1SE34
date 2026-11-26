@@ -11,6 +11,7 @@ import {
   DEVICE_OP_KEYWORDS,
   formatNotificationTime,
 } from '../../utils/notificationBuilder';
+import { isAppointmentOverdue } from '../../utils/appointmentHelpers';
 
 function toLocalYMD(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -177,9 +178,9 @@ export async function fetchDoctorNavbarNotifications(doctorUserId?: string): Pro
       const patIdx = patList.findIndex(
         (p) => p.id === (inc as unknown as { elderly_id?: string }).elderly_id || (inc.notes && inc.notes.includes(p.id))
       );
-      const matchedPat = patIdx >= 0 ? patList[patIdx] : patList[0];
-      const mrCode = patIdx >= 0 ? `MR-${String(patIdx + 1).padStart(3, '0')}` : 'MR-001';
-      const pName = matchedPat?.name || (isHouseInvite ? 'Hộ gia đình mới' : 'Người cao tuổi');
+      const matchedPat = patIdx >= 0 ? patList[patIdx] : undefined;
+      const mrCode = patIdx >= 0 ? `MR-${String(patIdx + 1).padStart(3, '0')}` : undefined;
+      const pName = matchedPat?.name || (isHouseInvite ? 'Hộ gia đình mới' : undefined);
       const repeatCount = inc.repeat_count || 1;
       const repeatBadge = inc.repeat_badge || (repeatCount > 1 ? `Lặp lại ${repeatCount} lần trong 15 phút qua` : undefined);
 
@@ -247,7 +248,19 @@ export async function fetchDoctorNavbarNotifications(doctorUserId?: string): Pro
       const isToday = Boolean(aptDt && !isNaN(aptDt.getTime()) && toLocalYMD(aptDt) === todayStr);
       const isCompleted = apt.status === 'COMPLETED';
       const isCancelled = apt.status === 'CANCELLED';
-      const label = isCompleted ? 'Đã khám' : isCancelled ? 'Đã hủy' : isToday ? 'Khám hôm nay' : 'Sắp tới';
+      const isConfirmed = apt.status === 'CONFIRMED';
+      const isOverdue = isAppointmentOverdue(apt.scheduled_at, apt.status);
+      const label = isCompleted
+        ? 'Đã khám'
+        : isCancelled
+          ? 'Đã hủy'
+          : isOverdue
+            ? 'Quá giờ'
+            : isConfirmed
+              ? 'Đã xác nhận'
+              : isToday
+                ? 'Khám hôm nay'
+                : 'Sắp tới';
       const formattedDate = formatNavbarDate(apt.scheduled_at);
 
       unifiedList.push({
@@ -261,8 +274,12 @@ export async function fetchDoctorNavbarNotifications(doctorUserId?: string): Pro
           ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
           : isCancelled
             ? 'text-rose-700 bg-rose-50 border-rose-200'
-            : 'text-sky-700 bg-sky-50 border-sky-200',
-        badgeBg: isCompleted ? 'bg-emerald-50' : isCancelled ? 'bg-rose-50' : 'bg-sky-50',
+            : isOverdue
+              ? 'text-orange-700 bg-orange-50 border-orange-200'
+              : isConfirmed
+                ? 'text-teal-700 bg-teal-50 border-teal-200'
+                : 'text-sky-700 bg-sky-50 border-sky-200',
+        badgeBg: isCompleted ? 'bg-emerald-50' : isCancelled ? 'bg-rose-50' : isOverdue ? 'bg-orange-50' : isConfirmed ? 'bg-teal-50' : 'bg-sky-50',
         isRead: savedReadIds.has(aptId),
         targetUrl: '/appointments',
         patientName: apt.patient_name,

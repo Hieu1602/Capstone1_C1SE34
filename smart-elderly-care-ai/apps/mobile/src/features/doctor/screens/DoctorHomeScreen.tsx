@@ -265,7 +265,6 @@ export default function DoctorHomeScreen() {
 
   const closeNotifAndRun = (cb?: () => void) => {
     setNotifModalVisible(false);
-    setHasUnreadNotifs(false);
     cb?.();
   };
 

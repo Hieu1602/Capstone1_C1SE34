@@ -176,6 +176,7 @@ export const NotificationsPage: React.FC = () => {
     try {
       await householdApi.respondInvite(memberId, action);
       await incidentsApi.acknowledge(incident.id, action === 'accept' ? 'Đã đồng ý vào nhà' : 'Đã từ chối vào nhà');
+      useDoctorDataStore.getState().fetchAllData(true);
       loadData();
     } catch (e) {
       console.warn('Respond invite error:', e);

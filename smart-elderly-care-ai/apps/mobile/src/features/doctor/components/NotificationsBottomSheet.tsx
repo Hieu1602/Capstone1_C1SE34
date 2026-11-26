@@ -2,13 +2,14 @@
 // Bottom sheet hiển thị thông báo tập trung cho Bác sĩ: Cảnh báo y tế bệnh nhân & Lịch hẹn khám
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, Modal, StyleSheet, TouchableOpacity, FlatList, SafeAreaView, Alert } from 'react-native';
+import { View, Text, Modal, StyleSheet, TouchableOpacity, FlatList, SafeAreaView, Alert, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAlertStore } from '../../../store/useAlertStore';
+import { useAuthStore } from '../../../store/useAuthStore';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
-import { householdApi } from '../../../services/api';
+import { adminBroadcastsApi, householdApi, SystemAnnouncement } from '../../../services/api';
 import type { Incident } from '../../../store/useAlertStore';
 import type { AppointmentItem, PatientCardData } from './types';
 import {
@@ -52,8 +53,10 @@ export default function NotificationsBottomSheet({
   onRespondHouseInvite,
 }: Props) {
   const { isDarkMode, colors } = useTheme();
+  const { userId } = useAuthStore();
   const [activeTab, setActiveTab] = useState<TabType>('ALL');
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const [adminBroadcasts, setAdminBroadcasts] = useState<SystemAnnouncement[]>([]);
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [selectedNotification, setSelectedNotification] = useState<UnifiedNotification | null>(null);
 
@@ -69,6 +72,12 @@ export default function NotificationsBottomSheet({
         if (Array.isArray(parsed)) setReadIds(new Set(parsed));
       } catch {}
     });
+    adminBroadcastsApi
+      .getActive('doctors')
+      .then((res) => {
+        if (Array.isArray(res.data)) setAdminBroadcasts(res.data);
+      })
+      .catch(() => {});
   }, [visible]);
 
   const persistReadIds = useCallback(async (newSet: Set<string>) => {
@@ -88,14 +97,18 @@ export default function NotificationsBottomSheet({
     appointments,
     upcomingAppointments,
     readIds,
+    adminBroadcasts,
+    doctorUserId: userId || undefined,
   });
 
   const unreadCount = unifiedList.filter((i) => !i.isRead).length;
+  const adminCount = unifiedList.filter((i) => i.type === 'ADMIN').length;
   const alertsCount = unifiedList.filter((i) => ['INCIDENT', 'PATIENT_WARNING', 'HOUSE_INVITE'].includes(i.type)).length;
   const aptsCount = unifiedList.filter((i) => i.type === 'APPOINTMENT').length;
 
   const filteredList = unifiedList.filter((item) => {
     if (activeTab === 'UNREAD') return !item.isRead;
+    if (activeTab === 'ADMIN') return item.type === 'ADMIN';
     if (activeTab === 'ALERTS') return ['INCIDENT', 'PATIENT_WARNING', 'HOUSE_INVITE'].includes(item.type);
     if (activeTab === 'APPOINTMENTS') return item.type === 'APPOINTMENT';
     return true;
@@ -141,12 +154,15 @@ export default function NotificationsBottomSheet({
   };
 
   const handleItemPress = async (item: UnifiedNotification) => {
-    const updated = new Set(readIds);
-    addReadId(updated, item);
-    if (item.rawIncidentId) {
-      useAlertStore.getState().acknowledgeIncident(item.rawIncidentId);
+    // Không tự động acknowledge lời mời tham gia nhà khi mới bấm xem chi tiết
+    if (item.type !== 'HOUSE_INVITE') {
+      const updated = new Set(readIds);
+      addReadId(updated, item);
+      if (item.rawIncidentId) {
+        useAlertStore.getState().acknowledgeIncident(item.rawIncidentId);
+      }
+      await persistReadIds(updated);
     }
-    await persistReadIds(updated);
     setSelectedNotification(item);
   };
 
@@ -176,6 +192,7 @@ export default function NotificationsBottomSheet({
   const tabs: { key: TabType; label: string; activeColor: string }[] = [
     { key: 'ALL', label: `Tất cả (${unifiedList.length})`, activeColor: '#2563EB' },
     { key: 'UNREAD', label: `Chưa đọc (${unreadCount})`, activeColor: '#2563EB' },
+    { key: 'ADMIN', label: `Admin (${adminCount})`, activeColor: '#0284C7' },
     { key: 'ALERTS', label: `Cảnh báo (${alertsCount})`, activeColor: '#DC2626' },
     { key: 'APPOINTMENTS', label: `Lịch khám (${aptsCount})`, activeColor: '#2563EB' },
   ];
@@ -223,17 +240,19 @@ export default function NotificationsBottomSheet({
               </View>
             </View>
 
-            <View style={[styles.tabBar, { borderBottomColor: border }]}>
-              {tabs.map((t) => {
-                const isActive = activeTab === t.key;
-                return (
-                  <TouchableOpacity key={t.key} style={[styles.tabItem, isActive && styles.tabItemActive]} onPress={() => setActiveTab(t.key)}>
-                    <LocalizedText style={[styles.tabText, { color: isActive ? t.activeColor : textSub }, isActive && styles.tabTextActive]}>
-                      {t.label}
-                    </LocalizedText>
-                  </TouchableOpacity>
-                );
-              })}
+            <View style={{ borderBottomWidth: 1, borderBottomColor: border }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabBar}>
+                {tabs.map((t) => {
+                  const isActive = activeTab === t.key;
+                  return (
+                    <TouchableOpacity key={t.key} style={[styles.tabItem, isActive && styles.tabItemActive]} onPress={() => setActiveTab(t.key)}>
+                      <LocalizedText style={[styles.tabText, { color: isActive ? t.activeColor : textSub }, isActive && styles.tabTextActive]}>
+                        {t.label}
+                      </LocalizedText>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             </View>
 
             {filteredList.length === 0 ? (
@@ -279,7 +298,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 16, fontWeight: '700' },
   countBadge: { backgroundColor: '#2563EB', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 1 },
   countText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
-  tabBar: { flexDirection: 'row', paddingHorizontal: 16, borderBottomWidth: 1 },
+  tabBar: { flexDirection: 'row', paddingHorizontal: 16 },
   tabItem: { paddingVertical: 10, marginRight: 14, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabItemActive: { borderBottomColor: '#2563EB' },
   tabText: { fontSize: 12.5, fontWeight: '600' },

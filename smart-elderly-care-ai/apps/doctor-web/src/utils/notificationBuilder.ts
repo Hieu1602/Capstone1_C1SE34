@@ -3,6 +3,7 @@
 
 import { UnifiedNotification } from '../components/clinical/NotificationDetailModal';
 import { cleanNotificationText } from './notificationSync';
+import { isAppointmentOverdue } from './appointmentHelpers';
 import type { Incident, AppointmentItem, DoctorPatientCard, SystemNotification } from '../types';
 
 export type TabType = 'ALL' | 'UNREAD' | 'ADMIN' | 'ALERTS' | 'APPOINTMENTS' | 'OTHERS';
@@ -262,8 +263,8 @@ export function buildNotificationItems(
     }
 
     const patIdx = pats?.findIndex((p) => p.id === (inc as any).elderly_id || (inc.notes && inc.notes.includes(p.id)));
-    const pat = patIdx !== undefined && patIdx >= 0 ? pats[patIdx] : pats?.[0];
-    const mrCode = patIdx !== undefined && patIdx >= 0 ? `MR-${String(patIdx + 1).padStart(3, '0')}` : 'MR-001';
+    const pat = patIdx !== undefined && patIdx >= 0 ? pats[patIdx] : undefined;
+    const mrCode = patIdx !== undefined && patIdx >= 0 ? `MR-${String(patIdx + 1).padStart(3, '0')}` : undefined;
     const pName = pat?.name || (type === 'INVITE' ? 'Hộ gia đình mới' : undefined);
     const parsed = parseTitleAndBody(msg, type, inc.alert_type, inc.alert_level, pName);
     const dg = getDateGroup(inc.created_at);
@@ -344,6 +345,8 @@ export function buildNotificationItems(
       const timeOnly = formatNotificationTime(apt.scheduled_at);
       const isDone = apt.status === 'COMPLETED';
       const isCancel = apt.status === 'CANCELLED';
+      const isConfirmed = apt.status === 'CONFIRMED';
+      const isOverdue = isAppointmentOverdue(apt.scheduled_at, apt.status);
       const title = `Lịch khám: ${apt.patient_name || 'Bệnh nhân'}`;
       const desc = `${apt.visit_type === 'HOME_VISIT' ? 'Khám tại nhà' : 'Tại phòng khám'} • Địa chỉ: ${apt.location || 'Chưa cập nhật'}`;
       list.push({
@@ -358,13 +361,17 @@ export function buildNotificationItems(
         dateKey: dg.key,
         dateLabel: dg.label,
         sortTimestamp: dg.timestamp,
-        badgeLabel: isDone ? 'Đã khám' : isCancel ? 'Đã hủy' : 'Sắp tới',
+        badgeLabel: isDone ? 'Đã khám' : isCancel ? 'Đã hủy' : isOverdue ? 'Quá giờ' : isConfirmed ? 'Đã xác nhận' : 'Sắp tới',
         badgeColor: isDone
           ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
           : isCancel
             ? 'text-rose-700 bg-rose-50 border-rose-200'
-            : 'text-sky-700 bg-sky-50 border-sky-200',
-        badgeBg: isDone ? 'bg-emerald-50' : isCancel ? 'bg-rose-50' : 'bg-sky-50',
+            : isOverdue
+              ? 'text-orange-700 bg-orange-50 border-orange-200'
+              : isConfirmed
+                ? 'text-teal-700 bg-teal-50 border-teal-200'
+                : 'text-sky-700 bg-sky-50 border-sky-200',
+        badgeBg: isDone ? 'bg-emerald-50' : isCancel ? 'bg-rose-50' : isOverdue ? 'bg-orange-50' : isConfirmed ? 'bg-teal-50' : 'bg-sky-50',
         isRead: readSet.has(`apt_${apt.id}`),
         targetUrl: '/appointments',
         patientName: apt.patient_name,

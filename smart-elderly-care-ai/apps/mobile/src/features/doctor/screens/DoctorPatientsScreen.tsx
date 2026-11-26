@@ -145,12 +145,14 @@ export default function DoctorPatientsScreen() {
   const [recurrenceOccurrences, setRecurrenceOccurrences] = useState(1);
   const [isSubmittingApt, setIsSubmittingApt] = useState(false);
 
-  const fetchPatients = useCallback(async () => {
+  const fetchPatients = useCallback(async (isManual = false) => {
     try {
       const res = await doctorApi.getPatients();
       setPatients(normalizePatientsList(res.data));
     } catch {
-      setPatients(normalizePatientsList([]));
+      if (isManual) {
+        LocalizedAlert.alert('Không thể tải lại', 'Vui lòng kiểm tra kết nối mạng và thử lại.');
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -176,8 +178,9 @@ export default function DoctorPatientsScreen() {
   }, [route.params?.autoFocus]);
 
   const onRefresh = () => {
+    if (refreshing) return;
     setRefreshing(true);
-    fetchPatients();
+    fetchPatients(true);
   };
 
   const filteredPatients = patients.filter((p) => {
@@ -309,6 +312,7 @@ export default function DoctorPatientsScreen() {
         onChangeSearch={setSearchQuery}
         onChangeFilter={setFilterTab}
         onRefresh={onRefresh}
+        refreshing={refreshing}
         isDarkMode={isDarkMode}
         colors={colors}
         searchInputRef={searchRef}
@@ -327,6 +331,7 @@ export default function DoctorPatientsScreen() {
       ) : (
         /* Danh sách bệnh nhân dạng danh thiếp ngang đầy đủ thông tin */
         <FlatList
+          style={{ flex: 1 }}
           data={filteredPatients}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContent}

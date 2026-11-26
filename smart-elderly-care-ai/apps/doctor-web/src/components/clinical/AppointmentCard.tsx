@@ -13,7 +13,7 @@ import {
   Calendar as CalendarIcon,
 } from 'lucide-react';
 import type { AppointmentItem } from '../../types';
-import { isUpcomingAppointmentStatus, parseAppointmentNotes } from '../../utils/appointmentHelpers';
+import { isAppointmentOverdue, isUpcomingAppointmentStatus, parseAppointmentNotes } from '../../utils/appointmentHelpers';
 
 const STATUS_BADGE_MAP: Record<string, { label: string; className: string }> = {
   COMPLETED: {
@@ -51,7 +51,13 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
 }) => {
   const isClinic = apt.visit_type === 'CLINIC';
   const isTelehealth = apt.visit_type === 'TELEHEALTH';
-  const statusBadge = STATUS_BADGE_MAP[apt.status] || STATUS_BADGE_MAP.UPCOMING;
+  const isOverdue = isAppointmentOverdue(apt.scheduled_at, apt.status);
+  const statusBadge = isOverdue
+    ? {
+        label: 'Quá giờ',
+        className: 'bg-orange-100 text-orange-800 border border-orange-200 dark:bg-orange-950/60 dark:text-orange-300 dark:border-orange-900/60',
+      }
+    : STATUS_BADGE_MAP[apt.status] || STATUS_BADGE_MAP.UPCOMING;
   const { isFamilyConfirmedByNote, cleanNotes } = parseAppointmentNotes(apt.clinical_notes);
   const isFamilyConfirmed = isFamilyConfirmedByNote || apt.status === 'CONFIRMED';
 

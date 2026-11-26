@@ -25,6 +25,19 @@ export const parseYMD = (s: string): Date => {
   return new Date(parts[0], parts[1] - 1, parts[2]);
 };
 
+export const parseFlexibleDate = (s?: string | null, fallbackYear?: number): Date => {
+  const raw = String(s || '').trim();
+  const ymd = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (ymd) return new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+  const dmy = raw.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?/);
+  if (dmy) {
+    const year = dmy[3] ? Number(dmy[3]) : (fallbackYear ?? new Date().getFullYear());
+    return new Date(year, Number(dmy[2]) - 1, Number(dmy[1]));
+  }
+  const parsed = new Date(raw);
+  return isNaN(parsed.getTime()) ? new Date() : parsed;
+};
+
 export const formatYMD = (d: Date): string => {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -33,6 +46,7 @@ export const formatYMD = (d: Date): string => {
 };
 
 export const formatDMY = (d: Date): string => {
+  if (isNaN(d.getTime())) return '--/--/----';
   const day = String(d.getDate()).padStart(2, '0');
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const y = d.getFullYear();
@@ -40,6 +54,7 @@ export const formatDMY = (d: Date): string => {
 };
 
 export const formatDM = (d: Date): string => {
+  if (isNaN(d.getTime())) return '--/--';
   const day = String(d.getDate()).padStart(2, '0');
   const m = String(d.getMonth() + 1).padStart(2, '0');
   return `${day}/${m}`;
@@ -58,12 +73,12 @@ const WEEKDAY_LABELS_FULL = [
 const WEEKDAY_LABELS_SHORT = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 
 export const formatVietnameseWeekdayDMY = (ymd: string): string => {
-  const d = parseYMD(ymd);
+  const d = parseFlexibleDate(ymd);
   return `${WEEKDAY_LABELS_FULL[d.getDay()]}, ${formatDMY(d)}`;
 };
 
-export const formatShortWeekdayDM = (ymd: string): string => {
-  const d = parseYMD(ymd);
+export const formatShortWeekdayDM = (ymd: string, fallbackYear?: number): string => {
+  const d = parseFlexibleDate(ymd, fallbackYear);
   return `${WEEKDAY_LABELS_SHORT[d.getDay()]} ${formatDM(d)}`;
 };
 
