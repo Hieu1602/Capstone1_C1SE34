@@ -352,7 +352,7 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
             {showHR && (
               <YAxis
                 yAxisId="left"
-                width={62}
+                width={70}
                 domain={[hrMin, hrMax]}
                 ticks={hrTicks}
                 stroke="#3B82F6"
