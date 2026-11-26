@@ -10,6 +10,7 @@ import {
   DEFAULT_ADMIN_BADGE,
   DEVICE_OP_KEYWORDS,
   formatNotificationTime,
+  parseTitleAndBody,
 } from '../../utils/notificationBuilder';
 import { isAppointmentOverdue } from '../../utils/appointmentHelpers';
 
@@ -144,7 +145,7 @@ export async function fetchDoctorNavbarNotifications(doctorUserId?: string): Pro
           : 'text-amber-700 bg-amber-50 border-amber-200';
         badgeBg = isHandled ? (isRejected ? 'bg-rose-50' : 'bg-emerald-50') : 'bg-amber-50';
         targetUrl = '/';
-        finalRead = isHandled || isRead;
+        finalRead = isHandled;
       } else if (isAppointmentMsg) {
         type = 'APPOINTMENT';
         const isCancelled = msgLower.includes('hủy') || inc.alert_type === 'APPOINTMENT_CANCELLED';
@@ -181,6 +182,8 @@ export async function fetchDoctorNavbarNotifications(doctorUserId?: string): Pro
       const matchedPat = patIdx >= 0 ? patList[patIdx] : undefined;
       const mrCode = patIdx >= 0 ? `MR-${String(patIdx + 1).padStart(3, '0')}` : undefined;
       const pName = matchedPat?.name || (isHouseInvite ? 'Hộ gia đình mới' : undefined);
+      const parsed = parseTitleAndBody(inc.message || '', type, inc.alert_type, inc.alert_level, pName);
+      if (parsed.title) title = parsed.title;
       const repeatCount = inc.repeat_count || 1;
       const repeatBadge = inc.repeat_badge || (repeatCount > 1 ? `Lặp lại ${repeatCount} lần trong 15 phút qua` : undefined);
 
@@ -288,5 +291,20 @@ export async function fetchDoctorNavbarNotifications(doctorUserId?: string): Pro
     });
   }
 
-  return unifiedList;
+  const tsOf = (s?: string) => {
+    if (!s) return 0;
+    const t = new Date(s).getTime();
+    return isNaN(t) ? 0 : t;
+  };
+  const timeById = new Map<string, number>();
+  if (sysRes.status === 'fulfilled' && Array.isArray(sysRes.value)) {
+    sysRes.value.forEach((s: SystemNotification) => timeById.set(`sys_${s.id}`, tsOf(s.published_at || s.created_at)));
+  }
+  if (incRes.status === 'fulfilled' && Array.isArray(incRes.value)) {
+    incRes.value.forEach((i: Incident) => timeById.set(`inc_${i.id}`, tsOf(i.created_at)));
+  }
+  if (aptRes.status === 'fulfilled' && Array.isArray(aptRes.value)) {
+    aptRes.value.forEach((a: AppointmentItem) => timeById.set(`apt_${a.id}`, tsOf(a.scheduled_at)));
+  }
+  return unifiedList.sort((a, b) => (timeById.get(b.id) || 0) - (timeById.get(a.id) || 0));
 }

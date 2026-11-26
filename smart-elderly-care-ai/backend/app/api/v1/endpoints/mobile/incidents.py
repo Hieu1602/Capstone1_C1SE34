@@ -211,8 +211,10 @@ async def acknowledge_incident(
         )
 
     # Nếu người nhà xác nhận thông báo đặt lịch khám của Bác sĩ -> đồng bộ xác nhận & báo Bác sĩ
+    is_doctor_actor = bool(current_user and current_user.role == "doctor")
     if (
-        incident.alert_type in ("APPOINTMENT_SCHEDULED", "APPOINTMENT_RESCHEDULED")
+        not is_doctor_actor
+        and incident.alert_type in ("APPOINTMENT_SCHEDULED", "APPOINTMENT_RESCHEDULED")
         and incident.notes
         and "APPOINTMENT_REQUESTED" not in incident.notes
     ):

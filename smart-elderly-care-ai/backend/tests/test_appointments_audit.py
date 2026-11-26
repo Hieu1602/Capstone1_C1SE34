@@ -823,3 +823,54 @@ async def test_doctor_can_update_and_complete_confirmed_appointment():
             )
             assert r_comp.status_code == 200
             assert r_comp.json()["status"] == "COMPLETED"
+
+
+@pytest.mark.anyio
+async def test_acknowledge_all_skips_house_invite_and_doctor_ack_skips_family_confirm():
+    import uuid
+    from app.api.v1.endpoints.mobile.incidents import acknowledge_incident
+
+    doc_id = uuid.uuid4()
+    db = AsyncMock()
+    db.get.return_value = SimpleNamespace(id=doc_id, role="doctor")
+    exec_res = MagicMock()
+    exec_res.fetchall.return_value = []
+    exec_res.rowcount = 1
+    db.execute.return_value = exec_res
+
+    await crud_incident.acknowledge_all(db, current_user_id=doc_id)
+    update_sql = str(
+        db.execute.call_args_list[-1].args[0].compile(compile_kwargs={"literal_binds": True})
+    )
+    assert "HOUSE_INVITE_PENDING" in update_sql
+
+    inc_id = uuid.uuid4()
+    doc_user = SimpleNamespace(id=doc_id, role="doctor", full_name="BS. Minh", phone="0909")
+    sched_inc = SimpleNamespace(
+        id=inc_id,
+        device_id=uuid.uuid4(),
+        alert_type="APPOINTMENT_SCHEDULED",
+        alert_level="LOW",
+        message="Lịch khám mới",
+        notes=f"APT:{uuid.uuid4()}",
+        is_acknowledged=True,
+        acknowledged_by=doc_id,
+        acknowledged_by_name="BS. Minh",
+        acknowledged_at=datetime.now(timezone.utc),
+    )
+    mock_confirm = AsyncMock()
+    with (
+        patch.object(crud_incident, "acknowledge", AsyncMock(return_value=sched_inc)),
+        patch("app.services.notification.appointment_notify.notify_doctor_appointment_confirmed", mock_confirm),
+    ):
+        bg = SimpleNamespace(add_task=lambda *a, **kw: None)
+        res = await acknowledge_incident(
+            incident_id=inc_id,
+            background_tasks=bg,
+            ack=None,
+            note=None,
+            db=db,
+            current_user=doc_user,
+        )
+    assert res.id == inc_id
+    mock_confirm.assert_not_awaited()

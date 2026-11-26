@@ -35,6 +35,7 @@ import {
 } from '../components/types';
 import { AppointmentDetailModal } from '../components';
 import NotificationsBottomSheet from '../components/NotificationsBottomSheet';
+import { buildUnifiedNotifications } from '../components/notifications/notificationHelpers';
 import {
   withTimeout,
   formatAptTime,
@@ -54,7 +55,7 @@ export default function DoctorHomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { isDarkMode, colors } = useTheme();
-  const { userName, avatarUrl, avatar_url } = useAuthStore();
+  const { userId, userName, avatarUrl, avatar_url } = useAuthStore();
   const doctorAvatarUri = (() => {
     const raw = avatarUrl || avatar_url;
     return raw && !raw.startsWith('blob:') ? resolveAvatarUrl(raw) : null;
@@ -131,8 +132,28 @@ export default function DoctorHomeScreen() {
   }, []);
 
   useEffect(() => {
-    setHasUnreadNotifs(incidents.some((inc) => !inc.is_acknowledged));
-  }, [incidents]);
+    AsyncStorage.getItem('@doctor_read_notification_ids')
+      .then((raw) => {
+        let readSet = new Set<string>();
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) readSet = new Set(parsed);
+          } catch {}
+        }
+        const warnPats = patients.filter((p) => p.health_status === 'WARNING' || p.health_status === 'DANGER');
+        const list = buildUnifiedNotifications({
+          incidents,
+          warningPatients: warnPats,
+          appointments: todayAppointments,
+          upcomingAppointments,
+          readIds: readSet,
+          doctorUserId: userId || undefined,
+        });
+        setHasUnreadNotifs(list.some((i) => !i.isRead));
+      })
+      .catch(() => {});
+  }, [incidents, patients, todayAppointments, upcomingAppointments, userId]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -396,9 +417,10 @@ export default function DoctorHomeScreen() {
         onSelectAppointment={() => closeNotifAndRun(() => navigation.navigate('DoctorAppointments'))}
         onNavigate={(screenName, params) => closeNotifAndRun(() => navigation.navigate(screenName, params))}
         onMarkAllRead={async () => {
-          setHasUnreadNotifs(false);
+          setHasUnreadNotifs(pendingHouseInvites.length > 0);
           await useAlertStore.getState().acknowledgeAll();
         }}
+        onUnreadCountChange={(count) => setHasUnreadNotifs(count > 0)}
         onRespondHouseInvite={handleRespondHouseInvite}
       />
 

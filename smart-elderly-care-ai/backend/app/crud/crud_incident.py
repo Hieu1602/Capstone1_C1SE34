@@ -309,7 +309,10 @@ class CRUDIncident:
         from sqlalchemy import update
         stmt = (
             update(Incident)
-            .where(Incident.is_acknowledged.is_(False))
+            .where(
+                Incident.is_acknowledged.is_(False),
+                Incident.alert_type != "HOUSE_INVITE_PENDING",
+            )
             .values(
                 is_acknowledged=True,
                 acknowledged_at=datetime.now(timezone.utc),

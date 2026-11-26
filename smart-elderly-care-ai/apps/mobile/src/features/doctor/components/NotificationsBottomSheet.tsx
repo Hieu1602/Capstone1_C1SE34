@@ -32,6 +32,7 @@ interface Props {
   onSelectAppointment?: (apt?: AppointmentItem) => void;
   onNavigate?: (screenName: string, params?: any) => void;
   onMarkAllRead?: () => void;
+  onUnreadCountChange?: (count: number) => void;
   hasUnread?: boolean;
   onRespondHouseInvite?: (incident: Incident, action: 'accept' | 'reject') => Promise<void>;
 }
@@ -49,6 +50,7 @@ export default function NotificationsBottomSheet({
   onSelectAppointment,
   onNavigate,
   onMarkAllRead,
+  onUnreadCountChange,
   hasUnread: _hasUnread = true,
   onRespondHouseInvite,
 }: Props) {
@@ -102,6 +104,9 @@ export default function NotificationsBottomSheet({
   });
 
   const unreadCount = unifiedList.filter((i) => !i.isRead).length;
+  useEffect(() => {
+    onUnreadCountChange?.(unreadCount);
+  }, [unreadCount, onUnreadCountChange]);
   const adminCount = unifiedList.filter((i) => i.type === 'ADMIN').length;
   const alertsCount = unifiedList.filter((i) => ['INCIDENT', 'PATIENT_WARNING', 'HOUSE_INVITE'].includes(i.type)).length;
   const aptsCount = unifiedList.filter((i) => i.type === 'APPOINTMENT').length;
@@ -184,7 +189,9 @@ export default function NotificationsBottomSheet({
 
   const handleMarkAllRead = async () => {
     const updated = new Set(readIds);
-    unifiedList.forEach((item) => addReadId(updated, item));
+    unifiedList.forEach((item) => {
+      if (item.type !== 'HOUSE_INVITE' || item.isRead) addReadId(updated, item);
+    });
     await persistReadIds(updated);
     onMarkAllRead?.();
   };

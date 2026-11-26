@@ -127,8 +127,16 @@ export const DoctorNavbar: React.FC = () => {
   useEffect(() => {
     fetchNotifData();
     const interval = setInterval(fetchNotifData, 30000);
-    const unsubscribe = doctorWebSocket.subscribe(() => {
-      fetchNotifData();
+    const unsubscribe = doctorWebSocket.subscribe((data) => {
+      if (
+        data?.type === 'ALERT_NEW' ||
+        data?.type === 'INITIAL_ALERTS' ||
+        data?.type === 'INCIDENT_RESOLVED' ||
+        data?.type === 'INCIDENT_ESCALATED' ||
+        data?.alert_type
+      ) {
+        fetchNotifData();
+      }
     });
 
     return () => {

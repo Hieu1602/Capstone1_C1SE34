@@ -242,7 +242,7 @@ export function buildNotificationItems(
       label = handled ? (inc.notes?.includes('từ chối') ? 'Đã từ chối' : 'Đã tham gia') : 'Lời mời';
       color = handled ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-amber-700 bg-amber-50 border-amber-200';
       target = '/';
-      finalRead = handled || isRead;
+      finalRead = handled;
     } else if (isAppointment) {
       type = 'APPOINTMENT';
       const isCancel = lower.includes('hủy');
