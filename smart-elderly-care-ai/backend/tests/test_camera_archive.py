@@ -173,3 +173,25 @@ class ArchiveTests(unittest.IsolatedAsyncioTestCase):
             })
             self.assertEqual(res2.status_code, 200)
             self.assertEqual(incident.thumbnail_url, f"/api/v1/camera/archive/{snap_id}/playback")
+
+    async def test_save_manual_snapshot_and_clip_to_s3(self):
+        added = []
+        self.db.add = lambda row: added.append(row)
+        client = MagicMock()
+        client.generate_presigned_url.return_value = "https://s3.example/signed"
+        with patch.object(archive, "_fetch_edge_bytes", new=AsyncMock(return_value=b"\xff\xd8\xff\xe0jpeg")), \
+             patch.object(archive.video_storage, "client", return_value=client):
+            res_snap = await self.http.post("/archive/snapshot")
+        self.assertEqual(res_snap.status_code, 201)
+        self.assertEqual(res_snap.json()["kind"], "manual_snapshot")
+        self.assertEqual(added[-1].kind, "manual_snapshot")
+        self.assertTrue(added[-1].object_key.startswith(f"manual/{self.device.id}/"))
+        client.put_object.assert_called_once()
+
+        with patch.object(archive, "_fetch_edge_bytes", new=AsyncMock(return_value=b"mp4-bytes")), \
+             patch.object(archive.video_storage, "client", return_value=client):
+            res_clip = await self.http.post("/archive/clip", json={"file_name": "SD_c_1700000000_60s.mp4", "duration": 60})
+        self.assertEqual(res_clip.status_code, 201)
+        self.assertEqual(res_clip.json()["kind"], "manual_clip")
+        self.assertEqual(added[-1].kind, "manual_clip")
+        self.assertTrue(added[-1].object_key.startswith(f"manual/{self.device.id}/"))

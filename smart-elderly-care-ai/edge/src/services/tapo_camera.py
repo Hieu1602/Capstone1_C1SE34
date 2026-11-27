@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import threading
 import uuid
 import time
 from urllib.parse import urlparse
@@ -1545,37 +1546,54 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         except Exception:
             return web.json_response({"mode": "auto"})
 
+    _sd_client_lock = threading.Lock()
+    _sd_dl_lock = threading.Lock()
+    _sd_client_state = {"key": None, "client": None, "time_corr": None}
+    _sd_list_cache = {"at": 0.0, "data": None}
+    _sd_recs_cache: dict[str, tuple[float, list]] = {}
+    _sd_active_until = 0.0
+    _sd_prefetch_inflight: set[str] = set()
+
     async def sync_sd_recordings(client=None):
-        """Tự động đồng bộ các đoạn video từ thẻ nhớ SD của camera về thư mục /recordings/."""
-        if not client:
+        """Đồng bộ nhẹ các đoạn video gần nhất từ thẻ nhớ SD khi không có phiên xem lại đang hoạt động."""
+        if not client or time.monotonic() < _sd_active_until:
+            return
+        if not _sd_dl_lock.acquire(blocking=False):
             return
         try:
-            await asyncio.to_thread(client.getUserID)
-            time_corr = await asyncio.to_thread(client.getTimeCorrection)
-            recs_list = await asyncio.to_thread(client.getRecordingsList)
-            if not recs_list:
-                return
-            today = list(recs_list[-1].values())[0]["date"]
-            day_recs = await asyncio.to_thread(client.getRecordings, today)
-            for r in day_recs:
-                val = list(r.values())[0]
-                st, et = int(val["startTime"]), int(val["endTime"])
-                dur = et - st
-                if dur <= 0:
-                    continue
-                dt_str = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime(st))
-                fn = f"SD_{dt_str}_{dur}s.mp4"
-                fp = recorder.directory / fn
-                if fp.is_file() and fp.stat().st_size > 1024:
-                    continue
-                if time.time() - et < 30:
-                    continue
+            def _sync_one():
+                client.getUserID()
+                time_corr = client.getTimeCorrection()
+                recs_list = client.getRecordingsList()
+                if not recs_list:
+                    return
+                today = list(recs_list[-1].values())[0]["date"]
+                day_recs = client.getRecordings(today)
                 from pytapo.media_stream.downloader import Downloader
-                dl = Downloader(client, st, et, time_corr, outputDirectory=str(recorder.directory) + "/", fileName=fn, output="mp4")
-                async for _ in dl.download():
-                    pass
+                for r in reversed(day_recs):
+                    if time.monotonic() < _sd_active_until:
+                        return
+                    val = list(r.values())[0]
+                    st, et = int(val["startTime"]), int(val["endTime"])
+                    dur = et - st
+                    if dur <= 0 or dur > 300 or time.time() - et < 30:
+                        continue
+                    dt_str = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime(st))
+                    fn = f"SD_{dt_str}_{dur}s.mp4"
+                    fp = recorder.directory / fn
+                    if fp.is_file() and fp.stat().st_size > 1024:
+                        continue
+                    dl = Downloader(client, st, et, time_corr, outputDirectory=str(recorder.directory) + "/", fileName=fn, output="mp4")
+                    async def _run():
+                        async for _ in dl.download():
+                            pass
+                    asyncio.run(_run())
+                    break  # Chỉ tải 1 đoạn mới nhất mỗi chu kỳ để không chiếm băng thông SD
+            await asyncio.to_thread(_sync_one)
         except Exception as err:
             LOG.debug("SD sync notice: %s", err)
+        finally:
+            _sd_dl_lock.release()
 
     async def recordings(request):
         """Liệt kê MP4 hoàn tất hoặc bắt đầu bản ghi mới.
@@ -1656,12 +1674,59 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
                     pass
         return web.json_response({"deleted_count": deleted})
 
-    def get_sd_client():
+    def get_sd_client(refresh=False):
         pwd = os.environ.get("TAPO_CONTROL_PASSWORD") or os.environ.get("TAPO_PASSWORD", "")
         user = os.environ.get("TAPO_CONTROL_USERNAME") or os.environ.get("TAPO_USERNAME", "")
         host = os.environ.get("TAPO_HOST", "")
-        from pytapo import Tapo
-        return Tapo(host, user, pwd, cloudPassword=pwd)
+        key = (host, user, pwd)
+        with _sd_client_lock:
+            if not refresh and _sd_client_state["client"] is not None and _sd_client_state["key"] == key:
+                return _sd_client_state["client"]
+            from pytapo import Tapo
+            cl = Tapo(host, user, pwd, cloudPassword=pwd)
+            _sd_client_state["key"] = key
+            _sd_client_state["client"] = cl
+            _sd_client_state["time_corr"] = None
+            return cl
+
+    def _get_time_corr(cl):
+        with _sd_client_lock:
+            if _sd_client_state["time_corr"] is not None and _sd_client_state["client"] is cl:
+                return _sd_client_state["time_corr"]
+        tc = cl.getTimeCorrection()
+        with _sd_client_lock:
+            if _sd_client_state["client"] is cl:
+                _sd_client_state["time_corr"] = tc
+        return tc
+
+    def _get_recordings_list_cached(cl, force=False):
+        now = time.monotonic()
+        if not force and _sd_list_cache["data"] is not None and now - _sd_list_cache["at"] < 30.0:
+            return _sd_list_cache["data"]
+        rl = cl.getRecordingsList()
+        _sd_list_cache["data"] = rl
+        _sd_list_cache["at"] = now
+        return rl
+
+    def _get_day_recordings_cached(cl, day_str: str):
+        now = time.monotonic()
+        today_str = time.strftime("%Y%m%d")
+        ttl = 20.0 if day_str == today_str else 600.0
+        cached = _sd_recs_cache.get(day_str)
+        if cached and now - cached[0] < ttl:
+            return cached[1]
+        recs = cl.getRecordings(day_str)
+        _sd_recs_cache[day_str] = (now, recs)
+        return recs
+
+    def _date_in_range(day_str: str, start_ts: int, end_ts: int) -> bool:
+        try:
+            day_dt = datetime.strptime(day_str, "%Y%m%d").replace(tzinfo=timezone.utc)
+            day_start = int(day_dt.timestamp())
+            # Biên +-1 ngày để bao phủ mọi lệch múi giờ UTC vs local.
+            return (day_start + 2 * 86400) >= start_ts and (day_start - 86400) <= end_ts
+        except Exception:
+            return True
 
     async def get_coverage(request):
         """Trả về danh sách dải thời gian ghi hình từ thẻ nhớ SD của camera."""
@@ -1681,64 +1746,134 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
                 pass
 
         def _fetch():
-            try:
-                cl = get_sd_client()
-                rl = cl.getRecordingsList()
-                available_dates = [list(x.values())[0]["date"] for x in rl] if rl else []
-                items = []
-                for d in available_dates:
-                    try:
-                        recs = cl.getRecordings(d)
-                        for r in recs:
-                            val = list(r.values())[0]
-                            st, et = int(val["startTime"]), int(val["endTime"])
-                            if et <= st:
-                                continue
-                            if et > start_ts and st < end_ts:
-                                st_iso = datetime.fromtimestamp(st, tz=timezone.utc).isoformat()
-                                et_iso = datetime.fromtimestamp(et, tz=timezone.utc).isoformat()
-                                items.append({"start": st_iso, "end": et_iso})
-                    except Exception:
+            for attempt in range(2):
+                try:
+                    cl = get_sd_client(refresh=(attempt > 0))
+                    rl = _get_recordings_list_cached(cl, force=(attempt > 0))
+                    available_dates = [list(x.values())[0]["date"] for x in rl] if rl else []
+                    filtered_dates = [d for d in available_dates if _date_in_range(d, start_ts, end_ts)]
+                    raw_ranges = []
+                    for d in filtered_dates:
+                        try:
+                            recs = _get_day_recordings_cached(cl, d)
+                            for r in recs:
+                                val = list(r.values())[0]
+                                st, et = int(val["startTime"]), int(val["endTime"])
+                                if et <= st:
+                                    continue
+                                if et > start_ts and st < end_ts:
+                                    raw_ranges.append((max(st, start_ts), min(et, end_ts)))
+                        except Exception:
+                            continue
+                    raw_ranges.sort()
+                    merged = []
+                    for bs, be in raw_ranges:
+                        if merged and bs <= merged[-1][1] + 3:
+                            merged[-1] = (merged[-1][0], max(merged[-1][1], be))
+                        else:
+                            merged.append((bs, be))
+                    return [
+                        {
+                            "start": datetime.fromtimestamp(bs, tz=timezone.utc).isoformat(),
+                            "end": datetime.fromtimestamp(be, tz=timezone.utc).isoformat(),
+                        }
+                        for bs, be in merged
+                    ]
+                except Exception as exc:
+                    if attempt == 0:
                         continue
-                return items
-            except Exception as exc:
-                LOG.warning("Lỗi đọc thẻ nhớ SD trong worker: %s", exc)
-                return []
+                    LOG.warning("Lỗi đọc thẻ nhớ SD trong worker: %s", exc)
+                    return []
 
         items = await asyncio.to_thread(_fetch)
         return web.json_response({"items": items})
 
     def find_local_recording(target_ts):
-        """Tìm file MP4 đã tải sẵn trên đĩa bao phủ target_ts để phát ngay không cần tải lại."""
+        """Tìm file MP4 chunk đã tải sẵn (faststart) bao phủ target_ts để phát ngay."""
         candidates = []
         for p in recorder.directory.glob("*.mp4"):
             name = p.name
-            m1 = re.match(r"^SD_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_(\d+)s\.mp4$", name)
-            if m1:
-                try:
-                    st = int(datetime.strptime(m1.group(1), "%Y-%m-%d_%H-%M-%S").replace(tzinfo=timezone.utc).timestamp())
-                    dur = int(m1.group(2))
-                    if st <= target_ts <= st + dur and p.stat().st_size > 1024:
-                        candidates.append((dur, st, dur, name))
-                except Exception:
-                    pass
             m2 = re.match(r"^SD_c_(\d+)_(\d+)s\.mp4$", name)
             if m2:
                 try:
                     st = int(m2.group(1))
                     dur = int(m2.group(2))
-                    if st <= target_ts <= st + dur and p.stat().st_size > 1024:
-                        candidates.append((dur, st, dur, name))
+                    if st <= target_ts < st + dur and p.stat().st_size > 1024:
+                        candidates.append((0, dur, st, dur, name))
+                except Exception:
+                    pass
+                continue
+            m1 = re.match(r"^SD_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_(\d+)s\.mp4$", name)
+            if m1:
+                try:
+                    dur = int(m1.group(2))
+                    # Bỏ qua file đồng bộ lớn (>120s) chưa có faststart để tránh nghẽn tua.
+                    if dur > 120:
+                        continue
+                    st = int(datetime.strptime(m1.group(1), "%Y-%m-%d_%H-%M-%S").timestamp())
+                    if st <= target_ts < st + dur and p.stat().st_size > 1024:
+                        candidates.append((1, dur, st, dur, name))
                 except Exception:
                     pass
         if candidates:
-            candidates.sort(key=lambda x: x[0], reverse=True)
-            _, st, dur, name = candidates[0]
+            candidates.sort(key=lambda x: (x[0], x[1]))
+            _, _, st, dur, name = candidates[0]
             return st, dur, name
         return None
 
+    def _download_sd_chunk_sync(chunk_st: int, chunk_et: int, file_name: str, refresh_client: bool = False):
+        file_path = recorder.directory / file_name
+        with _sd_dl_lock:
+            if file_path.is_file() and file_path.stat().st_size >= 1024:
+                return True
+            cl = get_sd_client(refresh=refresh_client)
+            tc = _get_time_corr(cl)
+            from pytapo.media_stream.downloader import Downloader
+            raw_name = f".raw_{uuid.uuid4().hex}_{file_name}"
+            raw_path = recorder.directory / raw_name
+            fast_path = recorder.directory / f".fast_{uuid.uuid4().hex}_{file_name}"
+            try:
+                dl = Downloader(cl, chunk_st, chunk_et, tc, outputDirectory=str(recorder.directory) + "/", fileName=raw_name, output="mp4")
+                async def _run():
+                    async for _ in dl.download():
+                        pass
+                asyncio.run(_run())
+                if not raw_path.is_file() or raw_path.stat().st_size < 1024:
+                    return False
+                res = subprocess.run(
+                    ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(raw_path), "-c", "copy", "-movflags", "+faststart", str(fast_path)],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=25, check=False,
+                )
+                if res.returncode == 0 and fast_path.is_file() and fast_path.stat().st_size >= 1024:
+                    fast_path.replace(file_path)
+                else:
+                    raw_path.replace(file_path)
+                return file_path.is_file() and file_path.stat().st_size >= 1024
+            finally:
+                raw_path.unlink(missing_ok=True)
+                fast_path.unlink(missing_ok=True)
+
+    async def _prefetch_sd_chunk(chunk_st: int, chunk_et: int):
+        dur = chunk_et - chunk_st
+        if dur <= 0:
+            return
+        file_name = f"SD_c_{chunk_st}_{dur}s.mp4"
+        file_path = recorder.directory / file_name
+        if file_path.is_file() and file_path.stat().st_size >= 1024:
+            return
+        if file_name in _sd_prefetch_inflight:
+            return
+        _sd_prefetch_inflight.add(file_name)
+        try:
+            await asyncio.to_thread(_download_sd_chunk_sync, chunk_st, chunk_et, file_name)
+        except Exception:
+            pass
+        finally:
+            _sd_prefetch_inflight.discard(file_name)
+
     async def get_archive_session(request):
         """Tìm và chuẩn bị đoạn video từ thẻ nhớ SD cho dải thời gian yêu cầu."""
+        nonlocal _sd_active_until
         start_str = request.query.get("start")
         if not start_str:
             raise web.HTTPBadRequest(text="Thiếu tham số start")
@@ -1747,7 +1882,9 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         except Exception:
             raise web.HTTPBadRequest(text="Định dạng start không hợp lệ")
 
-        # 1. Ưu tiên kiểm tra các file MP4 đã có sẵn trên đĩa bao phủ target_ts để phát ngay lập tức (0ms độ trễ)
+        _sd_active_until = time.monotonic() + 60.0
+
+        # 1. Ưu tiên file MP4 đã có sẵn trên đĩa bao phủ target_ts (0ms độ trễ)
         local_match = find_local_recording(target_ts)
         if local_match:
             loc_st, loc_dur, loc_name = local_match
@@ -1758,61 +1895,85 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
             })
 
         def _prepare_session():
-            cl = get_sd_client()
-            rl = cl.getRecordingsList()
-            available_dates = [list(x.values())[0]["date"] for x in rl] if rl else []
-            matched = None
-            closest = None
-            for d in reversed(available_dates):
+            for attempt in range(2):
                 try:
-                    recs = cl.getRecordings(d)
-                    for r in recs:
-                        val = list(r.values())[0]
-                        st, et = int(val["startTime"]), int(val["endTime"])
-                        if st <= target_ts <= et:
-                            matched = (st, et)
-                            break
-                        if closest is None or abs(st - target_ts) < abs(closest[0] - target_ts):
-                            closest = (st, et)
-                    if matched:
-                        break
+                    cl = get_sd_client(refresh=(attempt > 0))
+                    rl = _get_recordings_list_cached(cl, force=(attempt > 0))
+                    available_dates = [list(x.values())[0]["date"] for x in rl] if rl else []
+                    # Ưu tiên quét các ngày quanh target_ts trước để tránh RPC thừa.
+                    near_dates = [d for d in available_dates if _date_in_range(d, target_ts - 3600, target_ts + 3600)]
+                    scan_order = list(reversed(near_dates)) + [d for d in reversed(available_dates) if d not in near_dates]
+                    matched = None
+                    closest = None
+                    for d in scan_order:
+                        try:
+                            recs = _get_day_recordings_cached(cl, d)
+                            for r in recs:
+                                val = list(r.values())[0]
+                                st, et = int(val["startTime"]), int(val["endTime"])
+                                if et <= st:
+                                    continue
+                                if st <= target_ts < et:
+                                    matched = (st, et)
+                                    break
+                                if closest is None or abs(st - target_ts) < abs(closest[0] - target_ts):
+                                    closest = (st, et)
+                            if matched:
+                                break
+                        except Exception:
+                            continue
+                    return matched or closest
                 except Exception:
-                    continue
-            return cl, (matched or closest)
+                    if attempt == 0:
+                        continue
+                    return None
 
-        cl, matched = await asyncio.to_thread(_prepare_session)
+        matched = await asyncio.to_thread(_prepare_session)
         if not matched:
             raise web.HTTPNotFound(text="Không có bản ghi tại thời điểm này")
 
         st, et = matched
-        # Cắt thành chunk 300s (5 phút) để xem liên tục, tua nhanh không cần tải lại từng phút
-        chunk_size = 300
-        chunk_st = max(st, (target_ts // chunk_size) * chunk_size)
+        # Thẻ nhớ Tapo cần ~60s mới flush đoạn đang quay; lùi mốc an toàn 65s để luôn tải được ngay.
+        chunk_size = 60
+        safe_now = int(time.time()) - 65
+        effective_ts = min(target_ts, safe_now) if et > safe_now >= st else target_ts
+        chunk_st = max(st, (effective_ts // chunk_size) * chunk_size)
         chunk_et = min(et, chunk_st + chunk_size)
+        if et > safe_now and chunk_et > safe_now:
+            chunk_et = max(st, safe_now)
+            if chunk_et - chunk_st < 15 and chunk_st - chunk_size >= st:
+                chunk_st = chunk_st - chunk_size
+                chunk_et = chunk_st + chunk_size
         if chunk_et <= chunk_st:
-            chunk_st = max(st, et - chunk_size)
-            chunk_et = et
+            chunk_st = max(st, min(et, safe_now) - chunk_size)
+            chunk_et = min(et, chunk_st + chunk_size)
         dur = chunk_et - chunk_st
         file_name = f"SD_c_{chunk_st}_{dur}s.mp4"
         file_path = recorder.directory / file_name
 
         if not file_path.is_file() or file_path.stat().st_size < 1024:
-            def _download_chunk():
-                tc = cl.getTimeCorrection()
-                from pytapo.media_stream.downloader import Downloader
-                dl = Downloader(cl, chunk_st, chunk_et, tc, outputDirectory=str(recorder.directory) + "/", fileName=file_name, output="mp4")
-                async def _run():
-                    async for _ in dl.download():
-                        pass
-                asyncio.run(_run())
-                tmp_fast = recorder.directory / f"fast_{file_name}"
-                if file_path.is_file() and file_path.stat().st_size >= 1024:
-                    rc = os.system(f'ffmpeg -y -i "{file_path}" -c copy -movflags +faststart "{tmp_fast}" >{os.devnull} 2>&1')
-                    if rc == 0 and tmp_fast.is_file() and tmp_fast.stat().st_size >= 1024:
-                        tmp_fast.replace(file_path)
-                    elif tmp_fast.is_file():
-                        tmp_fast.unlink()
-            await asyncio.to_thread(_download_chunk)
+            ok = await asyncio.to_thread(_download_sd_chunk_sync, chunk_st, chunk_et, file_name)
+            if not ok:
+                ok = await asyncio.to_thread(_download_sd_chunk_sync, chunk_st, chunk_et, file_name, True)
+            # Nếu đoạn mới nhất vừa quay chưa flush trên thẻ SD, lùi lại 1 chunk hoàn chỉnh trước đó.
+            if not ok and chunk_st - chunk_size >= st:
+                prev_st = chunk_st - chunk_size
+                prev_et = chunk_st
+                prev_dur = prev_et - prev_st
+                prev_name = f"SD_c_{prev_st}_{prev_dur}s.mp4"
+                prev_path = recorder.directory / prev_name
+                if (prev_path.is_file() and prev_path.stat().st_size >= 1024) or await asyncio.to_thread(
+                    _download_sd_chunk_sync, prev_st, prev_et, prev_name
+                ):
+                    chunk_st, chunk_et, dur, file_name, file_path = prev_st, prev_et, prev_dur, prev_name, prev_path
+                    ok = True
+            if not ok:
+                raise web.HTTPServiceUnavailable(text="Không thể tải đoạn video từ thẻ nhớ camera")
+
+        if chunk_et < et:
+            next_et = min(et, chunk_et + chunk_size)
+            if next_et > chunk_et:
+                asyncio.create_task(_prefetch_sd_chunk(chunk_et, next_et))
 
         st_iso = datetime.fromtimestamp(chunk_st, tz=timezone.utc).isoformat()
         return web.json_response({

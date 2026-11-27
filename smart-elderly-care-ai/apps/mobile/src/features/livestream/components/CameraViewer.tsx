@@ -467,7 +467,7 @@ export default function CameraViewer({
     const actions = (
         <>
             {tool("camera", "Chụp ảnh", () => {
-                void connection.open("snapshot.jpg");
+                void connection.captureSnapshot();
             })}
             {tool(
                 "videocam",

@@ -330,6 +330,18 @@ export function useCameraConnection(
         });
     }
     /**
+     * Chụp ảnh hiện tại và lưu lên AWS S3 để mọi thiết bị đều xem được ở mục Download.
+     */
+    async function captureSnapshot() {
+        const saved = await run(async () => {
+            await cameraApi.saveSnapshot(cameraId);
+        });
+        if (saved) {
+            LocalizedAlert.alert("Chụp ảnh", "Đã chụp và lưu ảnh lên Cloud (mục Download).");
+        }
+        return saved;
+    }
+    /**
      * Đảo trạng thái phát hiện chuyển động của Tapo.
      * @returns Promise<boolean> cho biết thao tác có thành công hay không.
      * @remarks Tác động: Đọc/ghi API motion và cập nhật state; không bật/tắt AI YOLO.
@@ -448,6 +460,7 @@ export function useCameraConnection(
         pair,
         run,
         open,
+        captureSnapshot,
         record,
         move,
         togglePrivacy,

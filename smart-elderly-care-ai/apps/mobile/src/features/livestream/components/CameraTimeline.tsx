@@ -28,7 +28,6 @@ import {
     recordingAtProgress,
 } from "../services/archivePlayback";
 import ArchivePlayer from "./ArchivePlayer";
-import downloadVideo from "../services/downloadVideo";
 
 const HOUR_WIDTHS = [50, 75, 100, 150, 225, 300, 400];
 const TICK_MINUTES_BY_ZOOM = [60, 60, 60, 30, 15, 10, 5];
@@ -79,12 +78,21 @@ export default function CameraTimeline({ cameraId }: { cameraId?: string }) {
     );
     const playheadRef = useRef(playhead);
     playheadRef.current = playhead;
+    const selectedRef = useRef(selected);
+    selectedRef.current = selected;
+    const seekGuardUntilRef = useRef(0);
+    const seekTargetSecRef = useRef(0);
+    const lastReportedSecRef = useRef<number | null>(null);
+    const preSeekSecRef = useRef<number | null>(null);
+    const programmaticScrollAtRef = useRef(0);
+    const dragUiAtRef = useRef(0);
     const hourWidth = HOUR_WIDTHS[zoomIndex];
     const dayWidth = 24 * hourWidth;
     const tickMinutes = TICK_MINUTES_BY_ZOOM[zoomIndex];
     const dayRange = localDayWindow(day);
 
     function scrollTo(value: Date, animated = false) {
+        programmaticScrollAtRef.current = Date.now();
         timeline.current?.scrollTo({
             x: (secondsFromLocalMidnight(value) / DAY_SECONDS) * dayWidth,
             animated,
@@ -170,6 +178,9 @@ export default function CameraTimeline({ cameraId }: { cameraId?: string }) {
             }
             if (!position) throw new Error("missing");
             if (current === playbackRequest.current) {
+                preSeekSecRef.current = lastReportedSecRef.current;
+                seekTargetSecRef.current = position.seconds;
+                seekGuardUntilRef.current = Date.now() + 2500;
                 setSession(loaded);
                 setSelected(position.item);
                 setStartAt(position.seconds);
@@ -230,18 +241,20 @@ export default function CameraTimeline({ cameraId }: { cameraId?: string }) {
         setDownloading(true);
         const request = playbackRequest.current;
         try {
-            const result = await cameraApi.playback?.(
-                selected.id,
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selected.id);
+            const saveRes = await cameraApi.saveClip?.(
+                isUuid
+                    ? { recording_id: selected.id, started_at: selected.started_at, duration: selected.duration }
+                    : { file_name: selected.id, started_at: selected.started_at, duration: selected.duration },
                 cameraId,
-                true,
             );
-            if (result?.data?.url && request === playbackRequest.current) {
-                await downloadVideo(result.data.url);
-                LocalizedAlert?.alert?.("Tải xuống", "Đang bắt đầu tải đoạn video xuống thiết bị.");
+            const url = saveRes?.data?.url ?? (await cameraApi.playback?.(selected.id, cameraId, true))?.data?.url;
+            if (url && request === playbackRequest.current) {
+                LocalizedAlert?.alert?.("Đã lưu", "Đã lưu đoạn video vào mục Download.");
             }
         } catch {
             if (request === playbackRequest.current)
-                setError("Không tải được video. Vui lòng thử lại.");
+                setError("Không lưu được video. Vui lòng thử lại.");
         } finally {
             if (request === playbackRequest.current) setDownloading(false);
         }
@@ -313,14 +326,27 @@ export default function CameraTimeline({ cameraId }: { cameraId?: string }) {
                     paused={busy || dragging || userPaused}
                     onProgress={(seconds) => {
                         if (busy || dragging || !session) return;
+                        // Bỏ qua sự kiện tiến trình cũ hoặc 0s ngay sau khi tua để thanh timeline không giật lùi.
+                        if (Date.now() < seekGuardUntilRef.current) {
+                            const pre = preSeekSecRef.current;
+                            if (pre !== null && Math.abs(seconds - seekTargetSecRef.current) > 2.5) {
+                                return;
+                            }
+                            seekGuardUntilRef.current = 0;
+                        }
+                        lastReportedSecRef.current = seconds;
                         const position = recordingAtProgress(
                             session.items,
                             seconds,
                         );
                         if (!position) return;
-                        setSelected(position.item);
-                        setPlayhead(position.time);
-                        scrollTo(position.time);
+                        if (position.item.id !== selectedRef.current?.id) {
+                            setSelected(position.item);
+                        }
+                        if (Math.abs(position.time.getTime() - playheadRef.current.getTime()) >= 800) {
+                            setPlayhead(position.time);
+                            scrollTo(position.time);
+                        }
                     }}
                     onEnd={() => {
                         const last = session?.items[session.items.length - 1];
@@ -489,6 +515,28 @@ export default function CameraTimeline({ cameraId }: { cameraId?: string }) {
                             onScrollBeginDrag={() => {
                                 clearTimeout(scrollSeekTimer.current);
                                 setDragging(true);
+                            }}
+                            onScroll={(event) => {
+                                if (Date.now() - programmaticScrollAtRef.current < 180) return;
+                                const offset = event.nativeEvent.contentOffset.x;
+                                const seconds = Math.max(
+                                    0,
+                                    Math.min(
+                                        DAY_SECONDS - 0.001,
+                                        (offset / dayWidth) * DAY_SECONDS,
+                                    ),
+                                );
+                                if (!dragging) setDragging(true);
+                                const now = Date.now();
+                                if (now - dragUiAtRef.current >= 80) {
+                                    dragUiAtRef.current = now;
+                                    setPlayhead(timeAtSeconds(day, seconds));
+                                }
+                                clearTimeout(scrollSeekTimer.current);
+                                scrollSeekTimer.current = setTimeout(() => {
+                                    setDragging(false);
+                                    void seek(timeAtSeconds(day, seconds));
+                                }, 220);
                             }}
                             onScrollEndDrag={(event) => {
                                 const offset =

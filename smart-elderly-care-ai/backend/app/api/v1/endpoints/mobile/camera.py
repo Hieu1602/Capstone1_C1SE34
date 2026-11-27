@@ -13,7 +13,7 @@ from uuid import UUID
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
 from jose import JWTError, jwt
@@ -963,7 +963,7 @@ async def ticket(body: MediaRequest, context=Depends(viewer)):
     return {"path": f"/camera/media/{body.resource}?ticket={token}{suffix}", "expires_in": 300}
 
 
-@router.get("/media/{resource:path}")
+@router.api_route("/media/{resource:path}", methods=["GET", "HEAD"])
 async def media(resource: str, request: Request, ticket: str = Query(...), db: AsyncSession = Depends(get_db), quality: Literal["1080p", "720p", "auto"] = "auto", overlay: str = Query(default="0")):
     """Xác minh ticket và kiểm tra lại quyền trước khi truyền media.
 
@@ -1021,7 +1021,7 @@ async def media(resource: str, request: Request, ticket: str = Query(...), db: A
             Async iterator byte. Tác động: luôn đóng response/client khi kết thúc.
         """
         try:
-            async for chunk in response.aiter_bytes():
+            async for chunk in response.aiter_bytes(chunk_size=65536):
                 if resource == "live.mjpg" and time.time() >= expires:
                     break
                 yield chunk
@@ -1040,7 +1040,12 @@ async def media(resource: str, request: Request, ticket: str = Query(...), db: A
             headers["Content-Length"] = response.headers["content-length"]
     else:
         headers["Cache-Control"] = "no-store"
-    return StreamingResponse(chunks(), status_code=response.status_code, media_type=response.headers.get("content-type", "application/octet-stream"), headers=headers)
+    media_type = response.headers.get("content-type", "application/octet-stream")
+    if request.method == "HEAD":
+        await response.aclose()
+        await upstream.aclose()
+        return Response(status_code=response.status_code, media_type=media_type, headers=headers)
+    return StreamingResponse(chunks(), status_code=response.status_code, media_type=media_type, headers=headers)
 
 
 class SpeakReminderRequest(BaseModel):

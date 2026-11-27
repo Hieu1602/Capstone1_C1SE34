@@ -30,7 +30,7 @@ export interface CameraRecordings {
 export interface ArchivedRecording {
     id: string;
     device_id: string;
-    kind: "segment" | "incident" | "snapshot";
+    kind: "segment" | "incident" | "snapshot" | "manual_snapshot" | "manual_clip";
     started_at: string;
     duration: number;
     incident_id: string | null;
@@ -60,21 +60,38 @@ export const cameraApi = {
     hls: async (start: string, end: string, cameraId?: string): Promise<HlsSession> => {
         const { data } = await api.get<{ path: string; expires_at: number; items: HlsRecording[] }>("/camera/archive/hls", {
             params: { camera_id: cameraId, start, end },
+            timeout: 35000,
         });
         return { ...data, url: BASE_URL.replace(/\/$/, "") + data.path };
     },
-    timeline: (start: string, end: string, cameraId?: string, cursor?: ArchiveCursor) =>
+    timeline: (start: string, end: string, cameraId?: string, cursor?: ArchiveCursor, kinds?: string) =>
         api.get<{ items: ArchivedRecording[]; next: ArchiveCursor | null }>("/camera/archive", {
-            params: { camera_id: cameraId, start, end, ...cursor },
+            params: { camera_id: cameraId, start, end, ...cursor, ...(kinds ? { kinds } : {}) },
         }),
     coverage: (start: string, end: string, cameraId?: string) =>
         api.get<{ items: ArchiveCoverage[] }>("/camera/archive/coverage", {
             params: { camera_id: cameraId, start, end },
+            timeout: 35000,
         }),
     playback: (id: string, cameraId?: string, download = false) =>
         api.get<{ url: string; expires_in: number }>(`/camera/archive/${id}/playback`, {
             params: { ...sourceConfig(cameraId).params, download },
         }),
+    saveSnapshot: (cameraId?: string) =>
+        api.post<{ id: string; kind: string; started_at: string; url: string }>(
+            "/camera/archive/snapshot",
+            {},
+            { ...sourceConfig(cameraId), timeout: 20000 },
+        ),
+    saveClip: (
+        payload: { file_name?: string; recording_id?: string; started_at?: string; duration?: number },
+        cameraId?: string,
+    ) =>
+        api.post<{ id: string; kind: string; started_at: string; url: string }>(
+            "/camera/archive/clip",
+            payload,
+            { ...sourceConfig(cameraId), timeout: 45000 },
+        ),
     /**
      * Kiểm tra camera đã được liên kết trong hệ thống hay chưa.
      * @returns Promise chứa cờ paired từ backend.
