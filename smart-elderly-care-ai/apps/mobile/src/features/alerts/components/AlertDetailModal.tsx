@@ -1,7 +1,7 @@
 // AlertDetailModal.tsx
 // Modal xem nhanh & Đánh giá lâm sàng sự cố/cảnh báo tại chỗ (không chuyển trang)
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { Colors } from '../../../theme/colors';
+import { useHealthStore } from '../../../store/useHealthStore';
 import {
   getAlertConfig,
   analyzeAlertDetails,
@@ -42,10 +43,21 @@ export const AlertDetailModal: React.FC<AlertDetailModalProps> = ({
   navigation,
 }) => {
   const { t } = useTranslation();
+  const currentVitals = useHealthStore((s) => s.currentVitals);
+  const fetchVitals = useHealthStore((s) => s.fetchVitals);
+
+  useEffect(() => {
+    const isFall = item?.alert_type === 'FALL_DETECTED' || item?.alert_type === 'AI_FALL_DETECTED';
+    const ts = currentVitals?.timestamp;
+    const isFresh = Boolean(ts && Math.abs(Date.now() - ts) <= 2 * 60 * 1000);
+    if (visible && isFall && !isFresh) {
+      fetchVitals().catch(() => {});
+    }
+  }, [visible, item?.id, item?.alert_type, currentVitals?.timestamp, fetchVitals]);
 
   if (!item) return null;
 
-  const assessment = analyzeAlertDetails(item);
+  const assessment = analyzeAlertDetails(item, currentVitals);
   const cfg = getAlertConfig(item.alert_type, item.notes, item.message);
 
   return (
@@ -461,17 +473,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   metricGridLabel: {
     fontSize: 10,
     color: '#64748B',
     marginTop: 2,
     fontWeight: '600',
+    textAlign: 'center',
   },
   metricGridValue: {
     fontSize: 13,
     fontWeight: '800',
     marginTop: 2,
+    textAlign: 'center',
   },
   aiAdviceBox: {
     marginTop: 10,

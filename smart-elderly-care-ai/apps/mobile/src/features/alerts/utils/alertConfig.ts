@@ -357,7 +357,15 @@ export interface AlertAssessment {
   doctorAdvice: string;
 }
 
-export function analyzeAlertDetails(item: any): AlertAssessment {
+export interface CurrentVitalsSnapshot {
+  heart_rate?: number | null;
+  spo2?: number | null;
+  skin_temp_max?: number | null;
+  bp_systolic?: number | null;
+  bp_diastolic?: number | null;
+}
+
+export function analyzeAlertDetails(item: any, currentVitals?: CurrentVitalsSnapshot | null): AlertAssessment {
   if (!item) {
     return {
       severityLabel: 'Thông tin',
@@ -397,10 +405,28 @@ export function analyzeAlertDetails(item: any): AlertAssessment {
   const spo2Match = msg.match(/(\d{2,3})\s*%(?:\s*(?:SpO2|oxy))?/i);
   const tempMatch = msg.match(/(\d{2}(?:\.\d)?)\s*°?C/i);
 
+  const isFall = type === 'FALL_DETECTED' || type === 'AI_FALL_DETECTED';
+  const vitals = isFall ? currentVitals : null;
+
+  const hrVal = hrMatch
+    ? parseInt(hrMatch[1], 10)
+    : vitals?.heart_rate != null && vitals.heart_rate > 0
+    ? Math.round(vitals.heart_rate)
+    : null;
+  const spo2Val = spo2Match
+    ? parseInt(spo2Match[1], 10)
+    : vitals?.spo2 != null && vitals.spo2 > 0
+    ? Math.round(vitals.spo2)
+    : null;
+  const tempVal = tempMatch
+    ? parseFloat(tempMatch[1])
+    : vitals?.skin_temp_max != null && vitals.skin_temp_max > 0
+    ? Number(vitals.skin_temp_max.toFixed(1))
+    : null;
+
   const metrics: { label: string; value: string; icon: string; status: 'danger' | 'warning' | 'normal' }[] = [];
 
-  if (hrMatch) {
-    const hrVal = parseInt(hrMatch[1], 10);
+  if (hrVal !== null) {
     metrics.push({
       label: 'Nhịp tim',
       value: `${hrVal} bpm`,
@@ -414,8 +440,7 @@ export function analyzeAlertDetails(item: any): AlertAssessment {
     });
   }
 
-  if (spo2Match) {
-    const spo2Val = parseInt(spo2Match[1], 10);
+  if (spo2Val !== null) {
     metrics.push({
       label: 'Oxy SpO2',
       value: `${spo2Val}%`,
@@ -424,8 +449,7 @@ export function analyzeAlertDetails(item: any): AlertAssessment {
     });
   }
 
-  if (tempMatch) {
-    const tempVal = parseFloat(tempMatch[1]);
+  if (tempVal !== null) {
     metrics.push({
       label: 'Thân nhiệt',
       value: `${tempVal}°C`,
@@ -434,11 +458,27 @@ export function analyzeAlertDetails(item: any): AlertAssessment {
     });
   }
 
-  if (type === 'FALL_DETECTED') {
+  if (
+    vitals?.bp_systolic != null &&
+    vitals.bp_systolic > 0 &&
+    vitals?.bp_diastolic != null &&
+    vitals.bp_diastolic > 0
+  ) {
+    const sys = Math.round(vitals.bp_systolic);
+    const dia = Math.round(vitals.bp_diastolic);
     metrics.push({
-      label: 'Gia tốc kế',
-      value: 'Va đập mạnh',
-      icon: 'warning',
+      label: 'Huyết áp',
+      value: `${sys}/${dia} mmHg`,
+      icon: 'pulse',
+      status: sys >= 160 || sys < 90 || dia >= 100 || dia < 60 ? 'danger' : sys >= 140 || dia >= 90 ? 'warning' : 'normal',
+    });
+  }
+
+  if (isFall) {
+    metrics.push({
+      label: 'Camera AI',
+      value: 'Phát hiện té ngã',
+      icon: 'videocam',
       status: 'danger',
     });
   } else if (type === 'ACOUSTIC_DISTRESS') {
@@ -482,8 +522,8 @@ export function analyzeAlertDetails(item: any): AlertAssessment {
   } else if (type === 'CARDIO_COLLAPSE') {
     rootCause = 'Tụt nhịp tim kết hợp tụt oxy máu: Cảnh báo suy tuần hoàn hoặc trụy tim mạch nghiêm trọng.';
     doctorAdvice = 'CỰC KỲ KHẨN CẤP: Gọi xe cấp cứu 115 ngay. Kiểm tra mạch cảnh và nhịp thở của cụ. Sẵn sàng ép tim ngoài lồng ngực nếu cụ bất tỉnh mất mạch.';
-  } else if (type === 'FALL_DETECTED') {
-    rootCause = 'Cảm biến gia tốc vòng đeo tay ghi nhận gia tốc rơi tự do và lực va chạm mặt sàn đột ngột, theo sau bởi trạng thái bất động.';
+  } else if (isFall) {
+    rootCause = 'Camera AI phân tích tư thế khung xương phát hiện người bị ngã xuống sàn đột ngột và duy trì trạng thái bất động.';
     doctorAdvice = 'Đến kiểm tra ngay tại vị trí cụ ngã! Không vội vàng xốc nách đỡ cụ đứng dậy ngay nếu nghi ngờ gãy xương đùi hoặc chấn thương cổ/lưng.';
   } else if (type === 'ACOUSTIC_DISTRESS') {
     rootCause = 'Mô hình AI YAMNet phân tích và nhận diện tín hiệu âm thanh có tần số tương ứng tiếng kêu cứu, la hét hoặc rên rỉ đau đớn.';

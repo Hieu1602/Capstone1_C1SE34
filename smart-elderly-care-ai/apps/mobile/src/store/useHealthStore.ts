@@ -96,6 +96,7 @@ export const useHealthStore = create<HealthState>()((set, get) => ({
   isLoadingMode: false,
 
   fetchVitals: async () => {
+    if (get().isLoadingVitals) return null;
     set({ isLoadingVitals: true });
     try {
       const res = await vitalsApi.getCurrent();
@@ -126,18 +127,27 @@ export const useHealthStore = create<HealthState>()((set, get) => ({
         return updatedVitals;
       }
     } catch (e) {
-      console.warn('fetchVitals API fallback:', e);
-      set((state) => ({
-        currentVitals: {
-          ...state.currentVitals,
-          heart_rate: null,
-          spo2: null,
-          skin_temp_max: null,
-          bracelet_connected: false,
-          bracelet_battery: null,
-        },
-        isLoadingVitals: false,
-      }));
+      if (__DEV__) {
+        console.log('fetchVitals API fallback:', e instanceof Error ? e.message : e);
+      }
+      set((state) => {
+        const ts = state.currentVitals.timestamp;
+        const stillFresh = Boolean(ts && Math.abs(Date.now() - ts) <= 2 * 60 * 1000);
+        if (stillFresh) {
+          return { isLoadingVitals: false };
+        }
+        return {
+          currentVitals: {
+            ...state.currentVitals,
+            heart_rate: null,
+            spo2: null,
+            skin_temp_max: null,
+            bracelet_connected: false,
+            bracelet_battery: null,
+          },
+          isLoadingVitals: false,
+        };
+      });
     }
     set({ isLoadingVitals: false });
     return null;
