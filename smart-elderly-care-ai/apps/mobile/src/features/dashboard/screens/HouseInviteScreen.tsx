@@ -103,7 +103,7 @@ export default function HouseInviteScreen({ navigation, route }: any) {
         title: 'Mời thành viên gia đình',
         message: `Chào bạn, bạn nhận được lời mời tham gia căn nhà "${
           house?.name || 'Nhà của tôi'
-        }" với vai trò ${roleName} trên ứng dụng Smart Elderly Care AI để cùng chăm sóc và bảo vệ người thân. Mã mời: ${code} (hiệu lực trong 30 phút). Vui lòng tải ứng dụng và đăng nhập bằng số điện thoại của bạn.`,
+        }" với vai trò ${roleName} trên ứng dụng Smart Elderly Care AI để cùng chăm sóc và bảo vệ người thân. Mã mời: ${code} (hiệu lực trong 10 phút). Vui lòng tải ứng dụng và đăng nhập bằng số điện thoại của bạn.`,
       });
     } catch {
       Alert.alert('Thông báo', 'Không thể mở trình chia sẻ.');
@@ -157,7 +157,9 @@ export default function HouseInviteScreen({ navigation, route }: any) {
         </Text>
 
         {/* House Card */}
-        <View
+        <TouchableOpacity
+          activeOpacity={0.75}
+          onPress={() => navigation.navigate('HouseDetail', { from: 'HouseInvite' })}
           style={[
             styles.inviteHouseCard,
             {
@@ -169,10 +171,11 @@ export default function HouseInviteScreen({ navigation, route }: any) {
           <View style={[styles.inviteHouseIconBox, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF' }]}>
             <Ionicons name="home" size={22} color="#3B82F6" />
           </View>
-          <Text style={[styles.inviteHouseName, { color: textTitle }]}>
+          <Text style={[styles.inviteHouseName, { color: textTitle, flex: 1 }]}>
             {house?.name || 'Nhà của tôi'}
           </Text>
-        </View>
+          <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+        </TouchableOpacity>
 
         {/* MỜI THÀNH VIÊN VỚI */}
         <View style={{ marginTop: 22 }}>

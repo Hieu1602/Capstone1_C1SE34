@@ -26,7 +26,6 @@ class SmartCareBackgroundService : Service() {
     private var serverBaseUrl: String = "http://192.168.10.248:8000/api/v1"
     private var authToken: String? = null
     private var workerThread: Thread? = null
-    private val notifiedIncidentIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private var isFirstPoll = true
 
     companion object {
@@ -39,6 +38,68 @@ class SmartCareBackgroundService : Service() {
         private const val KEY_AUTH_TOKEN = "auth_token"
         private const val KEY_SERVER_URL = "server_url"
         private const val KEY_NOTIFIED_IDS = "notified_incident_ids"
+
+        private val notifiedIncidentIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+        private val notifLock = Any()
+
+        private fun ensureLoaded(context: Context) {
+            if (notifiedIncidentIds.isEmpty()) {
+                val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                val savedIds = prefs.getStringSet(KEY_NOTIFIED_IDS, null)
+                if (!savedIds.isNullOrEmpty()) {
+                    notifiedIncidentIds.addAll(savedIds)
+                }
+            }
+        }
+
+        @JvmStatic
+        fun tryClaimIncidentNotification(context: Context, incidentId: String): Boolean {
+            val cleanId = incidentId.trim()
+            if (cleanId.isEmpty()) return true
+            synchronized(notifLock) {
+                ensureLoaded(context)
+                if (notifiedIncidentIds.contains(cleanId)) {
+                    return false
+                }
+                notifiedIncidentIds.add(cleanId)
+                if (notifiedIncidentIds.size > 150) {
+                    val trimmed = notifiedIncidentIds.toList().takeLast(100)
+                    notifiedIncidentIds.clear()
+                    notifiedIncidentIds.addAll(trimmed)
+                }
+                context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    .edit()
+                    .putStringSet(KEY_NOTIFIED_IDS, HashSet(notifiedIncidentIds))
+                    .apply()
+                return true
+            }
+        }
+
+        @JvmStatic
+        fun markIncidentsSeen(context: Context, ids: Collection<String>) {
+            if (ids.isEmpty()) return
+            synchronized(notifLock) {
+                ensureLoaded(context)
+                var changed = false
+                for (id in ids) {
+                    val cleanId = id.trim()
+                    if (cleanId.isNotEmpty() && notifiedIncidentIds.add(cleanId)) {
+                        changed = true
+                    }
+                }
+                if (changed) {
+                    if (notifiedIncidentIds.size > 150) {
+                        val trimmed = notifiedIncidentIds.toList().takeLast(100)
+                        notifiedIncidentIds.clear()
+                        notifiedIncidentIds.addAll(trimmed)
+                    }
+                    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                        .edit()
+                        .putStringSet(KEY_NOTIFIED_IDS, HashSet(notifiedIncidentIds))
+                        .apply()
+                }
+            }
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -72,7 +133,7 @@ class SmartCareBackgroundService : Service() {
 
         val savedIds = prefs.getStringSet(KEY_NOTIFIED_IDS, null)
         if (!savedIds.isNullOrEmpty()) {
-            notifiedIncidentIds.addAll(savedIds)
+            markIncidentsSeen(this, savedIds)
             isFirstPoll = false
         }
 
@@ -263,10 +324,10 @@ class SmartCareBackgroundService : Service() {
                 )
 
                 var hasActiveEmergency = false
-                val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
                 if (isFirstPoll) {
                     isFirstPoll = false
+                    val seenIds = mutableListOf<String>()
                     for (i in 0 until incidents.length()) {
                         val item = incidents.getJSONObject(i)
                         val id = item.optString("id")
@@ -278,26 +339,29 @@ class SmartCareBackgroundService : Service() {
                             alertType != "LOW_BATTERY" && alertType != "DEVICE_BATTERY_DEAD"
 
                         if (id.isNotBlank()) {
-                            notifiedIncidentIds.add(id)
-                            // Lần đầu tiên khởi chạy chỉ bắn thông báo cho sự kiện mới nhất chưa xử lý (i == 0)
+                            // Lần đầu tiên khởi chạy chỉ bắn thông báo cho sự kiện mới nhất chưa xử lý (i == 0) nếu chưa bị JS/FCM claim
                             if (i == 0 && !isAck) {
-                                val contactPhone = item.optString("emergency_contact_phone", "").takeIf { it.isNotBlank() }
-                                    ?: NativeNotificationModule.DEFAULT_EMERGENCY_PHONE
-                                if (isEmergency) {
-                                    hasActiveEmergency = true
-                                    triggerHighPriorityAlarm(id, alertType, alertLevel, message, contactPhone)
-                                } else {
-                                    triggerRoutineNotification(id, alertType, message)
+                                if (tryClaimIncidentNotification(this, id)) {
+                                    val contactPhone = item.optString("emergency_contact_phone", "").takeIf { it.isNotBlank() }
+                                        ?: NativeNotificationModule.DEFAULT_EMERGENCY_PHONE
+                                    if (isEmergency) {
+                                        hasActiveEmergency = true
+                                        triggerHighPriorityAlarm(id, alertType, alertLevel, message, contactPhone)
+                                    } else {
+                                        triggerRoutineNotification(id, alertType, message)
+                                    }
                                 }
+                            } else {
+                                seenIds.add(id)
                             }
                         }
                     }
-                    prefs.edit().putStringSet(KEY_NOTIFIED_IDS, notifiedIncidentIds.toSet()).apply()
+                    markIncidentsSeen(this, seenIds)
                     return
                 }
 
                 // Duyệt qua các thông báo mới chưa từng bắn lên thanh thông báo Android
-                var updatedSet = false
+                val ackedIds = mutableListOf<String>()
                 for (i in (incidents.length() - 1) downTo 0) {
                     val item = incidents.getJSONObject(i)
                     val id = item.optString("id")
@@ -313,33 +377,27 @@ class SmartCareBackgroundService : Service() {
                         hasActiveEmergency = true
                     }
 
-                    if (id.isNotBlank() && !notifiedIncidentIds.contains(id)) {
-                        notifiedIncidentIds.add(id)
-                        updatedSet = true
+                    if (id.isNotBlank()) {
                         if (!isAck) {
-                            val contactPhone = item.optString("emergency_contact_phone", "").takeIf { it.isNotBlank() }
-                                ?: NativeNotificationModule.DEFAULT_EMERGENCY_PHONE
-                            if (isEmergency) {
-                                triggerHighPriorityAlarm(id, alertType, alertLevel, message, contactPhone)
-                            } else {
-                                triggerRoutineNotification(id, alertType, message)
+                            if (tryClaimIncidentNotification(this, id)) {
+                                val contactPhone = item.optString("emergency_contact_phone", "").takeIf { it.isNotBlank() }
+                                    ?: NativeNotificationModule.DEFAULT_EMERGENCY_PHONE
+                                if (isEmergency) {
+                                    triggerHighPriorityAlarm(id, alertType, alertLevel, message, contactPhone)
+                                } else {
+                                    triggerRoutineNotification(id, alertType, message)
+                                }
                             }
+                        } else {
+                            ackedIds.add(id)
                         }
                     }
                 }
+                markIncidentsSeen(this, ackedIds)
 
                 // Nếu không còn cảnh báo nguy hiểm nào chưa xử lý -> Tắt ngay chuông báo động
                 if (!hasActiveEmergency) {
                     NativeNotificationModule.stopAlarm(this)
-                }
-
-                if (updatedSet) {
-                    if (notifiedIncidentIds.size > 150) {
-                        val trimmed = notifiedIncidentIds.toList().takeLast(100)
-                        notifiedIncidentIds.clear()
-                        notifiedIncidentIds.addAll(trimmed)
-                    }
-                    prefs.edit().putStringSet(KEY_NOTIFIED_IDS, notifiedIncidentIds.toSet()).apply()
                 }
             }
         } catch (e: Exception) {
@@ -472,9 +530,11 @@ class SmartCareBackgroundService : Service() {
             alertType == "APPOINTMENT_CANCELLED" -> "🗓️ LỊCH KHÁM ĐÃ BỊ HỦY"
             alertType == "APPOINTMENT_RESCHEDULED" -> "🗓️ LỊCH KHÁM ĐÃ ĐƯỢC DỜI"
             alertType == "APPOINTMENT_COMPLETED" -> "✅ ĐÃ HOÀN TẤT BUỔI KHÁM"
-            alertType == "APPOINTMENT_DELETED" -> "🗓️ LỊCH KHÁM ĐÃ ĐƯỢC XÓA"
+            alertType == "APPOINTMENT_DELETED" -> "🗓️ LỊCH KHÁM ĐÃ BỊ XÓA"
+            alertType == "APPOINTMENT_REMINDER" -> "⏰ NHẮC NHỞ LỊCH KHÁM SẮP TỚI"
             alertType == "PRESCRIPTION_CREATED" || alertType == "PRESCRIPTION_UPDATED" -> "💊 ĐƠN THUỐC & LỊCH UỐNG THUỐC MỚI"
             alertType == "MEDICATION_REMINDER" -> "💊 NHẮC NHỞ ĐẾN GIỜ UỐNG THUỐC"
+            alertType == "HYDRATION_REMINDER" -> "💧 NHẮC NHỞ ĐẾN GIỜ UỐNG NƯỚC"
             alertType == "MEDICAL_RECORD_UPDATED" -> "📋 HỒ SƠ BỆNH ÁN ĐƯỢC CẬP NHẬT"
             alertType == "DEVICE_CONFIG_UPDATED" -> "⚙️ NGƯỠNG SINH HIỆU ĐƯỢC CẬP NHẬT"
             alertType == "DEVICE_BATTERY_DEAD" -> "🪫 VÒNG ĐEO TAY ĐÃ CẠN PIN (0%)"

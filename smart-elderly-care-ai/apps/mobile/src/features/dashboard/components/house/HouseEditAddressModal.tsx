@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   TextInput,
   ActivityIndicator,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   ScrollView,
 } from 'react-native';
@@ -17,6 +18,8 @@ import { Colors } from '../../../../theme/colors';
 
 interface HouseEditAddressModalProps {
   visible: boolean;
+  houseName: string;
+  setHouseName: (val: string) => void;
   address: string;
   setAddress: (val: string) => void;
   isSaving: boolean;
@@ -33,6 +36,8 @@ interface HouseEditAddressModalProps {
 
 export const HouseEditAddressModal: React.FC<HouseEditAddressModalProps> = ({
   visible,
+  houseName,
+  setHouseName,
   address,
   setAddress,
   isSaving,
@@ -42,16 +47,33 @@ export const HouseEditAddressModal: React.FC<HouseEditAddressModalProps> = ({
   colors: { bgCard, borderCol, textTitle, textSub },
 }) => {
   const insets = useSafeAreaInsets();
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates?.height || 0);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   return (
     <Modal
       visible={visible}
       transparent
+      statusBarTranslucent
       animationType="fade"
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.modalOverlay}
       >
         <TouchableOpacity
@@ -65,7 +87,8 @@ export const HouseEditAddressModal: React.FC<HouseEditAddressModalProps> = ({
             {
               backgroundColor: bgCard,
               borderColor: borderCol,
-              paddingBottom: Math.max(insets.bottom, 16),
+              paddingBottom: Math.max(insets.bottom, 20),
+              marginBottom: Platform.OS === 'android' && keyboardHeight > 0 ? keyboardHeight : 0,
             },
           ]}
         >
@@ -76,8 +99,8 @@ export const HouseEditAddressModal: React.FC<HouseEditAddressModalProps> = ({
           >
             <View style={styles.modalHeaderRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name="location" size={20} color={Colors.primary} />
-                <Text style={[styles.modalTitle, { color: textTitle }]}>Địa chỉ nhà thực tế</Text>
+                <Ionicons name="home" size={20} color={Colors.primary} />
+                <Text style={[styles.modalTitle, { color: textTitle }]}>Tên nhà & Địa chỉ thực tế</Text>
               </View>
               <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={22} color={textSub} />
@@ -85,9 +108,10 @@ export const HouseEditAddressModal: React.FC<HouseEditAddressModalProps> = ({
             </View>
 
             <Text style={[styles.modalSub, { color: textSub, marginBottom: 14 }]}>
-              Nhập địa chỉ vị trí thực tế của căn hộ / gia đình để thuận tiện khi có cảnh báo khẩn cấp hoặc hỗ trợ y tế.
+              Cập nhật tên căn nhà và địa chỉ vị trí thực tế để thuận tiện khi có cảnh báo khẩn cấp hoặc hỗ trợ y tế.
             </Text>
 
+            <Text style={[styles.inputLabel, { color: textTitle }]}>Tên căn nhà</Text>
             <TextInput
               style={[
                 styles.addressInput,
@@ -96,13 +120,34 @@ export const HouseEditAddressModal: React.FC<HouseEditAddressModalProps> = ({
                   borderColor: borderCol,
                   color: textTitle,
                   minHeight: 46,
+                  marginBottom: 14,
+                },
+              ]}
+              value={houseName}
+              onChangeText={setHouseName}
+              placeholder="VD: Nhà của tôi, Nhà ông bà..."
+              placeholderTextColor="#94A3B8"
+              returnKeyType="next"
+            />
+
+            <Text style={[styles.inputLabel, { color: textTitle }]}>Địa chỉ thực tế</Text>
+            <TextInput
+              style={[
+                styles.addressInput,
+                {
+                  backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                  borderColor: borderCol,
+                  color: textTitle,
+                  minHeight: 72,
+                  textAlignVertical: 'top',
                 },
               ]}
               value={address}
               onChangeText={setAddress}
               placeholder="VD: Số 123 Đường ABC, Quận XYZ, TP. Đà Nẵng"
               placeholderTextColor="#94A3B8"
-              autoFocus
+              multiline
+              numberOfLines={2}
               returnKeyType="done"
               onSubmitEditing={onSave}
             />
@@ -171,6 +216,11 @@ const styles = StyleSheet.create({
   modalSub: {
     fontSize: 13,
     marginTop: 2,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 6,
   },
   addressInput: {
     borderWidth: 1,

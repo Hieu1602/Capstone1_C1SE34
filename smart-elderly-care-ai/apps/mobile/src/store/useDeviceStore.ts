@@ -129,6 +129,7 @@ interface DeviceState {
   setHouseInfo: (info: Partial<HouseInfo>) => void;
   setHouseMode: (mode: HouseInfo["currentMode"]) => void;
   updateHouseAddress: (address: string) => void;
+  updateHouseInfo: (data: { name?: string; address?: string }) => void;
   toggleCameraSleep: () => void;
   toggleCameraAIProtect: () => void;
   setCameraResolution: (res: CameraDevice["resolution"]) => void;
@@ -202,6 +203,17 @@ export const useDeviceStore = create<DeviceState>()(
           .catch((err) =>
             console.log(
               "[DeviceStore] Không thể đồng bộ địa chỉ nhà lên backend:",
+              err,
+            ),
+          );
+      },
+      updateHouseInfo: (data) => {
+        set((state) => ({ house: { ...state.house, ...data } }));
+        houseApi
+          .updateHouse(data)
+          .catch((err) =>
+            console.log(
+              "[DeviceStore] Không thể đồng bộ thông tin nhà lên backend:",
               err,
             ),
           );
