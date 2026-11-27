@@ -796,6 +796,9 @@ class ReportService:
         elderly: Optional[ElderlyProfile] = None,
         period_days: int = 7,
         device: Optional[Device] = None,
+        house_name: Optional[str] = None,
+        owner_name: Optional[str] = None,
+        doctor_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Chuẩn bị dữ liệu đúng hợp đồng của `health_report_template.html` từ dữ liệu CSDL."""
         vn_tz = timezone(timedelta(hours=7))
@@ -1104,11 +1107,12 @@ class ReportService:
         age_val: Any = (now_vn.year - elderly.birth_year) if (elderly and getattr(elderly, "birth_year", None)) else "—"
         gender_raw = str(getattr(elderly, "gender", "") or "").upper() if elderly else ""
         sex_str = "Nam" if gender_raw in ("MALE", "NAM") else ("Nữ" if gender_raw in ("FEMALE", "NU") else "—")
-        house_name = None
-        if elderly and "house" in elderly.__dict__ and elderly.__dict__["house"]:
-            house_name = getattr(elderly.__dict__["house"], "name", None)
-        elif device and "house" in device.__dict__ and device.__dict__["house"]:
-            house_name = getattr(device.__dict__["house"], "name", None)
+        resolved_house_name = house_name
+        if not resolved_house_name:
+            if elderly and "house" in elderly.__dict__ and elderly.__dict__["house"]:
+                resolved_house_name = getattr(elderly.__dict__["house"], "name", None)
+            elif device and "house" in device.__dict__ and device.__dict__["house"]:
+                resolved_house_name = getattr(device.__dict__["house"], "name", None)
 
         return {
             "report": {
@@ -1123,7 +1127,9 @@ class ReportService:
                 "age": age_val,
                 "sex": sex_str,
                 "blood_type": getattr(elderly, "blood_type", None) if elderly else None,
-                "house": house_name,
+                "house": resolved_house_name,
+                "owner_name": owner_name,
+                "doctor_name": doctor_name,
             },
             "device": {
                 "name": getattr(device, "name", None) or str(device_id),
@@ -1173,6 +1179,9 @@ class ReportService:
         language: str = "vi",
         period_days: int = 7,
         device: Optional[Device] = None,
+        house_name: Optional[str] = None,
+        owner_name: Optional[str] = None,
+        doctor_name: Optional[str] = None,
     ) -> bytes:
         """Tạo PDF report theo mẫu HTML/SVG chuyên sâu, fallback về ReportLab nếu thiếu trình render HTML."""
         template_dir = Path(__file__).resolve().parent
@@ -1186,6 +1195,9 @@ class ReportService:
                     elderly=elderly,
                     period_days=period_days,
                     device=device,
+                    house_name=house_name,
+                    owner_name=owner_name,
+                    doctor_name=doctor_name,
                 )
                 from jinja2 import Environment, FileSystemLoader, select_autoescape
                 env = Environment(loader=FileSystemLoader(template_dir), autoescape=select_autoescape(["html"]))
