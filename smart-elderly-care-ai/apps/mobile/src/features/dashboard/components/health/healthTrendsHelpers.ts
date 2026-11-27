@@ -6,6 +6,15 @@ export interface HrPoint {
   val: number;
 }
 
+export interface TodayActivityStats {
+  hasData: boolean;
+  walkPct: number;
+  sitPct: number;
+  restPct: number;
+  activeLabel: string;
+  restLabel: string;
+}
+
 export interface ChartCoord {
   x: number;
   y: number;
@@ -153,6 +162,128 @@ export function useHeartRateTrendHistory(
   }, [currentVitals?.heart_rate, currentVitals?.timestamp, hasHR]);
 
   return hrBars;
+}
+
+function classifySampleActivity(v: any): 'walk' | 'sit' | 'rest' {
+  const txt = String(v?.activity_state || v?.posture_state || '').toLowerCase();
+  if (txt.includes('đi') || txt.includes('walk') || txt.includes('tập') || txt.includes('chạy') || txt.includes('exercise')) {
+    return 'walk';
+  }
+  if (txt.includes('nằm') || txt.includes('ngủ') || txt.includes('rest') || txt.includes('lying') || txt.includes('sleep')) {
+    return 'rest';
+  }
+  const hr = Number(v?.heart_rate || 0);
+  if (hr >= 95) return 'walk';
+  if (hr > 0 && hr < 72) return 'rest';
+  return 'sit';
+}
+
+function formatDurationShort(mins: number): string {
+  const m = Math.max(0, Math.round(mins));
+  if (m < 60) return `${m}p`;
+  const h = Math.round((m / 60) * 10) / 10;
+  return `${h}h`;
+}
+
+function computeActivityFromSamples(samples: any[]): TodayActivityStats {
+  if (!samples || samples.length === 0) {
+    return { hasData: false, walkPct: 0, sitPct: 0, restPct: 0, activeLabel: '--', restLabel: '--' };
+  }
+  let walk = 0;
+  let sit = 0;
+  let rest = 0;
+  let minTs = Infinity;
+  let maxTs = -Infinity;
+
+  for (const s of samples) {
+    const cls = classifySampleActivity(s);
+    if (cls === 'walk') walk++;
+    else if (cls === 'rest') rest++;
+    else sit++;
+
+    const rawT = s?.time || s?.recorded_at || s?.created_at || s?.timestamp;
+    const ms = rawT ? new Date(rawT).getTime() : NaN;
+    if (!isNaN(ms)) {
+      if (ms < minTs) minTs = ms;
+      if (ms > maxTs) maxTs = ms;
+    }
+  }
+
+  const total = walk + sit + rest;
+  const walkPct = Math.round((walk * 100) / total);
+  const sitPct = Math.round((sit * 100) / total);
+  const restPct = Math.max(0, 100 - walkPct - sitPct);
+
+  const spanMins = Number.isFinite(minTs) && Number.isFinite(maxTs) && maxTs > minTs
+    ? Math.max(1, (maxTs - minTs) / 60000)
+    : Math.max(1, total * 0.5);
+  const activeMins = (spanMins * walkPct) / 100;
+  const restMins = Math.max(0, spanMins - activeMins);
+
+  return {
+    hasData: true,
+    walkPct,
+    sitPct,
+    restPct,
+    activeLabel: formatDurationShort(activeMins),
+    restLabel: formatDurationShort(restMins),
+  };
+}
+
+/** Phân tích tỷ lệ Vận động & Sinh hoạt từ dữ liệu đo thực tế trong ngày hôm nay. */
+export function useTodayActivityStats(
+  patientDevice: any,
+  currentVitals: any,
+  hasAnyData: boolean
+): TodayActivityStats {
+  const [samples, setSamples] = useState<any[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchToday = async () => {
+      if (!patientDevice) {
+        if (isMounted) setSamples([]);
+        return;
+      }
+      try {
+        const devId = patientDevice.deviceId || patientDevice.id || 'BLE_BAND_001';
+        const res = await vitalsApi.getHistory(devId, 120);
+        const rows = Array.isArray(res?.data) ? res.data : [];
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const todayMs = startOfToday.getTime();
+        const todayRows = rows.filter((v: any) => {
+          const rawTime = v.time || v.recorded_at || v.created_at;
+          const ms = rawTime ? new Date(rawTime).getTime() : 0;
+          return ms >= todayMs && (v.heart_rate > 0 || v.spo2 > 0);
+        });
+        if (isMounted) setSamples(todayRows.reverse());
+      } catch {
+        if (isMounted) setSamples([]);
+      }
+    };
+    fetchToday();
+    return () => {
+      isMounted = false;
+    };
+  }, [patientDevice?.deviceId, patientDevice?.id]);
+
+  useEffect(() => {
+    if (hasAnyData && (currentVitals?.heart_rate || currentVitals?.spo2)) {
+      setSamples((prev) => [
+        ...prev.slice(-240),
+        {
+          heart_rate: currentVitals.heart_rate,
+          spo2: currentVitals.spo2,
+          activity_state: currentVitals.activity_state,
+          posture_state: currentVitals.posture_state,
+          time: currentVitals.time || currentVitals.timestamp || new Date().toISOString(),
+        },
+      ]);
+    }
+  }, [currentVitals?.heart_rate, currentVitals?.timestamp, currentVitals?.activity_state, hasAnyData]);
+
+  return computeActivityFromSamples(samples);
 }
 
 /** Tính toán tọa độ & đường cong Bezier SVG cho Mini Line Chart nhịp tim. */
