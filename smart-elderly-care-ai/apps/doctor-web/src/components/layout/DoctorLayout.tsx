@@ -8,6 +8,7 @@ import { DoctorSidebar } from './DoctorSidebar';
 import { AdminMarqueeBanner } from './AdminMarqueeBanner';
 import { doctorWebSocket } from '../../services/websocket';
 import { useDoctorDataStore } from '../../store/useDoctorDataStore';
+import { useDoctorAuthStore } from '../../store/useDoctorAuthStore';
 import { formatAppointmentWsNotification } from '../../utils/appointmentHelpers';
 import {
   isBrowserNotificationSupported,
@@ -86,6 +87,18 @@ export const DoctorLayout: React.FC = () => {
       }
 
       const evtType = String(event.type || '').toLowerCase();
+      if (evtType === 'user_profile_updated') {
+        const curUser = useDoctorAuthStore.getState().user;
+        if (curUser && String(event.user_id) === String(curUser.id)) {
+          useDoctorAuthStore.getState().updateUser({
+            avatar_url: event.avatar_url ?? null,
+            ...(event.full_name ? { full_name: event.full_name } : {}),
+          });
+          window.dispatchEvent(new Event('doctor-profile-updated'));
+        }
+        return;
+      }
+
       if (evtType === 'vital_update' || evtType === 'vitals_update') {
         const liveHr = event.heart_rate != null ? Number(event.heart_rate) : undefined;
         const liveSpo2 = event.spo2 != null ? Number(event.spo2) : undefined;

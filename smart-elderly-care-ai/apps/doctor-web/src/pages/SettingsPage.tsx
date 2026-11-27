@@ -49,8 +49,31 @@ export const SettingsPage: React.FC = () => {
   });
 
   useEffect(() => {
+    const nextAvatar = getDoctorAvatarUri(user?.avatar_url);
+    setDocInfo((prev) => ({
+      ...prev,
+      name: user?.full_name || prev.name,
+      specialty: user?.specialty || prev.specialty,
+      hospital: user?.workplace || prev.hospital,
+      cchn_number: user?.cchn_number || prev.cchn_number,
+      avatarUri: nextAvatar,
+    }));
+    setEditForm((prev) => ({ ...prev, avatarUri: nextAvatar }));
+  }, [user?.avatar_url, user?.full_name, user?.specialty, user?.workplace, user?.cchn_number]);
+
+  useEffect(() => {
+    authApi
+      .getMe()
+      .then((me) => {
+        if (me) useDoctorAuthStore.getState().updateUser(me);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     const handleProfileUpdate = () => {
-      const nextAvatar = getDoctorAvatarUri(user?.avatar_url);
+      const latestUser = useDoctorAuthStore.getState().user;
+      const nextAvatar = getDoctorAvatarUri(latestUser?.avatar_url);
       setDocInfo((prev) => ({ ...prev, avatarUri: nextAvatar }));
       setEditForm((prev) => ({ ...prev, avatarUri: nextAvatar }));
     };
@@ -60,7 +83,7 @@ export const SettingsPage: React.FC = () => {
       window.removeEventListener('doctor-profile-updated', handleProfileUpdate);
       window.removeEventListener('storage', handleProfileUpdate);
     };
-  }, [user]);
+  }, []);
 
   const [patientCount, setPatientCount] = useState(() => useDoctorDataStore.getState().patients.length);
   const [appointmentCount, setAppointmentCount] = useState(() => useDoctorDataStore.getState().appointments.length);
@@ -143,7 +166,7 @@ export const SettingsPage: React.FC = () => {
     window.dispatchEvent(new Event('doctor-profile-updated'));
   };
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -151,11 +174,22 @@ export const SettingsPage: React.FC = () => {
       const dataUrl = String(reader.result);
       syncAvatarLocally(dataUrl);
       try {
-        await authApi.updateMe({ avatar_url: dataUrl });
+        const updatedMe = await authApi.uploadAvatar(file);
+        if (updatedMe?.avatar_url) {
+          syncAvatarLocally(updatedMe.avatar_url);
+        }
+        showToast('Đã cập nhật ảnh đại diện Bác sĩ thành công.');
       } catch {
-        // ignore
+        try {
+          const updatedMe = await authApi.updateMe({ avatar_url: dataUrl });
+          if (updatedMe?.avatar_url) {
+            syncAvatarLocally(updatedMe.avatar_url);
+          }
+          showToast('Đã cập nhật ảnh đại diện Bác sĩ thành công.');
+        } catch {
+          showToast('Không thể lưu ảnh đại diện lên máy chủ.');
+        }
       }
-      showToast('Đã cập nhật ảnh đại diện Bác sĩ thành công.');
     };
     reader.readAsDataURL(file);
   };
@@ -194,12 +228,17 @@ export const SettingsPage: React.FC = () => {
         full_name: updated.name,
         specialty: updated.specialty,
         workplace: updated.hospital,
-        avatar_url: updated.avatarUri || null,
         ...({ gender: updated.gender } as any),
       };
-      useDoctorAuthStore.getState().updateUser(userPayload);
+      useDoctorAuthStore.getState().updateUser({
+        ...userPayload,
+        ...(updated.avatarUri === null ? { avatar_url: null } : {}),
+      });
       window.dispatchEvent(new Event('doctor-profile-updated'));
       try {
+        if (updated.avatarUri === null && user?.avatar_url) {
+          await authApi.deleteAvatar();
+        }
         await authApi.updateMe(userPayload);
       } catch {
         // ignore

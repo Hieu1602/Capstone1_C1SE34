@@ -19,7 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { doctorApi, usersApi } from '../../../services/api';
-import { resolveAvatarUrl } from '../../auth/hooks/useProfileManager';
+import { resolveAvatarUrl, convertAssetToDataUri } from '../../auth/hooks/useProfileManager';
 import { ViewAvatarModal } from '../../auth/components/profile';
 import {
   DoctorProfileInfo,
@@ -99,15 +99,67 @@ export default function DoctorProfileScreen({ navigation }: any) {
     fetchDoctorStats();
   }, [fetchDoctorStats]);
 
+  const loadSavedProfile = useCallback(async () => {
+    let loadedFromBackend = false;
+    let serverAvatar: string | null = null;
+    try {
+      const meRes = await usersApi.getMe();
+      if (meRes?.data) {
+        loadedFromBackend = true;
+        const user = meRes.data;
+        serverAvatar = user.avatar_url || null;
+        setDocInfo((prev) => ({
+          ...prev,
+          name: user.full_name || prev.name,
+          phone: user.phone || prev.phone,
+          specialty: user.specialty || prev.specialty,
+          hospital: user.workplace || prev.hospital,
+        }));
+        if (user.avatar_url) {
+          const resolved = resolveAvatarUrl(user.avatar_url);
+          setAvatarUri(resolved);
+          setAvatar(user.avatar_url);
+          setProfile({ avatar_url: user.avatar_url });
+        } else {
+          setAvatarUri(null);
+          setAvatar('');
+          setProfile({ avatar_url: null });
+        }
+      }
+    } catch {}
+    try {
+      const raw = await AsyncStorage.getItem('doctor_profile_custom');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setDocInfo((prev) => ({
+          ...prev,
+          ...parsed,
+          name: parsed.name || userName || 'Bác sĩ',
+          phone: parsed.phone || userPhone || '',
+        }));
+        if (loadedFromBackend) {
+          if (parsed.avatarUri !== serverAvatar) {
+            await AsyncStorage.setItem('doctor_profile_custom', JSON.stringify({ ...parsed, avatarUri: serverAvatar }));
+          }
+        } else if ('avatarUri' in parsed) {
+          setAvatarUri(parsed.avatarUri || null);
+        }
+      }
+    } catch {}
+  }, [userName, userPhone, setAvatar, setProfile]);
+
   useFocusEffect(
     useCallback(() => {
       fetchDoctorStats();
-    }, [fetchDoctorStats])
+      loadSavedProfile();
+    }, [fetchDoctorStats, loadSavedProfile])
   );
 
   useEffect(() => {
     const raw = avatarUrl || avatar_url;
-    if (raw && !raw.startsWith('blob:')) {
+    if (!raw) {
+      setAvatarUri(null);
+    } else if (!raw.startsWith('blob:')) {
       const resolved = resolveAvatarUrl(raw);
       if (resolved) {
         setAvatarUri(resolved);
@@ -116,48 +168,8 @@ export default function DoctorProfileScreen({ navigation }: any) {
   }, [avatarUrl, avatar_url]);
 
   useEffect(() => {
-    const loadSavedProfile = async () => {
-      try {
-        const meRes = await usersApi.getMe();
-        if (meRes?.data) {
-          const user = meRes.data;
-          setDocInfo((prev) => ({
-            ...prev,
-            name: user.full_name || prev.name,
-            phone: user.phone || prev.phone,
-            specialty: user.specialty || prev.specialty,
-            hospital: user.workplace || prev.hospital,
-          }));
-          if (user.avatar_url) {
-            const resolved = resolveAvatarUrl(user.avatar_url);
-            setAvatarUri(resolved);
-            setAvatar(user.avatar_url);
-            setProfile({ avatar_url: user.avatar_url });
-          } else {
-            setAvatarUri(null);
-            setAvatar('');
-            setProfile({ avatar_url: null });
-          }
-        }
-      } catch {}
-      try {
-        const raw = await AsyncStorage.getItem('doctor_profile_custom');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          setDocInfo((prev) => ({
-            ...prev,
-            ...parsed,
-            name: parsed.name || userName || 'Bác sĩ',
-            phone: parsed.phone || userPhone || '',
-          }));
-          if ('avatarUri' in parsed) {
-            setAvatarUri(parsed.avatarUri || null);
-          }
-        }
-      } catch {}
-    };
     loadSavedProfile();
-  }, [userName, userPhone]);
+  }, [loadSavedProfile]);
 
   const pickImage = async () => {
     try {
@@ -177,19 +189,27 @@ export default function DoctorProfileScreen({ navigation }: any) {
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
         const asset = result.assets[0];
-        const selectedUri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+        const selectedUri = await convertAssetToDataUri(asset);
         setEditAvatarUri(selectedUri);
         setAvatarUri(selectedUri);
         setAvatar(selectedUri);
         setProfile({ avatar_url: selectedUri });
         if (selectedUri.startsWith('data:image')) {
+          let finalAvatar = selectedUri;
           try {
-            await usersApi.uploadAvatarBase64(selectedUri);
+            const upRes = await usersApi.uploadAvatarBase64(selectedUri);
+            if (upRes?.data?.avatar_url) finalAvatar = upRes.data.avatar_url;
           } catch {
             try {
-              await usersApi.updateMe({ avatar_url: selectedUri });
+              const meRes = await usersApi.updateMe({ avatar_url: selectedUri });
+              if (meRes?.data?.avatar_url) finalAvatar = meRes.data.avatar_url;
             } catch {}
           }
+          const resolved = resolveAvatarUrl(finalAvatar);
+          setEditAvatarUri(resolved);
+          setAvatarUri(resolved);
+          setAvatar(finalAvatar);
+          setProfile({ avatar_url: finalAvatar });
         }
       }
     } catch {

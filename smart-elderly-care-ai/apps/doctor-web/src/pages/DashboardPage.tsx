@@ -292,8 +292,13 @@ export const DashboardPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    setDoctorAvatar(getDoctorAvatarUri(user?.avatar_url));
+  }, [user?.avatar_url]);
+
+  useEffect(() => {
     const handleProfileUpdate = () => {
-      setDoctorAvatar(getDoctorAvatarUri(user?.avatar_url));
+      const latestUser = useDoctorAuthStore.getState().user;
+      setDoctorAvatar(getDoctorAvatarUri(latestUser?.avatar_url));
     };
     window.addEventListener('doctor-profile-updated', handleProfileUpdate);
     window.addEventListener('storage', handleProfileUpdate);
@@ -301,7 +306,7 @@ export const DashboardPage: React.FC = () => {
       window.removeEventListener('doctor-profile-updated', handleProfileUpdate);
       window.removeEventListener('storage', handleProfileUpdate);
     };
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     // Tải trước / revalidate dữ liệu trong nền không chặn UI

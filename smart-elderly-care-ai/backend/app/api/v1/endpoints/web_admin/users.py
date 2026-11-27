@@ -684,6 +684,7 @@ async def update_profile(
     updated_user = await crud_user.update(db, db_obj=current_user, obj_in=update_data)
     await db.commit()
     await db.refresh(updated_user)
+    await _broadcast_user_profile_update(updated_user)
 
     await record_audit_log(
         db=db,
@@ -694,6 +695,29 @@ async def update_profile(
     )
 
     return updated_user
+
+
+async def _broadcast_user_profile_update(user: User) -> None:
+    """Phát sự kiện đồng bộ avatar/tên người dùng real-time tới các tab Web/App."""
+    try:
+        import json as _json
+        from app.api.websockets.vitals_ws import alert_clients
+        if not alert_clients:
+            return
+        payload = _json.dumps({
+            "type": "USER_PROFILE_UPDATED",
+            "user_id": str(user.id),
+            "avatar_url": user.avatar_url,
+            "full_name": user.full_name,
+        }, ensure_ascii=False)
+        for c_ws in list(alert_clients):
+            try:
+                await c_ws.send_text(payload)
+            except Exception:
+                if c_ws in alert_clients:
+                    alert_clients.remove(c_ws)
+    except Exception:
+        pass
 
 
 async def _process_and_save_avatar(
@@ -769,6 +793,7 @@ async def _process_and_save_avatar(
 
     await db.commit()
     await db.refresh(current_user)
+    await _broadcast_user_profile_update(current_user)
 
     return current_user
 
@@ -828,6 +853,7 @@ async def upload_my_avatar(
                         current_user.avatar_url = raw_b64
                         await db.commit()
                         await db.refresh(current_user)
+                        await _broadcast_user_profile_update(current_user)
 
                         return current_user
                     else:
@@ -880,6 +906,7 @@ async def delete_my_avatar(
     current_user.avatar_url = None
     await db.commit()
     await db.refresh(current_user)
+    await _broadcast_user_profile_update(current_user)
 
     return current_user
 

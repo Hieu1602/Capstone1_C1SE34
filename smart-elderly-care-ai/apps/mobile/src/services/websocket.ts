@@ -142,6 +142,19 @@ class AlertsWebSocket {
   }
 
   private _handleStoreUpdate(event: WebSocketAlertEvent) {
+    if (event.type === 'USER_PROFILE_UPDATED') {
+      const auth = useAuthStore.getState();
+      const curId = auth.userId || auth.user_id;
+      if (curId && String(event.user_id) === String(curId)) {
+        auth.setProfile({
+          avatar_url: event.avatar_url ?? null,
+          ...(event.full_name ? { full_name: event.full_name } : {}),
+        });
+        auth.setAvatar(event.avatar_url || '');
+      }
+      return;
+    }
+
     const store = useVitalStore.getState();
 
     // 0. Lịch khám mới từ Bác sĩ hoặc Yêu cầu lịch khám từ Gia đình

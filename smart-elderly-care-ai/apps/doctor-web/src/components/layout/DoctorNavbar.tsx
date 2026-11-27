@@ -80,8 +80,13 @@ export const DoctorNavbar: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    setDoctorAvatar(getDoctorAvatarUri(user?.avatar_url));
+  }, [user?.avatar_url]);
+
+  useEffect(() => {
     const handleProfileUpdate = () => {
-      setDoctorAvatar(getDoctorAvatarUri(user?.avatar_url));
+      const latestUser = useDoctorAuthStore.getState().user;
+      setDoctorAvatar(getDoctorAvatarUri(latestUser?.avatar_url));
     };
 
     window.addEventListener('doctor-profile-updated', handleProfileUpdate);
@@ -90,7 +95,7 @@ export const DoctorNavbar: React.FC = () => {
       window.removeEventListener('doctor-profile-updated', handleProfileUpdate);
       window.removeEventListener('storage', handleProfileUpdate);
     };
-  }, [user]);
+  }, []);
 
   // Lắng nghe sự kiện đồng bộ trạng thái đọc/chưa đọc toàn cục từ bất kỳ component nào (0ms)
   useEffect(() => {
