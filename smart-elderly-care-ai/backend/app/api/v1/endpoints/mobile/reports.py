@@ -6,11 +6,13 @@ Vị trí: backend/app/api/v1/endpoints/mobile/reports.py
 import io
 import re
 import unicodedata
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user_optional
@@ -18,11 +20,66 @@ from app.core.database import get_db
 from app.core.i18n import get_request_language
 from app.crud.crud_incident import crud_incident
 from app.crud.crud_vital import crud_vital
+from app.models.house import House, HouseMember
 from app.models.user import User
+from app.models.vital_sign import VitalSign
 from app.schemas.report import HealthReportSummaryOut
 from app.services.reports.report_service import report_service
 
 router = APIRouter()
+
+
+async def _resolve_house_people(
+    db: AsyncSession,
+    elderly,
+    device,
+) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """Lấy tên ngôi nhà, tên Chủ hộ và tên Bác sĩ phụ trách để hiển thị trên báo cáo PDF."""
+    house_id = getattr(elderly, "house_id", None) or getattr(device, "house_id", None)
+    if not house_id:
+        return None, None, None
+    h_res = await db.execute(
+        select(House.name, User.full_name)
+        .join(User, User.id == House.owner_id)
+        .where(House.id == house_id)
+    )
+    h_row = h_res.first()
+    house_name = h_row[0] if h_row else None
+    owner_name = h_row[1] if h_row else None
+
+    d_res = await db.execute(
+        select(User.full_name)
+        .join(HouseMember, HouseMember.user_id == User.id)
+        .where(
+            HouseMember.house_id == house_id,
+            HouseMember.status == "ACTIVE",
+            (HouseMember.role_in_house == "DOCTOR") | (User.role == "doctor"),
+        )
+    )
+    doctors = [r[0] for r in d_res.all() if r[0]]
+    doctor_name = ", ".join(dict.fromkeys(doctors)) if doctors else None
+    return house_name, owner_name, doctor_name
+
+
+async def _get_vitals_in_period(
+    db: AsyncSession,
+    device_uuid: Optional[UUID],
+    start_time: datetime,
+    end_time: datetime,
+) -> list[VitalSign]:
+    """Lấy toàn bộ bản ghi sinh hiệu theo khoảng thời gian để không bị cắt mất các ngày trước do giới hạn số dòng."""
+    if not device_uuid:
+        return []
+    res = await db.execute(
+        select(VitalSign)
+        .where(
+            VitalSign.device_id == device_uuid,
+            VitalSign.time >= start_time,
+            VitalSign.time <= end_time,
+        )
+        .order_by(VitalSign.time.asc())
+    )
+    return list(res.scalars().all())
 
 
 def _patient_filename_tag(elderly) -> str:
@@ -89,7 +146,7 @@ async def export_default_pdf(
     resolved_id: Optional[UUID] = device.id if device else None
     resolved_dev_str: str = device.device_id if device else "UNKNOWN_DEVICE"
 
-    vitals = await crud_vital.get_history(db, device_id=resolved_id, limit=calc_days * 24 * 6) if resolved_id else []
+    vitals = await _get_vitals_in_period(db, resolved_id, start_time, now)
     incidents = await report_service.get_house_incidents_in_period(
         db=db,
         device=device,
@@ -109,6 +166,7 @@ async def export_default_pdf(
         )
         incidents = all_house_inc[:100]
 
+    house_name, owner_name, doctor_name = await _resolve_house_people(db, elderly, device)
     pdf_bytes = report_service.generate_pdf(
         device_id=resolved_dev_str,
         vitals=vitals,
@@ -117,6 +175,9 @@ async def export_default_pdf(
         language=get_request_language(request),
         period_days=calc_days,
         device=device,
+        house_name=house_name,
+        owner_name=owner_name,
+        doctor_name=doctor_name,
     )
     patient_tag = _patient_filename_tag(elderly)
     pdf_filename = f"report_health{patient_tag}_{calc_days}d.pdf"
@@ -152,7 +213,7 @@ async def export_default_excel(
     resolved_id: Optional[UUID] = device.id if device else None
     resolved_dev_str: str = device.device_id if device else "UNKNOWN_DEVICE"
 
-    vitals = await crud_vital.get_history(db, device_id=resolved_id, limit=calc_days * 24 * 6) if resolved_id else []
+    vitals = await _get_vitals_in_period(db, resolved_id, start_time, now)
     incidents = await report_service.get_house_incidents_in_period(
         db=db,
         device=device,
@@ -200,7 +261,9 @@ async def export_pdf_report(
     Xuất báo cáo y tế PDF cho N ngày gần nhất theo mã thiết bị.
     """
     uuid_val = await crud_vital.resolve_device_uuid(db, device_id)
-    vitals = await crud_vital.get_history(db, device_id=device_id, limit=days * 24 * 6)
+    now = datetime.now(timezone.utc)
+    start_time = now - timedelta(days=days)
+    vitals = await _get_vitals_in_period(db, uuid_val, start_time, now)
     incidents = await crud_incident.list(db, device_id=uuid_val, limit=100)
 
     pdf_bytes = report_service.generate_pdf(
@@ -227,7 +290,9 @@ async def export_excel_report(
     Xuất báo cáo Excel với raw data sinh hiệu và incidents theo mã thiết bị.
     """
     uuid_val = await crud_vital.resolve_device_uuid(db, device_id)
-    vitals = await crud_vital.get_history(db, device_id=device_id, limit=days * 24 * 6)
+    now = datetime.now(timezone.utc)
+    start_time = now - timedelta(days=days)
+    vitals = await _get_vitals_in_period(db, uuid_val, start_time, now)
     incidents = await crud_incident.list(db, device_id=uuid_val, limit=500)
 
     excel_bytes = report_service.generate_excel(

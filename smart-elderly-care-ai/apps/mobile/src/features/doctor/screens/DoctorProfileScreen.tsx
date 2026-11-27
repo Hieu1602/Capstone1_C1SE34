@@ -28,6 +28,7 @@ import {
   DoctorEditProfileModal,
   DoctorChangePasswordModal,
   DoctorLogoutModal,
+  DoctorCertificateModal,
 } from '../components';
 
 export type { DoctorProfileInfo };
@@ -75,6 +76,7 @@ export default function DoctorProfileScreen({ navigation }: any) {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [certificateModalVisible, setCertificateModalVisible] = useState(false);
 
   const fetchDoctorStats = useCallback(async () => {
     try {
@@ -434,6 +436,9 @@ export default function DoctorProfileScreen({ navigation }: any) {
           onResetAvatar={handleResetAvatar}
           onViewAvatar={() => setIsViewingAvatar(true)}
           onEditProfile={handleOpenEditModal}
+          onPressPatients={() => navigation.navigate('DoctorPatients')}
+          onPressAppointments={() => navigation.navigate('DoctorAppointments')}
+          onPressCertificate={() => setCertificateModalVisible(true)}
           isDarkMode={isDarkMode}
           colors={colors}
         />
@@ -508,6 +513,15 @@ export default function DoctorProfileScreen({ navigation }: any) {
         isDarkMode={isDarkMode}
         onClose={() => setIsViewingAvatar(false)}
         onEditAvatar={pickImage}
+      />
+
+      {/* MODAL 5: CHI TIẾT CHỨNG CHỈ HÀNH NGHỀ */}
+      <DoctorCertificateModal
+        visible={certificateModalVisible}
+        info={docInfo}
+        onClose={() => setCertificateModalVisible(false)}
+        isDarkMode={isDarkMode}
+        colors={colors}
       />
     </View>
   );

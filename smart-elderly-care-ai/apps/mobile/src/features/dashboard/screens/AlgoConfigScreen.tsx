@@ -2,7 +2,7 @@
 // Màn hình Căn Chỉnh Tham Số Thuật Toán ("Chơi Algo" - Screenshot 2)
 // Cho phép thiết lập các ngưỡng kích hoạt cảnh báo theo yêu cầu Proposal
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import { useVitalStore } from '../../../store/useVitalStore';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useDeviceStore } from '../../../store/useDeviceStore';
+import { usePatientStore } from '../../../store/usePatientStore';
 import { devicesApi } from '../../../services/deviceService';
 import { alertsWS } from '../../../services/websocket';
 import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
@@ -23,11 +24,42 @@ export default function AlgoConfigScreen({ navigation, route }: any) {
   const { userRole, role, permissions, fetchMyPermissions } = useAuthStore();
   const [checkingPerms, setCheckingPerms] = useState(true);
 
-  const { iotDevices, activeDevice } = useDeviceStore();
+  const { iotDevices, activeDevice, fetchDevicesFromBackend } = useDeviceStore();
+  const { patientsList, fetchPatientsList } = usePatientStore();
 
   useEffect(() => {
     fetchMyPermissions().finally(() => setCheckingPerms(false));
+    fetchDevicesFromBackend();
+    fetchPatientsList();
   }, []);
+
+  const watchDevices = useMemo(
+    () => (iotDevices || []).filter((d) => d.type === 'watch' || d.device_type === 'SMARTBAND'),
+    [iotDevices]
+  );
+  const [selectedWatchId, setSelectedWatchId] = useState<string>(
+    route?.params?.deviceId ? String(route.params.deviceId) : ''
+  );
+
+  useEffect(() => {
+    if (watchDevices.length > 0 && !watchDevices.some((w) => String(w.id) === selectedWatchId)) {
+      setSelectedWatchId(String(watchDevices[0].id));
+    }
+  }, [watchDevices, selectedWatchId]);
+
+  const selectedWatch = useMemo(
+    () => watchDevices.find((w) => String(w.id) === selectedWatchId) || watchDevices[0] || null,
+    [watchDevices, selectedWatchId]
+  );
+
+  const getWearerLabel = (w: any) => {
+    if (w?.wearer_name) return w.wearer_name;
+    if (w?.elderly_id) {
+      const p = (patientsList || []).find((pt: any) => String(pt.id) === String(w.elderly_id));
+      if (p?.name || p?.full_name) return p.name || p.full_name;
+    }
+    return w?.name || 'Vòng đeo tay';
+  };
 
   const isOwnerOrAdmin =
     userRole === 'admin' ||
@@ -47,6 +79,15 @@ export default function AlgoConfigScreen({ navigation, route }: any) {
   const [fallAngle, setFallAngle] = useState(algoSettings.fallAngle.toString());
   const [immobilitySec, setImmobilitySec] = useState(algoSettings.immobilitySec.toString());
 
+  // Nạp ngưỡng riêng của đồng hồ đang chọn khi chuyển người cao tuổi / vòng đeo tay
+  useEffect(() => {
+    if (!selectedWatch) return;
+    const cfg = selectedWatch.config || {};
+    setMaxHR(String(cfg.hr_threshold_high ?? algoSettings.maxHeartRate ?? 120));
+    setMinHR(String(cfg.hr_threshold_low ?? algoSettings.minHeartRate ?? 50));
+    setMinSpO2(String(cfg.spo2_threshold_low ?? algoSettings.minSpO2 ?? 90));
+  }, [selectedWatch?.id, selectedWatch?.config]);
+
   useEffect(() => {
     alertsWS.connect();
     const handleWs = (event: any) => {
@@ -54,6 +95,10 @@ export default function AlgoConfigScreen({ navigation, route }: any) {
         event?.type === 'ALERT_NEW' &&
         (event?.alert_type === 'DEVICE_CONFIG_UPDATED' || event?.data?.alert_type === 'DEVICE_CONFIG_UPDATED')
       ) {
+        const evDevId = event?.data?.device_id;
+        if (evDevId && selectedWatch && String(evDevId) !== String(selectedWatch.id) && String(evDevId) !== String(selectedWatch.deviceId)) {
+          return;
+        }
         const t = event?.data?.thresholds;
         if (t) {
           if (t.hr_threshold_high) setMaxHR(String(t.hr_threshold_high));
@@ -98,9 +143,8 @@ export default function AlgoConfigScreen({ navigation, route }: any) {
     });
 
     try {
-      const devices = useDeviceStore.getState().iotDevices;
-      const targetDev = devices.find((d) => d.type === 'watch' || d.type === 'SMARTBAND') || devices[0];
-      const devId = targetDev?.deviceId || targetDev?.id || activeDevice?.id || 'BLE_BAND_01';
+      const targetDev = selectedWatch || watchDevices[0] || iotDevices[0];
+      const devId = targetDev?.deviceId || targetDev?.id || activeDevice?.id;
       if (devId) {
         await devicesApi.updateDeviceConfig(devId, {
           hr_threshold_high: newMaxHR,
@@ -108,6 +152,7 @@ export default function AlgoConfigScreen({ navigation, route }: any) {
           spo2_threshold_low: newMinSpO2,
           immobility_seconds: newImmobilitySec,
         });
+        await fetchDevicesFromBackend();
       }
     } catch (e) {
       console.warn('Sync device config fallback:', e);
@@ -210,9 +255,43 @@ export default function AlgoConfigScreen({ navigation, route }: any) {
           </View>
         </View>
 
-        {/* 2. Ngưỡng Sức khoẻ Vòng BLE */}
+        {/* 2. Ngưỡng Sức khoẻ Vòng BLE (riêng từng người cao tuổi) */}
         <View style={[styles.groupCard, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1 }]}>
           <LocalizedText style={styles.groupTitle}>2. Thuật toán sức khoẻ vòng đeo tay</LocalizedText>
+          {watchDevices.length > 0 ? (
+            <View style={{ marginBottom: 10 }}>
+              <LocalizedText style={[styles.watchSelectorHint, isDarkMode && { color: '#94A3B8' }]}>
+                Chọn người cao tuổi / vòng đeo tay để cấu hình ngưỡng riêng:
+              </LocalizedText>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+                {watchDevices.map((w) => {
+                  const isSel = String(w.id) === String(selectedWatch?.id);
+                  const wearer = getWearerLabel(w);
+                  return (
+                    <TouchableOpacity
+                      key={String(w.id)}
+                      onPress={() => setSelectedWatchId(String(w.id))}
+                      activeOpacity={0.75}
+                      style={[
+                        styles.watchPill,
+                        isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' },
+                        isSel && styles.watchPillActive,
+                      ]}
+                    >
+                      <Ionicons name="watch-outline" size={14} color={isSel ? '#FFF' : (isDarkMode ? '#94A3B8' : '#475569')} />
+                      <LocalizedText style={[styles.watchPillText, isDarkMode && { color: '#E2E8F0' }, isSel && { color: '#FFF' }]} numberOfLines={1}>
+                        {wearer}
+                      </LocalizedText>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : (
+            <LocalizedText style={[styles.watchSubNote, { marginBottom: 8 }, isDarkMode && { color: '#94A3B8' }]}>
+              Chưa có vòng đeo tay nào trong nhà.
+            </LocalizedText>
+          )}
           <View style={styles.inputRow}>
             <LocalizedText style={[styles.inputLabel, isDarkMode && { color: '#F8FAFC' }]}>Nhịp tim tối đa (Cảnh báo cao):</LocalizedText>
             <View style={[styles.inputBoxWrap, !canEditNow && styles.inputBoxDisabled, isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
@@ -431,5 +510,37 @@ const styles = StyleSheet.create({
   inputBoxDisabled: {
     backgroundColor: '#E2E8F0',
     borderColor: '#CBD5E1',
+  },
+  watchSelectorHint: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginBottom: 6,
+  },
+  watchPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  watchPillActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  watchPillText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    maxWidth: 180,
+  },
+  watchSubNote: {
+    fontSize: 11.5,
+    color: Colors.textSecondary,
+    marginTop: 4,
+    fontStyle: 'italic',
   },
 });

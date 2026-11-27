@@ -9,6 +9,7 @@ import {
   RefreshControl,
   StatusBar,
   Animated,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +18,7 @@ import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/nativ
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
+import { useDoctorPatientsStore } from '../../../store/useDoctorPatientsStore';
 import { doctorApi } from '../../../services/api';
 import { useDoctorAppointmentsStore } from '../../../store/useDoctorAppointmentsStore';
 import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
@@ -28,7 +30,6 @@ import {
   DoctorPatientCard,
   AppointmentFormModal,
 } from '../components';
-import { normalizePatientsList } from './DoctorHomeScreen';
 
 export type { PatientCardData };
 
@@ -42,12 +43,12 @@ const PatientSkeletonCard = ({ isDarkMode }: { isDarkMode: boolean }) => {
         Animated.timing(pulseAnim, {
           toValue: 0.85,
           duration: 750,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.timing(pulseAnim, {
           toValue: 0.35,
           duration: 750,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
       ])
     ).start();
@@ -126,9 +127,14 @@ export default function DoctorPatientsScreen() {
   const searchRef = useRef<any>(null);
   const { appointments, upsertAppointments } = useDoctorAppointmentsStore();
 
-  const [patients, setPatients] = useState<PatientCardData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    patients,
+    loading: storeLoading,
+    fetchPatients: fetchSharedPatients,
+  } = useDoctorPatientsStore();
+
   const [refreshing, setRefreshing] = useState(false);
+  const loading = storeLoading && patients.length === 0;
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTab, setFilterTab] = useState<'ALL' | 'DANGER' | 'WARNING' | 'NORMAL'>('ALL');
 
@@ -147,21 +153,15 @@ export default function DoctorPatientsScreen() {
 
   const fetchPatients = useCallback(async (isManual = false) => {
     try {
-      const res = await doctorApi.getPatients();
-      setPatients(normalizePatientsList(res.data));
+      await fetchSharedPatients();
     } catch {
       if (isManual) {
         LocalizedAlert.alert('Không thể tải lại', 'Vui lòng kiểm tra kết nối mạng và thử lại.');
       }
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
-  }, []);
-
-  useEffect(() => {
-    fetchPatients();
-  }, [fetchPatients]);
+  }, [fetchSharedPatients]);
 
   useFocusEffect(
     useCallback(() => {
@@ -213,7 +213,8 @@ export default function DoctorPatientsScreen() {
   const normalCount = patients.filter((p) => p.health_status === 'NORMAL').length;
 
   const handleViewDetail = (patientId: string) => {
-    navigation.navigate('DoctorPatientDetail', { patientId });
+    const target = patients.find((item) => String(item.id) === String(patientId));
+    navigation.navigate('DoctorPatientDetail', { patientId, initialPatient: target });
   };
 
   const handleViewAnalytics = (patientId: string) => {

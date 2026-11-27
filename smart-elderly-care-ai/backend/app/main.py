@@ -83,33 +83,41 @@ async def lifespan(app: FastAPI):
                         if dev_uuid:
                             payload["device_id"] = dev_uuid
 
-                    # Tự động đẩy video clip & ảnh sự cố lên AWS S3 Object Storage
-                    clip_path = payload.get("clip_path")
-                    if clip_path:
-                        try:
-                            import asyncio
-                            from app.services.storage.object_storage import object_storage
-                            event_name = f"{payload.get('id', 'incident')}.mp4"
-                            cloud_url = await asyncio.to_thread(object_storage.upload_file, clip_path, event_name, "video/mp4")
-                            if cloud_url:
-                                payload["video_clip_url"] = cloud_url
-                        except Exception as up_err:
-                            logger.warning("[Lifespan] Không thể upload clip lên AWS S3: %s", up_err)
+                    # Chỉ upload trực tiếp từ backend khi file tồn tại local trên backend và có cấu hình MINIO_ENDPOINT;
+                    # luồng camera Docker dùng VideoArchive (Edge -> S3 -> /api/v1/camera/archive).
+                    if settings.MINIO_ENDPOINT:
+                        clip_path = payload.get("clip_path")
+                        if clip_path and Path(clip_path).is_file():
+                            try:
+                                import asyncio
+                                from app.services.storage.object_storage import object_storage
+                                event_name = f"{payload.get('id', 'incident')}.mp4"
+                                cloud_url = await asyncio.to_thread(object_storage.upload_file, clip_path, event_name, "video/mp4")
+                                if cloud_url:
+                                    payload["video_clip_url"] = cloud_url
+                            except Exception as up_err:
+                                logger.warning("[Lifespan] Không thể upload clip lên Object Storage: %s", up_err)
 
-                    thumb_path = payload.get("thumbnail_path")
-                    if thumb_path:
-                        try:
-                            import asyncio
-                            from app.services.storage.object_storage import object_storage
-                            thumb_name = f"{payload.get('id', 'incident')}.jpg"
-                            cloud_thumb = await asyncio.to_thread(object_storage.upload_file, thumb_path, thumb_name, "image/jpeg")
-                            if cloud_thumb:
-                                payload["thumbnail_url"] = cloud_thumb
-                        except Exception as up_err:
-                            logger.warning("[Lifespan] Không thể upload ảnh lên AWS S3: %s", up_err)
+                        snapshots = payload.get("snapshots")
+                        thumb_path = payload.get("thumbnail_path") or (snapshots[0] if isinstance(snapshots, list) and snapshots else None)
+                        if thumb_path and Path(thumb_path).is_file():
+                            try:
+                                import asyncio
+                                from app.services.storage.object_storage import object_storage
+                                thumb_name = f"{payload.get('id', 'incident')}.jpg"
+                                cloud_thumb = await asyncio.to_thread(object_storage.upload_file, thumb_path, thumb_name, "image/jpeg")
+                                if cloud_thumb:
+                                    payload["thumbnail_url"] = cloud_thumb
+                            except Exception as up_err:
+                                logger.warning("[Lifespan] Không thể upload ảnh lên Object Storage: %s", up_err)
 
                     incident = await crud_incident.create_from_edge(session, payload)
                     await session.commit()
+                    try:
+                        from app.services.redis import redis_service
+                        await redis_service.invalidate_incidents_cache()
+                    except Exception:
+                        pass
 
                     # Real-time WebSocket broadcast & Auto-Escalation (45s)
                     try:
@@ -176,18 +184,51 @@ async def lifespan(app: FastAPI):
                         logger.warning("[Lifespan] WS broadcast warning: %s", ws_err)
 
                     # Gửi thông báo khẩn cấp (FCM) tới người nhà khi té ngã hoặc cảnh báo nguy cấp
-                    if incident.alert_type in ("FALL_DETECTED", "CRITICAL") or incident.alert_level in ("HIGH", "CRITICAL"):
+                    if incident.alert_type in ("FALL_DETECTED", "AI_FALL_DETECTED", "CRITICAL") or incident.alert_level in ("HIGH", "CRITICAL"):
                         try:
+                            import asyncio
+                            from uuid import UUID
+                            from app.models.camera_recording import CameraRecording
                             from app.models.device import Device
                             from app.models.house import House, HouseMember
                             from app.models.user import User
                             from app.services.notification.fcm_service import FCMService
+                            from app.services.storage import video_storage
                             from sqlalchemy import select, or_
+
+                            # Chờ tối đa 6s để VideoArchive trên Edge upload snapshot + clip 5s lên S3 và cập nhật DB
+                            if incident.alert_type in ("FALL_DETECTED", "AI_FALL_DETECTED"):
+                                for _ in range(12):
+                                    has_clip = bool(incident.video_clip_url) and not incident.video_clip_url.startswith("/recordings/")
+                                    has_thumb = bool(incident.thumbnail_url) and not incident.thumbnail_url.startswith("/recordings/")
+                                    if has_clip and has_thumb:
+                                        break
+                                    await asyncio.sleep(0.5)
+                                    await session.refresh(incident)
+
+                            fcm_image_url = None
+                            if incident.thumbnail_url and incident.thumbnail_url.startswith("/api/v1/camera/archive/") and incident.thumbnail_url.endswith("/playback"):
+                                try:
+                                    rec_id = UUID(incident.thumbnail_url.split("/")[5])
+                                    rec = await session.get(CameraRecording, rec_id)
+                                    if rec:
+                                        fcm_image_url = await asyncio.to_thread(
+                                            lambda: video_storage.client().generate_presigned_url(
+                                                "get_object",
+                                                Params={"Bucket": video_storage.bucket(), "Key": rec.object_key},
+                                                ExpiresIn=3600,
+                                            )
+                                        )
+                                except Exception:
+                                    pass
 
                             device = await session.get(Device, incident.device_id)
                             if device and device.house_id:
                                 house = await session.get(House, device.house_id)
-                                member_subq = select(HouseMember.user_id).where(HouseMember.house_id == device.house_id)
+                                member_subq = select(HouseMember.user_id).where(
+                                    HouseMember.house_id == device.house_id,
+                                    HouseMember.status == "ACTIVE",
+                                )
                                 user_query = select(User).where(
                                     User.is_active.is_(True),
                                     or_(
@@ -197,7 +238,13 @@ async def lifespan(app: FastAPI):
                                 )
                                 users_res = await session.execute(user_query)
                                 house_users = users_res.scalars().all()
-                                tokens = [u.fcm_token for u in house_users if u.fcm_token]
+                                tokens = list(dict.fromkeys(
+                                    u.fcm_token
+                                    for u in house_users
+                                    if u.fcm_token
+                                    and getattr(u, "notifications_enabled", True)
+                                    and getattr(u, "critical_alert_enabled", True)
+                                ))
                                 if tokens:
                                     fcm = FCMService()
                                     cred_path = Path(settings.FCM_SERVICE_ACCOUNT_PATH)
@@ -220,6 +267,7 @@ async def lifespan(app: FastAPI):
                                             "thumbnail_url": incident.thumbnail_url or "",
                                         },
                                         priority="high",
+                                        image_url=fcm_image_url,
                                     )
                                     logger.info("[Lifespan] Đã gửi thông báo té ngã tới %d thiết bị.", len(tokens))
                         except Exception as fcm_err:

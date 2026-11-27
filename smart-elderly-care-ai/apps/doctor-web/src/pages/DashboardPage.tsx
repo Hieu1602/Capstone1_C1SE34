@@ -210,7 +210,12 @@ export const DashboardPage: React.FC = () => {
 
   const handleMonthSelect = (mStr: string) => {
     const [y, m] = mStr.split('-').map(Number);
-    setChartAnchorDate(new Date(y, m - 1, 1));
+    const nowDate = new Date();
+    if (y === nowDate.getFullYear() && m - 1 === nowDate.getMonth()) {
+      setChartAnchorDate(nowDate);
+    } else {
+      setChartAnchorDate(new Date(y, m - 1, 1));
+    }
   };
 
   const selectedMonthStr = `${chartAnchorDate.getFullYear()}-${String(chartAnchorDate.getMonth() + 1).padStart(2, '0')}`;
@@ -251,7 +256,6 @@ export const DashboardPage: React.FC = () => {
   // Handler khi click chọn bất kỳ ngày nào trên Mini Calendar
   const handleSelectCalendarDate = useCallback((dateStr: string) => {
     setSelectedDate(dateStr);
-    setShowDayScheduleModal(true);
   }, []);
 
   // Handler mở tạo lịch khám mới gắn với ngày đang chọn
@@ -509,7 +513,7 @@ export const DashboardPage: React.FC = () => {
         upcomingCount={upcomingAppointments.length}
         onlineCount={onlineCount}
         onNavigatePatients={() => navigate('/patients')}
-        onNavigateAppointments={() => navigate('/appointments')}
+        onNavigateAppointments={() => navigate(`/appointments?date=${todayStr}`)}
         loading={isLoading && patients.length === 0}
       />
 
@@ -542,7 +546,9 @@ export const DashboardPage: React.FC = () => {
             miniCalendarCells={miniCalendarCells}
             selectedDate={selectedDate}
             onSelectDate={handleSelectCalendarDate}
-            onNavigateAppointments={() => setShowDayScheduleModal(true)}
+            onNavigateAppointments={() =>
+              navigate(selectedDate ? `/appointments?date=${selectedDate}` : '/appointments')
+            }
           />
         </div>
       </div>

@@ -25,15 +25,6 @@ interface IncidentEvidenceViewerProps {
   colors: any;
 }
 
-const SKELETON_JOINTS = [
-  { top: 12, left: '46%' },
-  { top: 38, left: '32%' },
-  { top: 38, left: '60%' },
-  { top: 82, left: '40%' },
-  { top: 110, left: '26%' },
-  { top: 125, left: '72%' },
-];
-
 export const IncidentEvidenceViewer: React.FC<IncidentEvidenceViewerProps> = ({
   incident,
   viewMode,
@@ -84,20 +75,6 @@ export const IncidentEvidenceViewer: React.FC<IncidentEvidenceViewerProps> = ({
             <Text style={styles.evidenceOsdText}>REC ● TRÍCH XUẤT BUFFER</Text>
             <Text style={[styles.evidenceOsdText, { marginLeft: 'auto' }]}>{incident.device_id || 'CAM-01'}</Text>
           </View>
-
-          {incident.alert_type === 'FALL_DETECTED' && (
-            <View style={styles.aiBoundingBox}>
-              <View style={styles.boxTag}>
-                <Ionicons name="warning" size={11} color="#FFF" style={{ marginRight: 3 }} />
-                <Text style={styles.boxTagText}>
-                  FALL DETECTED{incident.confidence != null ? ` (${(incident.confidence * 100).toFixed(1)}%)` : ''}
-                </Text>
-              </View>
-              {SKELETON_JOINTS.map((pos, idx) => (
-                <View key={idx} style={[styles.skeletonJoint, pos as any]} />
-              ))}
-            </View>
-          )}
 
           <View style={styles.evidenceOverlayFooter}>
             <View style={styles.aiTag}>
@@ -181,10 +158,6 @@ const styles = StyleSheet.create({
   evidenceOverlayHeader: { position: 'absolute', top: 8, left: 10, right: 10, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   recDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444', marginRight: 6 },
   evidenceOsdText: { color: '#FFF', fontSize: 11, fontWeight: '600', textShadowColor: 'rgba(0,0,0,0.9)', textShadowRadius: 4 },
-  aiBoundingBox: { position: 'absolute', top: '32%', left: '24%', width: '54%', height: '52%', borderWidth: 2, borderColor: '#EF4444', borderRadius: 4, backgroundColor: 'rgba(239, 68, 68, 0.12)' },
-  boxTag: { position: 'absolute', top: -18, left: -2, flexDirection: 'row', alignItems: 'center', backgroundColor: '#EF4444', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 3 },
-  boxTagText: { color: '#FFF', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
-  skeletonJoint: { position: 'absolute', width: 8, height: 8, borderRadius: 4, backgroundColor: '#22C55E', borderWidth: 1.5, borderColor: '#FFF' },
   evidenceOverlayFooter: { position: 'absolute', bottom: 8, left: 10, right: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   aiTag: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(239, 68, 68, 0.9)', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 4 },
   aiTagText: { color: '#FFF', fontSize: 11, fontWeight: '700' },

@@ -410,13 +410,13 @@ export default function AIAssistantScreen({ navigation }: any) {
       Animated.timing(backdropAnim, {
         toValue: 1,
         duration: 220,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.spring(slideAnim, {
         toValue: 0,
         bounciness: 0,
         speed: 18,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }),
     ]).start();
   }, [backdropAnim, fetchSessions, slideAnim]);
@@ -427,12 +427,12 @@ export default function AIAssistantScreen({ navigation }: any) {
       Animated.timing(backdropAnim, {
         toValue: 0,
         duration: 180,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.timing(slideAnim, {
         toValue: -340,
         duration: 180,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }),
     ]).start(() => {
       setIsSidebarOpen(false);

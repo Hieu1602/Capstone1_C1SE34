@@ -22,6 +22,7 @@ import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useAlertStore } from '../../../store/useAlertStore';
 import { useDoctorAppointmentsStore } from '../../../store/useDoctorAppointmentsStore';
+import { useDoctorPatientsStore } from '../../../store/useDoctorPatientsStore';
 import { doctorApi, householdApi, usersApi } from '../../../services/api';
 import { toLocalYMD, getLocalTodayYMD } from '../utils/dateUtils';
 import { alertsWS } from '../../../services/websocket';
@@ -67,10 +68,14 @@ export default function DoctorHomeScreen() {
     fetchAppointments: fetchSharedAppointments,
     setAppointments: setSharedAppointments,
   } = useDoctorAppointmentsStore();
+  const {
+    patients,
+    fetchPatients: fetchSharedPatients,
+    setPatients: setSharedPatients,
+  } = useDoctorPatientsStore();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [patients, setPatients] = useState<PatientCardData[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [notifModalVisible, setNotifModalVisible] = useState(false);
@@ -114,7 +119,9 @@ export default function DoctorHomeScreen() {
         if (!raw) return;
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed.patients) && parsed.patients.length > 0) {
-          setPatients(parsed.patients);
+          if (useDoctorPatientsStore.getState().patients.length === 0) {
+            setSharedPatients(parsed.patients);
+          }
           setSelectedPatientId((curr) => curr || parsed.selectedPatientId || parsed.patients[0]?.id || null);
         }
         if (useDoctorAppointmentsStore.getState().appointments.length === 0 && Array.isArray(parsed.appointments)) {
@@ -123,7 +130,7 @@ export default function DoctorHomeScreen() {
         setLoading(false);
       })
       .catch(() => {});
-  }, [setSharedAppointments]);
+  }, [setSharedAppointments, setSharedPatients]);
 
   // 2. Bộ đếm 10s kiểm tra độ trễ sinh hiệu
   useEffect(() => {
@@ -158,7 +165,7 @@ export default function DoctorHomeScreen() {
   const fetchData = useCallback(async () => {
     try {
       const [patRes, aptRes, meRes] = await Promise.allSettled([
-        withTimeout(doctorApi.getPatients(), 5000),
+        withTimeout(fetchSharedPatients(), 5000),
         withTimeout(fetchSharedAppointments(), 5000),
         withTimeout(usersApi.getMe(), 5000),
         withTimeout(fetchIncidents(), 5000),
@@ -172,10 +179,9 @@ export default function DoctorHomeScreen() {
 
       let nextPatients: PatientCardData[] | null = null;
       let nextSelId: string | null = null;
-      if (patRes.status === 'fulfilled' && patRes.value.data) {
-        const normalized = normalizePatientsList(patRes.value.data);
+      if (patRes.status === 'fulfilled' && Array.isArray(patRes.value) && patRes.value.length > 0) {
+        const normalized = patRes.value;
         nextPatients = normalized;
-        setPatients(normalized);
         setSelectedPatientId((curr) => {
           if (curr && normalized.some((p) => p.id === curr)) {
             nextSelId = curr;
@@ -210,7 +216,7 @@ export default function DoctorHomeScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [fetchIncidents, fetchSharedAppointments]);
+  }, [fetchIncidents, fetchSharedAppointments, fetchSharedPatients]);
 
   const handleRespondHouseInvite = async (incident: any, action: 'accept' | 'reject') => {
     try {
@@ -382,7 +388,10 @@ export default function DoctorHomeScreen() {
           isDarkMode={isDarkMode}
           colors={colors}
           onSeeAll={() => navigation.navigate('DoctorPatients')}
-          onViewPatient={(patientId) => navigation.navigate('DoctorPatientDetail', { patientId })}
+          onViewPatient={(patientId) => {
+            const p = patients.find((item) => String(item.id) === String(patientId));
+            navigation.navigate('DoctorPatientDetail', { patientId, initialPatient: p });
+          }}
           onBookAppointment={() => navigation.navigate('DoctorAppointments')}
         />
 
@@ -401,7 +410,10 @@ export default function DoctorHomeScreen() {
         <HeroHealthCard
           patient={activePatient}
           nowMs={nowMs}
-          onPress={(patientId) => navigation.navigate('DoctorPatientDetail', { patientId })}
+          onPress={(patientId) => {
+            const p = patients.find((item) => String(item.id) === String(patientId)) || activePatient;
+            navigation.navigate('DoctorPatientDetail', { patientId, initialPatient: p });
+          }}
         />
       </ScrollView>
 

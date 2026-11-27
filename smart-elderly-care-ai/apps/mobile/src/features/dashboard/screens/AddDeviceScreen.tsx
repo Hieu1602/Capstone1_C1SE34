@@ -130,12 +130,12 @@ export default function AddDeviceScreen({ navigation, route }: any) {
           Animated.timing(pulseAnim, {
             toValue: 1.35,
             duration: 900,
-            useNativeDriver: true,
+            useNativeDriver: Platform.OS !== 'web',
           }),
           Animated.timing(pulseAnim, {
             toValue: 1,
             duration: 900,
-            useNativeDriver: true,
+            useNativeDriver: Platform.OS !== 'web',
           }),
         ])
       ).start();

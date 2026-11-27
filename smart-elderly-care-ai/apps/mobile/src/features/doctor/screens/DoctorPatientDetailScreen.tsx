@@ -21,7 +21,32 @@ import { alertsWS } from '../../../services/websocket';
 
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
+import { useDoctorPatientsStore } from '../../../store/useDoctorPatientsStore';
 import { doctorApi } from '../../../services/api';
+
+const withTimeout = <T,>(promise: Promise<T>, ms = 8000): Promise<T> =>
+  Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('API Timeout')), ms)),
+  ]);
+
+const buildOptimisticDetail = (p: any, fallbackId: string): PatientDetail | null => {
+  if (!p) return null;
+  return {
+    id: String(p.id || fallbackId),
+    name: p.name || p.full_name || 'Bệnh nhân',
+    age: p.age,
+    gender: p.gender,
+    blood_type: p.blood_type,
+    avatar_url: p.avatar_url,
+    house_name: p.house_name,
+    house_address: p.house_address,
+    heart_rate: p.heart_rate,
+    spo2: p.spo2,
+    blood_pressure: p.blood_pressure,
+    skin_temp_max: p.skin_temp_max,
+  };
+};
 
 import {
   ConditionItem,
@@ -63,13 +88,29 @@ export default function DoctorPatientDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { isDarkMode, colors } = useTheme();
-  const patientId = route.params?.patientId || '';
+  const patientId = String(route.params?.patientId || '');
+  const initialPatientParam = route.params?.initialPatient;
+  const {
+    patients: storePatients,
+    patientDetailsCache,
+    prescriptionsCache,
+    setPatientDetailCache,
+    setPrescriptionsCache,
+  } = useDoctorPatientsStore();
+
+  const cachedDetail = patientId ? patientDetailsCache[patientId] : undefined;
+  const cachedRx = patientId ? prescriptionsCache[patientId] : undefined;
+  const storeBasicPatient = storePatients.find((p) => String(p.id) === patientId);
+  const initialDetail = cachedDetail || buildOptimisticDetail(initialPatientParam || storeBasicPatient, patientId);
 
   const [activeTab, setActiveTab] = useState<'RECORD' | 'PRESCRIPTIONS' | 'VITALS'>('RECORD');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!initialDetail);
   const [refreshing, setRefreshing] = useState(false);
-  const [detail, setDetail] = useState<PatientDetail | null>(null);
-  const [prescriptions, setPrescriptions] = useState<PrescriptionItem[]>([]);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [detail, setDetail] = useState<PatientDetail | null>(initialDetail);
+  const [prescriptions, setPrescriptions] = useState<PrescriptionItem[]>(cachedRx || []);
+  const [rxLoaded, setRxLoaded] = useState<boolean>(Boolean(cachedRx));
+  const [rxLoading, setRxLoading] = useState(false);
 
   // 1. Modal ghi chú bác sĩ & lịch tái khám
   const [modalNotesVisible, setModalNotesVisible] = useState(false);
@@ -114,17 +155,27 @@ export default function DoctorPatientDetailScreen() {
   const [hrLow, setHrLow] = useState('50');
   const [spo2Low, setSpo2Low] = useState('90');
 
-  const fetchDetail = useCallback(async () => {
+  const fetchDetail = useCallback(async (opts?: { includePrescriptions?: boolean; forceRefresh?: boolean }) => {
     if (!patientId) return;
+    const shouldFetchRx = Boolean(opts?.includePrescriptions || activeTab === 'PRESCRIPTIONS');
     try {
-      setLoading(true);
-      const [resDetail, resRx] = await Promise.all([
-        doctorApi.getPatientDetail(patientId),
-        doctorApi.getPrescriptions(patientId),
-      ]);
-      if (resDetail.data) {
-        const d = resDetail.data;
+      setFetchError(null);
+      if (!detail && !opts?.forceRefresh) setLoading(true);
+      if (shouldFetchRx && !rxLoaded) setRxLoading(true);
+
+      const tasks: Promise<any>[] = [withTimeout(doctorApi.getPatientDetail(patientId), 8000)];
+      if (shouldFetchRx) {
+        tasks.push(withTimeout(doctorApi.getPrescriptions(patientId), 8000));
+      }
+
+      const results = await Promise.allSettled(tasks);
+      const resDetail = results[0];
+      const resRx = shouldFetchRx ? results[1] : null;
+
+      if (resDetail.status === 'fulfilled' && resDetail.value?.data) {
+        const d = resDetail.value.data;
         setDetail(d);
+        setPatientDetailCache(patientId, d);
         setEditNotes(d.doctor_notes || '');
         setEditNextAppt(d.next_appointment || '');
         setEditDrugAllergies(d.drug_allergies || '');
@@ -133,20 +184,46 @@ export default function DoctorPatientDetailScreen() {
         if (d.hr_threshold_low) setHrLow(String(d.hr_threshold_low));
         if (d.hr_threshold_high) setHrHigh(String(d.hr_threshold_high));
         if (d.spo2_threshold_low) setSpo2Low(String(d.spo2_threshold_low));
+      } else if (resDetail.status === 'rejected') {
+        setFetchError('Không thể tải đầy đủ hồ sơ y tế (kết nối chậm hoặc lỗi máy chủ).');
       }
-      if (Array.isArray(resRx.data)) setPrescriptions(resRx.data);
-    } catch {} finally {
+
+      if (resRx && resRx.status === 'fulfilled' && Array.isArray(resRx.value?.data)) {
+        setPrescriptions(resRx.value.data);
+        setPrescriptionsCache(patientId, resRx.value.data);
+        setRxLoaded(true);
+      }
+    } catch {
+      setFetchError('Không thể tải dữ liệu hồ sơ bệnh nhân.');
+    } finally {
       setLoading(false);
       setRefreshing(false);
+      setRxLoading(false);
     }
-  }, [patientId]);
+  }, [patientId, activeTab, rxLoaded, detail, setPatientDetailCache, setPrescriptionsCache]);
+
+  const fetchPrescriptionsOnly = useCallback(async () => {
+    if (!patientId) return;
+    try {
+      setRxLoading(true);
+      const resRx = await withTimeout(doctorApi.getPrescriptions(patientId), 8000);
+      if (Array.isArray(resRx?.data)) {
+        setPrescriptions(resRx.data);
+        setPrescriptionsCache(patientId, resRx.data);
+        setRxLoaded(true);
+      }
+    } catch {
+      // Giữ nguyên dữ liệu đơn thuốc đã cache nếu có
+    } finally {
+      setRxLoading(false);
+    }
+  }, [patientId, setPrescriptionsCache]);
 
   useEffect(() => {
-    fetchDetail();
     const unsub = alertsWS.subscribe((event: any) => {
       const aType = event?.alert_type || event?.data?.alert_type;
       if (event?.type === 'ALERT_NEW' && (aType === 'MEDICAL_RECORD_UPDATED' || aType === 'DEVICE_CONFIG_UPDATED')) {
-        fetchDetail();
+        fetchDetail({ forceRefresh: true });
       }
     });
     return () => unsub();
@@ -157,6 +234,13 @@ export default function DoctorPatientDetailScreen() {
       fetchDetail();
     }, [fetchDetail])
   );
+
+  // Lazy load Đơn thuốc chỉ khi người dùng chuyển sang tab PRESCRIPTIONS
+  useEffect(() => {
+    if (activeTab === 'PRESCRIPTIONS' && !rxLoaded) {
+      fetchPrescriptionsOnly();
+    }
+  }, [activeTab, rxLoaded, fetchPrescriptionsOnly]);
 
   // Lưu ghi chú & lịch tái khám
   const handleOpenNotesModal = () => {
@@ -446,16 +530,22 @@ export default function DoctorPatientDetailScreen() {
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchDetail(); }} colors={[Colors.primary]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchDetail({ includePrescriptions: activeTab === 'PRESCRIPTIONS', forceRefresh: true }); }} colors={[Colors.primary]} />}
       >
-        {loading && !refreshing && <ActivityIndicator size="small" color={Colors.primary} style={{ marginVertical: 10 }} />}
+        {loading && !refreshing && !detail && <ActivityIndicator size="small" color={Colors.primary} style={{ marginVertical: 10 }} />}
+        {fetchError && (
+          <View style={{ backgroundColor: isDarkMode ? '#450A0A' : '#FEF2F2', borderColor: '#FCA5A5', borderWidth: 1, borderRadius: 10, padding: 10, marginBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Ionicons name="warning-outline" size={16} color="#DC2626" />
+            <Text style={{ flex: 1, fontSize: 12, color: isDarkMode ? '#FCA5A5' : '#991B1B' }}>{fetchError}</Text>
+          </View>
+        )}
 
         <PatientHeroCard detail={detail} isDarkMode={isDarkMode} colors={colors} onViewAnalytics={handleNavigateAnalytics} />
 
         <View style={[styles.segmentContainer, { backgroundColor: isDarkMode ? '#1E293B' : '#EEF2F6' }]}>
           {[
             { key: 'RECORD', label: 'Bệnh án' },
-            { key: 'PRESCRIPTIONS', label: `Đơn thuốc (${prescriptions.length})` },
+            { key: 'PRESCRIPTIONS', label: rxLoaded ? `Đơn thuốc (${prescriptions.length})` : 'Đơn thuốc' },
             { key: 'VITALS', label: 'Sinh hiệu & Ngưỡng' },
           ].map((tab) => {
             const active = activeTab === tab.key;
@@ -488,15 +578,19 @@ export default function DoctorPatientDetailScreen() {
         )}
 
         {activeTab === 'PRESCRIPTIONS' && (
-          <PatientPrescriptionsTab
-            prescriptions={prescriptions}
-            isDarkMode={isDarkMode}
-            colors={colors}
-            onOpenCreatePrescription={handleOpenCreatePrescription}
-            onOpenEditPrescription={handleOpenEditPrescription}
-            onDeletePrescription={handleDeletePrescription}
-            onToggleSpeakerReminder={handleToggleSpeakerReminder}
-          />
+          rxLoading && prescriptions.length === 0 ? (
+            <ActivityIndicator size="small" color={Colors.primary} style={{ marginVertical: 24 }} />
+          ) : (
+            <PatientPrescriptionsTab
+              prescriptions={prescriptions}
+              isDarkMode={isDarkMode}
+              colors={colors}
+              onOpenCreatePrescription={handleOpenCreatePrescription}
+              onOpenEditPrescription={handleOpenEditPrescription}
+              onDeletePrescription={handleDeletePrescription}
+              onToggleSpeakerReminder={handleToggleSpeakerReminder}
+            />
+          )
         )}
 
         {activeTab === 'VITALS' && (

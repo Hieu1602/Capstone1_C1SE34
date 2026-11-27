@@ -36,7 +36,42 @@ def compute_face_embedding(face_input: Any, target_dim: int = 128) -> List[float
         except Exception:
             img = Image.open(face_input).convert("RGB")
 
-    # 1. Chuẩn hóa kích thước khuôn mặt về 112 x 112 & cân bằng sáng (khớp với Edge Hub)
+    # 1. Cắt vùng khuôn mặt khỏi ảnh chân dung để khớp với FaceReID trên Edge Hub
+    w_img, h_img = img.size
+    cropped_via_cv2 = False
+    try:
+        import cv2  # type: ignore
+        import numpy as np  # type: ignore
+
+        bgr = np.array(img)[:, :, ::-1]
+        data = getattr(cv2, "data", None)
+        xml_path = (getattr(data, "haarcascades", "") + "haarcascade_frontalface_default.xml") if data else ""
+        cascade_cls = getattr(cv2, "CascadeClassifier", None)
+        if cascade_cls and xml_path:
+            cascade = cascade_cls(xml_path)
+            if not cascade.empty():
+                gray_cv = cv2.equalizeHist(cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY))
+                min_side = max(24, min(h_img, w_img) // 8)
+                faces = cascade.detectMultiScale(gray_cv, scaleFactor=1.1, minNeighbors=4, minSize=(min_side, min_side))
+                if len(faces) > 0:
+                    x, y, w, h = max(faces, key=lambda f: int(f[2]) * int(f[3]))
+                    x1 = max(0, x - int(w * 0.12))
+                    y1 = max(0, y - int(h * 0.15))
+                    x2 = min(w_img, x + w + int(w * 0.12))
+                    y2 = min(h_img, y + h + int(h * 0.12))
+                    if x2 > x1 + 15 and y2 > y1 + 15:
+                        img = img.crop((x1, y1, x2, y2))
+                        cropped_via_cv2 = True
+    except Exception:
+        pass
+
+    if not cropped_via_cv2 and max(w_img, h_img) > 160:
+        x1, x2 = int(w_img * 0.2), int(w_img * 0.8)
+        y1, y2 = int(h_img * 0.08), int(h_img * 0.72)
+        if x2 > x1 + 20 and y2 > y1 + 20:
+            img = img.crop((x1, y1, x2, y2))
+
+    # 2. Chuẩn hóa kích thước khuôn mặt về 112 x 112 & cân bằng sáng (khớp với Edge Hub)
     from PIL import ImageOps
     resized = img.resize((112, 112), Image.Resampling.BILINEAR)
     gray = ImageOps.equalize(resized.convert("L"))

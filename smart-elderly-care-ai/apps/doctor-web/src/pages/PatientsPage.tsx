@@ -222,7 +222,7 @@ export const PatientsPage: React.FC = () => {
       setAnalytics(data);
       if (cached) cached.analyticsByKey[key] = data;
     } catch {
-      // ignore
+      // Giữ nguyên dữ liệu cache nếu có
     } finally {
       setIsLoadingAnalytics(false);
     }

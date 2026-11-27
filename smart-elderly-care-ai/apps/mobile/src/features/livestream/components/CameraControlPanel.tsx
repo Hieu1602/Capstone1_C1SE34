@@ -2,7 +2,7 @@
  * Hiển thị panel Talk, Voice Call và Pan/Tilt bên dưới video trực tiếp.
  */
 import React, { useEffect, useRef, useState } from "react";
-import { Animated, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import { Animated, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { LocalizedText as Text } from "../../../i18n/LocalizedComponents";
 import { useTheme } from "../../../store/useThemeStore";
 import type { CameraIntercom } from "../hooks/useCameraIntercom";
@@ -43,13 +43,13 @@ export default function CameraControlPanel(props: Props) {
                 Animated.timing(fadeAnim, {
                     toValue: 1,
                     duration: 220,
-                    useNativeDriver: true,
+                    useNativeDriver: Platform.OS !== "web",
                 }),
                 Animated.spring(slideAnim, {
                     toValue: 0,
                     friction: 9,
                     tension: 65,
-                    useNativeDriver: true,
+                    useNativeDriver: Platform.OS !== "web",
                 }),
             ]).start();
         }
@@ -61,7 +61,7 @@ export default function CameraControlPanel(props: Props) {
             Animated.timing(contentAnim, {
                 toValue: 1,
                 duration: 180,
-                useNativeDriver: true,
+                useNativeDriver: Platform.OS !== "web",
             }).start();
         }
     }, [props.panel]);

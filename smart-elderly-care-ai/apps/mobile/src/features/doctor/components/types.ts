@@ -174,9 +174,21 @@ export interface DoctorProfileInfo {
 // Danh sách danh xưng hỗ trợ
 export const STANDARD_PATIENT_NAMES: string[] = [];
 
+// Helper trích xuất mảng bệnh nhân từ các format API phổ biến (data, data.items, data.data, data.patients, data.results)
+export const extractPatientsArray = (payload: any): any[] | null => {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== 'object') return null;
+  if (Array.isArray(payload.items)) return payload.items;
+  if (Array.isArray(payload.data)) return payload.data;
+  if (Array.isArray(payload.patients)) return payload.patients;
+  if (Array.isArray(payload.results)) return payload.results;
+  return null;
+};
+
 // Hàm chuẩn hóa dữ liệu bệnh nhân thực tế từ API/Database (Không dùng dữ liệu ảo)
-export const normalizePatientsList = (rawList: any[]): PatientCardData[] => {
-  if (!Array.isArray(rawList) || rawList.length === 0) {
+export const normalizePatientsList = (rawPayload: any): PatientCardData[] => {
+  const rawList = extractPatientsArray(rawPayload);
+  if (!rawList || rawList.length === 0) {
     return [];
   }
 

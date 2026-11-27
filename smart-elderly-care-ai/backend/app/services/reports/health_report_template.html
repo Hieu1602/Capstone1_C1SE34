@@ -94,8 +94,8 @@ tbody tr:nth-child(even){background:var(--bg)}.c{text-align:center}
 <section class="pt">
   <div><b>Họ tên</b>{{ patient.name }}</div><div><b>Tuổi / Giới</b>{{ patient.age }} · {{ patient.sex }}</div>
   <div><b>Nhóm máu</b>{{ patient.blood_type or '—' }}</div><div><b>Ngôi nhà</b>{{ patient.house or '—' }}</div>
-  <div class="wide"><b>Thiết bị đeo</b>{{ device.name }} ({{ device.id }})</div>
-  <div class="wide"><b>Đồng bộ gần nhất</b>{{ device.last_sync or '—' }}</div>
+  <div><b>Chủ hộ</b>{{ patient.owner_name or '—' }}</div><div><b>Bác sĩ phụ trách</b>{{ patient.doctor_name or '—' }}</div>
+  <div><b>Thiết bị đeo</b>{{ device.name }} ({{ device.id }})</div><div><b>Đồng bộ gần nhất</b>{{ device.last_sync or '—' }}</div>
 </section>
 
 <section class="banner st-{{ summary.status_level }}">

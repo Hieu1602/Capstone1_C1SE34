@@ -17,8 +17,8 @@ import {
   VitalRangeMode,
   formatDM,
   formatDMY,
-  formatShortWeekdayDM,
   formatYMD,
+  formatShortWeekdayDM,
   parseFlexibleDate,
   parseYMD,
 } from '../../utils/dateFilter';
@@ -334,7 +334,7 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
       {/* Chart container */}
       <div className="h-72 w-full rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs dark:border-slate-800/80 dark:bg-[#0F172A]">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 10, right: 8, left: 4, bottom: 0 }}>
+          <LineChart data={chartData} margin={{ top: 10, right: 14, left: 6, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.25} vertical={false} />
             <XAxis
               dataKey="date"
@@ -365,7 +365,7 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
             {showSpO2 && (
               <YAxis
                 yAxisId="right"
-                width={44}
+                width={46}
                 orientation={showHR ? 'right' : 'left'}
                 domain={[spo2Min, 100]}
                 ticks={spo2Ticks}
@@ -379,7 +379,7 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
             {showBP && (
               <YAxis
                 yAxisId="bp"
-                width={62}
+                width={64}
                 domain={[50, 180]}
                 stroke="#F43F5E"
                 fontSize={11}
@@ -391,7 +391,7 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
             {showTemp && (
               <YAxis
                 yAxisId="temp"
-                width={44}
+                width={48}
                 domain={[34, 40]}
                 stroke="#F97316"
                 fontSize={11}

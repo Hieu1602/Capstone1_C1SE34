@@ -77,6 +77,7 @@ class FCMService:
         data: Optional[dict] = None,
         priority: str = "high",
         language: str = "vi",
+        image_url: Optional[str] = None,
     ) -> dict:
         """
         Gửi push notification đến danh sách FCM tokens.
@@ -105,7 +106,8 @@ class FCMService:
         try:
             from firebase_admin import messaging  # type: ignore
 
-            notification = messaging.Notification(title=title, body=body)
+            valid_image = image_url if (image_url and image_url.startswith(("http://", "https://"))) else None
+            notification = messaging.Notification(title=title, body=body, image=valid_image)
 
             # Phân loại kênh thông báo: Báo động nguy hiểm (emergency_alerts_v6) vs Thông báo thường ting ting (smartcare_normal_v6)
             alert_type = str((data or {}).get("alert_type") or (data or {}).get("type") or "").upper()
@@ -142,6 +144,7 @@ class FCMService:
                 notification=messaging.AndroidNotification(
                     title=title,
                     body=body,
+                    image=valid_image,
                     sound="default",
                     channel_id=chosen_channel_id,
                     priority="max" if is_emergency else "high",

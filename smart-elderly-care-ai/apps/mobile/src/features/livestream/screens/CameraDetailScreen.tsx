@@ -6,6 +6,7 @@ import {
     Animated,
     Linking,
     Modal,
+    Platform,
     ScrollView,
     StatusBar,
     StyleSheet,
@@ -159,7 +160,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
             Animated.timing(archiveFade, {
                 toValue: 1,
                 duration: 200,
-                useNativeDriver: true,
+                useNativeDriver: Platform.OS !== "web",
             }).start();
         }
     }, [sheet, archiveTab]);

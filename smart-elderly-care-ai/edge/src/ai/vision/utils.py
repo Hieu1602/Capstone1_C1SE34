@@ -8,11 +8,87 @@ Provides:
 - Coordinate transformation helpers
 """
 
+from pathlib import Path
 from typing import List, Optional, Tuple
+import unicodedata
 import numpy as np
 import logging
 
 logger = logging.getLogger(__name__)
+
+_FONT_CACHE: dict[int, object] = {}
+
+
+def _get_unicode_font(font_size: int = 18):
+    """Nạp font TrueType hỗ trợ tiếng Việt (cache theo kích thước)."""
+    if font_size in _FONT_CACHE:
+        return _FONT_CACHE[font_size]
+    try:
+        from PIL import ImageFont  # type: ignore
+    except ImportError:
+        _FONT_CACHE[font_size] = None
+        return None
+
+    candidates = (
+        "C:/Windows/Fonts/segoeui.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+        "C:/Windows/Fonts/tahoma.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+    )
+    font = None
+    for path in candidates:
+        if Path(path).is_file():
+            try:
+                font = ImageFont.truetype(path, font_size)
+                break
+            except Exception:
+                continue
+    _FONT_CACHE[font_size] = font
+    return font
+
+
+def _strip_accents(text: str) -> str:
+    """Chuyển tiếng Việt có dấu sang ASCII khi thiếu Pillow/font TTF."""
+    text = text.replace("đ", "d").replace("Đ", "D")
+    return "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c))
+
+
+def draw_text_vi(
+    img: np.ndarray,
+    text: str,
+    org: Tuple[int, int],
+    color: Tuple[int, int, int] = (0, 255, 0),
+    font_size: int = 18,
+) -> None:
+    """Vẽ chữ tiếng Việt có dấu lên frame BGR (tọa độ org là góc dưới-trái giống cv2.putText)."""
+    import cv2  # type: ignore
+
+    font = _get_unicode_font(font_size)
+    if font is None:
+        cv2.putText(img, _strip_accents(text), org, cv2.FONT_HERSHEY_SIMPLEX, font_size / 30.0, color, 2)
+        return
+
+    from PIL import Image, ImageDraw  # type: ignore
+
+    h_img, w_img = img.shape[:2]
+    dummy = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    l, t, r, b = dummy.textbbox((0, 0), text, font=font, stroke_width=2)
+    tw, th = max(1, r - l + 4), max(1, b - t + 4)
+
+    x1 = max(0, org[0] - 2)
+    y2 = min(h_img, org[1] + 4)
+    y1 = max(0, y2 - th - 4)
+    x2 = min(w_img, x1 + tw + 4)
+    if x2 <= x1 or y2 <= y1:
+        return
+
+    roi = Image.fromarray(cv2.cvtColor(img[y1:y2, x1:x2], cv2.COLOR_BGR2RGB))
+    draw = ImageDraw.Draw(roi)
+    rgb_color = (int(color[2]), int(color[1]), int(color[0]))
+    draw.text((2 - l, 2 - t), text, font=font, fill=rgb_color, stroke_width=2, stroke_fill=(0, 0, 0))
+    img[y1:y2, x1:x2] = cv2.cvtColor(np.asarray(roi), cv2.COLOR_RGB2BGR)
 
 # COCO 17 Keypoint names for reference
 COCO_KEYPOINTS = [
@@ -164,10 +240,7 @@ def draw_pose(
             label = "FALL DETECTED!"
 
         cv2.rectangle(output, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
-        cv2.putText(
-            output, label, (int(x1), max(20, int(y1) - 8)),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2
-        )
+        draw_text_vi(output, label, (int(x1), max(24, int(y1) - 8)), color=color, font_size=18)
 
         if i < len(keypoints):
             kps = keypoints[i]

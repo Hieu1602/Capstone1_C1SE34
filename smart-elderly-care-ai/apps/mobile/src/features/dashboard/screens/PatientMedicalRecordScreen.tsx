@@ -427,7 +427,8 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
       } else {
         formData.append('file', { uri: res.assets[0].uri, name: 'elderly_face.jpg', type: 'image/jpeg' } as any);
       }
-      const enrollRes = await enrollPatientFace(1, formData);
+      const targetId = patientRecord?.id || activePatientId || route?.params?.patientId || 1;
+      const enrollRes = await enrollPatientFace(targetId, formData);
       Alert.alert(enrollRes?.success ? 'Đăng ký khuôn mặt thành công 🎉' : 'Thông báo', enrollRes?.success ? 'Đã trích xuất vector đặc trưng nhận diện khuôn mặt.' : (enrollRes?.message || 'Không thể đăng ký khuôn mặt.'));
     } catch { Alert.alert('Lỗi', 'Không thể tải ảnh khuôn mặt lên server.'); }
   };

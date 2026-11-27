@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import { Colors, Shadows } from '../../../theme/colors';
+import { resolveIncidentMediaUrl } from '../../../services/camera';
 import { getAlertConfig, formatFriendlyTime } from '../utils/alertConfig';
 
 interface IncidentAlertCardProps {
@@ -26,6 +27,17 @@ export const IncidentAlertCard: React.FC<IncidentAlertCardProps> = ({
   onRespondJoinRequest,
 }) => {
   const { t } = useTranslation();
+  const [thumbUri, setThumbUri] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const camId = inc.device_id ? String(inc.device_id) : undefined;
+    resolveIncidentMediaUrl(inc.thumbnail_url, camId).then((url) => {
+      if (active) setThumbUri(url);
+    });
+    return () => { active = false; };
+  }, [inc.thumbnail_url, inc.device_id]);
+
   const config = getAlertConfig(inc.alert_type, inc.notes || inc.note, inc.message);
   const isCriticalActive = config.isCritical && !inc.is_acknowledged;
   const isHandled = Boolean(inc.is_acknowledged);
@@ -174,7 +186,7 @@ export const IncidentAlertCard: React.FC<IncidentAlertCardProps> = ({
 
       {inc.thumbnail_url && (
         <View style={styles.thumbWrapper}>
-          <Image source={{ uri: inc.thumbnail_url }} style={styles.thumbImg} />
+          {thumbUri && <Image source={{ uri: thumbUri }} style={styles.thumbImg} resizeMode="cover" />}
           <View style={styles.thumbOverlay}>
             {inc.video_clip_url && (
               <View style={styles.playCenterBtn}>

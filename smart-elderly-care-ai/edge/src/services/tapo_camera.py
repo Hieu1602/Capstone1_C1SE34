@@ -3,6 +3,7 @@ import asyncio
 from collections import deque
 from datetime import datetime, timezone
 import hmac
+import json
 import logging
 import os
 from pathlib import Path
@@ -300,6 +301,14 @@ class CameraFallDetector:
                         if response.status == 200:
                             data = json.loads(response.read().decode("utf-8"))
                             base_url = url.rsplit("/api/v1/", 1)[0]
+                            active_ids = {str(item.get("elderly_id")) for item in data if item.get("elderly_id")} if isinstance(data, list) else set()
+                            if isinstance(data, list):
+                                stale_ids = [k for k in list(self.face_manager.enrolled_elderly.keys()) if k not in active_ids]
+                                for sk in stale_ids:
+                                    self.face_manager.enrolled_elderly.pop(sk, None)
+                                if stale_ids:
+                                    self.face_manager.save_cache()
+                                    LOG.info("[FaceReID] Đã xóa %d khuôn mặt cũ không còn trong DB.", len(stale_ids))
                             count = 0
                             for item in data:
                                 eid = item.get("elderly_id")
@@ -963,7 +972,7 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         if preset not in ("1080p", "720p", "auto"):
             raise ValueError("invalid video quality")
         height = 1080 if preset == "1080p" else 720
-        encoding_quality = 85 if preset == "1080p" else 75
+        encoding_quality = 85 if preset == "1080p" else (75 if preset == "720p" else 65)
         frame = await asyncio.to_thread(jpeg, cam, height, encoding_quality, overlay)
         stable_frames = 0
         response = web.StreamResponse(headers={
@@ -977,14 +986,16 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
                     str(len(frame)).encode() + b"\r\n\r\n" + frame + b"\r\n"), 5)
                 # Auto hạ tải khi client nhận chậm; chỉ tăng lại sau 30 frame ổn định.
                 if preset == "auto":
-                    slow = time.monotonic() - started > 0.15
+                    slow = time.monotonic() - started > 0.12
                     stable_frames = 0 if slow else stable_frames + 1
                     if slow:
-                        height, encoding_quality = 480, 60
+                        height, encoding_quality = 480, 55
                     elif stable_frames >= 30:
-                        height, encoding_quality = 720, 75
-                await asyncio.sleep(0.04)  # giới hạn MJPEG 25 FPS cho trình duyệt
+                        height, encoding_quality = 720, 65
                 frame = await asyncio.to_thread(jpeg, cam, height, encoding_quality, overlay)
+                elapsed = time.monotonic() - started
+                if elapsed < 0.04:
+                    await asyncio.sleep(0.04 - elapsed)
         except (ConnectionError, asyncio.TimeoutError, web.HTTPServiceUnavailable):
             return response
 
