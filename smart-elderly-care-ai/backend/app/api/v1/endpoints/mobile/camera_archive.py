@@ -101,15 +101,43 @@ async def ingest(body: RecordingMetadata, authorization: str = Header(default=""
         if existing is None or any(getattr(existing, key) != value for key, value in body.model_dump().items()):
             await db.rollback()
             raise HTTPException(409, "Recording metadata is immutable")
+    updated_incident: Incident | None = None
     if body.kind in ("incident", "snapshot") and body.incident_id:
         incident = await db.get(Incident, body.incident_id)
         if incident:
             playback_url = f"/api/v1/camera/archive/{body.id}/playback"
             if body.kind == "incident" and (not incident.video_clip_url or incident.video_clip_url.startswith("/recordings/")):
                 incident.video_clip_url = playback_url
+                updated_incident = incident
             elif body.kind == "snapshot" and (not incident.thumbnail_url or incident.thumbnail_url.startswith("/recordings/")):
                 incident.thumbnail_url = playback_url
+                updated_incident = incident
     await db.commit()
+    if updated_incident is not None:
+        try:
+            from app.services.redis import redis_service
+            await redis_service.invalidate_incidents_cache()
+        except Exception:
+            pass
+        try:
+            from app.api.websockets.vitals_ws import alert_clients, manager
+            ws_payload = {
+                "type": "ALERT_MEDIA_UPDATED",
+                "incident_id": str(updated_incident.id),
+                "device_id": str(updated_incident.device_id),
+                "video_clip_url": updated_incident.video_clip_url,
+                "thumbnail_url": updated_incident.thumbnail_url,
+            }
+            await manager.broadcast_to_device(str(updated_incident.device_id), ws_payload)
+            raw_msg = json.dumps(ws_payload, ensure_ascii=False)
+            for client_ws in list(alert_clients):
+                try:
+                    await client_ws.send_text(raw_msg)
+                except Exception:
+                    if client_ws in alert_clients:
+                        alert_clients.remove(client_ws)
+        except Exception:
+            pass
     return {"id": str(body.id)}
 
 
