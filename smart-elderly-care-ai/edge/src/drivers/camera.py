@@ -59,6 +59,7 @@ class CameraDriver:
         if self._thread and self._thread.is_alive():
             return
         self._stop.clear()
+        self._archive_continuous = os.getenv("VIDEO_ARCHIVE_CONTINUOUS", "false").lower() == "true"
         if os.getenv("VIDEO_ARCHIVE_ENABLED", "false").lower() == "true":
             from src.services.video_archive import VideoArchive
             self.archive = VideoArchive(self.fps)
@@ -186,7 +187,7 @@ class CameraDriver:
                                     self._frame = frame
                                     self._frame_id += 1
                                     self._updated = time.monotonic()
-                                if self.archive:
+                                if self.archive and self._archive_continuous:
                                     self.archive.submit(frame)
 
                                 while not self._stop.is_set() and proc.stdout:
@@ -199,7 +200,7 @@ class CameraDriver:
                                         self._frame = frame
                                         self._frame_id += 1
                                         self._updated = time.monotonic()
-                                    if self.archive:
+                                    if self.archive and self._archive_continuous:
                                         self.archive.submit(frame)
                                 break
                             else:
@@ -222,7 +223,7 @@ class CameraDriver:
                                 self._frame = frame
                                 self._frame_id += 1
                                 self._updated = time.monotonic()
-                            if self.archive:
+                            if self.archive and self._archive_continuous:
                                 self.archive.submit(frame)
                             self._stop.wait(1 / self.fps)
                 except Exception:
