@@ -252,12 +252,46 @@ export default function DoctorHomeScreen() {
     alertsWS.connect();
     const unsub = alertsWS.subscribe((event: any) => {
       const evtType = String(event?.type || '');
+      const evtLower = evtType.toLowerCase();
       const alertType = String(event?.alert_type || '');
+
+      if (evtLower === 'vital_update' || evtLower === 'vitals_update') {
+        const pid = event?.patient_id || event?.elderly_id;
+        const devId = event?.device_id;
+        const devUuid = event?.device_uuid;
+        const curPatients = useDoctorPatientsStore.getState().patients;
+        if (curPatients.length > 0 && (pid || devId || devUuid)) {
+          const liveHr = event?.heart_rate != null ? Number(event.heart_rate) : undefined;
+          const liveSpo2 = event?.spo2 != null ? Number(event.spo2) : undefined;
+          const liveTemp = event?.skin_temp_max != null ? Number(event.skin_temp_max) : undefined;
+          useDoctorPatientsStore.getState().setPatients(
+            curPatients.map((p) => {
+              const matched =
+                (pid && String(p.id) === String(pid)) ||
+                (devId && p.device_id === devId) ||
+                (devUuid && p.device_id === devUuid);
+              const nowIso = new Date().toISOString();
+              return matched
+                ? {
+                    ...p,
+                    is_online: true,
+                    last_updated: nowIso,
+                    heart_rate: liveHr !== undefined && liveHr > 0 ? liveHr : p.heart_rate,
+                    spo2: liveSpo2 !== undefined && liveSpo2 > 0 ? liveSpo2 : p.spo2,
+                    skin_temp_max: liveTemp !== undefined && liveTemp > 0 ? liveTemp : p.skin_temp_max,
+                  }
+                : p;
+            })
+          );
+          setNowMs(Date.now());
+        }
+        return;
+      }
+
       if (
         evtType === 'ALERT_NEW' ||
         evtType === 'INCIDENT_RESOLVED' ||
         evtType === 'INCIDENT_ESCALATED' ||
-        evtType === 'vitals_update' ||
         evtType === 'TELEMETRY_UPDATE' ||
         evtType === 'DEVICE_STATUS' ||
         evtType.startsWith('APPOINTMENT_') ||
@@ -274,6 +308,11 @@ export default function DoctorHomeScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchData();
+      const timer = setInterval(() => {
+        setNowMs(Date.now());
+        fetchData();
+      }, 15000);
+      return () => clearInterval(timer);
     }, [fetchData])
   );
 

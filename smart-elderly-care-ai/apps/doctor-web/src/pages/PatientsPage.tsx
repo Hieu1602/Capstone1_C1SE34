@@ -349,6 +349,27 @@ export const PatientsPage: React.FC = () => {
     [patients, selectedPatientId]
   );
 
+  // Đồng bộ chỉ số sinh hiệu real-time từ store sang Drawer đang mở
+  useEffect(() => {
+    if (!selectedPatientCard) return;
+    setPatientDetail((prev) => {
+      if (!prev || prev.id !== selectedPatientCard.id) return prev;
+      if (
+        prev.heart_rate === selectedPatientCard.heart_rate &&
+        prev.spo2 === selectedPatientCard.spo2 &&
+        prev.skin_temp_max === selectedPatientCard.skin_temp_max
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        heart_rate: selectedPatientCard.heart_rate ?? prev.heart_rate,
+        spo2: selectedPatientCard.spo2 ?? prev.spo2,
+        skin_temp_max: selectedPatientCard.skin_temp_max ?? prev.skin_temp_max,
+      };
+    });
+  }, [selectedPatientCard]);
+
   const selectedPatientIdx = useMemo(
     () => patients.findIndex((p) => p.id === selectedPatientId),
     [patients, selectedPatientId]

@@ -148,6 +148,7 @@ export interface PatientCardData {
   medical_history?: string;
   emergency_contact_phone?: string;
   device_id: string;
+  device_name?: string;
   is_online: boolean;
   battery_level?: number;
   heart_rate?: number;
@@ -224,6 +225,7 @@ export const normalizePatientsList = (rawPayload: any): PatientCardData[] => {
         house_name: item.house_name || '',
         house_address: item.house_address || '',
         device_id: item.device_id || '',
+        device_name: item.device_name || '',
         emergency_contact_phone: item.emergency_contact_phone || '',
         avatar_url: avatarUrl,
         health_status: item.health_status || 'NORMAL',

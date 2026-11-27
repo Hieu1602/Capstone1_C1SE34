@@ -309,36 +309,40 @@ export const DashboardPage: React.FC = () => {
 
     // Lắng nghe WebSocket thông qua kết nối toàn cục sẵn có từ Root Layout
     const unsub = doctorWebSocket.subscribe((data) => {
+      const evtType = String(data?.type || '').toLowerCase();
       if (
         data?.type === 'ALERT_NEW' ||
         data?.type === 'INITIAL_ALERTS' ||
         data?.type === 'DEVICE_STATUS' ||
         data?.type === 'INCIDENT_RESOLVED' ||
         data?.type === 'INCIDENT_ESCALATED' ||
-        data?.type === 'vitals_update' ||
         data?.alert_type
       ) {
         fetchAllData(true);
       }
 
       // Cập nhật sinh hiệu bệnh nhân thay đổi thời gian thực tức thì khi có bản tin
-      if (data?.type === 'VITALS_UPDATE' || data?.heart_rate || data?.spo2) {
+      if (evtType === 'vital_update' || evtType === 'vitals_update' || data?.heart_rate || data?.spo2) {
         const liveHr = data.heart_rate ? Number(data.heart_rate) : undefined;
         const liveSpo2 = data.spo2 ? Number(data.spo2) : undefined;
-        const hasTarget = Boolean(data?.patient_id || data?.device_id);
-        if ((liveHr || liveSpo2) && hasTarget) {
+        const liveTemp = data.skin_temp_max ? Number(data.skin_temp_max) : undefined;
+        const pid = data?.patient_id || data?.elderly_id;
+        const hasTarget = Boolean(pid || data?.device_id || data?.device_uuid);
+        if ((liveHr || liveSpo2 || liveTemp) && hasTarget) {
           const curPatients = useDoctorDataStore.getState().patients;
           setPatients(
             curPatients.map((p) => {
               const matched =
-                (data?.patient_id && String(p.id) === String(data.patient_id)) ||
-                (data?.device_id && p.device_id === data.device_id);
+                (pid && String(p.id) === String(pid)) ||
+                (data?.device_id && p.device_id === data.device_id) ||
+                (data?.device_uuid && p.device_id === data.device_uuid);
               return matched
                 ? {
                     ...p,
                     is_online: true,
                     heart_rate: liveHr ?? p.heart_rate,
                     spo2: liveSpo2 ?? p.spo2,
+                    skin_temp_max: liveTemp ?? p.skin_temp_max,
                     last_updated: 'Vừa xong (Trực tuyến)',
                   }
                 : p;

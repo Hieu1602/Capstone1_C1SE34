@@ -45,30 +45,61 @@ def _is_smartband_fresh(band_device: Any, ts_val: Any, now_utc: datetime) -> tup
     return diff_sec <= SMARTBAND_STALE_SECONDS, dt
 
 
-def _merge_device_vitals(cached_vs: Optional[Dict[str, Any]], latest_vs: Any) -> tuple[Any, Any, Any, Optional[str], Any, Optional[str]]:
-    """Kết hợp sinh hiệu từ Redis cache và bản ghi VitalSign mới nhất trong DB."""
-    hr = cached_vs.get("heart_rate") if cached_vs else None
-    spo2 = cached_vs.get("spo2") if cached_vs else None
-    temp = (cached_vs.get("skin_temp_max") or cached_vs.get("temperature")) if cached_vs else None
-    bp_str: Optional[str] = None
-    if cached_vs and cached_vs.get("bp_systolic") is not None and cached_vs.get("bp_diastolic") is not None:
-        bp_str = f"{cached_vs['bp_systolic']}/{cached_vs['bp_diastolic']} mmHg"
-    ts_candidate = (cached_vs.get("time") or cached_vs.get("cached_at_iso")) if cached_vs else None
-    last_updated_str: Optional[str] = (ts_candidate or "Vừa xong (Trực tuyến)") if cached_vs else None
+def _extract_cache_utc_dt(cached_vs: Optional[Dict[str, Any]]) -> Optional[datetime]:
+    if not cached_vs:
+        return None
+    if cached_vs.get("time"):
+        return _parse_utc_dt(cached_vs.get("time"))
+    if cached_vs.get("cached_at") is not None:
+        try:
+            return datetime.fromtimestamp(float(cached_vs["cached_at"]), tz=timezone.utc)
+        except Exception:
+            pass
+    return _parse_utc_dt(cached_vs.get("cached_at_iso"))
 
-    if latest_vs:
-        if hr is None:
-            hr = latest_vs.heart_rate
-        if spo2 is None:
-            spo2 = latest_vs.spo2
-        if temp is None:
-            temp = latest_vs.skin_temp_max
-        if bp_str is None and latest_vs.bp_systolic is not None and latest_vs.bp_diastolic is not None:
-            bp_str = f"{latest_vs.bp_systolic}/{latest_vs.bp_diastolic} mmHg"
-        if not ts_candidate and latest_vs.time:
-            ts_candidate = latest_vs.time
-        if not last_updated_str and latest_vs.time:
-            last_updated_str = latest_vs.time.isoformat()
+
+def _merge_device_vitals(cached_vs: Optional[Dict[str, Any]], latest_vs: Any) -> tuple[Any, Any, Any, Optional[str], Any, Optional[str]]:
+    """Kết hợp sinh hiệu từ Redis cache và bản ghi VitalSign mới nhất trong DB (ưu tiên nguồn mới hơn)."""
+    cache_dt = _extract_cache_utc_dt(cached_vs)
+    db_dt = _parse_utc_dt(getattr(latest_vs, "time", None)) if latest_vs else None
+    prefer_db = bool(latest_vs and (not cached_vs or (db_dt and (not cache_dt or db_dt >= cache_dt))))
+
+    c_hr = cached_vs.get("heart_rate") if cached_vs else None
+    c_spo2 = cached_vs.get("spo2") if cached_vs else None
+    c_temp = (cached_vs.get("skin_temp_max") or cached_vs.get("temperature")) if cached_vs else None
+    c_bp = (
+        f"{cached_vs['bp_systolic']}/{cached_vs['bp_diastolic']} mmHg"
+        if cached_vs and cached_vs.get("bp_systolic") is not None and cached_vs.get("bp_diastolic") is not None
+        else None
+    )
+
+    d_hr = latest_vs.heart_rate if latest_vs else None
+    d_spo2 = latest_vs.spo2 if latest_vs else None
+    d_temp = latest_vs.skin_temp_max if latest_vs else None
+    d_bp = (
+        f"{latest_vs.bp_systolic}/{latest_vs.bp_diastolic} mmHg"
+        if latest_vs and latest_vs.bp_systolic is not None and latest_vs.bp_diastolic is not None
+        else None
+    )
+
+    if prefer_db:
+        hr = d_hr if d_hr is not None else c_hr
+        spo2 = d_spo2 if d_spo2 is not None else c_spo2
+        temp = d_temp if d_temp is not None else c_temp
+        bp_str = d_bp if d_bp is not None else c_bp
+        ts_candidate = db_dt or cache_dt
+        last_updated_str = db_dt.isoformat() if db_dt else (cached_vs.get("time") or cached_vs.get("cached_at_iso") if cached_vs else None)
+    else:
+        hr = c_hr if c_hr is not None else d_hr
+        spo2 = c_spo2 if c_spo2 is not None else d_spo2
+        temp = c_temp if c_temp is not None else d_temp
+        bp_str = c_bp if c_bp is not None else d_bp
+        ts_candidate = cache_dt or db_dt
+        last_updated_str = (
+            (cache_dt.isoformat() if cache_dt else None)
+            or (db_dt.isoformat() if db_dt else None)
+            or ("Vừa xong (Trực tuyến)" if cached_vs else None)
+        )
 
     return hr, spo2, temp, bp_str, ts_candidate, last_updated_str
 
@@ -401,6 +432,7 @@ class CRUDDoctor:
                     avatar_url=ep.avatar_url,
                     has_face_enrolled=bool(ep.face_embedding),
                     device_id=band_device.device_id if band_device else "",
+                    device_name=band_device.name if band_device else None,
                     is_online=is_smartband_online,
                     battery_level=getattr(band_device, 'battery_level', 92) if (band_device and is_smartband_online) else None,
                     heart_rate=hr,
@@ -495,15 +527,13 @@ class CRUDDoctor:
             except Exception:
                 pass
 
-            latest_vs = None
-            if not cached_vs or cached_vs.get("heart_rate") is None or cached_vs.get("spo2") is None:
-                vs_res = await db.execute(
-                    select(VitalSign)
-                    .where(VitalSign.device_id == band_device.id)
-                    .order_by(desc(VitalSign.time))
-                    .limit(1)
-                )
-                latest_vs = vs_res.scalar_one_or_none()
+            vs_res = await db.execute(
+                select(VitalSign)
+                .where(VitalSign.device_id == band_device.id)
+                .order_by(desc(VitalSign.time))
+                .limit(1)
+            )
+            latest_vs = vs_res.scalar_one_or_none()
 
             hr, spo2, temp, bp_str, ts_candidate, last_updated_str = _merge_device_vitals(cached_vs, latest_vs)
 
@@ -594,6 +624,7 @@ class CRUDDoctor:
             avatar_url=med_record.avatar_url or (elderly.avatar_url if elderly else None),
             has_face_enrolled=bool(elderly.face_embedding if elderly else med_record.has_face_enrolled),
             device_id=band_device.device_id if band_device else "",
+            device_name=band_device.name if band_device else None,
             is_online=is_smartband_online,
             battery_level=band_device.battery_level if (band_device and is_smartband_online) else None,
             heart_rate=hr,

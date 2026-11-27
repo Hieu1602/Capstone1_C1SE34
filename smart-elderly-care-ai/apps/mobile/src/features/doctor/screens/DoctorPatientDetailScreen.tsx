@@ -220,18 +220,53 @@ export default function DoctorPatientDetailScreen() {
   }, [patientId, setPrescriptionsCache]);
 
   useEffect(() => {
+    alertsWS.connect();
     const unsub = alertsWS.subscribe((event: any) => {
+      const evtLower = String(event?.type || '').toLowerCase();
+      if (evtLower === 'vital_update' || evtLower === 'vitals_update') {
+        const pid = event?.patient_id || event?.elderly_id;
+        const devId = event?.device_id;
+        const devUuid = event?.device_uuid;
+        const storePatient = useDoctorPatientsStore.getState().patients.find((p) => String(p.id) === patientId);
+        const targetDevId = storePatient?.device_id;
+        const matched =
+          (pid && String(pid) === patientId) ||
+          (targetDevId && (devId === targetDevId || devUuid === targetDevId));
+
+        if (matched) {
+          const liveHr = event?.heart_rate != null ? Number(event.heart_rate) : undefined;
+          const liveSpo2 = event?.spo2 != null ? Number(event.spo2) : undefined;
+          const liveTemp = event?.skin_temp_max != null ? Number(event.skin_temp_max) : undefined;
+          setDetail((prev) => {
+            if (!prev) return prev;
+            const next: PatientDetail = {
+              ...prev,
+              heart_rate: liveHr !== undefined && liveHr > 0 ? liveHr : prev.heart_rate,
+              spo2: liveSpo2 !== undefined && liveSpo2 > 0 ? liveSpo2 : prev.spo2,
+              skin_temp_max: liveTemp !== undefined && liveTemp > 0 ? liveTemp : prev.skin_temp_max,
+            };
+            setPatientDetailCache(patientId, next);
+            return next;
+          });
+        }
+        return;
+      }
+
       const aType = event?.alert_type || event?.data?.alert_type;
       if (event?.type === 'ALERT_NEW' && (aType === 'MEDICAL_RECORD_UPDATED' || aType === 'DEVICE_CONFIG_UPDATED')) {
         fetchDetail({ forceRefresh: true });
       }
     });
     return () => unsub();
-  }, [fetchDetail]);
+  }, [fetchDetail, patientId, setPatientDetailCache]);
 
   useFocusEffect(
     useCallback(() => {
       fetchDetail();
+      const timer = setInterval(() => {
+        fetchDetail();
+      }, 15000);
+      return () => clearInterval(timer);
     }, [fetchDetail])
   );
 

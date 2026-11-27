@@ -24,6 +24,7 @@ class DoctorPatientCard(BaseModel):
     avatar_url: Optional[str] = None
     has_face_enrolled: bool = False
     device_id: Optional[str] = None
+    device_name: Optional[str] = None
     is_online: bool = False
     battery_level: Optional[int] = None
     heart_rate: Optional[int] = None

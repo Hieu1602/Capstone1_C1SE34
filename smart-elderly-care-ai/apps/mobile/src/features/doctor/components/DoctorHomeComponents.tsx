@@ -55,11 +55,26 @@ export const getDoctorInitial = (name?: string | null) => {
   return parts[parts.length - 1]?.[0]?.toUpperCase() || 'M';
 };
 
-export const getSafetyScore = (p: PatientCardData | null) => {
-  if (!p) return 86;
-  if (p.health_status === 'DANGER') return 48;
-  if (p.health_status === 'WARNING') return 74;
-  return 92;
+export const getSafetyScore = (p: PatientCardData | null, activeOnline = true): string | number => {
+  if (!p || !activeOnline || (p.heart_rate == null && p.spo2 == null)) return '--';
+  let score = 100;
+  if (p.heart_rate != null) {
+    if (p.heart_rate < 50 || p.heart_rate > 120) score -= 35;
+    else if (p.heart_rate < 55 || p.heart_rate > 100) score -= 15;
+    else if (p.heart_rate < 60 || p.heart_rate > 95) score -= 5;
+  }
+  if (p.spo2 != null) {
+    if (p.spo2 < 90) score -= 40;
+    else if (p.spo2 < 95) score -= 20;
+    else if (p.spo2 < 97) score -= 5;
+  }
+  if (p.skin_temp_max != null) {
+    if (p.skin_temp_max >= 38.0 || p.skin_temp_max <= 35.0) score -= 20;
+    else if (p.skin_temp_max >= 37.5) score -= 8;
+  }
+  if (p.health_status === 'DANGER') score = Math.min(score, 48);
+  else if (p.health_status === 'WARNING') score = Math.min(score, 74);
+  return Math.max(0, Math.min(100, score));
 };
 
 interface DoctorInviteCardProps {
@@ -416,7 +431,7 @@ interface HeroHealthCardProps {
 export const HeroHealthCard: React.FC<HeroHealthCardProps> = ({ patient, nowMs, onPress }) => {
   if (!patient) return null;
   const activeOnline = isPatientOnline(patient, nowMs);
-  const safetyScore = getSafetyScore(patient);
+  const safetyScore = getSafetyScore(patient, activeOnline);
   const statusColor = !activeOnline
     ? '#94A3B8'
     : patient.health_status === 'DANGER'
@@ -475,7 +490,7 @@ export const HeroHealthCard: React.FC<HeroHealthCardProps> = ({ patient, nowMs, 
             icon: 'watch-outline',
             color: activeOnline ? '#A7F3D0' : '#CBD5E1',
             label: 'Smartband',
-            val: activeOnline ? 'CooSpo HW706' : 'Chờ tín hiệu',
+            val: activeOnline ? (patient.device_name || patient.device_id || 'Smartband') : 'Chờ tín hiệu',
             isSmall: true,
           },
         ].map((pill) => (
