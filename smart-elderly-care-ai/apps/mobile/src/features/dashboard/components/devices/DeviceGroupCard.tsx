@@ -139,7 +139,6 @@ export const DeviceGroupCard: React.FC<DeviceGroupCardProps> = ({
                 variant="inGroup"
                 hasDivider={idx > 0}
                 onPress={onDevicePress}
-                onDelete={onDeviceDelete}
                 isDarkMode={isDarkMode}
                 colors={colors}
               />
