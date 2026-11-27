@@ -1,8 +1,9 @@
 import { maskPhoneNumber } from '../../../auth/utils/phoneValidation';
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../../theme/colors';
+import { BASE_URL } from '../../../../services/api';
 
 interface HouseMemberRowProps {
   member: any;
@@ -42,12 +43,23 @@ export const HouseMemberRow: React.FC<HouseMemberRowProps> = ({
     ? 'Bác sĩ gia đình'
     : 'Thành viên';
 
-  const displayName = isOwner ? `${member.full_name} (Chủ hộ)` : member.full_name;
+  const displayName = (member.full_name || '')
+    .replace(/\s*\(Chủ [hn][ộà]\)\s*/gi, '')
+    .trim() || 'Thành viên';
+
+  const [imgError, setImgError] = useState(false);
+  const rawAvatar = member.avatar_url;
+  const avatarUri =
+    rawAvatar && !imgError
+      ? rawAvatar.startsWith('http') || rawAvatar.startsWith('data:')
+        ? rawAvatar
+        : `${BASE_URL.replace('/api/v1', '')}${rawAvatar.startsWith('/') ? '' : '/'}${rawAvatar}`
+      : null;
 
   return (
     <>
       <View style={styles.memberCardRow}>
-        {/* Avatar Icon */}
+        {/* Avatar Image / Fallback Icon */}
         <View
           style={[
             styles.memberAvatarCircle,
@@ -66,20 +78,36 @@ export const HouseMemberRow: React.FC<HouseMemberRowProps> = ({
             },
           ]}
         >
-          <Ionicons
-            name={isOwner ? 'key' : isDoctor ? 'medkit' : 'person'}
-            size={20}
-            color={isOwner ? '#F59E0B' : isDoctor ? '#16A34A' : isDarkMode ? '#94A3B8' : '#64748B'}
-          />
+          {avatarUri ? (
+            <Image
+              source={{ uri: avatarUri }}
+              style={styles.memberAvatarImg}
+              resizeMode="cover"
+              onError={() => setImgError(true)}
+            />
+          ) : (
+            <Ionicons
+              name={isOwner ? 'key' : isDoctor ? 'medkit' : 'person'}
+              size={20}
+              color={isOwner ? '#F59E0B' : isDoctor ? '#16A34A' : isDarkMode ? '#94A3B8' : '#64748B'}
+            />
+          )}
         </View>
 
         {/* Member Details */}
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={[styles.memberNameText, { color: textTitle }]}>{displayName}</Text>
+            <Text
+              style={[styles.memberNameText, { color: textTitle, flexShrink: 1 }]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {displayName}
+            </Text>
             <View
               style={[
                 styles.roleBadge,
+                { flexShrink: 0 },
                 {
                   backgroundColor: isOwner
                     ? '#FEF3C7'
@@ -236,6 +264,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    overflow: 'hidden',
+  },
+  memberAvatarImg: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   memberNameText: {
     fontSize: 15,

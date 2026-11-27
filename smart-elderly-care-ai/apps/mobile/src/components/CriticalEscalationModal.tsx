@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Image,
   Animated,
+  Platform,
   ScrollView,
   SafeAreaView,
 } from 'react-native';
@@ -41,8 +42,8 @@ export const CriticalEscalationModal: React.FC = () => {
     if (!activeEscalation) return;
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.12, duration: 550, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 550, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1.12, duration: 550, useNativeDriver: Platform.OS !== 'web' }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 550, useNativeDriver: Platform.OS !== 'web' }),
       ])
     );
     loop.start();

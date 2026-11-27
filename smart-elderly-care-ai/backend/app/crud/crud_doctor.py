@@ -158,68 +158,13 @@ async def _resolve_elderly_id(
         res = await db.execute(select(ElderlyProfile.id).where(ElderlyProfile.id == target_uuid))
         if res.scalar_one_or_none():
             return target_uuid
-        if not create_if_missing:
-            return None
-
-    if target_uuid and create_if_missing:
-        res_h = await db.execute(select(House).limit(1))
-        house = res_h.scalar_one_or_none()
-        if not house:
-            res_u = await db.execute(select(User).limit(1))
-            owner = res_u.scalar_one_or_none()
-            if not owner:
-                owner = User(
-                    phone="0905999888",
-                    full_name="Chủ Nhà Mặc Định",
-                    hashed_password="pw",
-                    role="user",
-                )
-                db.add(owner)
-                await db.flush()
-            house = House(name="Nhà Người Cao Tuổi", address="Đà Nẵng", owner_id=owner.id)
-            db.add(house)
-            await db.flush()
-        profile = ElderlyProfile(
-            id=target_uuid,
-            house_id=house.id,
-            full_name="Người cao tuổi",
-            birth_year=1948,
-        )
-        db.add(profile)
-        await db.flush()
-        return target_uuid
+        return None
 
     # If elderly_id is not a valid UUID (e.g. "1" or "default_user"), find any existing profile
     res_any = await db.execute(select(ElderlyProfile.id).order_by(ElderlyProfile.created_at.asc()).limit(1))
     first_id = res_any.scalar_one_or_none()
     if first_id:
         return first_id
-
-    if create_if_missing:
-        res_u = await db.execute(select(User).limit(1))
-        owner = res_u.scalar_one_or_none()
-        if not owner:
-            owner = User(
-                phone="0905999888",
-                full_name="Chủ Nhà Mặc Định",
-                hashed_password="pw",
-                role="user",
-            )
-            db.add(owner)
-            await db.flush()
-        house = House(name="Nhà Người Cao Tuổi", address="Đà Nẵng", owner_id=owner.id)
-        db.add(house)
-        await db.flush()
-        new_uuid = uuid.uuid4()
-        profile = ElderlyProfile(
-            id=new_uuid,
-            house_id=house.id,
-            full_name="Người cao tuổi",
-            birth_year=1948,
-        )
-        db.add(profile)
-        await db.flush()
-        return new_uuid
 
     return None
 

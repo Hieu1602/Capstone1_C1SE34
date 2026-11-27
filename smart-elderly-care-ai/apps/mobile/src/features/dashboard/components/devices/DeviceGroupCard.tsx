@@ -154,7 +154,7 @@ export const DeviceGroupCard: React.FC<DeviceGroupCardProps> = ({
               >
                 <Ionicons name="add-circle-outline" size={15} color={Colors.primary} />
                 <LocalizedText style={styles.groupCardFooterAddText}>
-                  + Gán thêm thiết bị vào nhóm
+                  Gán thêm thiết bị vào nhóm
                 </LocalizedText>
               </TouchableOpacity>
             </View>

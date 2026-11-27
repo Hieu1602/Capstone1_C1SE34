@@ -92,12 +92,12 @@ export const DeviceQrScannerModal: React.FC<DeviceQrScannerModalProps> = ({
           Animated.timing(laserAnim, {
             toValue: 106,
             duration: 1600,
-            useNativeDriver: true,
+            useNativeDriver: Platform.OS !== 'web',
           }),
           Animated.timing(laserAnim, {
             toValue: 0,
             duration: 1600,
-            useNativeDriver: true,
+            useNativeDriver: Platform.OS !== 'web',
           }),
         ])
       );
