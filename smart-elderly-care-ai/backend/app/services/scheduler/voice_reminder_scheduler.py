@@ -23,7 +23,9 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionFactory, get_redis
+from app.models.device import Device
 from app.models.elderly_profile import ElderlyProfile
+from app.models.incident import Incident
 from app.models.prescription import Prescription
 from app.services.camera_speaker import (
     VN_TZ,
@@ -31,6 +33,11 @@ from app.services.camera_speaker import (
     build_medication_reminder_text,
     find_camera_for_patient,
     speak_to_camera,
+)
+from app.services.notification.appointment_notify import (
+    _invalidate_incidents_cache_safe,
+    broadcast_alert_ws,
+    send_appointment_fcm,
 )
 
 logger = logging.getLogger("voice_reminder_scheduler")
@@ -137,10 +144,9 @@ class VoiceReminderSchedulerService:
         spoken_count = 0
 
         async with AsyncSessionFactory() as db:
-            # 1. Lấy tất cả đơn thuốc ACTIVE có bật loa nhắc nhở
+            # 1. Lấy tất cả đơn thuốc ACTIVE (nhắc điện thoại cho mọi đơn active; loa camera chỉ phát nếu enable_speaker_reminder=True)
             stmt = select(Prescription).where(
                 Prescription.status == "ACTIVE",
-                Prescription.enable_speaker_reminder.is_(True),
                 Prescription.start_date <= now_utc,
                 or_(Prescription.end_date.is_(None), Prescription.end_date >= now_utc),
             )
@@ -198,6 +204,7 @@ class VoiceReminderSchedulerService:
                         "dose": rx.dosage,
                         "instructions": rx.instructions or "",
                         "time": t,
+                        "enable_speaker_reminder": bool(rx.enable_speaker_reminder),
                     })
 
             # Nạp thông tin ElderlyProfile cho từng patient
@@ -220,8 +227,6 @@ class VoiceReminderSchedulerService:
                     pid_uuid = None
 
                 camera_dev = await find_camera_for_patient(db, pid_uuid, house_id)
-                if not camera_dev:
-                    continue
 
                 for time_hhmm, meds in time_map.items():
                     if not meds:
@@ -230,24 +235,79 @@ class VoiceReminderSchedulerService:
                     if delta is None:
                         continue
 
+                    speaker_meds = [m for m in meds if m.get("enable_speaker_reminder", True)]
                     primary_key = f"voice_reminded:{today_str}:{pid_str}:med:{time_hhmm}"
                     repeat_key = f"voice_reminded_repeat:{today_str}:{pid_str}:med:{time_hhmm}"
+                    mobile_pre15_key = f"mobile_pre15_reminded:{today_str}:{pid_str}:med:{time_hhmm}"
+                    mobile_primary_key = f"mobile_reminded:{today_str}:{pid_str}:med:{time_hhmm}"
+                    mobile_repeat_key = f"mobile_reminded_repeat:{today_str}:{pid_str}:med:{time_hhmm}"
 
-                    if 0 <= delta <= 2 and not await self._already_spoken(redis, primary_key):
-                        text = build_medication_reminder_text(
-                            meds, time_hhmm, patient_name=patient_name, gender=gender, is_repeat=False, hour=now_vn.hour
-                        )
-                        if await self._safe_speak(camera_dev, text):
-                            await self._mark_spoken(redis, primary_key)
-                            spoken_count += 1
-                    elif 15 <= delta <= 17 and not await self._already_spoken(redis, repeat_key):
-                        # Chỉ nhắc lại nếu đã từng nhắc lần đầu (hoặc bỏ qua nếu đã uống)
-                        text = build_medication_reminder_text(
-                            meds, time_hhmm, patient_name=patient_name, gender=gender, is_repeat=True, hour=now_vn.hour
-                        )
-                        if await self._safe_speak(camera_dev, text):
-                            await self._mark_spoken(redis, repeat_key)
-                            spoken_count += 1
+                    if -15 <= delta <= -13:
+                        if not await self._already_spoken(redis, mobile_pre15_key):
+                            med_names = ", ".join(str(m.get("name") or "Thuốc") for m in meds[:3])
+                            if len(meds) > 3:
+                                med_names += f" và {len(meds) - 3} thuốc khác"
+                            who = patient_name or "Người cao tuổi"
+                            msg = f"Còn 15 phút nữa đến giờ uống thuốc ({time_hhmm}) cho {who}: {med_names}. Gia đình vui lòng chuẩn bị ăn uống và thuốc sẵn sàng nhé!"
+                            await self._dispatch_mobile_reminder(
+                                db=db,
+                                house_id=house_id,
+                                patient_id=pid_str,
+                                alert_type="MEDICATION_REMINDER",
+                                title=f"⏰ Chuẩn bị uống thuốc ({time_hhmm})",
+                                message=msg,
+                                fallback_device_id=camera_dev.id if camera_dev else None,
+                                extra_note=f"TIME:{time_hhmm}|PRE15",
+                            )
+                            await self._mark_spoken(redis, mobile_pre15_key)
+                    elif 0 <= delta <= 2:
+                        if camera_dev and speaker_meds and not await self._already_spoken(redis, primary_key):
+                            text = build_medication_reminder_text(
+                                speaker_meds, time_hhmm, patient_name=patient_name, gender=gender, is_repeat=False, hour=now_vn.hour
+                            )
+                            if await self._safe_speak(camera_dev, text):
+                                await self._mark_spoken(redis, primary_key)
+                                spoken_count += 1
+                        if not await self._already_spoken(redis, mobile_primary_key):
+                            med_names = ", ".join(str(m.get("name") or "Thuốc") for m in meds[:3])
+                            if len(meds) > 3:
+                                med_names += f" và {len(meds) - 3} thuốc khác"
+                            who = patient_name or "Người cao tuổi"
+                            msg = f"Đã đến giờ uống thuốc ({time_hhmm}) cho {who}: {med_names}. Vui lòng kiểm tra và xác nhận đã uống."
+                            await self._dispatch_mobile_reminder(
+                                db=db,
+                                house_id=house_id,
+                                patient_id=pid_str,
+                                alert_type="MEDICATION_REMINDER",
+                                title=f"💊 Đến giờ uống thuốc ({time_hhmm})",
+                                message=msg,
+                                fallback_device_id=camera_dev.id if camera_dev else None,
+                                extra_note=f"TIME:{time_hhmm}",
+                            )
+                            await self._mark_spoken(redis, mobile_primary_key)
+                    elif 15 <= delta <= 17:
+                        if camera_dev and speaker_meds and not await self._already_spoken(redis, repeat_key):
+                            text = build_medication_reminder_text(
+                                speaker_meds, time_hhmm, patient_name=patient_name, gender=gender, is_repeat=True, hour=now_vn.hour
+                            )
+                            if await self._safe_speak(camera_dev, text):
+                                await self._mark_spoken(redis, repeat_key)
+                                spoken_count += 1
+                        if not await self._already_spoken(redis, mobile_repeat_key):
+                            med_names = ", ".join(str(m.get("name") or "Thuốc") for m in meds[:3])
+                            who = patient_name or "Người cao tuổi"
+                            msg = f"Nhắc lại: {who} chưa xác nhận uống thuốc cữ {time_hhmm} ({med_names})."
+                            await self._dispatch_mobile_reminder(
+                                db=db,
+                                house_id=house_id,
+                                patient_id=pid_str,
+                                alert_type="MEDICATION_REMINDER",
+                                title=f"💊 Nhắc lại giờ uống thuốc ({time_hhmm})",
+                                message=msg,
+                                fallback_device_id=camera_dev.id if camera_dev else None,
+                                extra_note=f"TIME:{time_hhmm}|REPEAT",
+                            )
+                            await self._mark_spoken(redis, mobile_repeat_key)
 
             # 3. Xử lý nhắc nhở uống nước
             for pid_str, hydrations in hydrations_by_patient.items():
@@ -263,8 +323,6 @@ class VoiceReminderSchedulerService:
                     pid_uuid = None
 
                 camera_dev = await find_camera_for_patient(db, pid_uuid, house_id)
-                if not camera_dev:
-                    continue
 
                 for h in hydrations:
                     if h.get("done", False):
@@ -274,20 +332,110 @@ class VoiceReminderSchedulerService:
                     if delta is None or not (0 <= delta <= 2):
                         continue
                     h_key = f"voice_reminded:{today_str}:{pid_str}:hyd:{time_hhmm}"
-                    if await self._already_spoken(redis, h_key):
-                        continue
-                    text = build_hydration_reminder_text(
-                        time_hhmm,
-                        amount=str(h.get("amount") or "200ml"),
-                        note=str(h.get("note") or ""),
-                        patient_name=patient_name,
-                        gender=gender,
-                    )
-                    if await self._safe_speak(camera_dev, text):
-                        await self._mark_spoken(redis, h_key)
-                        spoken_count += 1
+                    mobile_h_key = f"mobile_reminded:{today_str}:{pid_str}:hyd:{time_hhmm}"
+                    if camera_dev and not await self._already_spoken(redis, h_key):
+                        text = build_hydration_reminder_text(
+                            time_hhmm,
+                            amount=str(h.get("amount") or "200ml"),
+                            note=str(h.get("note") or ""),
+                            patient_name=patient_name,
+                            gender=gender,
+                        )
+                        if await self._safe_speak(camera_dev, text):
+                            await self._mark_spoken(redis, h_key)
+                            spoken_count += 1
+                    if not await self._already_spoken(redis, mobile_h_key):
+                        who = patient_name or "Người cao tuổi"
+                        amount = str(h.get("amount") or "200ml")
+                        msg = f"Đã đến giờ uống nước ({time_hhmm}) cho {who} ({amount})."
+                        await self._dispatch_mobile_reminder(
+                            db=db,
+                            house_id=house_id,
+                            patient_id=pid_str,
+                            alert_type="HYDRATION_REMINDER",
+                            title=f"💧 Nhắc uống nước ({time_hhmm})",
+                            message=msg,
+                            fallback_device_id=camera_dev.id if camera_dev else None,
+                            extra_note=f"TIME:{time_hhmm}",
+                        )
+                        await self._mark_spoken(redis, mobile_h_key)
 
         return spoken_count
+
+    async def _dispatch_mobile_reminder(
+        self,
+        db: AsyncSession,
+        house_id: Optional[uuid.UUID],
+        patient_id: str,
+        alert_type: str,
+        title: str,
+        message: str,
+        fallback_device_id: Optional[uuid.UUID] = None,
+        extra_note: str = "",
+    ) -> None:
+        """Tạo Incident + phát WebSocket + gửi FCM để thanh thông báo Android luôn hiển thị."""
+        try:
+            device_id = fallback_device_id
+            if not device_id and house_id:
+                dev_res = await db.execute(select(Device.id).where(Device.house_id == house_id).limit(1))
+                device_id = dev_res.scalar_one_or_none()
+            if not device_id:
+                any_dev = await db.execute(select(Device.id).limit(1))
+                device_id = any_dev.scalar_one_or_none()
+
+            inc_id = str(uuid.uuid4())
+            created_iso = datetime.now(timezone.utc).isoformat()
+            if device_id:
+                note_parts = [f"PATIENT:{patient_id}"]
+                if extra_note:
+                    note_parts.append(extra_note)
+                inc = Incident(
+                    device_id=device_id,
+                    alert_type=alert_type,
+                    alert_level="LOW",
+                    message=message,
+                    is_acknowledged=False,
+                    notes="|".join(note_parts),
+                )
+                db.add(inc)
+                await db.commit()
+                await db.refresh(inc)
+                inc_id = str(inc.id)
+                if inc.created_at:
+                    created_iso = inc.created_at.isoformat()
+                await _invalidate_incidents_cache_safe()
+
+            await broadcast_alert_ws(
+                {
+                    "type": alert_type,
+                    "alert_type": alert_type,
+                    "patient_id": patient_id,
+                    "house_id": str(house_id) if house_id else None,
+                    "data": {
+                        "id": inc_id,
+                        "device_id": str(device_id) if device_id else "system",
+                        "patient_id": patient_id,
+                        "house_id": str(house_id) if house_id else None,
+                        "title": title,
+                        "message": message,
+                        "created_at": created_iso,
+                    },
+                }
+            )
+            await send_appointment_fcm(
+                db=db,
+                target_house_id=house_id,
+                doctor_id=None,
+                title=title,
+                body=message,
+                data={
+                    "incident_id": inc_id,
+                    "alert_type": alert_type,
+                    "patient_id": patient_id,
+                },
+            )
+        except Exception as exc:
+            logger.warning("[MobileReminder] Lỗi gửi thông báo %s: %s", alert_type, exc)
 
     async def _safe_speak(self, camera_dev, text: str) -> bool:
         try:

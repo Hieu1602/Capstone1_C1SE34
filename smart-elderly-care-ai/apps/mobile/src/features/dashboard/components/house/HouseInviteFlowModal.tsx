@@ -17,6 +17,7 @@ interface HouseInviteFlowModalProps {
   selectedInviteRole?: 'MEMBER' | 'ADMIN';
   setSelectedInviteRole?: (role: 'MEMBER' | 'ADMIN') => void;
   houseName: string;
+  onPressHouse?: () => void;
   onOpenAccountInvite: () => void;
   onShareInvite: () => void;
   onCopyLink: () => void;
@@ -28,6 +29,7 @@ interface HouseInviteFlowModalProps {
 export const HouseInviteFlowModal: React.FC<HouseInviteFlowModalProps> = ({
   visible,
   houseName,
+  onPressHouse,
   onOpenAccountInvite,
   onShareInvite,
   onCopyLink,
@@ -65,7 +67,10 @@ export const HouseInviteFlowModal: React.FC<HouseInviteFlowModalProps> = ({
           </Text>
 
           {/* House Card */}
-          <View
+          <TouchableOpacity
+            activeOpacity={onPressHouse ? 0.75 : 1}
+            disabled={!onPressHouse}
+            onPress={onPressHouse}
             style={[
               styles.inviteHouseCard,
               {
@@ -77,10 +82,11 @@ export const HouseInviteFlowModal: React.FC<HouseInviteFlowModalProps> = ({
             <View style={[styles.inviteHouseIconBox, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF' }]}>
               <Ionicons name="home" size={22} color="#3B82F6" />
             </View>
-            <Text style={[styles.inviteHouseName, { color: isDarkMode ? '#F8FAFC' : '#1E293B' }]}>
+            <Text style={[styles.inviteHouseName, { color: isDarkMode ? '#F8FAFC' : '#1E293B', flex: 1 }]}>
               {houseName || 'Nhà của tôi'}
             </Text>
-          </View>
+            {onPressHouse && <Ionicons name="chevron-forward" size={18} color="#94A3B8" />}
+          </TouchableOpacity>
 
           {/* MỜI THÀNH VIÊN VỚI */}
           <View style={{ marginTop: 22 }}>
