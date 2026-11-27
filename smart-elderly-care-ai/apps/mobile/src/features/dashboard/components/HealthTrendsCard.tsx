@@ -17,6 +17,7 @@ import { LocalizedText as Text } from '../../../i18n/LocalizedComponents';
 import {
   checkIsLiveFresh,
   useHeartRateTrendHistory,
+  useTodayActivityStats,
   buildMiniLineChartGeometry,
   getTrendStatusBadge,
 } from './health/healthTrendsHelpers';
@@ -60,6 +61,7 @@ export function HealthTrendsCard({
   const hasAnyData = hasHR || hasSpO2;
 
   const hrBars = useHeartRateTrendHistory(patientDevice, currentVitals, hasHR);
+  const activityStats = useTodayActivityStats(patientDevice, currentVitals, hasAnyData);
   const [chartWidth, setChartWidth] = useState(140);
 
   const hrValue = hasHR ? currentVitals.heart_rate : null;
@@ -110,6 +112,7 @@ export function HealthTrendsCard({
           isDarkMode={isDarkMode}
           colors={colors}
           hasAnyData={hasAnyData}
+          activityStats={activityStats}
           onPress={() => navigation.navigate('HealthDetail', { metric: 'activity' })}
         />
       </View>

@@ -57,7 +57,7 @@ export const ALERT_CONFIG_MAP: Record<string, AlertConfig> = {
     isCritical: false,
   },
   LOW_HEART_RATE: {
-    title: 'Nhịp tim chậm nguy hiểm (< 50 bpm)',
+    title: 'Nhịp tim quá thấp bất thường',
     badgeText: 'Nhịp tim chậm',
     badgeBg: '#FEE2E2',
     badgeColor: '#DC2626',
@@ -327,7 +327,7 @@ export const ALERT_CONFIG_MAP: Record<string, AlertConfig> = {
     isCritical: true,
   },
   BRADYCARDIA: {
-    title: 'Nhịp tim chậm nguy hiểm (< 50 bpm)',
+    title: 'Nhịp tim quá thấp bất thường',
     badgeText: 'Nhịp tim chậm',
     badgeBg: '#FEE2E2',
     badgeColor: '#DC2626',
@@ -405,7 +405,12 @@ export function analyzeAlertDetails(item: any): AlertAssessment {
       label: 'Nhịp tim',
       value: `${hrVal} bpm`,
       icon: 'heart',
-      status: hrVal >= 120 || hrVal < 50 ? 'danger' : hrVal > 100 ? 'warning' : 'normal',
+      status:
+        hrVal >= 120 || hrVal < 50 || (level === 'CRITICAL' && (type === 'LOW_HEART_RATE' || type === 'BRADYCARDIA'))
+          ? 'danger'
+          : hrVal > 100 || type === 'LOW_HEART_RATE' || type === 'BRADYCARDIA' || type === 'HIGH_HEART_RATE'
+          ? 'warning'
+          : 'normal',
     });
   }
 
