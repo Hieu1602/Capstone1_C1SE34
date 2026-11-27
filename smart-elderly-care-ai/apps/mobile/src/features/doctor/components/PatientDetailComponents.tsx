@@ -9,7 +9,6 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
-import { BASE_URL } from '../../../services/api';
 import { ConditionItem, PatientDetail, PrescriptionItem, getPatientAvatarUrl } from './types';
 import { formatGenderVN } from '../../../utils/formatters';
 
@@ -489,7 +488,7 @@ export interface PatientVitalsTabProps {
 }
 
 export const PatientVitalsTab: React.FC<PatientVitalsTabProps> = ({
-  detail,
+  detail: _detail,
   hrHigh,
   hrLow,
   spo2Low,
