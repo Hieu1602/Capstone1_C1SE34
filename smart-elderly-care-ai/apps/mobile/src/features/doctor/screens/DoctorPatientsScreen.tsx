@@ -9,6 +9,7 @@ import {
   RefreshControl,
   StatusBar,
   Animated,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -42,12 +43,12 @@ const PatientSkeletonCard = ({ isDarkMode }: { isDarkMode: boolean }) => {
         Animated.timing(pulseAnim, {
           toValue: 0.85,
           duration: 750,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.timing(pulseAnim, {
           toValue: 0.35,
           duration: 750,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
       ])
     ).start();

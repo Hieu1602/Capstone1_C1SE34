@@ -323,7 +323,7 @@ function Start-EdgeWatchService {
 # ------------------------------------------------------------------------------
 # 9. CHAY UNIT TESTS BACKEND
 # ------------------------------------------------------------------------------
-function Run-BackendTests {
+function Invoke-BackendTests {
     Write-Info "Dang thuc thi bo kiem thu Unit Test Backend..."
     $pyCmd = Get-PythonCommand
     if (-not $pyCmd) {
@@ -463,7 +463,7 @@ function Start-AllServices {
     Write-Host ""
 
     # Khoi dong Docker ha tang neu co
-    $dockerOk = Start-DockerServices
+    $null = Start-DockerServices
     Start-Sleep -Seconds 1
 
     Start-BackendService
@@ -518,7 +518,7 @@ switch ($Target.ToLower()) {
     "watch"      { Start-EdgeWatchService; exit }
     "band"       { Start-EdgeWatchService; exit }
     "edge-watch" { Start-EdgeWatchService; exit }
-    "test"       { Run-BackendTests; exit }
+    "test"       { Invoke-BackendTests; exit }
     "status"     { Show-SystemStatus; exit }
     "stop"       { Stop-AllServices; exit }
     "open"       { Open-WebLinks; exit }
@@ -561,7 +561,7 @@ do {
         "6"  { Start-MobileService -Mode "web"; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
         "7"  { Start-EdgeService; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
         "8"  { Write-Info "Dang kiem tra..."; Start-Sleep -Seconds 1 }
-        "9"  { Run-BackendTests; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
+        "9"  { Invoke-BackendTests; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
         "10" { Open-WebLinks; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
         "11" { Stop-AllServices; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
         "12" { Start-EdgeWatchService; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }

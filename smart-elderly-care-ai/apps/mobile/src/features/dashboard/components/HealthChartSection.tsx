@@ -9,7 +9,7 @@
 //   - Hiển thị màn hình Empty State khi ngày/tuần/tháng được chọn chưa có dữ liệu đo.
 // ==============================================================================
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line, Text as SvgText } from 'react-native-svg';
@@ -48,6 +48,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
   colors,
 }) => {
   const [containerWidth, setContainerWidth] = useState(SCREEN_WIDTH - 64);
+  const scrollRef = useRef<any>(null);
 
   const chartHeight = 150;
   const pointSpacing = 46;
@@ -137,7 +138,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
     coords.forEach((pt, idx) => {
       if (pt.minute !== undefined) {
         const diff = Math.abs(pt.minute - scrubberMinutes);
-        if (diff < bestDiff) {
+        if (diff <= bestDiff) {
           bestDiff = diff;
           bestIdx = idx;
         }
@@ -145,6 +146,13 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
     });
     return bestIdx;
   }, [coords, closestVital, scrubberMinutes]);
+
+  useEffect(() => {
+    if (hasData && (closestIdx === coords.length - 1 || closestIdx === -1)) {
+      const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 50);
+      return () => clearTimeout(t);
+    }
+  }, [hasData, coords.length, closestIdx]);
 
   return (
     <View
@@ -168,6 +176,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
 
       {hasData ? (
         <ScrollView
+          ref={scrollRef}
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.barsScrollContainer}
@@ -176,8 +185,8 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
             <Svg width={svgWidth} height={chartHeight}>
               <Defs>
                 <LinearGradient id="healthDetailGrad" x1="0" y1="0" x2="0" y2="1">
-                  <Stop offset="0%" stopColor="#2563EB" stopOpacity={0.32} />
-                  <Stop offset="100%" stopColor="#2563EB" stopOpacity={0.02} />
+                  <Stop offset="0%" stopColor="#EF4444" stopOpacity={0.28} />
+                  <Stop offset="100%" stopColor="#EF4444" stopOpacity={0.02} />
                 </LinearGradient>
               </Defs>
 
@@ -212,7 +221,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
               <Path
                 d={linePath}
                 fill="none"
-                stroke="#2563EB"
+                stroke="#EF4444"
                 strokeWidth={2.6}
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -230,10 +239,10 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
                         y1={padTop - 6}
                         x2={pt.x}
                         y2={bottomY}
-                        stroke="#2563EB"
-                        strokeWidth={1.5}
+                        stroke="#EF4444"
+                        strokeWidth={1.8}
                         strokeDasharray="3 3"
-                        opacity={0.6}
+                        opacity={0.85}
                       />
                     )}
 
@@ -241,7 +250,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
                       cx={pt.x}
                       cy={pt.y}
                       r={isClosest ? 5.5 : 3.5}
-                      fill={isClosest ? '#2563EB' : isDarkMode ? '#38BDF8' : '#2563EB'}
+                      fill={isClosest ? '#DC2626' : isDarkMode ? '#F87171' : '#EF4444'}
                       stroke="#FFFFFF"
                       strokeWidth={1.5}
                     />
@@ -253,7 +262,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
                         textAnchor="middle"
                         fontSize={11}
                         fontWeight="800"
-                        fill={isDarkMode ? '#60A5FA' : '#1D4ED8'}
+                        fill={isDarkMode ? '#F87171' : '#DC2626'}
                       >
                         {pt.hr} bpm
                       </SvgText>
@@ -276,7 +285,7 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
                     textAnchor="middle"
                     fontSize={9.5}
                     fontWeight={isClosest ? '800' : '500'}
-                    fill={isClosest ? (isDarkMode ? '#60A5FA' : '#2563EB') : isDarkMode ? '#64748B' : '#94A3B8'}
+                    fill={isClosest ? (isDarkMode ? '#F87171' : '#DC2626') : isDarkMode ? '#64748B' : '#94A3B8'}
                   >
                     {pt.label}
                   </SvgText>
