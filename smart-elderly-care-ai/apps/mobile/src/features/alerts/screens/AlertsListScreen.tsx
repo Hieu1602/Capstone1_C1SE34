@@ -95,19 +95,22 @@ export default function AlertsListScreen({ navigation, route }: any) {
     isFetchingRef.current = true;
     if (isInitial && incidents.length === 0) setLoading(true);
     try {
-      await Promise.allSettled([
+      const tasks: Array<Promise<any>> = [
         fetchNotifications(),
         fetchReminders(),
-        fetchPatientsList?.(),
-        fetchMyPermissions?.(),
-        fetchHouseFromBackend?.(),
-        fetchDevicesFromBackend?.(),
-      ]);
+      ];
+      if (isInitial) {
+        if (fetchPatientsList) tasks.push(fetchPatientsList());
+        if (fetchMyPermissions) tasks.push(fetchMyPermissions());
+        if (fetchHouseFromBackend) tasks.push(fetchHouseFromBackend());
+        if (fetchDevicesFromBackend) tasks.push(fetchDevicesFromBackend());
+      }
+      await Promise.allSettled(tasks);
     } finally {
       isFetchingRef.current = false;
       setLoading(false);
     }
-  }, [fetchNotifications, fetchReminders, fetchMyPermissions, fetchHouseFromBackend, fetchDevicesFromBackend, incidents.length]);
+  }, [fetchNotifications, fetchReminders, fetchPatientsList, fetchMyPermissions, fetchHouseFromBackend, fetchDevicesFromBackend, incidents.length]);
 
   useEffect(() => {
     loadData(true);

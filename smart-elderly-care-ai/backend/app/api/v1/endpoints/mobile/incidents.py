@@ -63,14 +63,51 @@ async def list_incidents(
         target_role=effective_target_role,
     )
 
+    serialized = [IncidentOut.model_validate(inc).model_dump(mode="json") for inc in incidents]
+
+    # Batch-resolve thumbnail_url (/api/v1/camera/archive/{id}/playback) sang presigned S3 URL
+    # trong 1 query duy nhất để mobile hiển thị ảnh ngay trên danh sách, tránh N+1 request /playback.
+    rec_map: dict[UUID, list[dict]] = {}
+    for item in serialized:
+        thumb = item.get("thumbnail_url") or ""
+        if thumb.startswith("/api/v1/camera/archive/") and thumb.endswith("/playback"):
+            try:
+                rec_id = UUID(thumb.split("/")[5])
+                rec_map.setdefault(rec_id, []).append(item)
+            except (ValueError, IndexError):
+                pass
+    if rec_map:
+        try:
+            from sqlalchemy import select
+            from app.models.camera_recording import CameraRecording
+            from app.services.storage import video_storage
+            rows = (
+                await db.execute(
+                    select(CameraRecording.id, CameraRecording.object_key).where(
+                        CameraRecording.id.in_(list(rec_map.keys()))
+                    )
+                )
+            ).all()
+            s3 = video_storage.client()
+            bkt = video_storage.bucket()
+            for rec_id, obj_key in rows:
+                signed_url = s3.generate_presigned_url(
+                    "get_object",
+                    Params={"Bucket": bkt, "Key": obj_key},
+                    ExpiresIn=900,
+                )
+                for item in rec_map.get(rec_id, []):
+                    item["thumbnail_url"] = signed_url
+        except Exception as sign_err:
+            logger.debug("[Incidents] Batch thumbnail signing skipped: %s", sign_err)
+
     # 2. Lưu vào Redis Cache (TTL = 180s)
     try:
-        serialized = [IncidentOut.model_validate(inc).model_dump(mode="json") for inc in incidents]
         await redis_service.set_cached_incidents(cache_key, serialized, ttl=180)
     except Exception as cache_err:
         logger.debug("[Redis] Không thể lưu cache incidents: %s", cache_err)
 
-    return incidents
+    return [IncidentOut(**item) for item in serialized]
 
 
 @router.post("/acknowledge-all")
