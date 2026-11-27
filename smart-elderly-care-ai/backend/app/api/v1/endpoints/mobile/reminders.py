@@ -435,6 +435,28 @@ async def create_prescription(
     except Exception:
         pass
 
+    # Thông báo cho tất cả thành viên trong gia đình trên thanh thông báo Android (Incident + WS + FCM)
+    try:
+        from app.crud.crud_doctor import crud_doctor
+
+        creator_name = (
+            current_user.full_name
+            if (current_user and getattr(current_user, "full_name", None))
+            else "Chủ hộ / Người chăm sóc"
+        )
+        med_summary = ", ".join(f"{m.name} ({m.dose})" for m in prescription_in.medications[:3])
+        if len(prescription_in.medications) > 3:
+            med_summary += f" và {len(prescription_in.medications) - 3} thuốc khác"
+        await crud_doctor._notify_family_prescription(
+            db=db,
+            patient_uuid=patient_uuid,
+            doctor_name=creator_name,
+            med_summary=med_summary,
+            diagnosis=prescription_in.diagnosis,
+        )
+    except Exception as exc:
+        logger.warning("[Reminders] Lỗi gửi thông báo đơn thuốc mới cho gia đình: %s", exc)
+
     return {
         "status": "success",
         "message": f"Đã lưu đơn thuốc '{prescription_in.diagnosis}' với {len(prescription_in.medications)} loại thuốc thành công.",

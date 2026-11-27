@@ -760,6 +760,7 @@ class CRUDDoctor:
                     title="💊 Đơn thuốc & Lịch uống thuốc mới",
                     body=notif_msg,
                     data={
+                        "incident_id": str(new_incident.id) if new_incident else "",
                         "type": "PRESCRIPTION_CREATED",
                         "alert_type": "PRESCRIPTION_CREATED",
                         "patient_id": str(patient_uuid),

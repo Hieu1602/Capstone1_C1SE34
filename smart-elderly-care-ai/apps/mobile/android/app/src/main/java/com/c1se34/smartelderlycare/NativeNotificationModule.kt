@@ -461,6 +461,17 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
         stopAlarm(reactContext)
     }
 
+    @ReactMethod
+    fun tryClaimIncidentNotification(incidentId: String, promise: Promise) {
+        try {
+            val claimed = SmartCareBackgroundService.tryClaimIncidentNotification(reactContext, incidentId)
+            promise.resolve(claimed)
+        } catch (e: Exception) {
+            Log.w(TAG, "tryClaimIncidentNotification error: ${e.message}")
+            promise.resolve(true)
+        }
+    }
+
     private fun showNotificationInternal(
         title: String,
         message: String,
