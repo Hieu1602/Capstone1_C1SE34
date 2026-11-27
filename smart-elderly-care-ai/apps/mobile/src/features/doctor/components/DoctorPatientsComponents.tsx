@@ -4,10 +4,9 @@
 // 2. DoctorPatientCard: Thẻ bệnh nhân bo tròn lớn, avatar, badge tình trạng, dải sinh hiệu + sparkline (Ảnh 5)
 
 import React, { useState, RefObject } from 'react';
-import { View, StyleSheet, TouchableOpacity, Modal, Image, ScrollView } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Modal, Image, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Circle } from 'react-native-svg';
-import { Colors } from '../../../theme/colors';
 import { LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
 import { PatientCardData, getPatientAvatarUrl } from './types';
 import { formatGenderVN } from '../../../utils/formatters';
@@ -43,6 +42,7 @@ export interface DoctorPatientsHeaderProps {
   onChangeSearch: (val: string) => void;
   onChangeFilter: (tab: 'ALL' | 'DANGER' | 'WARNING' | 'NORMAL') => void;
   onRefresh: () => void;
+  refreshing?: boolean;
   isDarkMode: boolean;
   colors: any;
   searchInputRef?: RefObject<any>;
@@ -59,6 +59,7 @@ export const DoctorPatientsHeader: React.FC<DoctorPatientsHeaderProps> = ({
   onChangeSearch,
   onChangeFilter,
   onRefresh,
+  refreshing = false,
   isDarkMode,
   colors,
   searchInputRef,
@@ -85,7 +86,7 @@ export const DoctorPatientsHeader: React.FC<DoctorPatientsHeaderProps> = ({
     >
       {/* Tiêu đề & Thông tin số lượng */}
       <View style={styles.headerRow}>
-        <View>
+        <View style={{ flex: 1, marginRight: 10 }}>
           <LocalizedText style={[styles.title, { color: colors.textPrimary }]}>
             Danh sách bệnh nhân
           </LocalizedText>
@@ -98,9 +99,14 @@ export const DoctorPatientsHeader: React.FC<DoctorPatientsHeaderProps> = ({
         <TouchableOpacity
           style={[styles.reloadBtn, { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' }]}
           onPress={onRefresh}
+          disabled={refreshing}
           activeOpacity={0.7}
         >
-          <Ionicons name="refresh" size={18} color="#2563EB" />
+          {refreshing ? (
+            <ActivityIndicator size="small" color="#2563EB" />
+          ) : (
+            <Ionicons name="refresh" size={18} color="#2563EB" />
+          )}
         </TouchableOpacity>
       </View>
 
@@ -151,12 +157,8 @@ export const DoctorPatientsHeader: React.FC<DoctorPatientsHeaderProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* DẢI PILL LỌC NHANH (Ảnh 1 & 5) */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterPillRow}
-      >
+      {/* DẢI PILL LỌC NHANH (Tự xuống dòng gọn gàng không bị cắt chữ ở cạnh phải) */}
+      <View style={styles.filterPillRow}>
         {filterOptions.map((opt) => {
           const isSelected = filterTab === opt.key;
           return (
@@ -190,7 +192,7 @@ export const DoctorPatientsHeader: React.FC<DoctorPatientsHeaderProps> = ({
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </View>
 
       {/* Modal / Dialog chọn bộ lọc trạng thái */}
       <Modal
@@ -409,7 +411,7 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
             <Ionicons name="heart" size={14} color="#EF4444" style={{ marginRight: 4 }} />
             <View>
               <LocalizedText style={[cardStyles.vitalValue, { color: colors.textPrimary }]}>
-                {patient.heart_rate ? `${patient.heart_rate} bpm` : '76 bpm'}
+                {patient.heart_rate != null ? `${patient.heart_rate} bpm` : '-- bpm'}
               </LocalizedText>
               <LocalizedText style={cardStyles.vitalSub}>Nhịp tim</LocalizedText>
             </View>
@@ -422,16 +424,24 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
             <Ionicons name="water" size={14} color="#0284C7" style={{ marginRight: 4 }} />
             <View>
               <LocalizedText style={[cardStyles.vitalValue, { color: colors.textPrimary }]}>
-                {patient.spo2 ? `${patient.spo2}%` : '98%'}
+                {patient.spo2 != null ? `${patient.spo2}%` : '--%'}
               </LocalizedText>
               <LocalizedText style={cardStyles.vitalSub}>SpO2</LocalizedText>
             </View>
           </View>
         </View>
 
-        {/* Mini Sparkline Chart bên phải thể hiện xu hướng ổn định */}
+        {/* Mini Sparkline Chart & Online/Offline tag */}
         <View style={cardStyles.sparklineWrap}>
-          <MiniSparkline color={isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#0D9488'} />
+          {!patient.is_online && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 2 }}>
+              <Ionicons name="cloud-offline-outline" size={11} color="#94A3B8" />
+              <LocalizedText style={{ fontSize: 9.5, color: '#94A3B8', fontWeight: '600' }}>Ngoại tuyến</LocalizedText>
+            </View>
+          )}
+          <View style={!patient.is_online ? { opacity: 0.45 } : undefined}>
+            <MiniSparkline color={isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#0D9488'} />
+          </View>
         </View>
       </View>
 
@@ -555,16 +565,16 @@ const styles = StyleSheet.create({
   },
   filterPillRow: {
     flexDirection: 'row',
-    gap: 8,
-    paddingRight: 16,
+    flexWrap: 'wrap',
+    gap: 6,
     paddingBottom: 2,
   },
   quickPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    height: 32,
-    borderRadius: 16,
+    paddingHorizontal: 10,
+    height: 30,
+    borderRadius: 15,
     borderWidth: 1,
   },
   quickPillDot: {

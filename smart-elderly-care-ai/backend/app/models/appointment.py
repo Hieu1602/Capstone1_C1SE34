@@ -55,6 +55,12 @@ class Appointment(Base):
     location: Mapped[str] = mapped_column(
         String(255), nullable=False, default="Tại nhà (Khám tại gia)"
     )
+    exam_type: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    instructions: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
     clinical_notes: Mapped[str | None] = mapped_column(
         Text, nullable=True
     )

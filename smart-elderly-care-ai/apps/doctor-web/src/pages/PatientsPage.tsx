@@ -26,11 +26,14 @@ import { Search, RefreshCw, X, Users, AlertTriangle, Watch } from 'lucide-react'
 
 interface PatientDrawerCacheEntry {
   detail: DoctorPatientDetail;
-  analytics: AnalyticsData | null;
+  analyticsByKey: Record<string, AnalyticsData>;
   prescriptions: PrescriptionItem[];
   appointments: AppointmentItem[];
   updatedAt: number;
 }
+
+const getAnalyticsCacheKey = (f: VitalFilterState) =>
+  `${f.mode}:${f.days || 7}:${f.startDate || ''}:${f.endDate || ''}`;
 
 const patientDrawerCache = new Map<string, PatientDrawerCacheEntry>();
 
@@ -107,17 +110,21 @@ export const PatientsPage: React.FC = () => {
     setSelectedPatientId(patientId);
     const cached = patientDrawerCache.get(patientId);
     const cardData = patients.find((p) => p.id === patientId);
+    const filterKey = getAnalyticsCacheKey(vitalFilter);
 
     if (cached && !forceRefresh) {
       setPatientDetail(cached.detail);
-      setAnalytics(cached.analytics);
+      setAnalytics(cached.analyticsByKey[filterKey] || null);
       setPrescriptions(cached.prescriptions);
       setPatientAppointments(cached.appointments);
       setIsLoadingDetail(false);
+      setIsLoadingAnalytics(false);
       setIsLoadingPrescriptions(false);
       setIsLoadingAppointments(false);
       return;
     }
+
+    const storeApts = storeAppointments.filter((a) => a.patient_id === patientId);
 
     // Dựng ngay dữ liệu Optimistic từ thẻ bệnh nhân đang có trên danh sách
     if (cardData && !forceRefresh) {
@@ -134,22 +141,26 @@ export const PatientsPage: React.FC = () => {
         spo2: cardData.spo2,
         blood_pressure: cardData.blood_pressure,
         skin_temp_max: cardData.skin_temp_max,
+        health_status: cardData.health_status,
+        is_online: cardData.is_online,
         conditions: [],
       });
       setAnalytics(null);
       setPrescriptions([]);
-      setPatientAppointments([]);
+      setPatientAppointments(storeApts);
     }
 
-    // 2. Tải song song dữ liệu chi tiết ở chế độ nền (không chặn mở Drawer)
+    // 2. Tải song song cả 4 API (kể cả Analytics cho Tab Đồ thị) để chuyển tab không cần chờ
     setIsLoadingDetail(true);
+    setIsLoadingAnalytics(true);
     setIsLoadingPrescriptions(true);
-    setIsLoadingAppointments(true);
+    setIsLoadingAppointments(storeApts.length === 0);
 
-    const [detailRes, rxRes, aptRes] = await Promise.allSettled([
+    const [detailRes, rxRes, aptRes, analyticsRes] = await Promise.allSettled([
       doctorApi.getPatientDetail(patientId),
       doctorApi.getPrescriptions(patientId),
       doctorApi.getAppointments(undefined, patientId),
+      doctorApi.getAnalytics(patientId, vitalFilter.days, vitalFilter.startDate, vitalFilter.endDate),
     ]);
 
     const nextDetail =
@@ -157,19 +168,25 @@ export const PatientsPage: React.FC = () => {
         ? detailRes.value
         : cached?.detail || (cardData ? { id: cardData.id, name: cardData.name, conditions: [] } : null);
     const nextRx = rxRes.status === 'fulfilled' ? rxRes.value : (cached?.prescriptions || []);
-    const nextApt = aptRes.status === 'fulfilled' ? aptRes.value : (cached?.appointments || []);
+    const nextApt = aptRes.status === 'fulfilled' ? aptRes.value : (cached?.appointments || storeApts);
+    const nextAnalytics =
+      analyticsRes.status === 'fulfilled' ? analyticsRes.value : (cached?.analyticsByKey[filterKey] || null);
 
     if (nextDetail) setPatientDetail(nextDetail);
     setPrescriptions(nextRx);
     setPatientAppointments(nextApt);
+    setAnalytics(nextAnalytics);
     setIsLoadingDetail(false);
+    setIsLoadingAnalytics(false);
     setIsLoadingPrescriptions(false);
     setIsLoadingAppointments(false);
 
     if (nextDetail) {
+      const nextAnalyticsMap = { ...(cached?.analyticsByKey || {}) };
+      if (nextAnalytics) nextAnalyticsMap[filterKey] = nextAnalytics;
       patientDrawerCache.set(patientId, {
         detail: nextDetail,
-        analytics: cached?.analytics || null,
+        analyticsByKey: nextAnalyticsMap,
         prescriptions: nextRx,
         appointments: nextApt,
         updatedAt: Date.now(),
@@ -177,9 +194,23 @@ export const PatientsPage: React.FC = () => {
     }
   };
 
-  // Lazy-load dữ liệu Đồ thị Sinh hiệu khi người dùng thực sự mở Tab 'VITALS'
+  const handleCloseDrawer = () => {
+    setSelectedPatientId(null);
+    if (searchParams.has('id')) {
+      const q = searchParams.get('search');
+      setSearchParams(q ? { search: q } : {}, { replace: true });
+    }
+  };
+
+  // Dùng cache nếu đã prefetch trước; chỉ gọi API khi chưa có trong cache cho bộ lọc hiện tại
   const handleDrawerTabChange = async (tab: DrawerTabKey) => {
     if (tab !== 'VITALS' || !selectedPatientId) return;
+    const key = getAnalyticsCacheKey(vitalFilter);
+    const cached = patientDrawerCache.get(selectedPatientId);
+    if (cached?.analyticsByKey[key]) {
+      setAnalytics(cached.analyticsByKey[key]);
+      return;
+    }
     setIsLoadingAnalytics(true);
     try {
       const data = await doctorApi.getAnalytics(
@@ -189,8 +220,9 @@ export const PatientsPage: React.FC = () => {
         vitalFilter.endDate
       );
       setAnalytics(data);
+      if (cached) cached.analyticsByKey[key] = data;
     } catch {
-      // ignore
+      // Giữ nguyên dữ liệu cache nếu có
     } finally {
       setIsLoadingAnalytics(false);
     }
@@ -199,6 +231,12 @@ export const PatientsPage: React.FC = () => {
   const handleVitalFilterChange = async (newFilter: VitalFilterState) => {
     setVitalFilter(newFilter);
     if (!selectedPatientId) return;
+    const key = getAnalyticsCacheKey(newFilter);
+    const cached = patientDrawerCache.get(selectedPatientId);
+    if (cached?.analyticsByKey[key]) {
+      setAnalytics(cached.analyticsByKey[key]);
+      return;
+    }
     setIsLoadingAnalytics(true);
     try {
       const data = await doctorApi.getAnalytics(
@@ -208,6 +246,7 @@ export const PatientsPage: React.FC = () => {
         newFilter.endDate
       );
       setAnalytics(data);
+      if (cached) cached.analyticsByKey[key] = data;
     } catch {
       // ignore
     } finally {
@@ -497,10 +536,11 @@ export const PatientsPage: React.FC = () => {
           vitalFilter={vitalFilter}
           onVitalFilterChange={handleVitalFilterChange}
           onTabChange={handleDrawerTabChange}
-          onClose={() => setSelectedPatientId(null)}
+          onClose={handleCloseDrawer}
           onOpenRecordModal={() => setShowRecordModal(true)}
           onOpenPrescriptionModal={() => setShowPrescriptionModal(true)}
           onOpenAppointmentModal={() => setShowAppointmentModal(true)}
+          onThresholdsSaved={handleRefreshDetail}
         />
       )}
 

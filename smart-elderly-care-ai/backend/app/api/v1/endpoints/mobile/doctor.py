@@ -8,8 +8,9 @@ import logging
 import uuid
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 logger = logging.getLogger("doctor")
 
@@ -22,8 +23,10 @@ from app.crud.crud_appointment import (
     crud_appointment,
     get_patient_names_map,
 )
+from app.models.appointment import Appointment
 from app.models.device import Device
 from app.models.elderly_profile import ElderlyProfile
+from app.models.house import House, HouseMember
 from app.models.incident import Incident
 from app.models.user import User
 from app.schemas.doctor import (
@@ -388,6 +391,24 @@ async def get_doctor_appointments(
     ]
 
 
+_VISIT_TYPE_LABELS = {
+    "HOME_VISIT": "Khám bệnh tại nhà",
+    "HOME": "Khám bệnh tại nhà",
+    "CLINIC": "Khám tại phòng khám",
+    "TELEHEALTH": "Khám từ xa",
+}
+
+
+def _format_exam_label(exam_type: Optional[str], visit_type: Optional[str]) -> str:
+    if exam_type and exam_type.strip():
+        return exam_type.strip()
+    if visit_type:
+        mapped = _VISIT_TYPE_LABELS.get(visit_type.strip().upper())
+        if mapped:
+            return mapped
+    return "Khám bệnh định kỳ"
+
+
 @router.post(
     "/appointments",
     response_model=AppointmentResponse,
@@ -401,12 +422,6 @@ async def create_doctor_appointment(
 ):
     """Bác sĩ lên lịch tái khám mới và tự động kích hoạt nhắc nhở FCM trước giờ hẹn 24h & 2h."""
     _check_doctor_access(current_user)
-    doctor_id = (
-        current_user.id
-        if current_user and current_user.role == "doctor"
-        else DEMO_DOCTOR_ID
-    )
-    created_by = current_user.id if current_user else doctor_id
 
     try:
         patient_uuid = uuid.UUID(appointment_in.patient_id)
@@ -416,6 +431,93 @@ async def create_doctor_appointment(
     eld = await db.get(ElderlyProfile, patient_uuid)
     if not eld:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy hồ sơ người cao tuổi.")
+
+    if current_user and current_user.role == "doctor":
+        if not eld.house_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bạn không được phân công phụ trách hộ gia đình của bệnh nhân này.",
+            )
+        assign_stmt = (
+            select(House.id)
+            .outerjoin(
+                HouseMember,
+                (HouseMember.house_id == House.id)
+                & (HouseMember.user_id == current_user.id)
+                & (HouseMember.status == "ACTIVE"),
+            )
+            .where(
+                House.id == eld.house_id,
+                or_(
+                    House.owner_id == current_user.id,
+                    HouseMember.id.isnot(None),
+                ),
+            )
+            .limit(1)
+        )
+        if not (await db.execute(assign_stmt)).scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bạn không được phân công phụ trách hộ gia đình của bệnh nhân này.",
+            )
+        doctor_id = current_user.id
+    elif current_user and current_user.role == "admin":
+        if appointment_in.doctor_id:
+            doc_stmt = select(User.id).where(
+                User.id == appointment_in.doctor_id,
+                User.role == "doctor",
+                User.is_active.is_(True),
+            )
+            resolved_doc = (await db.execute(doc_stmt)).scalar_one_or_none()
+            if not resolved_doc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Bác sĩ được chỉ định không tồn tại hoặc không hợp lệ.",
+                )
+            doctor_id = appointment_in.doctor_id
+        else:
+            doctor_id = None
+            if eld.house_id:
+                house_doc_stmt = (
+                    select(User.id)
+                    .outerjoin(
+                        HouseMember,
+                        (HouseMember.user_id == User.id)
+                        & (HouseMember.house_id == eld.house_id)
+                        & (HouseMember.status == "ACTIVE"),
+                    )
+                    .outerjoin(
+                        House,
+                        (House.id == eld.house_id) & (House.owner_id == User.id),
+                    )
+                    .where(
+                        User.is_active.is_(True),
+                        or_(
+                            and_(
+                                HouseMember.id.isnot(None),
+                                or_(
+                                    HouseMember.role_in_house.ilike("%doctor%"),
+                                    User.role == "doctor",
+                                ),
+                            ),
+                            and_(
+                                House.id.isnot(None),
+                                User.role == "doctor",
+                            ),
+                        ),
+                    )
+                    .limit(1)
+                )
+                doctor_id = (await db.execute(house_doc_stmt)).scalar_one_or_none()
+            if not doctor_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Vui lòng chọn bác sĩ phụ trách hoặc phân công bác sĩ cho hộ gia đình.",
+                )
+    else:
+        doctor_id = appointment_in.doctor_id or DEMO_DOCTOR_ID
+
+    created_by = current_user.id if current_user else doctor_id
 
     try:
         root_apt, created_count, reminders_count = await crud_appointment.create_appointment_series(
@@ -429,12 +531,15 @@ async def create_doctor_appointment(
 
     doctor_name = (
         (root_apt.doctor.full_name if root_apt.doctor else None)
-        or (current_user.full_name if current_user else "BS. Trần Văn Minh")
+        or (current_user.full_name if current_user and current_user.role == "doctor" else "BS. Trần Văn Minh")
     )
     patient_name = eld.full_name or appointment_in.patient_name or "Bệnh nhân người cao tuổi"
     target_house_id = root_apt.house_id or eld.house_id
     scheduled_str = format_vn_dt(root_apt.scheduled_at, "thời gian đã hẹn")
-    exam_label = getattr(appointment_in, "exam_type", None) or root_apt.visit_type or "Khám bệnh định kỳ"
+    exam_label = _format_exam_label(
+        getattr(appointment_in, "exam_type", None) or getattr(root_apt, "exam_type", None),
+        root_apt.visit_type,
+    )
     notify_title = f"🗓️ Lịch khám mới từ Bác sĩ {doctor_name}"
     notify_msg = (
         f"Bác sĩ {doctor_name} đã lên lịch khám '{exam_label}' cho {patient_name} vào {scheduled_str}. "
@@ -495,7 +600,35 @@ async def create_doctor_appointment(
     except Exception as notify_err:
         logger.error("[NOTIFY] Lỗi tạo thông báo tức thì cho lịch khám: %s", notify_err)
 
-    return build_appointment_response(root_apt, patient_name=patient_name, doctor_name=doctor_name)
+    child_responses: List[AppointmentResponse] = []
+    if created_count > 1 or (root_apt.recurrence_pattern and root_apt.recurrence_pattern != "NONE"):
+        try:
+            c_stmt = (
+                select(Appointment)
+                .where(Appointment.parent_recurring_id == root_apt.id)
+                .options(selectinload(Appointment.doctor), selectinload(Appointment.reminders))
+                .order_by(Appointment.scheduled_at.asc())
+            )
+            c_res = await db.execute(c_stmt)
+            children = [
+                c
+                for c in c_res.scalars().all()
+                if getattr(c, "id", None) is not None and getattr(c, "scheduled_at", None) is not None
+            ]
+            child_responses = [
+                build_appointment_response(c, patient_name=patient_name, doctor_name=doctor_name)
+                for c in children
+            ]
+        except Exception:
+            child_responses = []
+
+    root_item = build_appointment_response(root_apt, patient_name=patient_name, doctor_name=doctor_name)
+    return build_appointment_response(
+        root_apt,
+        patient_name=patient_name,
+        doctor_name=doctor_name,
+        created_appointments=[root_item, *child_responses],
+    )
 
 
 @router.put(
@@ -522,10 +655,10 @@ async def update_doctor_appointment(
             detail="Không tìm thấy lịch khám yêu cầu.",
         )
     _check_doctor_access(current_user, existing)
-    if existing.status != AppointmentStatusEnum.UPCOMING.value:
+    if existing.status not in (AppointmentStatusEnum.UPCOMING.value, AppointmentStatusEnum.CONFIRMED.value):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Chỉ có thể cập nhật lịch khám ở trạng thái sắp tới (UPCOMING).",
+            detail="Chỉ có thể cập nhật lịch khám ở trạng thái sắp tới (UPCOMING/CONFIRMED).",
         )
 
     try:
@@ -631,7 +764,7 @@ async def complete_doctor_appointment(
             detail="Không tìm thấy lịch khám yêu cầu.",
         )
     _check_doctor_access(current_user, existing)
-    if existing.status != AppointmentStatusEnum.UPCOMING.value:
+    if existing.status not in (AppointmentStatusEnum.UPCOMING.value, AppointmentStatusEnum.CONFIRMED.value):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Lịch khám đã hoàn tất hoặc đã bị hủy trước đó.",

@@ -406,6 +406,14 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     });
   }, [dayVitals]);
 
+  // Tự động cập nhật scrubberMinutes theo thời gian thực khi người dùng đang xem ở mốc hiện tại
+  useEffect(() => {
+    if (isScrubbingTimeline || selectedDate !== getTodayStr()) return;
+    const now = new Date();
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+    setScrubberMinutes((prev) => (nowMins - prev >= 0 && nowMins - prev <= 5 ? nowMins : prev));
+  }, [dayVitals, isScrubbingTimeline, selectedDate]);
+
   // Tìm mốc đo gần nhất với giờ tua (chỉ so khớp số phút nguyên đã tiền xử lý, tránh tính lại Date khi kéo thanh trượt)
   const closestVital = useMemo(() => {
     const isToday = selectedDate === getTodayStr();
@@ -429,8 +437,8 @@ export default function HealthDetailScreen({ navigation, route }: any) {
         if (isToday && vMinutes > nowMinutes) continue;
 
         const diff = Math.abs(vMinutes - scrubberMinutes);
-        // Gắn kết nếu bản ghi nằm trong khoảng +-180 phút (3 tiếng) quanh giờ tua
-        if (diff < minDiff && diff <= 180) {
+        // Gắn kết nếu bản ghi nằm trong khoảng +-180 phút (3 tiếng) quanh giờ tua (ưu tiên mẫu mới nhất khi cùng phút)
+        if (diff <= minDiff && diff <= 180) {
           minDiff = diff;
           best = v;
         }

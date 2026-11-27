@@ -38,6 +38,7 @@ export interface PatientDetailDrawerProps {
   onOpenRecordModal: () => void;
   onOpenPrescriptionModal: () => void;
   onOpenAppointmentModal: () => void;
+  onThresholdsSaved?: () => void;
 }
 
 export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
@@ -58,6 +59,7 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
   onOpenRecordModal,
   onOpenPrescriptionModal,
   onOpenAppointmentModal,
+  onThresholdsSaved,
 }) => {
   const [activeTab, setActiveTab] = useState<DrawerTabKey>('RECORD');
 
@@ -65,27 +67,34 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
     patientDetail.blood_type || selectedPatientCard?.blood_type || 'O+';
   const activeAvatar =
     patientDetail.avatar_url || selectedPatientCard?.avatar_url || null;
-  const activeBmi = patientDetail.bmi ? patientDetail.bmi.toFixed(1) : '21.5';
-  const activeBp = patientDetail.blood_pressure || selectedPatientCard?.blood_pressure || '120/80';
+  const activeBmi = patientDetail.bmi ? patientDetail.bmi.toFixed(1) : '—';
+  const activeBp = patientDetail.blood_pressure || selectedPatientCard?.blood_pressure || '—';
   const activeSkinTemp = patientDetail.skin_temp_max
     ? `${patientDetail.skin_temp_max}°C`
     : selectedPatientCard?.skin_temp_max
       ? `${selectedPatientCard.skin_temp_max}°C`
-      : '36.5°C';
+      : '—';
   const activeEmergencyPhone = selectedPatientCard?.emergency_contact_phone || '';
 
-  const isSelectedDanger = Boolean(
-    (selectedPatientCard?.heart_rate &&
-      (selectedPatientCard.heart_rate > 100 || selectedPatientCard.heart_rate < 50)) ||
-      (selectedPatientCard?.spo2 && selectedPatientCard.spo2 < 92)
-  );
+  const backendHealthStatus = patientDetail.health_status || selectedPatientCard?.health_status;
+  const isSelectedDanger = backendHealthStatus
+    ? backendHealthStatus === 'DANGER'
+    : Boolean(
+        selectedPatientCard?.is_online &&
+          ((selectedPatientCard?.heart_rate &&
+            (selectedPatientCard.heart_rate > 120 || selectedPatientCard.heart_rate < 50)) ||
+            (selectedPatientCard?.spo2 && selectedPatientCard.spo2 < 90))
+      );
 
-  const isSelectedWarning = Boolean(
-    !isSelectedDanger &&
-      ((selectedPatientCard?.heart_rate &&
-        (selectedPatientCard.heart_rate > 90 || selectedPatientCard.heart_rate < 60)) ||
-        (selectedPatientCard?.spo2 && selectedPatientCard.spo2 < 95))
-  );
+  const isSelectedWarning = backendHealthStatus
+    ? backendHealthStatus === 'WARNING'
+    : Boolean(
+        !isSelectedDanger &&
+          selectedPatientCard?.is_online &&
+          ((selectedPatientCard?.heart_rate &&
+            (selectedPatientCard.heart_rate > 100 || selectedPatientCard.heart_rate < 55)) ||
+            (selectedPatientCard?.spo2 && selectedPatientCard.spo2 < 95))
+      );
 
   useEffect(() => {
     document.body.classList.add('overflow-hidden');
@@ -138,6 +147,11 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
 
           {activeTab === 'VITALS' && (
             <PatientDrawerVitalsTab
+              patientId={patientDetail.id}
+              initialHrHigh={patientDetail.hr_threshold_high}
+              initialHrLow={patientDetail.hr_threshold_low}
+              initialSpo2Low={patientDetail.spo2_threshold_low}
+              onThresholdsSaved={onThresholdsSaved}
               analytics={analytics}
               isLoading={isLoadingAnalytics}
               vitalFilter={vitalFilter}

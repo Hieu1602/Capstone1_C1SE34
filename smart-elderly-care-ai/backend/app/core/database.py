@@ -128,6 +128,7 @@ async def init_db() -> None:
                 await conn.execute(text("ALTER TABLE vital_signs ADD COLUMN IF NOT EXISTS elderly_id UUID REFERENCES elderly_profiles(id) ON DELETE CASCADE;"))
                 await conn.execute(text("ALTER TABLE vital_signs ADD COLUMN IF NOT EXISTS recorded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_vital_signs_elderly_id ON vital_signs(elderly_id);"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_vital_signs_elderly_recorded_desc ON vital_signs(elderly_id, recorded_at DESC NULLS LAST);"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_vital_signs_recorded_at_desc ON vital_signs(recorded_at DESC NULLS LAST);"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_vital_signs_time_desc ON vital_signs(\"time\" DESC);"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_vital_signs_device_time_desc ON vital_signs(device_id, \"time\" DESC);"))
@@ -278,6 +279,8 @@ async def init_db() -> None:
                     scheduled_at TIMESTAMPTZ NOT NULL,
                     duration_minutes INT NOT NULL DEFAULT 30,
                     location VARCHAR(255) NOT NULL DEFAULT 'Tại nhà (Khám tại gia)',
+                    exam_type VARCHAR(255),
+                    instructions TEXT,
                     clinical_notes TEXT,
                     status VARCHAR(20) NOT NULL DEFAULT 'UPCOMING',
                     cancellation_reason TEXT,
@@ -291,6 +294,8 @@ async def init_db() -> None:
             """))
             await conn.execute(text("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS elderly_id UUID REFERENCES elderly_profiles(id) ON DELETE CASCADE;"))
             await conn.execute(text("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS recorded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;"))
+            await conn.execute(text("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS exam_type VARCHAR(255);"))
+            await conn.execute(text("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS instructions TEXT;"))
             await conn.execute(text("UPDATE appointments SET elderly_id = patient_id WHERE elderly_id IS NULL AND patient_id IS NOT NULL;"))
             await conn.execute(text("UPDATE appointments SET recorded_at = scheduled_at WHERE recorded_at IS NULL AND scheduled_at IS NOT NULL;"))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_appointments_doctor_id ON appointments(doctor_id);"))

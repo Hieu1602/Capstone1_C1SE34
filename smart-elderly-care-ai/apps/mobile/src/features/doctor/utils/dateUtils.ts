@@ -83,7 +83,7 @@ export const isAppointmentOverdue = (
   status?: string | null,
   nowMs: number = Date.now()
 ): boolean => {
-  if (status !== 'UPCOMING' || !dateStr) return false;
+  if ((status !== 'UPCOMING' && status !== 'CONFIRMED') || !dateStr) return false;
   const t = new Date(dateStr).getTime();
   if (isNaN(t)) return false;
   return nowMs - t > NOW_WINDOW_MS;

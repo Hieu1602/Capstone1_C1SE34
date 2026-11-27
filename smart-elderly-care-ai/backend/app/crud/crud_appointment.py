@@ -47,6 +47,7 @@ def build_appointment_response(
     apt: Appointment,
     patient_name: Optional[str] = None,
     doctor_name: Optional[str] = None,
+    created_appointments: Optional[List[AppointmentResponse]] = None,
 ) -> AppointmentResponse:
     resolved_doctor = doctor_name or (apt.doctor.full_name if apt.doctor else "Bác sĩ")
     return AppointmentResponse(
@@ -56,10 +57,13 @@ def build_appointment_response(
         patient_id=str(apt.patient_id),
         patient_name=patient_name or "Bệnh nhân người cao tuổi",
         house_id=str(apt.house_id) if apt.house_id else None,
+        created_by=getattr(apt, "created_by", None),
         visit_type=apt.visit_type,
         scheduled_at=apt.scheduled_at,
         duration_minutes=apt.duration_minutes,
         location=apt.location,
+        exam_type=getattr(apt, "exam_type", None),
+        instructions=getattr(apt, "instructions", None),
         clinical_notes=apt.clinical_notes,
         status=apt.status,
         cancellation_reason=apt.cancellation_reason,
@@ -68,6 +72,7 @@ def build_appointment_response(
         enable_speaker_reminder=apt.enable_speaker_reminder,
         created_at=apt.created_at,
         updated_at=apt.updated_at,
+        created_appointments=created_appointments,
     )
 
 
@@ -225,6 +230,8 @@ class CRUDAppointment:
         Kiểm tra thời gian tương lai và chống trùng lịch.
         """
         scheduled_at = _to_utc(obj_in.scheduled_at)
+        if scheduled_at <= datetime.now(timezone.utc):
+            raise ValueError("Thời gian hẹn phải ở tương lai")
 
         # 1. Chuyển đổi và tìm kiếm thông tin bệnh nhân
         try:
@@ -253,6 +260,8 @@ class CRUDAppointment:
 
         # 3. Tạo cuộc hẹn chính (Root Appointment)
         pattern = (obj_in.recurrence_pattern or RecurrencePatternEnum.NONE.value).strip().upper()
+        exam_type_val = obj_in.exam_type.strip() if obj_in.exam_type and obj_in.exam_type.strip() else None
+        instructions_val = obj_in.instructions.strip() if obj_in.instructions and obj_in.instructions.strip() else None
         root_apt = Appointment(
             doctor_id=doctor_id,
             patient_id=patient_uuid,
@@ -262,6 +271,8 @@ class CRUDAppointment:
             scheduled_at=scheduled_at,
             duration_minutes=obj_in.duration_minutes,
             location=obj_in.location,
+            exam_type=exam_type_val,
+            instructions=instructions_val,
             clinical_notes=obj_in.clinical_notes,
             status=AppointmentStatusEnum.UPCOMING.value,
             recurrence_pattern=pattern,
@@ -307,6 +318,8 @@ class CRUDAppointment:
                         scheduled_at=next_time,
                         duration_minutes=obj_in.duration_minutes,
                         location=obj_in.location,
+                        exam_type=exam_type_val,
+                        instructions=instructions_val,
                         clinical_notes=obj_in.clinical_notes,
                         status=AppointmentStatusEnum.UPCOMING.value,
                         recurrence_pattern=pattern,
@@ -335,11 +348,13 @@ class CRUDAppointment:
         apt = await self.get_by_id(db, appointment_id)
         if not apt:
             return None
-        if apt.status != AppointmentStatusEnum.UPCOMING.value:
+        if apt.status not in (AppointmentStatusEnum.UPCOMING.value, "CONFIRMED"):
             raise ValueError("Chỉ có thể cập nhật lịch khám ở trạng thái sắp tới (UPCOMING).")
 
         # Nếu thay đổi thời gian hoặc thời lượng
         new_time = _to_utc(obj_in.scheduled_at) if obj_in.scheduled_at is not None else _to_utc(apt.scheduled_at)
+        if obj_in.scheduled_at is not None and new_time <= datetime.now(timezone.utc):
+            raise ValueError("Thời gian hẹn phải ở tương lai")
         new_duration = obj_in.duration_minutes if obj_in.duration_minutes is not None else apt.duration_minutes
 
         if obj_in.scheduled_at is not None or obj_in.duration_minutes is not None or obj_in.visit_type is not None:
@@ -375,6 +390,10 @@ class CRUDAppointment:
             apt.visit_type = obj_in.visit_type
         if obj_in.location is not None:
             apt.location = obj_in.location
+        if obj_in.exam_type is not None:
+            apt.exam_type = obj_in.exam_type.strip() or None
+        if obj_in.instructions is not None:
+            apt.instructions = obj_in.instructions.strip() or None
         if obj_in.clinical_notes is not None:
             apt.clinical_notes = obj_in.clinical_notes
         if obj_in.enable_speaker_reminder is not None:
@@ -393,7 +412,7 @@ class CRUDAppointment:
         apt = await self.get_by_id(db, appointment_id)
         if not apt:
             return None
-        if apt.status != AppointmentStatusEnum.UPCOMING.value:
+        if apt.status not in (AppointmentStatusEnum.UPCOMING.value, AppointmentStatusEnum.CONFIRMED.value):
             raise ValueError("Lịch khám đã hoàn tất hoặc đã bị hủy trước đó.")
 
         apt.status = AppointmentStatusEnum.COMPLETED.value

@@ -1,12 +1,13 @@
-import React from 'react';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { MonthYearPopover } from './MonthYearPopover';
 
 export interface MiniCalendarCell {
   day: number | null;
   dateStr?: string;
   isToday?: boolean;
   isSelected?: boolean;
-  dotStatus?: 'COMPLETED' | 'UPCOMING' | 'CRITICAL' | null;
+  dotStatus?: 'COMPLETED' | 'UPCOMING' | 'OVERDUE' | 'CRITICAL' | null;
 }
 
 export interface DoctorMiniCalendarProps {
@@ -28,8 +29,10 @@ export const DoctorMiniCalendar: React.FC<DoctorMiniCalendarProps> = ({
   onSelectDate,
   onNavigateAppointments,
 }) => {
+  const [showMonthYearPicker, setShowMonthYearPicker] = useState(false);
+
   return (
-    <div className="w-full h-full rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm flex flex-col justify-between dark:border-slate-800/80 dark:bg-[#131C31]">
+    <div className="relative z-10 w-full h-full rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm flex flex-col justify-between dark:border-slate-800/80 dark:bg-[#131C31]">
       <div>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -38,27 +41,60 @@ export const DoctorMiniCalendar: React.FC<DoctorMiniCalendarProps> = ({
               Lịch khám trong tháng
             </h3>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="relative z-10 flex items-center gap-1">
             <button
+              type="button"
               onClick={() =>
                 onMonthChange(
                   new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1)
                 )
               }
               className="rounded-lg p-1 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 cursor-pointer"
+              title="Tháng trước"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="text-xs font-bold text-slate-700 dark:text-slate-200 px-1">
-              Tháng {calendarMonth.getMonth() + 1}/{calendarMonth.getFullYear()}
-            </span>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowMonthYearPicker((v) => !v)}
+                className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-700 dark:text-slate-200 dark:hover:bg-slate-800 transition cursor-pointer"
+                title="Bấm để chọn nhanh Tháng / Năm"
+              >
+                <span>
+                  Tháng {calendarMonth.getMonth() + 1}/{calendarMonth.getFullYear()}
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+              </button>
+
+              <MonthYearPopover
+                isOpen={showMonthYearPicker}
+                onClose={() => setShowMonthYearPicker(false)}
+                selectedYear={calendarMonth.getFullYear()}
+                selectedMonth={calendarMonth.getMonth()}
+                onSelectMonthYear={(year, month) => {
+                  onMonthChange(new Date(year, month, 1));
+                }}
+                onSelectCurrent={() => {
+                  const now = new Date();
+                  const todayYMD = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                  onMonthChange(new Date(now.getFullYear(), now.getMonth(), 1));
+                  onSelectDate?.(todayYMD);
+                }}
+                currentLabel="Hôm nay / Tháng hiện tại"
+                disableFuture={false}
+                align="right"
+              />
+            </div>
             <button
+              type="button"
               onClick={() =>
                 onMonthChange(
                   new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1)
                 )
               }
               className="rounded-lg p-1 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 cursor-pointer"
+              title="Tháng sau"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -102,11 +138,13 @@ export const DoctorMiniCalendar: React.FC<DoctorMiniCalendarProps> = ({
                 <span>{cell.day}</span>
                 {cell.dotStatus && (
                   <span
-                    className={`absolute bottom-0.5 h-1.5 w-1.5 rounded-full ${
+                    className={`pointer-events-none absolute bottom-0.5 h-1.5 w-1.5 rounded-full ${
                       cell.isSelected
                         ? 'bg-white'
                         : cell.dotStatus === 'COMPLETED'
                         ? 'bg-emerald-500'
+                        : cell.dotStatus === 'OVERDUE'
+                        ? 'bg-orange-600'
                         : cell.dotStatus === 'UPCOMING'
                         ? 'bg-amber-500'
                         : 'bg-rose-500'
@@ -120,7 +158,7 @@ export const DoctorMiniCalendar: React.FC<DoctorMiniCalendarProps> = ({
       </div>
 
       <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
-        <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold text-slate-600 dark:text-slate-400">
           <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
             Đã khám
@@ -130,8 +168,12 @@ export const DoctorMiniCalendar: React.FC<DoctorMiniCalendarProps> = ({
             Sắp tới
           </span>
           <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-orange-600" />
+            Quá giờ
+          </span>
+          <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-rose-500" />
-            Cần lưu ý
+            Đã hủy
           </span>
         </div>
 

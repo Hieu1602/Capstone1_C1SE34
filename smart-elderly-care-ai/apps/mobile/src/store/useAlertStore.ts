@@ -167,13 +167,17 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
       notificationService.stopEmergencyAlarm();
     } catch {}
 
-    // 1. Optimistic Update tức thời trong RAM (0ms)
+    // 1. Optimistic Update tức thời trong RAM (0ms) — giữ nguyên lời mời chờ xác nhận
     set((state) => ({
-      incidents: state.incidents.map((inc) => ({
-        ...inc,
-        is_acknowledged: true,
-        acknowledged_at: new Date().toISOString(),
-      })),
+      incidents: state.incidents.map((inc) =>
+        inc.alert_type === 'HOUSE_INVITE_PENDING'
+          ? inc
+          : {
+              ...inc,
+              is_acknowledged: true,
+              acknowledged_at: new Date().toISOString(),
+            }
+      ),
       sirenActive: false,
     }));
 

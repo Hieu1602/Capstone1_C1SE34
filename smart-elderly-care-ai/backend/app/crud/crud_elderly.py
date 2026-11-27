@@ -14,7 +14,7 @@ from datetime import datetime
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.models.device import Device
 from app.models.elderly_profile import ElderlyProfile
@@ -225,7 +225,9 @@ class CRUDElderly:
 
             res = await db.execute(
 
-                select(ElderlyProfile).where(ElderlyProfile.id == val_uuid)
+                select(ElderlyProfile)
+                .options(joinedload(ElderlyProfile.house), selectinload(ElderlyProfile.devices))
+                .where(ElderlyProfile.id == val_uuid)
 
             )
 
@@ -459,7 +461,9 @@ class CRUDElderly:
 
             res = await db.execute(
 
-                select(ElderlyProfile).where(ElderlyProfile.id == val_uuid)
+                select(ElderlyProfile)
+                .options(joinedload(ElderlyProfile.house), selectinload(ElderlyProfile.devices))
+                .where(ElderlyProfile.id == val_uuid)
 
             )
 
@@ -621,7 +625,9 @@ class CRUDElderly:
 
             res = await db.execute(
 
-                select(ElderlyProfile).where(ElderlyProfile.id == val_uuid)
+                select(ElderlyProfile)
+                .options(joinedload(ElderlyProfile.house), selectinload(ElderlyProfile.devices))
+                .where(ElderlyProfile.id == val_uuid)
 
             )
 

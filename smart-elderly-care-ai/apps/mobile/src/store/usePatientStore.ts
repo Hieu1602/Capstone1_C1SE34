@@ -94,7 +94,7 @@ interface PatientState {
   deletePatient: (patientId: string | number) => Promise<boolean>;
   fetchPatientRecord: (patientId?: number | string | null, target_date?: string) => Promise<PatientMedicalRecord | null>;
   updatePatientRecord: (patientId: number | string, data: Partial<PatientMedicalRecord>) => Promise<PatientMedicalRecord | null>;
-  enrollPatientFace: (patientId: number, formData: FormData) => Promise<any>;
+  enrollPatientFace: (patientId: number | string, formData: FormData) => Promise<any>;
   resetPatientStore: () => void;
 }
 
@@ -431,20 +431,28 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
     return null;
   },
 
-  enrollPatientFace: async (patientId: number, formData: FormData) => {
+  enrollPatientFace: async (patientId: number | string, formData: FormData) => {
     try {
       const res = await patientApi.enrollFace(patientId, formData);
       if (res.data) {
-        set((state) => {
-          if (!state.patientRecord) return state;
-          return {
-            patientRecord: {
-              ...state.patientRecord,
-              avatar_url: res.data.avatar_url,
-              has_face_enrolled: true,
-            },
-          };
-        });
+        const freshAvatarUrl = res.data.avatar_url
+          ? `${res.data.avatar_url}${res.data.avatar_url.includes('?') ? '&' : '?'}t=${Date.now()}`
+          : res.data.avatar_url;
+        const targetId = String(res.data.elderly_id || patientId);
+        set((state) => ({
+          patientRecord: state.patientRecord
+            ? {
+                ...state.patientRecord,
+                avatar_url: freshAvatarUrl,
+                has_face_enrolled: true,
+              }
+            : state.patientRecord,
+          patientsList: (state.patientsList || []).map((p: any) =>
+            String(p.id) === targetId
+              ? { ...p, avatar_url: freshAvatarUrl, has_face_enrolled: true }
+              : p
+          ),
+        }));
         return res.data;
       }
     } catch (e) {

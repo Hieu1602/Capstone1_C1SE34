@@ -8,9 +8,13 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  SlidersHorizontal,
+  Check,
   LucideIcon,
 } from 'lucide-react';
 import { PrescriptionItem, AppointmentItem, AnalyticsData } from '../../types';
+import { doctorApi } from '../../services/api';
+import { parseAppointmentNotes } from '../../utils/appointmentHelpers';
 import { VitalsTrendChart, VitalMetricKey } from './VitalsTrendChart';
 import {
   VitalFilterState,
@@ -85,11 +89,22 @@ export const PatientDrawerTabBar: React.FC<PatientDrawerTabBarProps> = ({
 };
 
 interface PatientDrawerVitalsTabProps {
+  patientId?: string;
+  initialHrHigh?: number;
+  initialHrLow?: number;
+  initialSpo2Low?: number;
+  onThresholdsSaved?: () => void;
   analytics: AnalyticsData | null;
   isLoading: boolean;
   vitalFilter?: VitalFilterState;
   onVitalFilterChange?: (next: VitalFilterState) => void;
 }
+
+const THRESHOLD_PRESETS = [
+  { label: 'Người cao tuổi tiêu chuẩn', hrHigh: 120, hrLow: 50, spo2Low: 90 },
+  { label: 'Bệnh nhân Tim mạch', hrHigh: 95, hrLow: 55, spo2Low: 95 },
+  { label: 'Bệnh nhân Hô hấp (COPD)', hrHigh: 105, hrLow: 60, spo2Low: 90 },
+];
 
 const METRIC_OPTIONS: { key: VitalMetricKey; label: string }[] = [
   { key: 'ALL', label: 'Tất cả' },
@@ -100,6 +115,11 @@ const METRIC_OPTIONS: { key: VitalMetricKey; label: string }[] = [
 ];
 
 export const PatientDrawerVitalsTab: React.FC<PatientDrawerVitalsTabProps> = ({
+  patientId,
+  initialHrHigh = 120,
+  initialHrLow = 50,
+  initialSpo2Low = 90,
+  onThresholdsSaved,
   analytics,
   isLoading,
   vitalFilter,
@@ -117,6 +137,37 @@ export const PatientDrawerVitalsTab: React.FC<PatientDrawerVitalsTabProps> = ({
   const [selectedMetric, setSelectedMetric] = useState<VitalMetricKey>('ALL');
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [pickerMode, setPickerMode] = useState<'DAY' | 'MONTH_YEAR'>('DAY');
+  const [thresholdOpen, setThresholdOpen] = useState(false);
+  const [hrHigh, setHrHigh] = useState<number>(initialHrHigh);
+  const [hrLow, setHrLow] = useState<number>(initialHrLow);
+  const [spo2Low, setSpo2Low] = useState<number>(initialSpo2Low);
+  const [savingThreshold, setSavingThreshold] = useState(false);
+  const [thresholdMsg, setThresholdMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    setHrHigh(initialHrHigh);
+    setHrLow(initialHrLow);
+    setSpo2Low(initialSpo2Low);
+  }, [patientId, initialHrHigh, initialHrLow, initialSpo2Low]);
+
+  const handleSaveThresholds = async () => {
+    if (!patientId) return;
+    setSavingThreshold(true);
+    setThresholdMsg(null);
+    try {
+      await doctorApi.updateThresholds(patientId, {
+        hr_threshold_high: hrHigh,
+        hr_threshold_low: hrLow,
+        spo2_threshold_low: spo2Low,
+      });
+      onThresholdsSaved?.();
+      setThresholdMsg({ ok: true, text: 'Đã lưu ngưỡng y tế & gửi thông báo cho bác sĩ, chủ nhà và người liên quan.' });
+    } catch {
+      setThresholdMsg({ ok: false, text: 'Không thể lưu cấu hình ngưỡng. Vui lòng thử lại.' });
+    } finally {
+      setSavingThreshold(false);
+    }
+  };
   const [viewMonthDate, setViewMonthDate] = useState<Date>(() =>
     parseYMD(activeFilter.selectedDate)
   );
@@ -396,27 +447,144 @@ export const PatientDrawerVitalsTab: React.FC<PatientDrawerVitalsTabProps> = ({
           </div>
         </div>
 
-        {/* Thanh chọn chỉ số sinh hiệu */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          {METRIC_OPTIONS.map((m) => {
-            const active = selectedMetric === m.key;
-            return (
-              <button
-                key={m.key}
-                type="button"
-                onClick={() => setSelectedMetric(m.key)}
-                className={`rounded-xl px-2.5 py-1 text-[11px] font-bold transition cursor-pointer ${
-                  active
-                    ? 'bg-blue-600 text-white shadow-2xs'
-                    : 'border border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                }`}
-              >
-                {m.label}
-              </button>
-            );
-          })}
+        {/* Thanh chọn chỉ số sinh hiệu + Nút cấu hình ngưỡng */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {METRIC_OPTIONS.map((m) => {
+              const active = selectedMetric === m.key;
+              return (
+                <button
+                  key={m.key}
+                  type="button"
+                  onClick={() => setSelectedMetric(m.key)}
+                  className={`rounded-xl px-2.5 py-1 text-[11px] font-bold transition cursor-pointer ${
+                    active
+                      ? 'bg-blue-600 text-white shadow-2xs'
+                      : 'border border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {patientId && (
+            <button
+              type="button"
+              onClick={() => {
+                setThresholdOpen((v) => !v);
+                setThresholdMsg(null);
+              }}
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1 text-[11px] font-bold transition cursor-pointer ${
+                thresholdOpen
+                  ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300'
+                  : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200'
+              }`}
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              <span>Cấu hình ngưỡng ({hrLow}–{hrHigh} bpm • SpO₂ ≥{spo2Low}%)</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {thresholdOpen && patientId && (
+        <div className="rounded-2xl border border-blue-200/80 bg-blue-50/40 p-4 space-y-3.5 dark:border-blue-900/60 dark:bg-slate-900/70">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                Cấu hình ngưỡng cảnh báo Nhịp tim & SpO₂
+              </h4>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Đồng bộ trực tiếp xuống thiết bị và gửi thông báo cho bác sĩ, chủ nhà & người thân.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {THRESHOLD_PRESETS.map((p) => {
+                const active = hrHigh === p.hrHigh && hrLow === p.hrLow && spo2Low === p.spo2Low;
+                return (
+                  <button
+                    key={p.label}
+                    type="button"
+                    onClick={() => {
+                      setHrHigh(p.hrHigh);
+                      setHrLow(p.hrLow);
+                      setSpo2Low(p.spo2Low);
+                    }}
+                    className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition cursor-pointer ${
+                      active
+                        ? 'border-blue-600 bg-blue-600 text-white'
+                        : 'border-blue-200 bg-white text-blue-700 hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-800 dark:text-blue-300'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              { label: 'Nhịp tim tối đa (bpm)', val: hrHigh, set: setHrHigh, min: 70, max: 180, step: 5, ref: 'An toàn: 90 – 120' },
+              { label: 'Nhịp tim tối thiểu (bpm)', val: hrLow, set: setHrLow, min: 35, max: 90, step: 5, ref: 'An toàn: 45 – 65' },
+              { label: 'SpO₂ tối thiểu (%)', val: spo2Low, set: setSpo2Low, min: 80, max: 99, step: 1, ref: 'An toàn: 88 – 96' },
+            ].map((item) => (
+              <div key={item.label} className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800/80">
+                <p className="text-[11px] font-bold text-slate-800 dark:text-slate-100">{item.label}</p>
+                <p className="text-[10px] text-slate-400 mb-2">{item.ref}</p>
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => item.set(Math.max(item.min, item.val - item.step))}
+                    className="h-7 w-7 rounded-lg border border-slate-200 bg-slate-50 text-xs font-bold text-slate-700 hover:bg-slate-100 cursor-pointer dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    min={item.min}
+                    max={item.max}
+                    value={item.val}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      if (!Number.isNaN(n)) item.set(Math.max(item.min, Math.min(item.max, n)));
+                    }}
+                    className="w-16 text-center text-sm font-extrabold text-blue-600 bg-transparent focus:outline-none dark:text-blue-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => item.set(Math.min(item.max, item.val + item.step))}
+                    className="h-7 w-7 rounded-lg border border-slate-200 bg-slate-50 text-xs font-bold text-slate-700 hover:bg-slate-100 cursor-pointer dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-[11px]">
+              {thresholdMsg && (
+                <span className={thresholdMsg.ok ? 'font-semibold text-emerald-600 dark:text-emerald-400' : 'font-semibold text-rose-600'}>
+                  {thresholdMsg.text}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              disabled={savingThreshold}
+              onClick={handleSaveThresholds}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60 transition cursor-pointer"
+            >
+              <Check className="h-3.5 w-3.5" />
+              <span>{savingThreshold ? 'Đang lưu...' : 'Lưu cấu hình'}</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {isLoading && !analytics ? (
         <div className="space-y-4 animate-pulse">
@@ -559,6 +727,11 @@ const APPOINTMENT_STATUS_BADGE: Record<string, { label: string; className: strin
     className:
       'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900/60',
   },
+  CONFIRMED: {
+    label: 'Đã xác nhận',
+    className:
+      'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/60 dark:text-teal-300 dark:border-teal-900/60',
+  },
 };
 
 const DEFAULT_APPOINTMENT_BADGE = {
@@ -592,19 +765,26 @@ export const PatientDrawerAppointmentsTab: React.FC<PatientDrawerAppointmentsTab
       .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
       .map((apt) => {
         const badge = APPOINTMENT_STATUS_BADGE[apt.status] ?? DEFAULT_APPOINTMENT_BADGE;
+        const { isFamilyConfirmedByNote, cleanNotes } = parseAppointmentNotes(apt.clinical_notes);
+        const isFamilyConfirmed = isFamilyConfirmedByNote || apt.status === 'CONFIRMED';
         return (
           <div
             key={apt.id}
             className="rounded-2xl border border-slate-200/80 bg-white dark:bg-[#0F172A] dark:border-slate-800/80 p-4 shadow-xs"
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className="font-extrabold text-slate-900 dark:text-white text-xs">
-                {apt.clinical_notes || 'Khám sức khỏe'}
+                {cleanNotes || 'Khám sức khỏe'}
               </span>
-              <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold border ${badge.className}`}>
+              <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-extrabold border ${badge.className}`}>
                 {badge.label}
               </span>
             </div>
+            {isFamilyConfirmed && (
+              <span className="mt-1 inline-block rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800/60 dark:text-emerald-300">
+                Gia đình đã xác nhận đón tiếp
+              </span>
+            )}
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               {new Date(apt.scheduled_at).toLocaleString('vi-VN')} • {apt.location}
             </p>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Filter, Heart, Activity } from 'lucide-react';
+import { Search, Filter, Heart, Activity, WifiOff } from 'lucide-react';
 import { DoctorPatientCard } from '../../types';
 import { formatGender } from '../../utils/formatters';
 
@@ -189,15 +189,34 @@ export const DoctorPatientTable: React.FC<DoctorPatientTableProps> = ({
                       {patient.house_name || 'Gia đình bệnh nhân'}
                     </td>
                     <td className="py-3.5 px-3">
-                      <div className="flex items-center gap-4">
-                        <span className="inline-flex items-center gap-1 font-bold text-slate-800 dark:text-slate-200">
-                          <Heart className="h-3.5 w-3.5 text-rose-500" />
-                          {patient.heart_rate ? `${patient.heart_rate} bpm` : '76 bpm'}
-                        </span>
-                        <span className="inline-flex items-center gap-1 font-bold text-slate-800 dark:text-slate-200">
-                          <Activity className="h-3.5 w-3.5 text-blue-500" />
-                          {patient.spo2 ? `${patient.spo2}%` : '97%'}
-                        </span>
+                      <div className="flex items-center gap-3">
+                        {patient.heart_rate != null ? (
+                          <span className="inline-flex items-center gap-1 font-bold text-slate-800 dark:text-slate-200">
+                            <Heart className="h-3.5 w-3.5 text-rose-500" />
+                            {patient.heart_rate} bpm
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-slate-400 dark:text-slate-500 font-medium">
+                            <Heart className="h-3.5 w-3.5" />
+                            —
+                          </span>
+                        )}
+                        {patient.spo2 != null ? (
+                          <span className="inline-flex items-center gap-1 font-bold text-slate-800 dark:text-slate-200">
+                            <Activity className="h-3.5 w-3.5 text-blue-500" />
+                            {patient.spo2}%
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-slate-400 dark:text-slate-500 font-medium">
+                            <Activity className="h-3.5 w-3.5" />
+                            —
+                          </span>
+                        )}
+                        {!patient.is_online && (patient.heart_rate != null || patient.spo2 != null) && (
+                          <span title="Dữ liệu lần cuối (thiết bị offline)">
+                            <WifiOff className="h-3 w-3 text-slate-400 dark:text-slate-500" />
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="py-3.5 px-3">

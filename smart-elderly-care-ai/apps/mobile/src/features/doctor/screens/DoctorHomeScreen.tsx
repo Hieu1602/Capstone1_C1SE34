@@ -22,6 +22,7 @@ import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useAlertStore } from '../../../store/useAlertStore';
 import { useDoctorAppointmentsStore } from '../../../store/useDoctorAppointmentsStore';
+import { useDoctorPatientsStore } from '../../../store/useDoctorPatientsStore';
 import { doctorApi, householdApi, usersApi } from '../../../services/api';
 import { toLocalYMD, getLocalTodayYMD } from '../utils/dateUtils';
 import { alertsWS } from '../../../services/websocket';
@@ -30,12 +31,12 @@ import { LocalizedText } from '../../../i18n/LocalizedComponents';
 import AdminMarqueeBanner from '../../../components/AdminMarqueeBanner';
 import {
   PatientCardData,
-  AppointmentItem,
   STANDARD_PATIENT_NAMES,
   normalizePatientsList,
 } from '../components/types';
 import { AppointmentDetailModal } from '../components';
 import NotificationsBottomSheet from '../components/NotificationsBottomSheet';
+import { buildUnifiedNotifications } from '../components/notifications/notificationHelpers';
 import {
   withTimeout,
   formatAptTime,
@@ -55,7 +56,7 @@ export default function DoctorHomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { isDarkMode, colors } = useTheme();
-  const { userName, avatarUrl, avatar_url } = useAuthStore();
+  const { userId, userName, avatarUrl, avatar_url } = useAuthStore();
   const doctorAvatarUri = (() => {
     const raw = avatarUrl || avatar_url;
     return raw && !raw.startsWith('blob:') ? resolveAvatarUrl(raw) : null;
@@ -67,10 +68,14 @@ export default function DoctorHomeScreen() {
     fetchAppointments: fetchSharedAppointments,
     setAppointments: setSharedAppointments,
   } = useDoctorAppointmentsStore();
+  const {
+    patients,
+    fetchPatients: fetchSharedPatients,
+    setPatients: setSharedPatients,
+  } = useDoctorPatientsStore();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [patients, setPatients] = useState<PatientCardData[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [notifModalVisible, setNotifModalVisible] = useState(false);
@@ -89,21 +94,22 @@ export default function DoctorHomeScreen() {
   const upcomingAppointments = useMemo(
     () =>
       appointments
-        .filter((a) => a.status === 'UPCOMING')
+        .filter((a) => a.status === 'UPCOMING' || a.status === 'CONFIRMED')
         .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()),
     [appointments]
   );
   const nextAppointment = useMemo(() => {
     const cutoff = nowMs - 30 * 60 * 1000;
+    const isActiveStatus = (s?: string) => s === 'UPCOMING' || s === 'CONFIRMED';
     const activeToday = todayAppointments.find(
-      (a) => a.status === 'UPCOMING' && new Date(a.scheduled_at).getTime() >= cutoff
+      (a) => isActiveStatus(a.status) && new Date(a.scheduled_at).getTime() >= cutoff
     );
     if (activeToday) return activeToday;
     const activeUpcoming = upcomingAppointments.find(
       (a) => new Date(a.scheduled_at).getTime() >= cutoff
     );
     if (activeUpcoming) return activeUpcoming;
-    return todayAppointments.find((a) => a.status === 'UPCOMING') || upcomingAppointments[0] || null;
+    return todayAppointments.find((a) => isActiveStatus(a.status)) || upcomingAppointments[0] || null;
   }, [todayAppointments, upcomingAppointments, nowMs]);
 
   // 1. Nạp Cache tức thì (0ms) từ AsyncStorage khi mở màn hình
@@ -113,7 +119,9 @@ export default function DoctorHomeScreen() {
         if (!raw) return;
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed.patients) && parsed.patients.length > 0) {
-          setPatients(parsed.patients);
+          if (useDoctorPatientsStore.getState().patients.length === 0) {
+            setSharedPatients(parsed.patients);
+          }
           setSelectedPatientId((curr) => curr || parsed.selectedPatientId || parsed.patients[0]?.id || null);
         }
         if (useDoctorAppointmentsStore.getState().appointments.length === 0 && Array.isArray(parsed.appointments)) {
@@ -122,7 +130,7 @@ export default function DoctorHomeScreen() {
         setLoading(false);
       })
       .catch(() => {});
-  }, [setSharedAppointments]);
+  }, [setSharedAppointments, setSharedPatients]);
 
   // 2. Bộ đếm 10s kiểm tra độ trễ sinh hiệu
   useEffect(() => {
@@ -131,13 +139,33 @@ export default function DoctorHomeScreen() {
   }, []);
 
   useEffect(() => {
-    setHasUnreadNotifs(incidents.some((inc) => !inc.is_acknowledged));
-  }, [incidents]);
+    AsyncStorage.getItem('@doctor_read_notification_ids')
+      .then((raw) => {
+        let readSet = new Set<string>();
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) readSet = new Set(parsed);
+          } catch {}
+        }
+        const warnPats = patients.filter((p) => p.health_status === 'WARNING' || p.health_status === 'DANGER');
+        const list = buildUnifiedNotifications({
+          incidents,
+          warningPatients: warnPats,
+          appointments,
+          upcomingAppointments,
+          readIds: readSet,
+          doctorUserId: userId || undefined,
+        });
+        setHasUnreadNotifs(list.some((i) => !i.isRead));
+      })
+      .catch(() => {});
+  }, [incidents, patients, appointments, upcomingAppointments, userId]);
 
   const fetchData = useCallback(async () => {
     try {
       const [patRes, aptRes, meRes] = await Promise.allSettled([
-        withTimeout(doctorApi.getPatients(), 5000),
+        withTimeout(fetchSharedPatients(), 5000),
         withTimeout(fetchSharedAppointments(), 5000),
         withTimeout(usersApi.getMe(), 5000),
         withTimeout(fetchIncidents(), 5000),
@@ -151,10 +179,9 @@ export default function DoctorHomeScreen() {
 
       let nextPatients: PatientCardData[] | null = null;
       let nextSelId: string | null = null;
-      if (patRes.status === 'fulfilled' && patRes.value.data) {
-        const normalized = normalizePatientsList(patRes.value.data);
+      if (patRes.status === 'fulfilled' && Array.isArray(patRes.value) && patRes.value.length > 0) {
+        const normalized = patRes.value;
         nextPatients = normalized;
-        setPatients(normalized);
         setSelectedPatientId((curr) => {
           if (curr && normalized.some((p) => p.id === curr)) {
             nextSelId = curr;
@@ -189,7 +216,7 @@ export default function DoctorHomeScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [fetchIncidents, fetchSharedAppointments]);
+  }, [fetchIncidents, fetchSharedAppointments, fetchSharedPatients]);
 
   const handleRespondHouseInvite = async (incident: any, action: 'accept' | 'reject') => {
     try {
@@ -224,15 +251,18 @@ export default function DoctorHomeScreen() {
     fetchData();
     alertsWS.connect();
     const unsub = alertsWS.subscribe((event: any) => {
+      const evtType = String(event?.type || '');
+      const alertType = String(event?.alert_type || '');
       if (
-        event?.type === 'ALERT_NEW' ||
-        event?.type === 'INCIDENT_RESOLVED' ||
-        event?.type === 'INCIDENT_ESCALATED' ||
-        event?.type === 'vitals_update' ||
-        event?.type === 'TELEMETRY_UPDATE' ||
-        event?.type === 'DEVICE_STATUS' ||
-        event?.alert_type === 'MEDICAL_RECORD_UPDATED' ||
-        event?.alert_type === 'APPOINTMENT_SCHEDULED'
+        evtType === 'ALERT_NEW' ||
+        evtType === 'INCIDENT_RESOLVED' ||
+        evtType === 'INCIDENT_ESCALATED' ||
+        evtType === 'vitals_update' ||
+        evtType === 'TELEMETRY_UPDATE' ||
+        evtType === 'DEVICE_STATUS' ||
+        evtType.startsWith('APPOINTMENT_') ||
+        alertType === 'MEDICAL_RECORD_UPDATED' ||
+        alertType.startsWith('APPOINTMENT_')
       ) {
         setNowMs(Date.now());
         fetchData();
@@ -261,7 +291,6 @@ export default function DoctorHomeScreen() {
 
   const closeNotifAndRun = (cb?: () => void) => {
     setNotifModalVisible(false);
-    setHasUnreadNotifs(false);
     cb?.();
   };
 
@@ -359,7 +388,10 @@ export default function DoctorHomeScreen() {
           isDarkMode={isDarkMode}
           colors={colors}
           onSeeAll={() => navigation.navigate('DoctorPatients')}
-          onViewPatient={(patientId) => navigation.navigate('DoctorPatientDetail', { patientId })}
+          onViewPatient={(patientId) => {
+            const p = patients.find((item) => String(item.id) === String(patientId));
+            navigation.navigate('DoctorPatientDetail', { patientId, initialPatient: p });
+          }}
           onBookAppointment={() => navigation.navigate('DoctorAppointments')}
         />
 
@@ -378,7 +410,10 @@ export default function DoctorHomeScreen() {
         <HeroHealthCard
           patient={activePatient}
           nowMs={nowMs}
-          onPress={(patientId) => navigation.navigate('DoctorPatientDetail', { patientId })}
+          onPress={(patientId) => {
+            const p = patients.find((item) => String(item.id) === String(patientId)) || activePatient;
+            navigation.navigate('DoctorPatientDetail', { patientId, initialPatient: p });
+          }}
         />
       </ScrollView>
 
@@ -386,17 +421,19 @@ export default function DoctorHomeScreen() {
         visible={notifModalVisible}
         onClose={() => closeNotifAndRun()}
         hasUnread={hasUnreadNotifs}
-        appointments={todayAppointments}
+        appointments={appointments}
         upcomingAppointments={upcomingAppointments}
+        patients={patients}
         warningPatients={warningPatients}
         incidents={incidents}
         onSelectPatient={(pId) => closeNotifAndRun(() => navigation.navigate('DoctorPatientDetail', { patientId: pId }))}
         onSelectAppointment={() => closeNotifAndRun(() => navigation.navigate('DoctorAppointments'))}
         onNavigate={(screenName, params) => closeNotifAndRun(() => navigation.navigate(screenName, params))}
         onMarkAllRead={async () => {
-          setHasUnreadNotifs(false);
+          setHasUnreadNotifs(pendingHouseInvites.length > 0);
           await useAlertStore.getState().acknowledgeAll();
         }}
+        onUnreadCountChange={(count) => setHasUnreadNotifs(count > 0)}
         onRespondHouseInvite={handleRespondHouseInvite}
       />
 

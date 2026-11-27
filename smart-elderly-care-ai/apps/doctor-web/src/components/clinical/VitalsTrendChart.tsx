@@ -17,7 +17,9 @@ import {
   VitalRangeMode,
   formatDM,
   formatDMY,
+  formatYMD,
   formatShortWeekdayDM,
+  parseFlexibleDate,
   parseYMD,
 } from '../../utils/dateFilter';
 
@@ -180,50 +182,87 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
     };
   };
 
-  const chartData: ChartPoint[] =
-    isHourlyView && data[0]?.hourly_records && data[0].hourly_records.length > 0
-      ? data[0].hourly_records.map((h) => {
-          const { sys, dia } = parseBp(h.bp);
-          const dayDMY = selectedDate
-            ? formatDMY(parseYMD(selectedDate))
-            : data[0]?.date
-              ? formatDMY(parseYMD(data[0].date))
-              : '';
-          return {
-            date: h.time,
-            fullDateTime: dayDMY ? `${h.time} • ${dayDMY}` : h.time,
-            heartRate: h.heart_rate ?? null,
-            spo2: h.spo2 ?? null,
-            bpSys: sys,
-            bpDia: dia,
-            temp: h.skin_temp !== undefined ? Math.round(h.skin_temp * 10) / 10 : null,
-          };
-        })
-      : data.map((item) => {
-          const d = parseYMD(item.date);
-          const dateLabel =
-            effectiveMode === 'WEEK'
-              ? formatShortWeekdayDM(item.date)
-              : formatDM(d);
-          const fullDateTime =
-            effectiveMode === 'WEEK'
-              ? `${formatShortWeekdayDM(item.date)} • ${formatDMY(d)}`
-              : `Ngày ${formatDMY(d)}`;
-          return {
-            date: dateLabel,
-            fullDateTime,
-            heartRate: item.avg_heart_rate ? Math.round(item.avg_heart_rate) : null,
-            spo2: item.avg_spo2 ? Math.round(item.avg_spo2 * 10) / 10 : null,
-            bpSys: null,
-            bpDia: null,
-            temp: item.avg_skin_temp ? Math.round(item.avg_skin_temp * 10) / 10 : null,
-          };
-        });
+  const referenceYear = (() => {
+    const src = startDate || selectedDate;
+    const m = src?.match(/^(\d{4})-/);
+    return m ? Number(m[1]) : new Date().getFullYear();
+  })();
+
+  const chartData: ChartPoint[] = (() => {
+    if (isHourlyView && data[0]?.hourly_records && data[0].hourly_records.length > 0) {
+      const dayDMY = selectedDate
+        ? formatDMY(parseFlexibleDate(selectedDate, referenceYear))
+        : data[0]?.date
+          ? formatDMY(parseFlexibleDate(data[0].date, referenceYear))
+          : '';
+      const byHour = new Map(data[0].hourly_records.map((h) => [h.time, h]));
+      // Đủ 00:00 -> 24:00 (25 mốc) để trục ngày luôn hiển thị tròn 0-24h
+      return Array.from({ length: 25 }, (_, hr) => {
+        const time = `${String(hr).padStart(2, '0')}:00`;
+        const h = byHour.get(time);
+        const { sys, dia } = parseBp(h?.bp);
+        return {
+          date: time,
+          fullDateTime: dayDMY ? `${time} • ${dayDMY}` : time,
+          heartRate: h?.heart_rate ?? null,
+          spo2: h?.spo2 ?? null,
+          bpSys: sys,
+          bpDia: dia,
+          temp: h?.skin_temp !== undefined ? Math.round(h.skin_temp * 10) / 10 : null,
+        };
+      });
+    }
+
+    const toPoint = (d: Date, item?: TrendItem): ChartPoint => {
+      const ymd = formatYMD(d);
+      const dateLabel =
+        effectiveMode === 'WEEK' ? formatShortWeekdayDM(ymd, referenceYear) : formatDM(d);
+      const fullDateTime =
+        effectiveMode === 'WEEK'
+          ? `${formatShortWeekdayDM(ymd, referenceYear)} • ${formatDMY(d)}`
+          : `Ngày ${formatDMY(d)}`;
+      return {
+        date: dateLabel,
+        fullDateTime,
+        heartRate: item?.avg_heart_rate ? Math.round(item.avg_heart_rate) : null,
+        spo2: item?.avg_spo2 ? Math.round(item.avg_spo2 * 10) / 10 : null,
+        bpSys: null,
+        bpDia: null,
+        temp: item?.avg_skin_temp ? Math.round(item.avg_skin_temp * 10) / 10 : null,
+      };
+    };
+
+    if ((effectiveMode === 'WEEK' || effectiveMode === 'MONTH') && startDate && endDate) {
+      const byYmd = new Map<string, TrendItem>();
+      data.forEach((item) => {
+        byYmd.set(formatYMD(parseFlexibleDate(item.date, referenceYear)), item);
+      });
+      const points: ChartPoint[] = [];
+      const cur = parseYMD(startDate);
+      const end = parseYMD(endDate);
+      while (cur.getTime() <= end.getTime()) {
+        points.push(toPoint(new Date(cur), byYmd.get(formatYMD(cur))));
+        cur.setDate(cur.getDate() + 1);
+      }
+      return points;
+    }
+
+    return data.map((item) => toPoint(parseFlexibleDate(item.date, referenceYear), item));
+  })();
 
   const showHR = selectedMetric === 'ALL' || selectedMetric === 'HR';
   const showSpO2 = selectedMetric === 'ALL' || selectedMetric === 'SPO2';
   const showBP = selectedMetric === 'BP';
   const showTemp = selectedMetric === 'TEMP';
+
+  const hrValues = chartData.map((p) => p.heartRate).filter((v): v is number => v !== null);
+  const spo2Values = chartData.map((p) => p.spo2).filter((v): v is number => v !== null);
+  const hrMin = hrValues.length && Math.min(...hrValues) < 50 ? Math.max(20, Math.floor(Math.min(...hrValues) / 10) * 10) : 50;
+  const hrMax = hrValues.length && Math.max(...hrValues) > 130 ? Math.ceil(Math.max(...hrValues) / 10) * 10 : 130;
+  const hrTicks = hrMin === 50 && hrMax === 130 ? [50, 70, 90, 110, 130] : undefined;
+
+  const spo2Min = spo2Values.length && Math.min(...spo2Values) < 80 ? Math.max(0, Math.floor(Math.min(...spo2Values) / 5) * 5) : 80;
+  const spo2Ticks = spo2Min === 80 ? [80, 85, 90, 95, 100] : undefined;
 
   const hasBPPoints = chartData.some((p) => p.bpSys !== null);
   const hasTempPoints = chartData.some((p) => p.temp !== null);
@@ -295,7 +334,7 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
       {/* Chart container */}
       <div className="h-72 w-full rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs dark:border-slate-800/80 dark:bg-[#0F172A]">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 10, right: 10, left: -16, bottom: 0 }}>
+          <LineChart data={chartData} margin={{ top: 10, right: 14, left: 6, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.25} vertical={false} />
             <XAxis
               dataKey="date"
@@ -303,12 +342,19 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
               fontSize={11}
               tickLine={false}
               axisLine={{ stroke: '#475569' }}
-              interval={effectiveMode === 'MONTH' ? Math.max(0, Math.floor(chartData.length / 7)) : isHourlyView ? 'preserveStartEnd' : 0}
+              ticks={
+                isHourlyView
+                  ? ['00:00', '03:00', '06:00', '09:00', '12:00', '15:00', '18:00', '21:00', '24:00']
+                  : undefined
+              }
+              interval={effectiveMode === 'MONTH' ? Math.max(0, Math.floor(chartData.length / 7)) : 0}
             />
             {showHR && (
               <YAxis
                 yAxisId="left"
-                domain={[50, 130]}
+                width={70}
+                domain={[hrMin, hrMax]}
+                ticks={hrTicks}
                 stroke="#3B82F6"
                 fontSize={11}
                 tickLine={false}
@@ -319,8 +365,10 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
             {showSpO2 && (
               <YAxis
                 yAxisId="right"
+                width={46}
                 orientation={showHR ? 'right' : 'left'}
-                domain={[85, 100]}
+                domain={[spo2Min, 100]}
+                ticks={spo2Ticks}
                 stroke="#10B981"
                 fontSize={11}
                 tickLine={false}
@@ -331,6 +379,7 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
             {showBP && (
               <YAxis
                 yAxisId="bp"
+                width={64}
                 domain={[50, 180]}
                 stroke="#F43F5E"
                 fontSize={11}
@@ -342,6 +391,7 @@ export const VitalsTrendChart: React.FC<VitalsTrendChartProps> = ({
             {showTemp && (
               <YAxis
                 yAxisId="temp"
+                width={48}
                 domain={[34, 40]}
                 stroke="#F97316"
                 fontSize={11}

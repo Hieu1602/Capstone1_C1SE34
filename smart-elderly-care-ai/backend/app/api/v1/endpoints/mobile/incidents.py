@@ -24,8 +24,8 @@ router = APIRouter()
 async def list_incidents(
     device_id: str | None = Query(default=None),
     alert_level: str | None = Query(default=None),
-    target_role: str | None = Query(default=None, description="Lọc đối tượng nhận: doctor | family | caregiver"),
-    limit: int = Query(default=20, le=100),
+    target_role: str | None = Query(default=None, description="Lọc đối tượng nhận: doctor | doctor_analytics | family | caregiver"),
+    limit: int = Query(default=20, le=500),
     offset: int = Query(default=0),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
@@ -96,7 +96,7 @@ async def acknowledge_all_incidents(
         res = await db.execute(
             select(Incident).where(
                 Incident.is_acknowledged.is_(False),
-                Incident.alert_type == "APPOINTMENT_SCHEDULED",
+                Incident.alert_type.in_(["APPOINTMENT_SCHEDULED", "APPOINTMENT_RESCHEDULED"]),
             )
         )
         scoped_incidents = list(res.scalars().all())
@@ -104,7 +104,7 @@ async def acknowledge_all_incidents(
     for inc in scoped_incidents:
         if (
             not inc.is_acknowledged
-            and inc.alert_type == "APPOINTMENT_SCHEDULED"
+            and inc.alert_type in ("APPOINTMENT_SCHEDULED", "APPOINTMENT_RESCHEDULED")
             and inc.notes
             and "APPOINTMENT_REQUESTED" not in inc.notes
         ):
@@ -211,8 +211,10 @@ async def acknowledge_incident(
         )
 
     # Nếu người nhà xác nhận thông báo đặt lịch khám của Bác sĩ -> đồng bộ xác nhận & báo Bác sĩ
+    is_doctor_actor = bool(current_user and current_user.role == "doctor")
     if (
-        incident.alert_type == "APPOINTMENT_SCHEDULED"
+        not is_doctor_actor
+        and incident.alert_type in ("APPOINTMENT_SCHEDULED", "APPOINTMENT_RESCHEDULED")
         and incident.notes
         and "APPOINTMENT_REQUESTED" not in incident.notes
     ):

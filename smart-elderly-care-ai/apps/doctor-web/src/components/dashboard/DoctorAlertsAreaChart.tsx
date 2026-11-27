@@ -12,7 +12,8 @@ import {
   CartesianGrid,
   Tooltip,
 } from 'recharts';
-import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, ChevronDown } from 'lucide-react';
+import { MonthYearPopover } from './MonthYearPopover';
 
 export interface AlertDayStat {
   label: string;
@@ -51,8 +52,8 @@ interface SeriesConfig {
 const SERIES_CONFIG: SeriesConfig[] = [
   { key: 'fall', dataKey: 'fall', label: 'Té ngã AI', color: '#F43F5E', gradId: 'gradFall' },
   { key: 'heart', dataKey: 'heart_alert', label: 'Nhịp tim bất thường', color: '#2563EB', gradId: 'gradHeart' },
-  { key: 'spo2', dataKey: 'spo2_alert', label: 'SpO2 hạ', color: '#F59E0B', gradId: 'gradSpo2' },
-  { key: 'sos', dataKey: 'sos_alert', label: 'Nút SOS', color: '#8B5CF6', gradId: 'gradSos' },
+  { key: 'spo2', dataKey: 'spo2_alert', label: 'SpO2 hạ thấp', color: '#F59E0B', gradId: 'gradSpo2' },
+  { key: 'sos', dataKey: 'sos_alert', label: 'Nút SOS khẩn cấp', color: '#8B5CF6', gradId: 'gradSos' },
 ];
 
 const CustomAreaTooltip = ({ active, payload, label }: any) => {
@@ -123,12 +124,22 @@ export const DoctorAlertsAreaChart: React.FC<DoctorAlertsAreaChartProps> = ({
   selectedMonthStr,
   onMonthSelect,
 }) => {
+  const [showPickerPopover, setShowPickerPopover] = useState(false);
   const [visibleSeries, setVisibleSeries] = useState<Record<SeriesKey, boolean>>({
     fall: true,
     heart: true,
     spo2: true,
     sos: true,
   });
+
+  const parsedAnchor = (() => {
+    if (selectedMonthStr) {
+      const [y, m] = selectedMonthStr.split('-').map(Number);
+      if (y && m) return { year: y, month: m - 1 };
+    }
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+  })();
 
   const toggleSeries = (key: SeriesKey) => {
     setVisibleSeries((prev) => {
@@ -139,27 +150,32 @@ export const DoctorAlertsAreaChart: React.FC<DoctorAlertsAreaChartProps> = ({
     });
   };
 
+  const isFallZero = data.every((d) => (d.fall ?? 0) === 0);
+  const isHeartZero = data.every((d) => (d.heart_alert ?? 0) === 0);
+  const isSpo2Zero = data.every((d) => (d.spo2_alert ?? 0) === 0);
+  const isSosZero = data.every((d) => (d.sos_alert ?? 0) === 0);
+
   return (
     <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs flex flex-col justify-between dark:border-slate-800/80 dark:bg-[#131C31]">
       {/* 1. Header & Segmented Control */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h3 className="font-heading text-base font-extrabold text-slate-900 dark:text-white">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h3 className="font-heading text-base font-extrabold text-slate-900 dark:text-white whitespace-nowrap">
               Phân loại Cảnh báo Y tế &amp; Sự cố
             </h3>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-700 animate-pulse dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
+            <span className="inline-flex items-center gap-1 whitespace-nowrap shrink-0 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-700 animate-pulse dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
               Thời gian thực
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-0.5 dark:text-slate-400">
-            Thống kê Té ngã AI, Nhịp tim bất thường, SpO2 hạ thấp &amp; Nút SOS theo từng ngày
+          <p className="text-xs text-slate-500 mt-1 leading-relaxed dark:text-slate-400">
+            Thống kê Té ngã AI, Nhịp tim bất thường, SpO2 hạ thấp &amp; Nút SOS khẩn cấp theo từng ngày
           </p>
         </div>
 
         {/* Bộ chuyển đổi khoảng thời gian & Điều hướng Tuần/Tháng */}
-        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+        <div className="flex flex-wrap items-center justify-end gap-1.5 self-start shrink-0">
           {/* Segmented Control - Nút cố định kích thước */}
           <div className="inline-flex rounded-xl border border-slate-200/90 bg-slate-100/80 p-0.5 text-xs font-semibold dark:border-slate-800 dark:bg-slate-800/80">
             {(['7D', '30D'] as const).map((r) => {
@@ -169,7 +185,7 @@ export const DoctorAlertsAreaChart: React.FC<DoctorAlertsAreaChartProps> = ({
                   key={r}
                   type="button"
                   onClick={() => onRangeChange(r)}
-                  className={`w-20 rounded-lg py-1 text-xs font-bold transition-all text-center cursor-pointer ${
+                  className={`px-2.5 rounded-lg py-1 text-xs font-bold transition-all text-center whitespace-nowrap cursor-pointer ${
                     isActive
                       ? 'bg-white text-blue-600 shadow-2xs dark:bg-slate-900 dark:text-blue-400'
                       : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -208,39 +224,46 @@ export const DoctorAlertsAreaChart: React.FC<DoctorAlertsAreaChartProps> = ({
               </button>
             </div>
 
-            {/* Ô hiển thị nhãn thời gian - Khóa cứng chiều rộng w-36 (144px) để không làm xê dịch nút khác */}
+            {/* Ô hiển thị nhãn thời gian - Nút mở Popover chọn nhanh Tháng/Năm */}
             <div className="relative flex items-center">
-              {range === '30D' ? (
-                <div className="relative flex w-36 h-7 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 shadow-2xs hover:border-blue-400 transition cursor-pointer">
-                  <Calendar className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                  <span className="truncate">{periodLabel}</span>
-                  <input
-                    type="month"
-                    value={selectedMonthStr}
-                    onChange={(e) => e.target.value && onMonthSelect?.(e.target.value)}
-                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                    title="Chọn tháng khác"
-                  />
-                </div>
-              ) : (
-                <div className="relative flex w-36 h-7 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 shadow-2xs">
-                  <Calendar className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                  <span className="truncate">{periodLabel}</span>
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => setShowPickerPopover((v) => !v)}
+                className="relative flex min-w-[136px] h-7 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 shadow-2xs hover:border-blue-400 hover:bg-blue-50/40 dark:hover:border-blue-500 transition cursor-pointer"
+                title="Bấm để chọn nhanh Tháng / Năm"
+              >
+                <Calendar className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                <span className="truncate">{periodLabel}</span>
+                <ChevronDown className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+              </button>
+
+              <MonthYearPopover
+                isOpen={showPickerPopover}
+                onClose={() => setShowPickerPopover(false)}
+                selectedYear={parsedAnchor.year}
+                selectedMonth={parsedAnchor.month}
+                onSelectMonthYear={(year, month) => {
+                  const mm = String(month + 1).padStart(2, '0');
+                  onMonthSelect?.(`${year}-${mm}`);
+                }}
+                onSelectCurrent={() => onResetCurrent?.()}
+                currentLabel="Tháng hiện tại"
+                disableFuture={true}
+                align="right"
+              />
             </div>
 
-            {/* Nút quay về hiện tại - Giữ vị trí cố định bằng visibility để không làm nhảy bố cục */}
-            <div className={`transition-opacity ${isCurrentPeriod ? 'invisible pointer-events-none' : 'visible'}`}>
+            {/* Nút quay về hiện tại */}
+            {!isCurrentPeriod && (
               <button
                 type="button"
                 onClick={onResetCurrent}
-                className="rounded-lg bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-600 border border-blue-200 hover:bg-blue-100 dark:bg-blue-950/50 dark:border-blue-900 dark:text-blue-300 dark:hover:bg-blue-900 transition cursor-pointer shrink-0"
+                className="rounded-lg bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-600 border border-blue-200 hover:bg-blue-100 dark:bg-blue-950/50 dark:border-blue-900 dark:text-blue-300 dark:hover:bg-blue-900 transition cursor-pointer shrink-0 whitespace-nowrap"
                 title="Quay lại thời điểm hiện tại"
               >
                 {range === '7D' ? 'Tuần này' : 'Tháng này'}
               </button>
-            </div>
+            )}
           </div>
         </div>
       </div>
@@ -320,6 +343,9 @@ export const DoctorAlertsAreaChart: React.FC<DoctorAlertsAreaChartProps> = ({
             <Tooltip
               content={<CustomAreaTooltip />}
               cursor={{ stroke: '#94A3B8', strokeWidth: 1, strokeDasharray: '3 3' }}
+              allowEscapeViewBox={{ x: false, y: false }}
+              offset={14}
+              wrapperStyle={{ zIndex: 30, pointerEvents: 'none' }}
             />
 
             {visibleSeries.fall && (
@@ -328,9 +354,11 @@ export const DoctorAlertsAreaChart: React.FC<DoctorAlertsAreaChartProps> = ({
                 dataKey="fall"
                 name="Té ngã AI"
                 stroke="#F43F5E"
-                strokeWidth={2.5}
+                strokeWidth={isFallZero ? 1.75 : 2.5}
+                strokeDasharray={isFallZero ? '4 4' : undefined}
+                strokeOpacity={isFallZero ? 0.65 : 1}
                 fill="url(#gradFall)"
-                dot={{ r: 3, fill: '#F43F5E', stroke: '#fff', strokeWidth: 1.5 }}
+                dot={isFallZero ? false : { r: 3, fill: '#F43F5E', stroke: '#fff', strokeWidth: 1.5 }}
                 activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2 }}
               />
             )}
@@ -341,9 +369,11 @@ export const DoctorAlertsAreaChart: React.FC<DoctorAlertsAreaChartProps> = ({
                 dataKey="heart_alert"
                 name="Nhịp tim bất thường"
                 stroke="#2563EB"
-                strokeWidth={2.5}
+                strokeWidth={isHeartZero ? 1.75 : 2.5}
+                strokeDasharray={isHeartZero ? '4 4' : undefined}
+                strokeOpacity={isHeartZero ? 0.65 : 1}
                 fill="url(#gradHeart)"
-                dot={{ r: 3, fill: '#2563EB', stroke: '#fff', strokeWidth: 1.5 }}
+                dot={isHeartZero ? false : { r: 3, fill: '#2563EB', stroke: '#fff', strokeWidth: 1.5 }}
                 activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2 }}
               />
             )}
@@ -352,11 +382,13 @@ export const DoctorAlertsAreaChart: React.FC<DoctorAlertsAreaChartProps> = ({
               <Area
                 type="monotone"
                 dataKey="spo2_alert"
-                name="SpO2 hạ"
+                name="SpO2 hạ thấp"
                 stroke="#F59E0B"
-                strokeWidth={2.5}
+                strokeWidth={isSpo2Zero ? 1.75 : 2.5}
+                strokeDasharray={isSpo2Zero ? '4 4' : undefined}
+                strokeOpacity={isSpo2Zero ? 0.65 : 1}
                 fill="url(#gradSpo2)"
-                dot={{ r: 3, fill: '#F59E0B', stroke: '#fff', strokeWidth: 1.5 }}
+                dot={isSpo2Zero ? false : { r: 3, fill: '#F59E0B', stroke: '#fff', strokeWidth: 1.5 }}
                 activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2 }}
               />
             )}
@@ -365,11 +397,13 @@ export const DoctorAlertsAreaChart: React.FC<DoctorAlertsAreaChartProps> = ({
               <Area
                 type="monotone"
                 dataKey="sos_alert"
-                name="Nút SOS"
+                name="Nút SOS khẩn cấp"
                 stroke="#8B5CF6"
-                strokeWidth={2.5}
+                strokeWidth={isSosZero ? 1.75 : 2.5}
+                strokeDasharray={isSosZero ? '4 4' : undefined}
+                strokeOpacity={isSosZero ? 0.65 : 1}
                 fill="url(#gradSos)"
-                dot={{ r: 3, fill: '#8B5CF6', stroke: '#fff', strokeWidth: 1.5 }}
+                dot={isSosZero ? false : { r: 3, fill: '#8B5CF6', stroke: '#fff', strokeWidth: 1.5 }}
                 activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2 }}
               />
             )}

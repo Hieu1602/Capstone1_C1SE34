@@ -3,6 +3,7 @@
 
 import { UnifiedNotification } from '../components/clinical/NotificationDetailModal';
 import { cleanNotificationText } from './notificationSync';
+import { isAppointmentOverdue } from './appointmentHelpers';
 import type { Incident, AppointmentItem, DoctorPatientCard, SystemNotification } from '../types';
 
 export type TabType = 'ALL' | 'UNREAD' | 'ADMIN' | 'ALERTS' | 'APPOINTMENTS' | 'OTHERS';
@@ -122,6 +123,9 @@ export function parseTitleAndBody(
   if (alertType === 'MEDICAL_RECORD_UPDATED' || lower.includes('bệnh án')) {
     return { title: 'Cập nhật hồ sơ bệnh án', desc: text };
   }
+  if (alertType === 'DEVICE_CONFIG_UPDATED' || lower.includes('ngưỡng cảnh báo sinh hiệu')) {
+    return { title: 'Cập nhật ngưỡng y tế', desc: text };
+  }
 
   const parts = text.split(/[:\.\n]/);
   if (parts.length > 1 && parts[0].trim().length >= 5 && parts[0].trim().length < 50) {
@@ -215,14 +219,15 @@ export function buildNotificationItems(
       lower.includes('lịch hẹn');
     const isAssignment = lower.includes('bệnh nhân mới') || lower.includes('phụ trách');
     const isMedicalRecord = inc.alert_type === 'MEDICAL_RECORD_UPDATED' || lower.includes('bệnh án');
+    const isConfigUpdate = inc.alert_type === 'DEVICE_CONFIG_UPDATED';
 
     // Chống tự làm phiền (No Self-Notification khi bác sĩ tự cập nhật)
     if (isMedicalRecord && (inc.acknowledged_by === doctorUserId || (doctorUserId && inc.notes?.includes(doctorUserId)))) {
       return;
     }
 
-    // Tuyệt đối ẩn dao động nhẹ; Bác sĩ chỉ nhận Cảnh báo Nguy cấp HOẶC Lịch khám / Lời mời
-    if (!isCrit && !isHouseInvite && !isAppointment && !isAssignment) {
+    // Tuyệt đối ẩn dao động nhẹ; Bác sĩ chỉ nhận Cảnh báo Nguy cấp, Lịch khám / Lời mời, hoặc Cập nhật ngưỡng
+    if (!isCrit && !isHouseInvite && !isAppointment && !isAssignment && !isConfigUpdate) {
       return;
     }
 
@@ -241,7 +246,7 @@ export function buildNotificationItems(
       label = handled ? (inc.notes?.includes('từ chối') ? 'Đã từ chối' : 'Đã tham gia') : 'Lời mời';
       color = handled ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-amber-700 bg-amber-50 border-amber-200';
       target = '/';
-      finalRead = handled || isRead;
+      finalRead = handled;
     } else if (isAppointment) {
       type = 'APPOINTMENT';
       const isCancel = lower.includes('hủy');
@@ -259,11 +264,14 @@ export function buildNotificationItems(
     } else if (isMedicalRecord) {
       label = 'Hồ sơ y tế';
       color = 'text-indigo-700 bg-indigo-50 border-indigo-200';
+    } else if (isConfigUpdate) {
+      label = 'Cấu hình ngưỡng';
+      color = 'text-blue-700 bg-blue-50 border-blue-200';
     }
 
     const patIdx = pats?.findIndex((p) => p.id === (inc as any).elderly_id || (inc.notes && inc.notes.includes(p.id)));
-    const pat = patIdx !== undefined && patIdx >= 0 ? pats[patIdx] : pats?.[0];
-    const mrCode = patIdx !== undefined && patIdx >= 0 ? `MR-${String(patIdx + 1).padStart(3, '0')}` : 'MR-001';
+    const pat = patIdx !== undefined && patIdx >= 0 ? pats[patIdx] : undefined;
+    const mrCode = patIdx !== undefined && patIdx >= 0 ? `MR-${String(patIdx + 1).padStart(3, '0')}` : undefined;
     const pName = pat?.name || (type === 'INVITE' ? 'Hộ gia đình mới' : undefined);
     const parsed = parseTitleAndBody(msg, type, inc.alert_type, inc.alert_level, pName);
     const dg = getDateGroup(inc.created_at);
@@ -344,6 +352,8 @@ export function buildNotificationItems(
       const timeOnly = formatNotificationTime(apt.scheduled_at);
       const isDone = apt.status === 'COMPLETED';
       const isCancel = apt.status === 'CANCELLED';
+      const isConfirmed = apt.status === 'CONFIRMED';
+      const isOverdue = isAppointmentOverdue(apt.scheduled_at, apt.status);
       const title = `Lịch khám: ${apt.patient_name || 'Bệnh nhân'}`;
       const desc = `${apt.visit_type === 'HOME_VISIT' ? 'Khám tại nhà' : 'Tại phòng khám'} • Địa chỉ: ${apt.location || 'Chưa cập nhật'}`;
       list.push({
@@ -358,13 +368,17 @@ export function buildNotificationItems(
         dateKey: dg.key,
         dateLabel: dg.label,
         sortTimestamp: dg.timestamp,
-        badgeLabel: isDone ? 'Đã khám' : isCancel ? 'Đã hủy' : 'Sắp tới',
+        badgeLabel: isDone ? 'Đã khám' : isCancel ? 'Đã hủy' : isOverdue ? 'Quá giờ' : isConfirmed ? 'Đã xác nhận' : 'Sắp tới',
         badgeColor: isDone
           ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
           : isCancel
             ? 'text-rose-700 bg-rose-50 border-rose-200'
-            : 'text-sky-700 bg-sky-50 border-sky-200',
-        badgeBg: isDone ? 'bg-emerald-50' : isCancel ? 'bg-rose-50' : 'bg-sky-50',
+            : isOverdue
+              ? 'text-orange-700 bg-orange-50 border-orange-200'
+              : isConfirmed
+                ? 'text-teal-700 bg-teal-50 border-teal-200'
+                : 'text-sky-700 bg-sky-50 border-sky-200',
+        badgeBg: isDone ? 'bg-emerald-50' : isCancel ? 'bg-rose-50' : isOverdue ? 'bg-orange-50' : isConfirmed ? 'bg-teal-50' : 'bg-sky-50',
         isRead: readSet.has(`apt_${apt.id}`),
         targetUrl: '/appointments',
         patientName: apt.patient_name,

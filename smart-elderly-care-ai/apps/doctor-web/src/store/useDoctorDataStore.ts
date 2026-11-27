@@ -11,6 +11,7 @@ const STORAGE_KEYS = {
   APPOINTMENTS: 'seca_cache_appointments',
   INVITES: 'seca_cache_invites',
   INCIDENTS: 'seca_cache_incidents',
+  CLINICAL_INCIDENTS: 'seca_cache_clinical_incidents',
   TIMESTAMP: 'seca_cache_timestamp',
 };
 
@@ -41,6 +42,7 @@ interface DoctorDataState {
   appointments: AppointmentItem[];
   invites: HouseInvite[];
   incidents: Incident[];
+  clinicalIncidents: Incident[];
 
   isLoading: boolean;
   isLoadingPatients: boolean;
@@ -64,6 +66,7 @@ const initialPatients = getStorageItem<DoctorPatientCard[]>(STORAGE_KEYS.PATIENT
 const initialAppointments = getStorageItem<AppointmentItem[]>(STORAGE_KEYS.APPOINTMENTS, []);
 const initialInvites = getStorageItem<HouseInvite[]>(STORAGE_KEYS.INVITES, []);
 const initialIncidents = getStorageItem<Incident[]>(STORAGE_KEYS.INCIDENTS, []);
+const initialClinicalIncidents = getStorageItem<Incident[]>(STORAGE_KEYS.CLINICAL_INCIDENTS, []);
 const initialTimestamp = getStorageItem<number | null>(STORAGE_KEYS.TIMESTAMP, null);
 
 const hasCachedData = initialPatients.length > 0 || initialAppointments.length > 0;
@@ -73,6 +76,7 @@ export const useDoctorDataStore = create<DoctorDataState>((set, get) => ({
   appointments: initialAppointments,
   invites: initialInvites,
   incidents: initialIncidents,
+  clinicalIncidents: initialClinicalIncidents,
 
   // Nếu đã có cache từ trước thì isLoading = false ngay lập tức (0ms)
   isLoading: !hasCachedData,
@@ -101,7 +105,7 @@ export const useDoctorDataStore = create<DoctorDataState>((set, get) => ({
     inFlightFetchAll = (async () => {
       try {
         // Thực hiện tất cả các request song song bằng Promise.all()
-        const [patData, aptData, invData, incData] = await Promise.all([
+        const [patData, aptData, invData, incData, clinicalData] = await Promise.all([
           doctorApi.getPatients().catch((err) => {
             console.warn('[DoctorDataStore] Tải bệnh nhân thất bại:', err);
             return get().patients;
@@ -118,18 +122,24 @@ export const useDoctorDataStore = create<DoctorDataState>((set, get) => ({
             console.warn('[DoctorDataStore] Tải cảnh báo thất bại:', err);
             return get().incidents;
           }),
+          incidentsApi.list(undefined, 500, 'doctor_analytics').catch((err) => {
+            console.warn('[DoctorDataStore] Tải thống kê cảnh báo thất bại:', err);
+            return get().clinicalIncidents;
+          }),
         ]);
 
         const validPatients = Array.isArray(patData) ? patData : get().patients;
         const validAppointments = Array.isArray(aptData) ? aptData : get().appointments;
         const validInvites = Array.isArray(invData) ? invData : get().invites;
         const validIncidents = Array.isArray(incData) ? incData : get().incidents;
+        const validClinicalIncidents = Array.isArray(clinicalData) ? clinicalData : get().clinicalIncidents;
         const now = Date.now();
 
         setStorageItem(STORAGE_KEYS.PATIENTS, validPatients);
         setStorageItem(STORAGE_KEYS.APPOINTMENTS, validAppointments);
         setStorageItem(STORAGE_KEYS.INVITES, validInvites);
         setStorageItem(STORAGE_KEYS.INCIDENTS, validIncidents);
+        setStorageItem(STORAGE_KEYS.CLINICAL_INCIDENTS, validClinicalIncidents);
         setStorageItem(STORAGE_KEYS.TIMESTAMP, now);
 
         set({
@@ -137,6 +147,7 @@ export const useDoctorDataStore = create<DoctorDataState>((set, get) => ({
           appointments: validAppointments,
           invites: validInvites,
           incidents: validIncidents,
+          clinicalIncidents: validClinicalIncidents,
           isLoading: false,
           isLoadingPatients: false,
           isLoadingAppointments: false,
@@ -241,6 +252,7 @@ export const useDoctorDataStore = create<DoctorDataState>((set, get) => ({
       localStorage.removeItem(STORAGE_KEYS.APPOINTMENTS);
       localStorage.removeItem(STORAGE_KEYS.INVITES);
       localStorage.removeItem(STORAGE_KEYS.INCIDENTS);
+      localStorage.removeItem(STORAGE_KEYS.CLINICAL_INCIDENTS);
       localStorage.removeItem(STORAGE_KEYS.TIMESTAMP);
     }
     set({
@@ -248,6 +260,7 @@ export const useDoctorDataStore = create<DoctorDataState>((set, get) => ({
       appointments: [],
       invites: [],
       incidents: [],
+      clinicalIncidents: [],
       isLoading: true,
       isLoadingPatients: true,
       isLoadingAppointments: true,

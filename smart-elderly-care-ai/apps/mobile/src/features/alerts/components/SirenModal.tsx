@@ -18,6 +18,7 @@
 import React, { useEffect, useRef } from 'react';
 import {
   Modal,
+  Platform,
   View,
   Text,
   StyleSheet,
@@ -64,17 +65,17 @@ export default function SirenModal({
       // 1. Khởi chạy Animation nhịp đập lặp vô tận (Pulse loop)
       Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.15, duration: 600, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1.0,  duration: 600, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1.15, duration: 600, useNativeDriver: Platform.OS !== 'web' }),
+          Animated.timing(pulseAnim, { toValue: 1.0,  duration: 600, useNativeDriver: Platform.OS !== 'web' }),
         ])
       ).start();
 
       // 2. Khởi chạy Animation rung lắc khung cảnh báo (Shake loop)
       Animated.loop(
         Animated.sequence([
-          Animated.timing(shakeAnim, { toValue: 8,  duration: 80, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: -8, duration: 80, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: 0,  duration: 80, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: 8,  duration: 80, useNativeDriver: Platform.OS !== 'web' }),
+          Animated.timing(shakeAnim, { toValue: -8, duration: 80, useNativeDriver: Platform.OS !== 'web' }),
+          Animated.timing(shakeAnim, { toValue: 0,  duration: 80, useNativeDriver: Platform.OS !== 'web' }),
         ])
       ).start();
 

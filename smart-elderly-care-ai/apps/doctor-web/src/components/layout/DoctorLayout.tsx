@@ -1,13 +1,14 @@
 // src/components/layout/DoctorLayout.tsx
 // Bố cục tổng thể trang Bác sĩ: Navbar + Sidebar + Vùng nội dung (#F4F7FE)
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Outlet } from 'react-router-dom';
 import { DoctorNavbar } from './DoctorNavbar';
 import { DoctorSidebar } from './DoctorSidebar';
 import { AdminMarqueeBanner } from './AdminMarqueeBanner';
 import { doctorWebSocket } from '../../services/websocket';
 import { useDoctorDataStore } from '../../store/useDoctorDataStore';
+import { formatAppointmentWsNotification } from '../../utils/appointmentHelpers';
 import {
   isBrowserNotificationSupported,
   getBrowserNotificationPermission,
@@ -15,7 +16,7 @@ import {
   showBrowserNotification,
   playEmergencyAlarmSound,
 } from '../../utils/browserNotification';
-import { AlertCircle, X, Bell } from 'lucide-react';
+import { AlertCircle, X, Bell, Calendar } from 'lucide-react';
 
 export const DoctorLayout: React.FC = () => {
   const [realtimeAlert, setRealtimeAlert] = useState<{
@@ -24,6 +25,12 @@ export const DoctorLayout: React.FC = () => {
     time?: string;
     type?: string;
   } | null>(null);
+  const [appointmentToast, setAppointmentToast] = useState<{
+    title: string;
+    message: string;
+    time: string;
+  } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [showPermissionBanner, setShowPermissionBanner] = useState<boolean>(() => {
     return isBrowserNotificationSupported() && getBrowserNotificationPermission() === 'default';
@@ -55,6 +62,23 @@ export const DoctorLayout: React.FC = () => {
 
       if (isAppointmentEvent) {
         useDoctorDataStore.getState().fetchAllData(true);
+        if (alertType.startsWith('APPOINTMENT_')) {
+          const { title, body } = formatAppointmentWsNotification(event);
+          showBrowserNotification({
+            title,
+            body,
+            tag: event.incident_id || alertType,
+            url: '/appointments',
+            requireInteraction: false,
+          });
+          setAppointmentToast({
+            title,
+            message: body,
+            time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+          });
+          if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+          toastTimerRef.current = setTimeout(() => setAppointmentToast(null), 6000);
+        }
         return;
       }
 
@@ -88,6 +112,7 @@ export const DoctorLayout: React.FC = () => {
     });
 
     return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
       unsubscribe();
       doctorWebSocket.disconnect();
     };
@@ -171,6 +196,28 @@ export const DoctorLayout: React.FC = () => {
           <Outlet />
         </main>
       </div>
+
+      {appointmentToast && (
+        <div className="fixed bottom-6 right-6 z-50 flex max-w-sm items-start gap-3 rounded-2xl border border-blue-200 bg-white p-4 text-xs shadow-xl dark:border-blue-800/70 dark:bg-[#131C31] animate-in fade-in duration-200">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400">
+            <Calendar className="h-4 w-4" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-extrabold text-slate-900 dark:text-white">
+              {appointmentToast.title} <span className="font-normal text-slate-400">({appointmentToast.time})</span>
+            </p>
+            <p className="mt-0.5 text-slate-600 dark:text-slate-300 leading-relaxed">{appointmentToast.message}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAppointmentToast(null)}
+            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200 cursor-pointer"
+            title="Đóng thông báo"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };

@@ -57,13 +57,19 @@ class CRUDIncident:
             query = query.where(Incident.alert_level == alert_level)
 
         is_doctor = False
+        is_doctor_chart = False
         if current_user_id:
             from app.models.user import User
             from app.models.house import House, HouseMember
             from app.models.device import Device
 
             user = await db.get(User, current_user_id)
-            is_doctor = (target_role == "doctor") or (user is not None and user.role == "doctor")
+            is_doctor_chart = (target_role == "doctor_analytics") and (
+                user is not None and user.role == "doctor"
+            )
+            is_doctor = (not is_doctor_chart) and (
+                (target_role == "doctor") or (user is not None and user.role == "doctor")
+            )
 
             if user and user.role == "admin":
                 # Admin cấp hệ thống: có thể giám sát toàn bộ
@@ -134,8 +140,8 @@ class CRUDIncident:
                 )
             )
 
-        # Lọc chống Alert Fatigue cho Bác sĩ (Doctor Portal)
-        if is_doctor:
+        # Lọc chống Alert Fatigue cho Bác sĩ (Doctor Portal) & biểu đồ lâm sàng
+        if is_doctor or is_doctor_chart:
             # 1. Ẩn toàn bộ sự kiện vận hành thiết bị & kết nối
             excluded_device_alerts = [
                 "BATTERY_LOW", "BATTERY_CRITICAL", "BATTERY_DRAIN",
@@ -155,6 +161,32 @@ class CRUDIncident:
                 )
             )
 
+        appointment_invite_types = [
+            "APPOINTMENT_SCHEDULED", "APPOINTMENT_CONFIRMED",
+            "APPOINTMENT_CANCELLED", "APPOINTMENT_RESCHEDULED",
+            "HOUSE_INVITE_PENDING", "DOCTOR_ASSIGNED", "INVITATION"
+        ]
+
+        if is_doctor_chart:
+            # Chế độ thống kê biểu đồ bác sĩ: bỏ sự kiện lịch/đơn thuốc/cấu hình, giữ đủ cảnh báo y tế (HIGH + CRITICAL)
+            excluded_non_clinical = appointment_invite_types + [
+                "PRESCRIPTION_CREATED",
+                "MEDICAL_RECORD_UPDATED",
+                "DEVICE_CONFIG_UPDATED",
+            ]
+            query = query.where(Incident.alert_type.not_in(excluded_non_clinical))
+            query = query.where(
+                and_(
+                    ~Incident.message.ilike("%lịch khám%"),
+                    ~Incident.message.ilike("%lời mời%"),
+                    ~Incident.message.ilike("%tái khám%"),
+                    ~Incident.message.ilike("%hẹn khám%"),
+                )
+            )
+            result = await db.execute(query.offset(offset).limit(limit))
+            return list(result.scalars().all())
+
+        if is_doctor:
             # 2. Chống tự làm phiền (No Self-Notification khi bác sĩ tự cập nhật)
             if current_user_id:
                 query = query.where(
@@ -175,16 +207,12 @@ class CRUDIncident:
                 "LOW_SPO2", "LOW_SPO2_CRITICAL", "EXERTION_HYPOXIA",
                 "CARDIO_COLLAPSE", "HIGH_HEART_RATE_CRITICAL", "HIGH_FEVER"
             ]
-            appointment_invite_types = [
-                "APPOINTMENT_SCHEDULED", "APPOINTMENT_CONFIRMED",
-                "APPOINTMENT_CANCELLED", "APPOINTMENT_RESCHEDULED",
-                "HOUSE_INVITE_PENDING", "DOCTOR_ASSIGNED", "INVITATION"
-            ]
 
             doctor_allowed = or_(
                 Incident.alert_level == "CRITICAL",
                 Incident.alert_type.in_(critical_types),
                 Incident.alert_type.in_(appointment_invite_types),
+                Incident.alert_type == "DEVICE_CONFIG_UPDATED",
                 Incident.message.ilike("%lịch khám%"),
                 Incident.message.ilike("%lời mời%"),
                 Incident.message.ilike("%tái khám%"),
@@ -237,7 +265,21 @@ class CRUDIncident:
                 setattr(inc, "repeat_badge", None)
                 grouped_incidents.append(inc)
 
-        return grouped_incidents[:limit]
+        top_incidents = grouped_incidents[:limit]
+        # Bổ sung elderly_id từ Device để Web/App nhận diện đúng bệnh nhân kể cả khi notes bị ghi đè
+        try:
+            dev_ids = {inc.device_id for inc in top_incidents if getattr(inc, "device_id", None)}
+            if dev_ids:
+                from app.models.device import Device
+
+                dev_rows = await db.execute(select(Device.id, Device.elderly_id).where(Device.id.in_(list(dev_ids))))
+                dev_map = {row[0]: row[1] for row in dev_rows.fetchall() if row[1] is not None}
+                for inc in top_incidents:
+                    if not getattr(inc, "elderly_id", None):
+                        setattr(inc, "elderly_id", dev_map.get(inc.device_id))
+        except Exception:
+            pass
+        return top_incidents
 
     async def create(self, db: AsyncSession, data: dict) -> Incident:
         obj = Incident(**data)
@@ -267,10 +309,13 @@ class CRUDIncident:
         preserved_tags = []
         user_tag_match = re.search(r'(USER:[0-9a-fA-F-]+)', existing_notes)
         apt_tag_match = re.search(r'(APT:[0-9a-fA-F-]+)', existing_notes)
+        patient_tag_match = re.search(r'(PATIENT:[0-9a-fA-F-]+)', existing_notes)
         if user_tag_match:
             preserved_tags.append(user_tag_match.group(1))
         if apt_tag_match:
             preserved_tags.append(apt_tag_match.group(1))
+        if patient_tag_match:
+            preserved_tags.append(patient_tag_match.group(1))
         if "APPOINTMENT_REQUESTED" in existing_notes:
             preserved_tags.append("APPOINTMENT_REQUESTED")
         if notes:
@@ -309,7 +354,10 @@ class CRUDIncident:
         from sqlalchemy import update
         stmt = (
             update(Incident)
-            .where(Incident.is_acknowledged.is_(False))
+            .where(
+                Incident.is_acknowledged.is_(False),
+                Incident.alert_type != "HOUSE_INVITE_PENDING",
+            )
             .values(
                 is_acknowledged=True,
                 acknowledged_at=datetime.now(timezone.utc),

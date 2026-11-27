@@ -1,12 +1,17 @@
 // src/components/clinical/NewAppointmentModal.tsx
 // Modal Tạo Lịch Khám & Tái Khám Mới cho Bác sĩ gia đình
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AppointmentItem, DoctorPatientCard } from '../../types';
 import { doctorApi } from '../../services/api';
 import { useDoctorDataStore } from '../../store/useDoctorDataStore';
-import { Calendar, X, AlertCircle, Loader2, Volume2 } from 'lucide-react';
+import {
+  formatLocalDatetimeInput,
+  getInitialAppointmentDatetimeInput,
+  parseAppointmentNotes,
+} from '../../utils/appointmentHelpers';
+import { Calendar, X, AlertCircle, Loader2, Volume2, Repeat } from 'lucide-react';
 
 interface NewAppointmentModalProps {
   patients: DoctorPatientCard[];
@@ -17,49 +22,6 @@ interface NewAppointmentModalProps {
 }
 
 const inputCls = 'w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-blue-500 focus:outline-hidden bg-white dark:border-slate-700/60 dark:bg-[#0F172A] dark:text-slate-100 dark:placeholder-slate-500';
-
-const toLocalDatetimeInput = (iso?: string, isCreatePrefill = false): string => {
-  const d = iso ? new Date(iso) : new Date();
-  if (!iso || isNaN(d.getTime())) {
-    const fallback = new Date();
-    fallback.setDate(fallback.getDate() + 1);
-    fallback.setHours(9, 0, 0, 0);
-    return toLocalDatetimeInput(fallback.toISOString(), false);
-  }
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const ymd = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-
-  if (isCreatePrefill) {
-    // Tự động chọn khung giờ trống đầu tiên trong ngày nếu 09:00 đã có lịch UPCOMING
-    const existing = useDoctorDataStore
-      .getState()
-      .appointments.filter((a) => {
-        if (a.status !== 'UPCOMING' && a.status !== 'CONFIRMED') return false;
-        const ad = new Date(a.scheduled_at);
-        return (
-          !isNaN(ad.getTime()) &&
-          `${ad.getFullYear()}-${pad(ad.getMonth() + 1)}-${pad(ad.getDate())}` === ymd
-        );
-      })
-      .map((a) => {
-        const start = new Date(a.scheduled_at).getTime();
-        const dur = (a.duration_minutes || 30) * 60_000;
-        return [start, start + dur] as const;
-      });
-
-    const candidate = new Date(d);
-    for (let step = 0; step < 24; step++) {
-      const cStart = candidate.getTime();
-      const cEnd = cStart + 30 * 60_000;
-      const overlaps = existing.some(([s, e]) => s < cEnd && e > cStart);
-      if (!overlaps) break;
-      candidate.setMinutes(candidate.getMinutes() + 30);
-    }
-    return `${candidate.getFullYear()}-${pad(candidate.getMonth() + 1)}-${pad(candidate.getDate())}T${pad(candidate.getHours())}:${pad(candidate.getMinutes())}`;
-  }
-
-  return `${ymd}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
 
 export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
   patients,
@@ -81,28 +43,54 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
     }
   }, [patients, patientId, initialAppointment, initialPatientId]);
 
-  const [visitType, setVisitType] = useState<'CLINIC' | 'HOME_VISIT' | 'TELEHEALTH'>(
+  const initialVisitType: 'CLINIC' | 'HOME_VISIT' | 'TELEHEALTH' =
     initialAppointment?.visit_type === 'HOME_VISIT' || initialAppointment?.visit_type === 'HOME'
       ? 'HOME_VISIT'
       : initialAppointment?.visit_type === 'TELEHEALTH'
         ? 'TELEHEALTH'
-        : 'CLINIC'
-  );
-  const [scheduledAt, setScheduledAt] = useState(() =>
-    toLocalDatetimeInput(initialAppointment?.scheduled_at, !isReschedule && Boolean(initialAppointment?.scheduled_at))
-  );
+        : 'CLINIC';
+  const [visitType, setVisitType] = useState<'CLINIC' | 'HOME_VISIT' | 'TELEHEALTH'>(initialVisitType);
   const [durationMinutes, setDurationMinutes] = useState<number>(
     initialAppointment?.duration_minutes || 30
   );
+  const hasEditedDatetimeRef = useRef(false);
+  const [scheduledAt, setScheduledAt] = useState(() =>
+    getInitialAppointmentDatetimeInput({
+      iso: initialAppointment?.scheduled_at,
+      isReschedule,
+      visitType: initialVisitType,
+      durationMinutes: initialAppointment?.duration_minutes || 30,
+      appointments: useDoctorDataStore.getState().appointments,
+      excludeAppointmentId: initialAppointment?.id,
+    })
+  );
+  const [recurrencePattern, setRecurrencePattern] = useState<'NONE' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY'>('NONE');
+  const [recurrenceOccurrences, setRecurrenceOccurrences] = useState<number>(4);
   const [location, setLocation] = useState(
     initialAppointment?.location || 'Phòng khám Bác sĩ Gia đình'
   );
-  const [clinicalNotes, setClinicalNotes] = useState(
-    initialAppointment?.clinical_notes ?? 'Khám định kỳ & đánh giá đáp ứng phác đồ thuốc'
+  const [clinicalNotes, setClinicalNotes] = useState(() =>
+    initialAppointment?.clinical_notes !== undefined
+      ? parseAppointmentNotes(initialAppointment.clinical_notes).cleanNotes
+      : 'Khám định kỳ & đánh giá đáp ứng phác đồ thuốc'
   );
   const [enableSpeaker, setEnableSpeaker] = useState(
     initialAppointment ? initialAppointment.enable_speaker_reminder !== false : true
   );
+  const minDatetimeLocal = formatLocalDatetimeInput(new Date());
+
+  const refreshAutoSuggestedDatetime = (nextVisitType: string, nextDuration: number) => {
+    if (isReschedule || hasEditedDatetimeRef.current) return;
+    setScheduledAt(
+      getInitialAppointmentDatetimeInput({
+        iso: initialAppointment?.scheduled_at,
+        isReschedule: false,
+        visitType: nextVisitType,
+        durationMinutes: nextDuration,
+        appointments: useDoctorDataStore.getState().appointments,
+      })
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,6 +102,10 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
     const parsedDt = new Date(scheduledAt);
     if (isNaN(parsedDt.getTime())) {
       setErrorMsg('Thời gian hẹn không hợp lệ.');
+      return;
+    }
+    if (parsedDt.getTime() <= Date.now()) {
+      setErrorMsg('Thời gian hẹn phải ở tương lai.');
       return;
     }
 
@@ -137,6 +129,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
             .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
         );
       } else {
+        const safeOccurrences = Math.min(12, Math.max(2, Number(recurrenceOccurrences) || 4));
         const created = await doctorApi.createAppointment({
           patient_id: patientId,
           patient_name: p?.name,
@@ -147,9 +140,20 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
           location: location.trim(),
           clinical_notes: clinicalNotes.trim(),
           enable_speaker_reminder: enableSpeaker,
+          recurrence_pattern: recurrencePattern,
+          ...(recurrencePattern !== 'NONE' ? { recurrence_occurrences: safeOccurrences } : {}),
         });
+        const createdItems =
+          Array.isArray(created.created_appointments) && created.created_appointments.length > 0
+            ? created.created_appointments
+            : [created];
+        const createdIds = new Set(createdItems.map((item) => item.id));
+        const normalizedCreated = createdItems.map((item) => ({
+          ...item,
+          patient_name: p?.name || item.patient_name,
+        }));
         store.setAppointments(
-          [...store.appointments.filter((a) => a.id !== created.id), { ...created, patient_name: p?.name || created.patient_name }].sort(
+          [...store.appointments.filter((a) => !createdIds.has(a.id)), ...normalizedCreated].sort(
             (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
           )
         );
@@ -157,8 +161,17 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
       onSuccess();
       onClose();
     } catch (err: any) {
+      const rawDetail = err.response?.data?.detail;
+      const formattedDetail =
+        typeof rawDetail === 'string'
+          ? rawDetail
+          : Array.isArray(rawDetail)
+            ? rawDetail.map((d: any) => d?.msg || JSON.stringify(d)).join('; ')
+            : rawDetail && typeof rawDetail === 'object'
+              ? rawDetail.message || JSON.stringify(rawDetail)
+              : null;
       setErrorMsg(
-        err.response?.data?.detail ||
+        formattedDetail ||
           (isReschedule
             ? 'Không thể dời lịch hẹn. Vui lòng kiểm tra lại.'
             : 'Không thể tạo lịch hẹn. Vui lòng kiểm tra lại.')
@@ -236,6 +249,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
                 onChange={(e) => {
                   const vt = e.target.value as 'CLINIC' | 'HOME_VISIT' | 'TELEHEALTH';
                   setVisitType(vt);
+                  refreshAutoSuggestedDatetime(vt, durationMinutes);
                   if (vt === 'CLINIC') {
                     setLocation('Phòng khám Bác sĩ Gia đình');
                   } else if (vt === 'TELEHEALTH') {
@@ -256,10 +270,24 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Thời gian hẹn *</label>
               <div className="flex gap-2">
-                <input type="datetime-local" required value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className={inputCls} />
+                <input
+                  type="datetime-local"
+                  required
+                  min={minDatetimeLocal}
+                  value={scheduledAt}
+                  onChange={(e) => {
+                    hasEditedDatetimeRef.current = true;
+                    setScheduledAt(e.target.value);
+                  }}
+                  className={inputCls}
+                />
                 <select
                   value={durationMinutes}
-                  onChange={(e) => setDurationMinutes(Number(e.target.value))}
+                  onChange={(e) => {
+                    const nextDur = Number(e.target.value);
+                    setDurationMinutes(nextDur);
+                    refreshAutoSuggestedDatetime(visitType, nextDur);
+                  }}
                   aria-label="Thời lượng khám"
                   className="w-24 shrink-0 rounded-xl border border-slate-200 px-2 py-2 text-xs focus:border-blue-500 focus:outline-hidden bg-white dark:border-slate-700/60 dark:bg-[#0F172A] dark:text-slate-100"
                 >
@@ -276,6 +304,44 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Địa điểm khám *</label>
             <input type="text" required value={location} onChange={(e) => setLocation(e.target.value)} className={inputCls} />
           </div>
+
+          {!isReschedule && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3 dark:border-slate-700/60 dark:bg-[#0F172A]/60">
+              <div>
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  <Repeat className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                  <span>Lặp lại định kỳ</span>
+                </label>
+                <select
+                  value={recurrencePattern}
+                  onChange={(e) =>
+                    setRecurrencePattern(e.target.value as 'NONE' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY')
+                  }
+                  className={inputCls}
+                >
+                  <option value="NONE" className="dark:bg-[#0F172A] dark:text-slate-100">Không lặp lại (1 buổi)</option>
+                  <option value="WEEKLY" className="dark:bg-[#0F172A] dark:text-slate-100">Hàng tuần</option>
+                  <option value="MONTHLY" className="dark:bg-[#0F172A] dark:text-slate-100">Hàng tháng</option>
+                  <option value="QUARTERLY" className="dark:bg-[#0F172A] dark:text-slate-100">Hàng quý (3 tháng)</option>
+                </select>
+              </div>
+              {recurrencePattern !== 'NONE' && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Số buổi lặp (2–12)
+                  </label>
+                  <input
+                    type="number"
+                    min={2}
+                    max={12}
+                    value={recurrenceOccurrences}
+                    onChange={(e) => setRecurrenceOccurrences(Math.min(12, Math.max(2, Number(e.target.value) || 2)))}
+                    className={inputCls}
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Dặn dò & Ghi chú y tế</label>

@@ -19,6 +19,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import type { AppointmentItem } from '../../types';
+import { isAppointmentOverdue, parseAppointmentNotes } from '../../utils/appointmentHelpers';
 
 interface DayAppointmentsModalProps {
   isOpen: boolean;
@@ -159,7 +160,9 @@ export const DayAppointmentsModal: React.FC<DayAppointmentsModalProps> = ({
               {appointments.map((apt) => {
                 const isCompleted = apt.status === 'COMPLETED';
                 const isCancelled = apt.status === 'CANCELLED';
-                const isUpcoming = apt.status === 'UPCOMING' || apt.status === 'CONFIRMED';
+                const isOverdue = isAppointmentOverdue(apt.scheduled_at, apt.status);
+                const { isFamilyConfirmedByNote, cleanNotes } = parseAppointmentNotes(apt.clinical_notes);
+                const isFamilyConfirmed = isFamilyConfirmedByNote || apt.status === 'CONFIRMED';
 
                 // Format thời gian
                 const timeStr = (() => {
@@ -203,6 +206,8 @@ export const DayAppointmentsModal: React.FC<DayAppointmentsModalProps> = ({
                                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-900/60'
                                   : isCancelled
                                   ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900/60'
+                                  : isOverdue
+                                  ? 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/60 dark:text-orange-300 dark:border-orange-900/60'
                                   : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-900/60'
                               }`}
                             >
@@ -215,6 +220,11 @@ export const DayAppointmentsModal: React.FC<DayAppointmentsModalProps> = ({
                                 <>
                                   <XCircle className="h-3 w-3" />
                                   <span>Đã hủy</span>
+                                </>
+                              ) : isOverdue ? (
+                                <>
+                                  <AlertCircle className="h-3 w-3" />
+                                  <span>Quá giờ</span>
                                 </>
                               ) : (
                                 <>
@@ -245,9 +255,15 @@ export const DayAppointmentsModal: React.FC<DayAppointmentsModalProps> = ({
                           </div>
 
                           {/* Ghi chú lâm sàng nếu có */}
-                          {apt.clinical_notes && (
+                          {isFamilyConfirmed && (
+                            <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800/60 dark:text-emerald-300">
+                              <CheckCircle2 className="h-3 w-3" />
+                              <span>Gia đình đã xác nhận đón tiếp</span>
+                            </span>
+                          )}
+                          {cleanNotes && (
                             <p className="mt-2 rounded-lg bg-slate-50 p-2 text-xs italic text-slate-600 dark:bg-slate-800/50 dark:text-slate-300 border-l-2 border-blue-400">
-                              "{apt.clinical_notes}"
+                              "{cleanNotes}"
                             </p>
                           )}
                         </div>

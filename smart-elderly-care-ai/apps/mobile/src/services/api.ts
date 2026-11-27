@@ -340,16 +340,28 @@ export const patientApi = {
     api.put(`/patients/${patientId}/medical-record`, data),
   getVitals: (patientId: number | string, target_date?: string) =>
     api.get(`/patients/${patientId}/vitals`, { params: { target_date, limit: 300 } }),
-  enrollFace: (patientId: number, formData: FormData) =>
+  enrollFace: (patientId: number | string, formData: FormData) =>
     api.post(`/patients/${patientId}/face-enroll`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   getAppointments: (patientId?: number | string | null, status?: string) =>
     patientId ? api.get(`/patients/${patientId}/appointments`, { params: status ? { status } : undefined }) : Promise.resolve({ data: [] } as any),
+  getBusySlots: (patientId: string) =>
+    api.get<BusySlotItem[]>(`/patients/${patientId}/appointments/busy-slots`),
   confirmAppointment: (patientId: number | string, appointmentId: string) =>
     api.post(`/patients/${patientId}/appointments/${appointmentId}/confirm`),
   requestAppointment: (patientId: number | string, data: any) =>
-    api.post(`/patients/${patientId}/appointments`, data),
+    api.post<AppointmentItem>(`/patients/${patientId}/appointments`, data),
+  rescheduleAppointment: (
+    patientId: string,
+    appointmentId: string,
+    data: { scheduled_at: string; visit_type?: string; location?: string; clinical_notes?: string }
+  ) => api.put<AppointmentItem>(`/patients/${patientId}/appointments/${appointmentId}`, data),
+  cancelAppointment: (patientId: string, appointmentId: string, cancellationReason?: string) =>
+    api.post<AppointmentItem>(
+      `/patients/${patientId}/appointments/${appointmentId}/cancel`,
+      cancellationReason ? { cancellation_reason: cancellationReason } : {}
+    ),
 };
 
 // 5. Notifications & Incidents API
@@ -369,6 +381,13 @@ export const incidentsApi = {
 
 export const notificationsApi = incidentsApi;
 
+export interface BusySlotItem {
+  id: string;
+  scheduled_at: string;
+  duration_minutes: number;
+  visit_type: string;
+}
+
 export interface AppointmentItem {
   id: string;
   doctor_id?: string;
@@ -377,17 +396,19 @@ export interface AppointmentItem {
   patient_name: string;
   house_id?: string;
   visit_type?: string;
-  exam_type?: string;
+  exam_type?: string | null;
   scheduled_at: string;
   duration_minutes?: number;
   location: string;
   clinical_notes?: string;
-  instructions?: string;
-  status: 'UPCOMING' | 'COMPLETED' | 'CANCELLED';
+  instructions?: string | null;
+  status: 'UPCOMING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | string;
   cancellation_reason?: string;
-  recurrence_pattern?: 'NONE' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY';
+  recurrence_pattern?: 'NONE' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | string;
   parent_recurring_id?: string;
   enable_speaker_reminder?: boolean;
+  created_by?: string | null;
+  created_appointments?: AppointmentItem[] | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -395,13 +416,14 @@ export interface AppointmentItem {
 export interface AppointmentCreateData {
   patient_id: string;
   patient_name?: string;
+  doctor_id?: string | null;
   scheduled_at: string;
   duration_minutes?: number;
   visit_type?: string;
-  exam_type?: string;
+  exam_type?: string | null;
   location?: string;
   clinical_notes?: string;
-  instructions?: string;
+  instructions?: string | null;
   enable_speaker_reminder?: boolean;
   recurrence_pattern?: string;
   recurrence_occurrences?: number;
@@ -411,11 +433,11 @@ export interface AppointmentUpdateData {
   scheduled_at?: string;
   duration_minutes?: number;
   visit_type?: string;
-  exam_type?: string;
+  exam_type?: string | null;
   location?: string;
   status?: string;
   clinical_notes?: string;
-  instructions?: string;
+  instructions?: string | null;
   enable_speaker_reminder?: boolean;
 }
 
@@ -477,9 +499,19 @@ export const doctorApi = {
     api.put(`/doctor/patients/${id}/thresholds`, data),
   getAppointments: (status?: string, patientId?: string) =>
     api.get('/doctor/appointments', { params: { ...(status ? { status } : {}), ...(patientId ? { patient_id: patientId } : {}) } }),
-  createAppointment: (data: AppointmentCreateData) => api.post('/doctor/appointments', data),
+  createAppointment: (data: AppointmentCreateData) =>
+    api.post<
+      AppointmentItem & {
+        exam_type?: string;
+        instructions?: string;
+        created_appointments?: (AppointmentItem & { exam_type?: string; instructions?: string })[] | null;
+      }
+    >('/doctor/appointments', data),
   updateAppointment: (appointmentId: string, data: AppointmentUpdateData) =>
-    api.put(`/doctor/appointments/${appointmentId}`, data),
+    api.put<AppointmentItem & { exam_type?: string; instructions?: string }>(
+      `/doctor/appointments/${appointmentId}`,
+      data
+    ),
   completeAppointment: (appointmentId: string) =>
     api.post(`/doctor/appointments/${appointmentId}/complete`),
   cancelAppointment: (appointmentId: string, data: { cancellation_reason: string }) =>

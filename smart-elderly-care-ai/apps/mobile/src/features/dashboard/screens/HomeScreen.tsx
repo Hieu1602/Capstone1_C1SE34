@@ -89,7 +89,7 @@ export default function HomeScreen({ navigation }: any) {
   const canViewHealth = isOwnerOrAdmin || (hasLinkedHouse && permissions?.can_view_health !== false);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const { patientRecord, fetchPatientRecord } = usePatientStore();
+  const { patientRecord, activePatientId, fetchPatientRecord } = usePatientStore();
   const lastFetchRef = React.useRef<number>(0);
   const isLoadingRef = React.useRef<boolean>(false);
 
@@ -203,7 +203,9 @@ export default function HomeScreen({ navigation }: any) {
   );
 
   const appointmentPatientInfo = React.useMemo(() => {
-    if (!pendingAppointmentNotice) return { id: patientRecord?.patient_id || 1, name: patientRecord?.name };
+    const pList = (patientsList && patientsList.length > 0) ? patientsList : (usePatientStore.getState().patientsList || []);
+    const fallbackId = patientRecord?.id || activePatientId || pList[0]?.id || pList[0]?.elderly_id || '';
+    if (!pendingAppointmentNotice) return { id: fallbackId, name: patientRecord?.name || pList[0]?.name || pList[0]?.full_name };
     let pid: any = null;
     let pname: string | null = null;
     if (pendingAppointmentNotice.notes?.includes('PATIENT:')) {
@@ -216,7 +218,6 @@ export default function HomeScreen({ navigation }: any) {
       const match = pendingAppointmentNotice.message.match(/cho\s+([^,]+?)\s+vào\s+/i);
       if (match && match[1]) pname = match[1].trim();
     }
-    const pList = (patientsList && patientsList.length > 0) ? patientsList : (usePatientStore.getState().patientsList || []);
     if (pname && !pid) {
       const found = pList.find((p: any) => (p.name || p.full_name)?.toLowerCase().trim() === pname?.toLowerCase().trim());
       if (found) pid = found.id || found.elderly_id;
@@ -226,10 +227,10 @@ export default function HomeScreen({ navigation }: any) {
       if (found) pname = found.name || found.full_name;
     }
     return {
-      id: pid || (pendingAppointmentNotice.device_id && !isNaN(Number(pendingAppointmentNotice.device_id)) ? pendingAppointmentNotice.device_id : (patientRecord?.patient_id || 1)),
+      id: pid || fallbackId,
       name: pname || (pid && pList.find((p: any) => p.id === pid || p.elderly_id === pid)?.name) || patientRecord?.name || 'Bệnh nhân',
     };
-  }, [pendingAppointmentNotice, patientsList, patientRecord]);
+  }, [pendingAppointmentNotice, patientsList, patientRecord, activePatientId]);
 
   const handleConfirmSnooze = async () => {
     if (!isOwnerOrAdmin) {

@@ -297,9 +297,33 @@ function Start-EdgeService {
 }
 
 # ------------------------------------------------------------------------------
+# 8b. KHOI DONG EDGE HUB KET NOI DONG HO BLE (XIAOMI BAND 7)
+# ------------------------------------------------------------------------------
+function Start-EdgeWatchService {
+    Write-Info "Dang khoi dong Edge Hub ket noi dong ho Xiaomi Smart Band 7..."
+    $edgePy = "$EdgeDir\.venv\Scripts\python.exe"
+    if (-not (Test-Path $edgePy)) {
+        $edgePy = Get-PythonCommand
+    }
+    if (-not $edgePy) {
+        Write-ErrorMsg "Khong tim thay Python runtime cho Edge Hub."
+        return
+    }
+
+    $watchScript = "$EdgeDir\scripts\stream_xiaomi_band7.py"
+    if (Test-Path $watchScript) {
+        $psCommand = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; `$env:PYTHONIOENCODING='utf-8'; `$host.UI.RawUI.WindowTitle = '[Elderly Care] Edge Hub - Dong Ho BLE'; Set-Location '$RootDir'; & '$edgePy' '$watchScript' --auto"
+        Start-Process powershell.exe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $psCommand
+        Write-Success "Da mo cua so Edge Hub ket noi dong ho BLE (--auto)."
+    } else {
+        Write-Warn "Khong tim thay file $watchScript"
+    }
+}
+
+# ------------------------------------------------------------------------------
 # 9. CHAY UNIT TESTS BACKEND
 # ------------------------------------------------------------------------------
-function Run-BackendTests {
+function Invoke-BackendTests {
     Write-Info "Dang thuc thi bo kiem thu Unit Test Backend..."
     $pyCmd = Get-PythonCommand
     if (-not $pyCmd) {
@@ -439,7 +463,7 @@ function Start-AllServices {
     Write-Host ""
 
     # Khoi dong Docker ha tang neu co
-    $dockerOk = Start-DockerServices
+    $null = Start-DockerServices
     Start-Sleep -Seconds 1
 
     Start-BackendService
@@ -491,7 +515,10 @@ switch ($Target.ToLower()) {
     "doctor-web" { Start-DoctorWebService; exit }
     "mobile"     { Start-MobileService -Mode "web"; exit }
     "edge"       { Start-EdgeService; exit }
-    "test"       { Run-BackendTests; exit }
+    "watch"      { Start-EdgeWatchService; exit }
+    "band"       { Start-EdgeWatchService; exit }
+    "edge-watch" { Start-EdgeWatchService; exit }
+    "test"       { Invoke-BackendTests; exit }
     "status"     { Show-SystemStatus; exit }
     "stop"       { Stop-AllServices; exit }
     "open"       { Open-WebLinks; exit }
@@ -513,6 +540,7 @@ do {
     Write-Host "  [5] Khoi dong Doctor Web Portal (localhost:3001)" -ForegroundColor Cyan
     Write-Host "  [6] Khoi dong Mobile App (localhost:8081)" -ForegroundColor Cyan
     Write-Host "  [7] Khoi dong Edge Hub AI (Kiem tra Camera / Cam bien)" -ForegroundColor Cyan
+    Write-Host "  [12] Khoi dong Edge Hub ket noi Dong ho BLE (Xiaomi Band 7)" -ForegroundColor Green
     Write-Host "  ------------------------------------------------------------------------------" -ForegroundColor DarkGray
     Write-Host "  [8] Kiem tra trang thai he thong (Health Check)" -ForegroundColor White
     Write-Host "  [9] Chay Unit Tests Backend (pytest)" -ForegroundColor White
@@ -522,7 +550,7 @@ do {
     Write-Host "  ------------------------------------------------------------------------------" -ForegroundColor DarkGray
     Write-Host ""
 
-    $choice = Read-Host "  Nhap lua chon cua ban (0-11)"
+    $choice = Read-Host "  Nhap lua chon cua ban (0-12)"
 
     switch ($choice) {
         "1"  { Start-AllServices; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
@@ -533,10 +561,11 @@ do {
         "6"  { Start-MobileService -Mode "web"; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
         "7"  { Start-EdgeService; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
         "8"  { Write-Info "Dang kiem tra..."; Start-Sleep -Seconds 1 }
-        "9"  { Run-BackendTests; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
+        "9"  { Invoke-BackendTests; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
         "10" { Open-WebLinks; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
         "11" { Stop-AllServices; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
+        "12" { Start-EdgeWatchService; Write-Host "Nhan Enter de tiep tuc..."; [void][System.Console]::ReadLine() }
         "0"  { Write-Host "`nTam biet!`n"; break }
-        default { Write-Warn "Lua chon khong hop le, vui long chon tu 0 den 11."; Start-Sleep -Seconds 2 }
+        default { Write-Warn "Lua chon khong hop le, vui long chon tu 0 den 12."; Start-Sleep -Seconds 2 }
     }
 } while ($choice -ne "0")

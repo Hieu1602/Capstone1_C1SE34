@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
     Animated,
     Modal,
+    Platform,
     Pressable,
     StatusBar,
     StyleSheet,
@@ -92,7 +93,7 @@ export default function CameraViewer({
             Animated.timing(toolbarOpacity, {
                 toValue: 0,
                 duration: 300,
-                useNativeDriver: true,
+                useNativeDriver: Platform.OS !== "web",
             }).start(({ finished }) => {
                 if (finished) setToolbarVisible(false);
             });
@@ -106,7 +107,7 @@ export default function CameraViewer({
             Animated.timing(toolbarOpacity, {
                 toValue: 1,
                 duration: 200,
-                useNativeDriver: true,
+                useNativeDriver: Platform.OS !== "web",
             }).start();
         }
         resetTimer();

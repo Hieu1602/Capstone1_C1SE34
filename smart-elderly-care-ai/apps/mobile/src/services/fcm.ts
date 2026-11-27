@@ -142,7 +142,7 @@ class FCMService {
           console.log('[FCM] Foreground message:', remoteMessage);
 
           const { notification, data } = remoteMessage;
-          const level: AlertLevel = (data?.level as AlertLevel) || 'LOW';
+          const level: AlertLevel = ((data?.level || data?.alert_level) as AlertLevel) || 'LOW';
           const title = notification?.title || data?.title || '🔔 Thông báo SmartCare AI';
           const body = notification?.body || data?.body || data?.message || 'Bạn có thông báo mới từ hệ thống SmartCare AI.';
 

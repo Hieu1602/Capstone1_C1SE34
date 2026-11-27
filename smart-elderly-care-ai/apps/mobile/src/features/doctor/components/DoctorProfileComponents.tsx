@@ -80,16 +80,95 @@ const FormShell: React.FC<ThemeProps & {
 );
 
 // =============================================================
+// 0. MODAL CHI TIẾT CHỨNG CHỈ HÀNH NGHỀ (CCHN)
+// =============================================================
+export const DoctorCertificateModal: React.FC<ThemeProps & {
+  visible: boolean;
+  info: DoctorProfileInfo;
+  onClose: () => void;
+}> = ({ visible, info, onClose, isDarkMode, colors }) => {
+  const certRows = [
+    { label: 'Số CCHN', value: info.cchn_number || '028491/BYT-CCHN', isBadge: true },
+    { label: 'Cơ quan cấp', value: 'Bộ Y tế' },
+    { label: 'Chuyên khoa', value: info.specialty || 'Y học Gia đình & Lão khoa' },
+    { label: 'Trạng thái', value: 'Đã xác minh & Đang hoạt động', isVerified: true },
+    { label: 'Ngày cấp', value: '15/06/2020' },
+    { label: 'Nơi công tác', value: info.department || 'Khoa Chăm sóc Người cao tuổi' },
+  ];
+
+  return (
+    <DialogShell
+      visible={visible}
+      onClose={onClose}
+      icon="ribbon"
+      iconBg="#059669"
+      title="Chứng chỉ hành nghề khám bệnh, chữa bệnh"
+      isDarkMode={isDarkMode}
+      colors={colors}
+    >
+      <View style={{ width: '100%', gap: 10, marginTop: 4, marginBottom: 18 }}>
+        {certRows.map((row) => (
+          <View
+            key={row.label}
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              paddingVertical: 8,
+              borderBottomWidth: StyleSheet.hairlineWidth,
+              borderBottomColor: isDarkMode ? '#334155' : '#E2E8F0',
+              gap: 12,
+            }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: '600', color: isDarkMode ? '#94A3B8' : '#64748B' }}>
+              {row.label}:
+            </Text>
+            {row.isBadge ? (
+              <View style={{ backgroundColor: isDarkMode ? '#1E3A8A44' : '#EFF6FF', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#2563EB' }}>{row.value}</Text>
+              </View>
+            ) : row.isVerified ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDarkMode ? '#064E3B44' : '#ECFDF5', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                <Ionicons name="checkmark-circle" size={14} color="#059669" />
+                <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#059669' }}>{row.value}</Text>
+              </View>
+            ) : (
+              <Text style={{ flex: 1, textAlign: 'right', fontSize: 13.5, fontWeight: '700', color: colors.textPrimary }}>
+                {row.value}
+              </Text>
+            )}
+          </View>
+        ))}
+      </View>
+
+      <TouchableOpacity
+        style={[
+          styles.btnSave,
+          { width: '100%', backgroundColor: '#2563EB', flex: 0 },
+          Platform.OS === 'web' ? ({ cursor: 'pointer' } as any) : undefined,
+        ]}
+        activeOpacity={0.85}
+        onPress={onClose}
+      >
+        <Text style={styles.btnWhite13}>Đóng</Text>
+      </TouchableOpacity>
+    </DialogShell>
+  );
+};
+
+// =============================================================
 // 1. CARD HỒ SƠ & THỐNG KÊ BÁC SĨ (PROFILE CARD)
 // =============================================================
 export interface DoctorProfileCardProps extends ThemeProps {
   info: DoctorProfileInfo; avatarUri: string | null;
   patientCount: number; appointmentCount: number;
   onPickImage: () => void; onViewAvatar?: () => void; onResetAvatar?: () => void; onEditProfile: () => void;
+  onPressPatients?: () => void; onPressAppointments?: () => void; onPressCertificate?: () => void;
 }
 
 export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
-  info, avatarUri, patientCount, appointmentCount, onPickImage, onViewAvatar, onResetAvatar, onEditProfile, isDarkMode, colors,
+  info, avatarUri, patientCount, appointmentCount, onPickImage, onViewAvatar, onResetAvatar, onEditProfile,
+  onPressPatients, onPressAppointments, onPressCertificate, isDarkMode, colors,
 }) => {
   const getDoctorInitial = (name?: string) => {
     if (!name) return 'M';
@@ -112,6 +191,7 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
       heading: 'Bệnh nhân',
       value: patientCount,
       sub: 'Đang theo dõi',
+      onPress: onPressPatients,
     },
     {
       icon: 'calendar' as const,
@@ -121,6 +201,7 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
       heading: 'Ca khám',
       value: appointmentCount,
       sub: 'Đã phụ trách',
+      onPress: onPressAppointments,
     },
     {
       icon: 'ribbon' as const,
@@ -130,6 +211,7 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
       heading: 'Chứng chỉ',
       value: 'Đã cấp',
       sub: '10+ năm KN',
+      onPress: onPressCertificate,
     },
   ];
 
@@ -198,17 +280,22 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
           </View>
         </View>
 
-        {/* HÀNG 3 Ô THỐNG KÊ BO TRÒN (Ảnh 1 - Dr. Omara) */}
+        {/* HÀNG 3 Ô THỐNG KÊ BO TRÒN (Tương tác điều hướng & xem CCHN) */}
         <View style={styles.statsThreeColRow}>
           {stats.map((s) => (
-            <View
+            <TouchableOpacity
               key={s.heading}
+              activeOpacity={0.78}
+              onPress={s.onPress}
+              disabled={!s.onPress}
+              accessibilityRole="button"
               style={[
                 styles.statCardThreeCol,
                 {
                   backgroundColor: isDarkMode ? '#0F172A' : s.bg,
                   borderColor: isDarkMode ? '#334155' : 'transparent',
                 },
+                Platform.OS === 'web' && s.onPress ? ({ cursor: 'pointer' } as any) : undefined,
               ]}
             >
               <View style={[styles.statIconBoxSmall, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
@@ -216,7 +303,7 @@ export const DoctorProfileCard: React.FC<DoctorProfileCardProps> = ({
               </View>
               <Text style={[styles.statCardValueSmall, { color: s.valColor }]}>{s.value}</Text>
               <Text style={[styles.statCardHeadingSmall, { color: mutedText }]}>{s.heading}</Text>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
 

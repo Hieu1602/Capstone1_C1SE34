@@ -8,6 +8,7 @@ import { useDoctorDataStore } from '../store/useDoctorDataStore';
 import { householdApi, authApi } from '../services/api';
 import { doctorWebSocket } from '../services/websocket';
 import { removeVietnameseTones } from '../utils/text';
+import { isAppointmentOverdue, isUpcomingAppointmentStatus } from '../utils/appointmentHelpers';
 import { DoctorPatientCard, AppointmentItem, HouseInvite } from '../types';
 import { HouseInviteCard } from '../components/dashboard/HouseInviteCard';
 import { NewAppointmentModal } from '../components/clinical/NewAppointmentModal';
@@ -20,23 +21,6 @@ import { DoctorPatientTable } from '../components/dashboard/DoctorPatientTable';
 import { EscalationStatusBanner } from '../components/dashboard/EscalationStatusBanner';
 import { Sparkles } from 'lucide-react';
 
-const DEFAULT_ALERT_STATS_7D: AlertDayStat[] = [
-  { label: 'T2', fullLabel: 'Thứ Hai', fall: 1, heart_alert: 3, spo2_alert: 1, sos_alert: 0, total: 5 },
-  { label: 'T3', fullLabel: 'Thứ Ba', fall: 0, heart_alert: 2, spo2_alert: 2, sos_alert: 1, total: 5 },
-  { label: 'T4', fullLabel: 'Thứ Tư', fall: 2, heart_alert: 4, spo2_alert: 1, sos_alert: 0, total: 7 },
-  { label: 'T5', fullLabel: 'Thứ Năm', fall: 0, heart_alert: 1, spo2_alert: 1, sos_alert: 0, total: 2 },
-  { label: 'T6', fullLabel: 'Thứ Sáu', fall: 1, heart_alert: 3, spo2_alert: 2, sos_alert: 1, total: 7 },
-  { label: 'T7', fullLabel: 'Thứ Bảy', fall: 0, heart_alert: 2, spo2_alert: 0, sos_alert: 0, total: 2 },
-  { label: 'CN', fullLabel: 'Chủ Nhật', fall: 1, heart_alert: 2, spo2_alert: 1, sos_alert: 1, total: 5 },
-];
-
-const DEFAULT_ALERT_STATS_30D: AlertDayStat[] = [
-  { label: 'Tuần 1', fullLabel: 'Tuần 1 (01 - 07)', fall: 3, heart_alert: 12, spo2_alert: 5, sos_alert: 2, total: 22 },
-  { label: 'Tuần 2', fullLabel: 'Tuần 2 (08 - 14)', fall: 2, heart_alert: 15, spo2_alert: 7, sos_alert: 1, total: 25 },
-  { label: 'Tuần 3', fullLabel: 'Tuần 3 (15 - 21)', fall: 4, heart_alert: 11, spo2_alert: 4, sos_alert: 3, total: 22 },
-  { label: 'Tuần 4', fullLabel: 'Tuần 4 (22 - 30)', fall: 1, heart_alert: 9, spo2_alert: 3, sos_alert: 1, total: 14 },
-];
-
 function getMonday(d: Date): Date {
   const date = new Date(d);
   const day = date.getDay();
@@ -44,6 +28,44 @@ function getMonday(d: Date): Date {
   date.setDate(date.getDate() + diff);
   date.setHours(0, 0, 0, 0);
   return date;
+}
+
+function classifyAlertCategory(
+  alertType?: string
+): 'fall' | 'heart_alert' | 'spo2_alert' | 'sos_alert' | null {
+  const type = (alertType || '').toUpperCase();
+  if (!type) return null;
+  if (
+    type.startsWith('APPOINTMENT_') ||
+    type.startsWith('HOUSE_INVITE') ||
+    type.startsWith('PRESCRIPTION_') ||
+    type.startsWith('MEDICAL_RECORD_') ||
+    type.startsWith('DEVICE_') ||
+    type.startsWith('BATTERY_') ||
+    type.startsWith('CHARGER_') ||
+    type === 'DOCTOR_ASSIGNED' ||
+    type === 'INVITATION' ||
+    type === 'BLE_DISCONNECTED' ||
+    type === 'SENSOR_OFFLINE'
+  ) {
+    return null;
+  }
+  if (type.includes('FALL') || type.includes('TE_NGA')) return 'fall';
+  if (type.includes('SOS') || type.includes('EMERGENCY_BUTTON')) return 'sos_alert';
+  if (type.includes('SPO2') || type.includes('OXY') || type.includes('HYPOXIA')) return 'spo2_alert';
+  if (
+    type.includes('HEART') ||
+    type.includes('NHIP_TIM') ||
+    type.includes('_HR_') ||
+    type.startsWith('HR_') ||
+    type.includes('ARRHYTHMIA') ||
+    type.includes('TACHYCARDIA') ||
+    type.includes('BRADYCARDIA') ||
+    type.includes('CARDIO')
+  ) {
+    return 'heart_alert';
+  }
+  return null;
 }
 
 function computeAlertStats(incidents: any[], range: '7D' | '30D', anchorDate: Date): AlertDayStat[] {
@@ -59,37 +81,19 @@ function computeAlertStats(incidents: any[], range: '7D' | '30D', anchorDate: Da
       { label: 'Tuần 4', fullLabel: `Tuần 4 (22 - ${lastDay}/${m + 1})`, fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
     ];
 
-    if (!incidents || incidents.length === 0) {
-      const now = new Date();
-      return (y === now.getFullYear() && m === now.getMonth()) ? DEFAULT_ALERT_STATS_30D : weeks;
-    }
-
-    for (const inc of incidents) {
+    for (const inc of incidents || []) {
       const d = inc.created_at ? new Date(inc.created_at) : null;
       if (!d || isNaN(d.getTime())) continue;
       if (d.getFullYear() === y && d.getMonth() === m) {
+        const category = classifyAlertCategory(inc.alert_type);
+        if (!category) continue;
         const dayNum = d.getDate();
-        let targetWeek = 0;
-        if (dayNum <= 7) targetWeek = 0;
-        else if (dayNum <= 14) targetWeek = 1;
-        else if (dayNum <= 21) targetWeek = 2;
-        else targetWeek = 3;
-
-        const type = (inc.alert_type || '').toUpperCase();
-        if (type.includes('FALL')) weeks[targetWeek].fall++;
-        else if (type.includes('HEART') || type.includes('NHIP_TIM')) weeks[targetWeek].heart_alert++;
-        else if (type.includes('SPO2') || type.includes('OXY')) weeks[targetWeek].spo2_alert++;
-        else if (type.includes('SOS')) weeks[targetWeek].sos_alert++;
-        else weeks[targetWeek].heart_alert++;
+        const targetWeek = dayNum <= 7 ? 0 : dayNum <= 14 ? 1 : dayNum <= 21 ? 2 : 3;
+        weeks[targetWeek][category]++;
         weeks[targetWeek].total++;
       }
     }
 
-    const hasData = weeks.some((w) => w.total > 0);
-    const now = new Date();
-    if (!hasData && y === now.getFullYear() && m === now.getMonth()) {
-      return DEFAULT_ALERT_STATS_30D;
-    }
     return weeks;
   }
 
@@ -116,32 +120,19 @@ function computeAlertStats(incidents: any[], range: '7D' | '30D', anchorDate: Da
     };
   });
 
-  if (!incidents || incidents.length === 0) {
-    const currentMonday = getMonday(new Date());
-    return monday.getTime() === currentMonday.getTime() ? DEFAULT_ALERT_STATS_7D : days;
-  }
-
-  for (const inc of incidents) {
+  for (const inc of incidents || []) {
     const d = inc.created_at ? new Date(inc.created_at) : null;
     if (!d || isNaN(d.getTime())) continue;
     if (d.getTime() >= monday.getTime() && d.getTime() <= sunday.getTime()) {
+      const category = classifyAlertCategory(inc.alert_type);
+      if (!category) continue;
       const dayOfWeek = d.getDay(); // 0 is CN, 1 is T2
       const dayIdx = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-      const type = (inc.alert_type || '').toUpperCase();
-      if (type.includes('FALL')) days[dayIdx].fall++;
-      else if (type.includes('HEART') || type.includes('NHIP_TIM')) days[dayIdx].heart_alert++;
-      else if (type.includes('SPO2') || type.includes('OXY')) days[dayIdx].spo2_alert++;
-      else if (type.includes('SOS')) days[dayIdx].sos_alert++;
-      else days[dayIdx].heart_alert++;
+      days[dayIdx][category]++;
       days[dayIdx].total++;
     }
   }
 
-  const hasData = days.some((d) => d.total > 0);
-  const currentMonday = getMonday(new Date());
-  if (!hasData && monday.getTime() === currentMonday.getTime()) {
-    return DEFAULT_ALERT_STATS_7D;
-  }
   return days;
 }
 
@@ -155,6 +146,7 @@ export const DashboardPage: React.FC = () => {
     appointments,
     invites,
     incidents,
+    clinicalIncidents,
     isLoading,
     fetchAllData,
     setPatients,
@@ -218,7 +210,12 @@ export const DashboardPage: React.FC = () => {
 
   const handleMonthSelect = (mStr: string) => {
     const [y, m] = mStr.split('-').map(Number);
-    setChartAnchorDate(new Date(y, m - 1, 1));
+    const nowDate = new Date();
+    if (y === nowDate.getFullYear() && m - 1 === nowDate.getMonth()) {
+      setChartAnchorDate(nowDate);
+    } else {
+      setChartAnchorDate(new Date(y, m - 1, 1));
+    }
   };
 
   const selectedMonthStr = `${chartAnchorDate.getFullYear()}-${String(chartAnchorDate.getMonth() + 1).padStart(2, '0')}`;
@@ -232,8 +229,8 @@ export const DashboardPage: React.FC = () => {
   }, [appointments]);
 
   const alertStats = useMemo(() => {
-    return computeAlertStats(incidents, chartRange, chartAnchorDate);
-  }, [incidents, chartRange, chartAnchorDate]);
+    return computeAlertStats(clinicalIncidents, chartRange, chartAnchorDate);
+  }, [clinicalIncidents, chartRange, chartAnchorDate]);
 
   // Table search & filter
   const [tableSearch, setTableSearch] = useState('');
@@ -259,7 +256,6 @@ export const DashboardPage: React.FC = () => {
   // Handler khi click chọn bất kỳ ngày nào trên Mini Calendar
   const handleSelectCalendarDate = useCallback((dateStr: string) => {
     setSelectedDate(dateStr);
-    setShowDayScheduleModal(true);
   }, []);
 
   // Handler mở tạo lịch khám mới gắn với ngày đang chọn
@@ -329,11 +325,15 @@ export const DashboardPage: React.FC = () => {
       if (data?.type === 'VITALS_UPDATE' || data?.heart_rate || data?.spo2) {
         const liveHr = data.heart_rate ? Number(data.heart_rate) : undefined;
         const liveSpo2 = data.spo2 ? Number(data.spo2) : undefined;
-        if (liveHr || liveSpo2) {
+        const hasTarget = Boolean(data?.patient_id || data?.device_id);
+        if ((liveHr || liveSpo2) && hasTarget) {
           const curPatients = useDoctorDataStore.getState().patients;
           setPatients(
-            curPatients.map((p, idx) =>
-              idx === 0
+            curPatients.map((p) => {
+              const matched =
+                (data?.patient_id && String(p.id) === String(data.patient_id)) ||
+                (data?.device_id && p.device_id === data.device_id);
+              return matched
                 ? {
                     ...p,
                     is_online: true,
@@ -341,8 +341,8 @@ export const DashboardPage: React.FC = () => {
                     spo2: liveSpo2 ?? p.spo2,
                     last_updated: 'Vừa xong (Trực tuyến)',
                   }
-                : p
-            )
+                : p;
+            })
           );
         }
       }
@@ -402,8 +402,10 @@ export const DashboardPage: React.FC = () => {
     for (let d = 1; d <= totalDays; d++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const dayApts = appointments.filter((a) => toLocalYMD(a.scheduled_at) === dateStr);
-      let dotStatus: 'COMPLETED' | 'UPCOMING' | 'CRITICAL' | null = null;
-      if (dayApts.some((a) => a.status === 'UPCOMING' || a.status === 'CONFIRMED')) {
+      let dotStatus: 'COMPLETED' | 'UPCOMING' | 'OVERDUE' | 'CRITICAL' | null = null;
+      if (dayApts.some((a) => isAppointmentOverdue(a.scheduled_at, a.status))) {
+        dotStatus = 'OVERDUE';
+      } else if (dayApts.some((a) => isUpcomingAppointmentStatus(a.status))) {
         dotStatus = 'UPCOMING';
       } else if (dayApts.some((a) => a.status === 'COMPLETED')) {
         dotStatus = 'COMPLETED';
@@ -511,7 +513,7 @@ export const DashboardPage: React.FC = () => {
         upcomingCount={upcomingAppointments.length}
         onlineCount={onlineCount}
         onNavigatePatients={() => navigate('/patients')}
-        onNavigateAppointments={() => navigate('/appointments')}
+        onNavigateAppointments={() => navigate(`/appointments?date=${todayStr}`)}
         loading={isLoading && patients.length === 0}
       />
 
@@ -544,7 +546,9 @@ export const DashboardPage: React.FC = () => {
             miniCalendarCells={miniCalendarCells}
             selectedDate={selectedDate}
             onSelectDate={handleSelectCalendarDate}
-            onNavigateAppointments={() => setShowDayScheduleModal(true)}
+            onNavigateAppointments={() =>
+              navigate(selectedDate ? `/appointments?date=${selectedDate}` : '/appointments')
+            }
           />
         </div>
       </div>
@@ -558,7 +562,7 @@ export const DashboardPage: React.FC = () => {
         onSearchChange={setTableSearch}
         tableFilter={tableFilter}
         onFilterChange={setTableFilter}
-        onSelectPatient={() => navigate('/patients')}
+        onSelectPatient={(patientId) => navigate(`/patients?id=${patientId}`)}
         loading={isLoading && patients.length === 0}
       />
 

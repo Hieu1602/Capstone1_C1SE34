@@ -115,6 +115,7 @@ export interface IoTDeviceItem {
   wearer_name?: string;
   house_id?: string;
   device_type?: string;
+  config?: any;
 }
 interface DeviceState {
   activeDevice: Device | null;
@@ -270,6 +271,7 @@ export const useDeviceStore = create<DeviceState>()(
               streamUrl: dev.config?.stream_url || undefined,
               macAddress: dev.mac_address || undefined,
               house_id: dev.house_id || targetHouseId,
+              config: dev.config || null,
             };
             set((state) => ({
               iotDevices: state.iotDevices.map((d) => (d.id === device.id ? canonical : d)),
@@ -573,6 +575,7 @@ export const useDeviceStore = create<DeviceState>()(
                 elderly_id: dev.elderly_id,
                 wearer_name: dev.wearer_name,
                 house_id: dev.house_id || undefined,
+                config: dev.config || null,
               };
             });
             set({ iotDevices: mapped });

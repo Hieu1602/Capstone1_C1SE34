@@ -11,7 +11,6 @@ import {
   Check,
   ChevronRight,
   Sparkles,
-  RotateCcw,
   Megaphone,
 } from 'lucide-react';
 import type { UnifiedNotification } from '../clinical/NotificationDetailModal';
@@ -76,9 +75,7 @@ interface NotificationBellPopoverProps {
   isOpen: boolean;
   onToggleOpen: () => void;
   notifications: UnifiedNotification[];
-  canUndo: boolean;
   onMarkAllRead: () => void;
-  onUndoMarkAll: () => void;
   onToggleSingleRead: (e: React.MouseEvent, item: UnifiedNotification) => void;
   onNotificationClick: (item: UnifiedNotification) => void;
   onViewAll: () => void;
@@ -89,9 +86,7 @@ export const NotificationBellPopover: React.FC<NotificationBellPopoverProps> = (
   isOpen,
   onToggleOpen,
   notifications,
-  canUndo,
   onMarkAllRead,
-  onUndoMarkAll,
   onToggleSingleRead,
   onNotificationClick,
   onViewAll,
@@ -154,17 +149,6 @@ export const NotificationBellPopover: React.FC<NotificationBellPopoverProps> = (
               </span>
             </div>
             <div className="flex items-center space-x-2">
-              {canUndo && (
-                <button
-                  type="button"
-                  onClick={onUndoMarkAll}
-                  className="flex items-center space-x-1 text-[11px] font-bold text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-lg transition-colors cursor-pointer dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
-                  title="Khôi phục trạng thái chưa đọc trước khi bấm Đã đọc tất cả"
-                >
-                  <RotateCcw className="h-3 w-3" />
-                  <span>Khôi phục</span>
-                </button>
-              )}
               {unreadCount > 0 && (
                 <button
                   type="button"

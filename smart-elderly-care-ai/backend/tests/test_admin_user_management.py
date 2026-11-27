@@ -6,6 +6,7 @@ from app.models.user import User, UserStatus
 from app.models.house import House, HouseMember
 from app.models.incident import Incident
 from app.models.device import Device
+from app.models.system_notification import SystemNotification
 from app.core.database import AsyncSessionFactory
 from app.api.v1.endpoints.web_admin.users import (
     get_user_dormancy_level,
@@ -171,6 +172,7 @@ async def test_guard_rules_and_db_flow():
         print("✅ TEST 6 PASSED: Cựu Owner đủ điều kiện xóa an toàn sau khi chuyển giao nhà.")
 
         # Cleanup test data để DB luôn sạch
+        await db.execute(delete(SystemNotification).where(SystemNotification.title == "Chỉ định Chủ hộ mới: Test Abandoned House"))
         await db.execute(delete(HouseMember).where(HouseMember.house_id == test_house.id))
         await db.execute(delete(House).where(House.id == test_house.id))
         await db.execute(delete(User).where(User.id.in_([test_owner.id, test_member.id])))

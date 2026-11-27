@@ -217,12 +217,12 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
       Animated.timing(pulseAnim, {
         toValue: 1.18,
         duration: 180,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.timing(pulseAnim, {
         toValue: 1,
         duration: 220,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }),
     ]).start();
   };

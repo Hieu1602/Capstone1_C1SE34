@@ -109,7 +109,8 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
     Boolean(notif.rawIncident?.is_acknowledged) ||
     notif.badgeLabel === 'Đã xử lý' ||
     notif.badgeLabel === 'Đã tham gia' ||
-    notif.badgeLabel === 'Đã khám';
+    notif.badgeLabel === 'Đã khám' ||
+    notif.badgeLabel === 'Đã hủy';
 
   const handleAcknowledgeClick = async () => {
     if (!onAcknowledge || isAlreadyHandled) return;
@@ -354,12 +355,14 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
                     </span>
                   </div>
                 )}
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500 dark:text-slate-400">Thiết bị giám sát:</span>
-                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                    CooSpo HW706 BLE Smartband (Online)
-                  </span>
-                </div>
+                {!isAppointment && !isInvite && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 dark:text-slate-400">Thiết bị giám sát:</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">
+                      Cảm biến Smartband theo dõi
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -381,7 +384,7 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
                     </span>
                   </div>
                   <p className="mt-1 text-xl font-extrabold text-rose-700 dark:text-rose-300">
-                    {notif.heartRate && notif.heartRate > 0 ? notif.heartRate : (isCritical ? '128' : '76')}{' '}
+                    {notif.heartRate && notif.heartRate > 0 ? notif.heartRate : '—'}{' '}
                     <span className="text-xs font-medium text-slate-500">bpm</span>
                   </p>
                 </div>
@@ -392,11 +395,11 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
                       <Activity className="h-3.5 w-3.5 text-emerald-500" /> Nồng độ oxy SpO2
                     </span>
                     <span className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400 bg-emerald-100/80 px-1.5 py-0.5 rounded">
-                      Ổn định
+                      {notif.spo2 && notif.spo2 > 0 ? (notif.spo2 < 95 ? 'Thấp' : 'Ổn định') : 'Chưa đo'}
                     </span>
                   </div>
                   <p className="mt-1 text-xl font-extrabold text-emerald-700 dark:text-emerald-300">
-                    {notif.spo2 && notif.spo2 > 0 ? notif.spo2 : '98'}{' '}
+                    {notif.spo2 && notif.spo2 > 0 ? notif.spo2 : '—'}{' '}
                     <span className="text-xs font-medium text-slate-500">%</span>
                   </p>
                 </div>
@@ -433,10 +436,12 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
                     ? `Đã xử lý bởi ${notif.rawIncident.acknowledged_by_name}`
                     : notif.rawIncident?.acknowledged_by && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(notif.rawIncident.acknowledged_by))
                     ? `Đã xử lý bởi ${notif.rawIncident.acknowledged_by}`
+                    : isAppointment
+                    ? `Trạng thái lịch: ${notif.badgeLabel}`
                     : 'Bác sĩ đã xác nhận & xử lý'}
                 </span>
               ) : (
-                <span>Cần xác nhận xử lý y khoa</span>
+                <span>{isAppointment ? `Trạng thái lịch: ${notif.badgeLabel || 'Sắp tới'}` : 'Cần xác nhận xử lý y khoa'}</span>
               )}
             </div>
 

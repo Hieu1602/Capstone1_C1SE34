@@ -92,6 +92,8 @@ export interface DoctorPatientDetail {
   spo2?: number;
   blood_pressure?: string;
   skin_temp_max?: number;
+  is_online?: boolean;
+  health_status?: HealthStatus;
   doctor_notes?: string;
   next_appointment?: string;
   drug_allergies?: string;
@@ -99,6 +101,9 @@ export interface DoctorPatientDetail {
   dietary_notes?: string;
   conditions?: ConditionItem[];
   prescriptions?: PrescriptionItem[];
+  hr_threshold_low?: number;
+  hr_threshold_high?: number;
+  spo2_threshold_low?: number;
 }
 
 export interface AppointmentItem {
@@ -114,12 +119,15 @@ export interface AppointmentItem {
   duration_minutes?: number;
   exam_type?: string;
   location?: string;
-  status: 'UPCOMING' | 'COMPLETED' | 'CANCELLED' | string;
+  status: 'UPCOMING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | string;
   clinical_notes?: string;
   instructions?: string;
   cancellation_reason?: string;
   recurrence_pattern?: 'NONE' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | string;
+  recurrence_occurrences?: number;
   enable_speaker_reminder?: boolean;
+  created_by?: string | null;
+  created_appointments?: AppointmentItem[] | null;
   created_at?: string;
   updated_at?: string;
 }
