@@ -8,6 +8,9 @@ export interface SmartbandVitalsCardsProps {
   hrValue?: string | number | null;
   spo2Value?: string | number | null;
   tempValue?: string | number | null;
+  batteryValue?: number | null;
+  stepsValue?: number | null;
+  fallDetected?: boolean;
   hasHR: boolean;
   hasSpO2: boolean;
   hasTemp: boolean;
@@ -20,6 +23,9 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
   hrValue,
   spo2Value,
   tempValue,
+  batteryValue = null,
+  stepsValue = null,
+  fallDetected = false,
   hasHR,
   hasSpO2,
   hasTemp,
@@ -29,6 +35,14 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
 }) => {
   const displayHR = hrValue ?? '--';
   const displaySpO2 = spo2Value ?? '--';
+  const hasBattery = typeof batteryValue === 'number' && !Number.isNaN(batteryValue);
+  const batteryPct = hasBattery ? Math.max(0, Math.min(100, Math.round(batteryValue!))) : null;
+  const hasSteps = typeof stepsValue === 'number' && !Number.isNaN(stepsValue);
+  const stepsCount = hasSteps ? Math.max(0, Math.round(stepsValue!)) : null;
+  const stepGoal = 5000;
+  const stepPct = stepsCount !== null ? Math.min(100, Math.round((stepsCount / stepGoal) * 100)) : 0;
+  const distanceKm = stepsCount !== null ? (stepsCount * 0.00072).toFixed(1) : '--';
+  const caloriesKcal = stepsCount !== null ? Math.round(stepsCount * 0.04) : '--';
 
   return (
     <>
@@ -50,7 +64,7 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
             <View style={[styles.metricIconCircle, { backgroundColor: '#FEE2E2' }]}>
               <Ionicons name="heart" size={22} color="#EF4444" />
             </View>
-            <View style={{ marginLeft: 12 }}>
+            <View style={{ flex: 1, minWidth: 0, marginLeft: 12 }}>
               <LocalizedText style={[styles.metricTitle, isDarkMode && { color: colors.textPrimary }]}>
                 Nhịp Tim Quang Học (PPG)
               </LocalizedText>
@@ -151,7 +165,7 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
               <View style={[styles.metricIconCircle, { backgroundColor: '#E0F2FE' }]}>
                 <Ionicons name="water" size={22} color="#0284C7" />
               </View>
-              <View style={{ marginLeft: 12 }}>
+              <View style={{ flex: 1, minWidth: 0, marginLeft: 12 }}>
                 <LocalizedText style={[styles.metricTitle, isDarkMode && { color: colors.textPrimary }]}>
                   Nồng Độ Oxy Trong Máu (SpO₂)
                 </LocalizedText>
@@ -232,14 +246,17 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
           </LocalizedText>
 
           <View style={styles.smallMetricValueRow}>
-            <LocalizedText style={[styles.smallMetricValue, isDarkMode && { color: colors.textPrimary }]}>1.01</LocalizedText>
-            <LocalizedText style={styles.smallMetricUnit}>G</LocalizedText>
+            <LocalizedText style={[styles.smallMetricValue, { color: fallDetected ? '#DC2626' : undefined }, !fallDetected && isDarkMode && { color: colors.textPrimary }]}>
+              {fallDetected ? 'Cảnh báo' : hasHR ? 'Ổn định' : '--'}
+            </LocalizedText>
           </View>
-          <LocalizedText style={styles.impactSafeStatus}>✓ Không có va chạm ngã</LocalizedText>
+          <LocalizedText style={[styles.impactSafeStatus, fallDetected && { color: '#DC2626' }, !hasHR && !fallDetected && { color: '#94A3B8' }]}>
+            {fallDetected ? '⚠ Phát hiện va chạm ngã' : hasHR ? '✓ Không có va chạm ngã' : 'Chưa có dữ liệu cảm biến'}
+          </LocalizedText>
 
           <View style={[styles.xyzAxisBox, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
             <LocalizedText style={[styles.xyzAxisText, isDarkMode && { color: colors.textSecondary }]}>
-              X: 0.02G | Y: 0.14G | Z: 0.99G
+              {hasHR ? 'Trạng thái: Đang theo dõi' : 'X: -- | Y: -- | Z: --'}
             </LocalizedText>
           </View>
           <LocalizedText style={[styles.sensorNoteText, isDarkMode && { color: colors.textMuted }]}>
@@ -251,7 +268,7 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
         <View style={[styles.smallMetricCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.smallMetricHeader}>
             <View style={[styles.metricIconCircleSmall, { backgroundColor: '#ECFDF5' }]}>
-              <Ionicons name="battery-charging" size={18} color="#10B981" />
+              <Ionicons name="battery-charging" size={18} color={batteryPct !== null && batteryPct <= 20 ? '#D97706' : '#10B981'} />
             </View>
             <LocalizedText style={[styles.smallMetricTitle, isDarkMode && { color: colors.textPrimary }]}>
               Pin &amp; Nguồn Điện
@@ -262,10 +279,14 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
           </LocalizedText>
 
           <View style={styles.smallMetricValueRow}>
-            <LocalizedText style={[styles.smallMetricValue, { color: '#10B981' }]}>92</LocalizedText>
+            <LocalizedText style={[styles.smallMetricValue, { color: batteryPct === null ? '#94A3B8' : batteryPct <= 20 ? '#D97706' : '#10B981' }]}>
+              {batteryPct !== null ? batteryPct : '--'}
+            </LocalizedText>
             <LocalizedText style={styles.smallMetricUnit}>%</LocalizedText>
           </View>
-          <LocalizedText style={styles.impactSafeStatus}>Mức pin hoạt động tốt</LocalizedText>
+          <LocalizedText style={[styles.impactSafeStatus, batteryPct === null && { color: '#94A3B8' }, batteryPct !== null && batteryPct <= 20 && { color: '#D97706' }]}>
+            {batteryPct === null ? 'Chưa đọc được mức pin' : batteryPct <= 20 ? 'Pin yếu, cần sạc sớm' : 'Mức pin hoạt động tốt'}
+          </LocalizedText>
 
           <View style={[styles.xyzAxisBox, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
             <LocalizedText style={[styles.xyzAxisText, isDarkMode && { color: colors.textSecondary }]}>
@@ -285,47 +306,57 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
             <View style={[styles.metricIconCircle, { backgroundColor: '#DCFCE7' }]}>
               <Ionicons name="walk" size={22} color="#16A34A" />
             </View>
-            <View style={{ marginLeft: 12 }}>
+            <View style={{ flex: 1, minWidth: 0, marginLeft: 12 }}>
               <LocalizedText style={[styles.metricTitle, isDarkMode && { color: colors.textPrimary }]}>
                 Vận Động &amp; Đếm Bước Chân
               </LocalizedText>
               <LocalizedText style={[styles.metricSub, isDarkMode && { color: colors.textSecondary }]}>
-                Theo dõi mức độ tích cực của người cao tuổi
+                Theo dõi mức độ tích cực trong ngày
               </LocalizedText>
             </View>
           </View>
 
-          <View style={styles.stepCountGoalBadge}>
+          <View style={[styles.stepCountGoalBadge, { flexShrink: 0 }]}>
             <LocalizedText style={styles.stepCountGoalText}>Mục tiêu: 5,000</LocalizedText>
           </View>
         </View>
 
         <View style={styles.stepStatsRow}>
           <View style={styles.stepStatBox}>
-            <LocalizedText style={[styles.stepStatBigNumber, isDarkMode && { color: colors.textPrimary }]}>3,420</LocalizedText>
-            <LocalizedText style={[styles.stepStatLabel, isDarkMode && { color: colors.textSecondary }]}>Bước (68% mục tiêu)</LocalizedText>
+            <LocalizedText style={[styles.stepStatBigNumber, isDarkMode && { color: colors.textPrimary }]}>
+              {stepsCount !== null ? stepsCount.toLocaleString('vi-VN') : '--'}
+            </LocalizedText>
+            <LocalizedText style={[styles.stepStatLabel, isDarkMode && { color: colors.textSecondary }]}>
+              {stepsCount !== null ? `Bước (${stepPct}% mục tiêu)` : 'Bước hôm nay'}
+            </LocalizedText>
           </View>
           <View style={[styles.stepStatDivider, isDarkMode && { backgroundColor: colors.border }]} />
           <View style={styles.stepStatBox}>
-            <LocalizedText style={[styles.stepStatBigNumber, isDarkMode && { color: colors.textPrimary }]}>2.1</LocalizedText>
+            <LocalizedText style={[styles.stepStatBigNumber, isDarkMode && { color: colors.textPrimary }]}>
+              {distanceKm}
+            </LocalizedText>
             <LocalizedText style={[styles.stepStatLabel, isDarkMode && { color: colors.textSecondary }]}>Kilômét (km)</LocalizedText>
           </View>
           <View style={[styles.stepStatDivider, isDarkMode && { backgroundColor: colors.border }]} />
           <View style={styles.stepStatBox}>
-            <LocalizedText style={[styles.stepStatBigNumber, isDarkMode && { color: colors.textPrimary }]}>142</LocalizedText>
+            <LocalizedText style={[styles.stepStatBigNumber, isDarkMode && { color: colors.textPrimary }]}>
+              {caloriesKcal}
+            </LocalizedText>
             <LocalizedText style={[styles.stepStatLabel, isDarkMode && { color: colors.textSecondary }]}>Calo tiêu hao (kcal)</LocalizedText>
           </View>
         </View>
 
         {/* Thanh tiến độ bước chân */}
         <View style={styles.stepProgressBarBg}>
-          <View style={[styles.stepProgressBarFill, { width: '68%' }]} />
+          <View style={[styles.stepProgressBarFill, { width: `${stepPct}%` }]} />
         </View>
 
         <View style={[styles.aiInsightBox, isDarkMode && { backgroundColor: colors.surfaceSubtle }]}>
           <Ionicons name="sparkles" size={15} color="#0284C7" />
           <LocalizedText style={[styles.aiInsightText, isDarkMode && { color: colors.textSecondary }]}>
-            Đánh giá AI: Mức vận động đi bộ nhẹ nhàng trong nhà và khuôn viên buổi sáng rất tốt cho tim mạch và lưu thông khớp gối.
+            {stepsCount !== null
+              ? `Đánh giá AI: Đã ghi nhận ${stepsCount.toLocaleString('vi-VN')} bước chân hôm nay (${stepPct}% mục tiêu 5,000 bước/ngày).`
+              : 'Đánh giá AI: Chưa có dữ liệu bước chân hôm nay từ vòng đeo tay.'}
           </LocalizedText>
         </View>
       </View>
@@ -337,7 +368,7 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
             <View style={[styles.metricIconCircle, { backgroundColor: '#EDE9FE' }]}>
               <Ionicons name="moon" size={22} color="#7C3AED" />
             </View>
-            <View style={{ marginLeft: 12 }}>
+            <View style={{ flex: 1, minWidth: 0, marginLeft: 12 }}>
               <LocalizedText style={[styles.metricTitle, isDarkMode && { color: colors.textPrimary }]}>
                 Giấc Ngủ &amp; Phục Hồi Sinh Học
               </LocalizedText>
@@ -347,67 +378,15 @@ export const SmartbandVitalsCards: React.FC<SmartbandVitalsCardsProps> = ({
             </View>
           </View>
 
-          <View style={styles.sleepScoreBadge}>
-            <LocalizedText style={styles.sleepScoreBadgeText}>88/100 Điểm</LocalizedText>
+          <View style={[styles.sleepScoreBadge, { flexShrink: 0 }]}>
+            <LocalizedText style={styles.sleepScoreBadgeText}>Chưa đồng bộ</LocalizedText>
           </View>
         </View>
 
-        <View style={styles.sleepStatsRow}>
-          <View style={styles.sleepStatMainBox}>
-            <LocalizedText style={[styles.sleepStatHours, isDarkMode && { color: colors.textPrimary }]}>
-              7<LocalizedText style={{ fontSize: 16 }}>h </LocalizedText>15<LocalizedText style={{ fontSize: 16 }}>m</LocalizedText>
-            </LocalizedText>
-            <LocalizedText style={[styles.sleepStatDesc, isDarkMode && { color: colors.textSecondary }]}>
-              Tổng thời gian ngủ đêm qua
-            </LocalizedText>
-          </View>
-
-          <View style={styles.sleepStagePillsCol}>
-            <View style={styles.sleepStagePill}>
-              <View style={[styles.sleepColorDot, { backgroundColor: '#3B82F6' }]} />
-              <LocalizedText style={[styles.sleepStageName, isDarkMode && { color: colors.textSecondary }]}>
-                Ngủ sâu: 2h 10m (30%)
-              </LocalizedText>
-            </View>
-            <View style={styles.sleepStagePill}>
-              <View style={[styles.sleepColorDot, { backgroundColor: '#60A5FA' }]} />
-              <LocalizedText style={[styles.sleepStageName, isDarkMode && { color: colors.textSecondary }]}>
-                Ngủ nhẹ: 3h 40m (51%)
-              </LocalizedText>
-            </View>
-            <View style={styles.sleepStagePill}>
-              <View style={[styles.sleepColorDot, { backgroundColor: '#A78BFA' }]} />
-              <LocalizedText style={[styles.sleepStageName, isDarkMode && { color: colors.textSecondary }]}>
-                REM (Mơ): 50m (11%)
-              </LocalizedText>
-            </View>
-          </View>
-        </View>
-
-        {/* Thanh phân tầng giấc ngủ trực quan */}
-        <View style={styles.sleepSegmentBar}>
-          <View style={[styles.sleepSegItem, { flex: 30, backgroundColor: '#3B82F6' }]} />
-          <View style={[styles.sleepSegItem, { flex: 51, backgroundColor: '#60A5FA' }]} />
-          <View style={[styles.sleepSegItem, { flex: 11, backgroundColor: '#A78BFA' }]} />
-          <View style={[styles.sleepSegItem, { flex: 8, backgroundColor: '#FCD34D' }]} />
-        </View>
-        <View style={styles.sleepLegendRow}>
-          <View style={styles.sleepLegendItem}>
-            <View style={[styles.sleepLegendDot, { backgroundColor: '#3B82F6' }]} />
-            <LocalizedText style={styles.sleepLegendText}>Sâu: 30%</LocalizedText>
-          </View>
-          <View style={styles.sleepLegendItem}>
-            <View style={[styles.sleepLegendDot, { backgroundColor: '#60A5FA' }]} />
-            <LocalizedText style={styles.sleepLegendText}>Nhẹ: 51%</LocalizedText>
-          </View>
-          <View style={styles.sleepLegendItem}>
-            <View style={[styles.sleepLegendDot, { backgroundColor: '#A78BFA' }]} />
-            <LocalizedText style={styles.sleepLegendText}>REM: 11%</LocalizedText>
-          </View>
-          <View style={styles.sleepLegendItem}>
-            <View style={[styles.sleepLegendDot, { backgroundColor: '#FCD34D' }]} />
-            <LocalizedText style={styles.sleepLegendText}>Thức: 35m (8%)</LocalizedText>
-          </View>
+        <View style={{ paddingVertical: 14, alignItems: 'center' }}>
+          <LocalizedText style={{ fontSize: 13, color: isDarkMode ? colors.textSecondary : '#64748B', textAlign: 'center' }}>
+            Chưa có dữ liệu giấc ngủ đồng bộ từ vòng đeo tay
+          </LocalizedText>
         </View>
       </View>
     </>
@@ -468,6 +447,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    minWidth: 0,
+    marginRight: 8,
   },
   metricIconCircle: {
     width: 44,
