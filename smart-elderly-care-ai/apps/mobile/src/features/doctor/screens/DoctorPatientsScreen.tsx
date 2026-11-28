@@ -201,18 +201,18 @@ export default function DoctorPatientsScreen() {
       if (!matchesName && !matchesHouse && !matchesCondition && !matchesPhone) return false;
     }
 
-    if (filterTab === 'DANGER') return p.health_status === 'DANGER';
-    if (filterTab === 'WARNING') return p.health_status === 'WARNING';
+    if (filterTab === 'DANGER') return Boolean(p.is_online) && p.health_status === 'DANGER';
+    if (filterTab === 'WARNING') return Boolean(p.is_online) && p.health_status === 'WARNING';
     if (filterTab === 'NORMAL') return p.health_status === 'NORMAL' && Boolean(p.is_online);
-    if (filterTab === 'OFFLINE') return p.health_status === 'NORMAL' && !p.is_online;
+    if (filterTab === 'OFFLINE') return !p.is_online;
     return true;
   });
 
   const totalPatients = patients.length;
-  const dangerCount = patients.filter((p) => p.health_status === 'DANGER').length;
-  const warningCount = patients.filter((p) => p.health_status === 'WARNING').length;
+  const dangerCount = patients.filter((p) => Boolean(p.is_online) && p.health_status === 'DANGER').length;
+  const warningCount = patients.filter((p) => Boolean(p.is_online) && p.health_status === 'WARNING').length;
   const normalCount = patients.filter((p) => p.health_status === 'NORMAL' && Boolean(p.is_online)).length;
-  const offlineCount = patients.filter((p) => p.health_status === 'NORMAL' && !p.is_online).length;
+  const offlineCount = patients.filter((p) => !p.is_online).length;
 
   const handleViewDetail = (patientId: string) => {
     navigation.navigate('DoctorPatientDetail', { patientId });

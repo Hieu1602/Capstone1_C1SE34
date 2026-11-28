@@ -23,7 +23,7 @@ import { useAuthStore } from '../../../store/useAuthStore';
 import { useAlertStore } from '../../../store/useAlertStore';
 import { useDoctorAppointmentsStore } from '../../../store/useDoctorAppointmentsStore';
 import { useDoctorPatientsStore } from '../../../store/useDoctorPatientsStore';
-import { doctorApi, householdApi, usersApi } from '../../../services/api';
+import { doctorApi, householdApi, incidentsApi, usersApi } from '../../../services/api';
 import { toLocalYMD, getLocalTodayYMD } from '../utils/dateUtils';
 import { alertsWS } from '../../../services/websocket';
 import { resolveAvatarUrl } from '../../auth/hooks/useProfileManager';
@@ -80,6 +80,7 @@ export default function DoctorHomeScreen() {
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [notifModalVisible, setNotifModalVisible] = useState(false);
   const [hasUnreadNotifs, setHasUnreadNotifs] = useState(false);
+  const [readSyncTick, setReadSyncTick] = useState(0);
   const [respondingInviteId, setRespondingInviteId] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
 
@@ -148,10 +149,13 @@ export default function DoctorHomeScreen() {
             if (Array.isArray(parsed)) readSet = new Set(parsed);
           } catch {}
         }
-        const warnPats = patients.filter((p) => p.health_status === 'WARNING' || p.health_status === 'DANGER');
+        const warnPats = patients.filter(
+          (p) => Boolean(p.is_online) && (p.health_status === 'WARNING' || p.health_status === 'DANGER')
+        );
         const list = buildUnifiedNotifications({
           incidents,
           warningPatients: warnPats,
+          patients,
           appointments,
           upcomingAppointments,
           readIds: readSet,
@@ -160,16 +164,22 @@ export default function DoctorHomeScreen() {
         setHasUnreadNotifs(list.some((i) => !i.isRead));
       })
       .catch(() => {});
-  }, [incidents, patients, appointments, upcomingAppointments, userId]);
+  }, [incidents, patients, appointments, upcomingAppointments, userId, readSyncTick]);
 
   const fetchData = useCallback(async () => {
     try {
-      const [patRes, aptRes, meRes] = await Promise.allSettled([
+      const [patRes, aptRes, meRes, , readRes] = await Promise.allSettled([
         withTimeout(fetchSharedPatients(), 5000),
         withTimeout(fetchSharedAppointments(), 5000),
         withTimeout(usersApi.getMe(), 5000),
         withTimeout(fetchIncidents(), 5000),
+        withTimeout(incidentsApi.getReadState(), 5000),
       ]);
+
+      if (readRes.status === 'fulfilled' && Array.isArray(readRes.value?.data?.read_ids)) {
+        await AsyncStorage.setItem(readIdsStorageKey(userId), JSON.stringify(readRes.value.data.read_ids));
+        setReadSyncTick((t) => t + 1);
+      }
 
       if (meRes.status === 'fulfilled' && meRes.value?.data) {
         const u = meRes.value.data;
@@ -187,7 +197,9 @@ export default function DoctorHomeScreen() {
             nextSelId = curr;
             return curr;
           }
-          const warn = normalized.find((p) => p.health_status === 'DANGER' || p.health_status === 'WARNING');
+          const warn = normalized.find(
+            (p) => Boolean(p.is_online) && (p.health_status === 'DANGER' || p.health_status === 'WARNING')
+          );
           nextSelId = warn ? warn.id : normalized[0]?.id || null;
           return nextSelId;
         });
@@ -216,7 +228,7 @@ export default function DoctorHomeScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [fetchIncidents, fetchSharedAppointments, fetchSharedPatients]);
+  }, [fetchIncidents, fetchSharedAppointments, fetchSharedPatients, userId]);
 
   const handleRespondHouseInvite = async (incident: any, action: 'accept' | 'reject') => {
     try {
@@ -288,9 +300,19 @@ export default function DoctorHomeScreen() {
         return;
       }
 
+      if (evtType === 'NOTIFICATION_READ_STATE_UPDATED') {
+        if ((!event?.user_id || !userId || String(event.user_id) === String(userId)) && Array.isArray(event?.read_ids)) {
+          AsyncStorage.setItem(readIdsStorageKey(userId), JSON.stringify(event.read_ids))
+            .then(() => setReadSyncTick((t) => t + 1))
+            .catch(() => {});
+        }
+        return;
+      }
+
       if (
         evtType === 'ALERT_NEW' ||
         evtType === 'INCIDENT_RESOLVED' ||
+        evtType === 'INCIDENTS_ACKNOWLEDGED' ||
         evtType === 'INCIDENT_ESCALATED' ||
         evtType === 'TELEMETRY_UPDATE' ||
         evtType === 'DEVICE_STATUS' ||
@@ -316,7 +338,9 @@ export default function DoctorHomeScreen() {
     }, [fetchData])
   );
 
-  const warningPatients = patients.filter((p) => p.health_status === 'WARNING' || p.health_status === 'DANGER');
+  const warningPatients = patients.filter(
+    (p) => Boolean(p.is_online) && (p.health_status === 'WARNING' || p.health_status === 'DANGER')
+  );
   const activePatient = patients.find((p) => p.id === selectedPatientId) || patients[0] || null;
   const doctorInitial = getDoctorInitial(userName);
 

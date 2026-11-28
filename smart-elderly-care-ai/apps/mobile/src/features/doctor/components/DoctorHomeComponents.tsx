@@ -314,8 +314,14 @@ export const ClinicalWarningsSection: React.FC<ClinicalWarningsSectionProps> = (
                 {p.name} ({p.age ? `${p.age} tuổi` : 'Cao tuổi'})
               </Text>
               <Text style={styles.warningVitalText}>
-                Nhịp tim: <Text style={{ fontWeight: '700', color: '#DC2626' }}>{p.heart_rate || 122} bpm</Text> • SpO2:{' '}
-                <Text style={{ fontWeight: '700', color: '#059669' }}>{p.spo2 || 94}%</Text>
+                Nhịp tim:{' '}
+                <Text style={{ fontWeight: '700', color: '#DC2626' }}>
+                  {p.is_online && p.heart_rate != null ? `${p.heart_rate} bpm` : '-- bpm'}
+                </Text>{' '}
+                • SpO2:{' '}
+                <Text style={{ fontWeight: '700', color: '#059669' }}>
+                  {p.is_online && p.spo2 != null ? `${p.spo2}%` : '--%'}
+                </Text>
               </Text>
             </View>
           </View>

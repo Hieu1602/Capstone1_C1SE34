@@ -177,6 +177,10 @@ export interface HouseInvite {
 export interface Incident {
   id: string;
   device_id?: string;
+  elderly_id?: string | null;
+  patient_name?: string | null;
+  heart_rate?: number | null;
+  spo2?: number | null;
   alert_type: string;
   alert_level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | string;
   message: string;

@@ -326,3 +326,94 @@ test('DoctorPatients requires is_online for Ổn định and labels offline pati
   assert.match(compCode, /patient\.is_online && patient\.heart_rate != null/);
   assert.match(compCode, /patient\.is_online && patient\.spo2 != null/);
 });
+
+test('Incident vitals & patient matching hydrate snapshot vitals without confusing face match % with SpO2', () => {
+  const helpers = transpileAndLoad(p('features/doctor/components/notifications/notificationHelpers.ts'), {
+    '../../../../store/useAlertStore': {},
+    '../../../../services/doctorApi': {},
+  });
+  const detailCode = parseTsAst(p('features/doctor/components/notifications/NotificationDetailView.tsx')).code;
+
+  // Fall alert with face match 94% must NOT parse 94 as SpO2, while structured snapshot fields do apply
+  const fallInc = {
+    id: 'inc-1',
+    alert_type: 'FALL_DETECTED',
+    alert_level: 'CRITICAL',
+    message: '🚨 CẢNH BÁO TÉ NGÃ: Phát hiện Cụ Nguyễn Văn An té ngã (Khớp khuôn mặt hồ sơ: 94%)!',
+    is_acknowledged: false,
+    created_at: '2026-11-28T13:31:00Z',
+    heart_rate: 112,
+    spo2: 96,
+  };
+  assert.deepEqual({ ...helpers.extractIncidentVitals(fallInc) }, { heartRate: 112, spo2: 96 });
+
+  const noSnapshotFall = { ...fallInc, heart_rate: null, spo2: null };
+  assert.deepEqual({ ...helpers.extractIncidentVitals(noSnapshotFall) }, { heartRate: undefined, spo2: undefined });
+
+  const textVitalsInc = {
+    ...noSnapshotFall,
+    message: 'Cảnh báo nhịp tim 128 bpm, SpO2: 91%',
+  };
+  assert.deepEqual({ ...helpers.extractIncidentVitals(textVitalsInc) }, { heartRate: 128, spo2: 91 });
+
+  const patients = [
+    { id: 'pat-1', name: 'Cụ Nguyễn Văn An', is_online: false, heart_rate: null, spo2: null },
+  ];
+  const matched = helpers.matchPatientForIncident(noSnapshotFall, patients);
+  assert.equal(matched?.id, 'pat-1');
+
+  const items = helpers.buildUnifiedNotifications({
+    incidents: [fallInc],
+    warningPatients: [],
+    patients,
+    appointments: [],
+    upcomingAppointments: [],
+    readIds: new Set(),
+  });
+  assert.equal(items.length, 1);
+  assert.equal(items[0].patientId, 'pat-1');
+  assert.equal(items[0].patientName, 'Cụ Nguyễn Văn An');
+  assert.equal(items[0].heartRate, 112);
+  assert.equal(items[0].spo2, 96);
+
+  assert.match(detailCode, /detectedHr\s*=[\s\S]*?item\.heartRate/);
+  assert.match(detailCode, /detectedSpo2\s*=[\s\S]*?item\.spo2/);
+
+  // Offline patient with stale DANGER must NOT spawn fake "Sinh hiệu nguy cấp" notification or fake 122/94 UI fallbacks
+  const offlineDangerPat = { id: 'pat-off', name: 'Cụ Đặng Văn Dũng', is_online: false, health_status: 'DANGER', heart_rate: null, spo2: null };
+  const offlinePatNotifs = helpers.buildUnifiedNotifications({
+    incidents: [],
+    warningPatients: [offlineDangerPat],
+    patients: [offlineDangerPat],
+    appointments: [],
+    upcomingAppointments: [],
+    readIds: new Set(),
+  });
+  assert.equal(offlinePatNotifs.some((n) => n.id === 'pat_pat-off'), false);
+
+  const homeCompCode = parseTsAst(p('features/doctor/components/DoctorHomeComponents.tsx')).code;
+  assert.equal(/heart_rate\s*\|\|\s*122|spo2\s*\|\|\s*94/.test(homeCompCode), false);
+});
+
+test('Mobile notification parity: limit=100, APPOINTMENT_RESCHEDULED & MEDICAL_RECORD_UPDATED included', () => {
+  const helpers = transpileAndLoad(p('features/doctor/components/notifications/notificationHelpers.ts'), {
+    '../../../../store/useAlertStore': {},
+    '../../../../services/doctorApi': {},
+  });
+  const items = helpers.buildUnifiedNotifications({
+    incidents: [
+      { id: 'med-1', alert_type: 'MEDICAL_RECORD_UPDATED', alert_level: 'LOW', message: 'Cập nhật hồ sơ bệnh án', is_acknowledged: false, created_at: '2026-11-28T10:00:00Z' },
+      { id: 'resched-1', alert_type: 'APPOINTMENT_RESCHEDULED', alert_level: 'LOW', message: 'Đã đổi giờ hẹn', is_acknowledged: false, created_at: '2026-11-28T10:05:00Z' },
+    ],
+    warningPatients: [],
+    patients: [],
+    appointments: [],
+    upcomingAppointments: [],
+    readIds: new Set(),
+    doctorUserId: 'doc-me',
+  });
+  assert.equal(items.length, 2);
+
+  const apiCode = parseTsAst(p('services/api.ts')).code;
+  assert.match(apiCode, /incidentsApi[\s\S]*?limit\s*=\s*100/);
+});

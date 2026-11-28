@@ -180,15 +180,21 @@ export const DoctorNavbar: React.FC = () => {
     } catch (err) {
       console.warn('Acknowledge all backend fallback:', err);
     }
-    const allIds = notifications.map((n) => n.id);
-    const rawIds = notifications.map((n) => n.rawIncidentId || '').filter(Boolean);
+    const eligible = notifications.filter((n) => n.type !== 'INVITE' || n.isRead);
+    const allIds = eligible.map((n) => n.id);
+    const rawIds = eligible.map((n) => n.rawIncidentId || '').filter(Boolean);
     markAllAsRead(allIds, rawIds);
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    setNotifications((prev) =>
+      prev.map((n) => (n.type !== 'INVITE' || n.isRead ? { ...n, isRead: true } : n))
+    );
   };
 
   // Đảo trạng thái Đã đọc <-> Chưa đọc cho một thông báo cụ thể
   const handleToggleSingleRead = (e: React.MouseEvent, item: UnifiedNotification) => {
     e.stopPropagation();
+    if (!item.isRead && item.rawIncidentId) {
+      syncReadToServer(item.rawIncidentId, item.rawIncident);
+    }
     const { isRead } = toggleReadStatus(item.id, item.rawIncidentId);
     setNotifications((prev) =>
       prev.map((n) =>

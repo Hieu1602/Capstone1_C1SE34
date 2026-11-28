@@ -406,6 +406,49 @@ class RedisService:
         logger.info("[Redis] Đã xoá %d keys cache incidents", deleted)
         return deleted
 
+    async def get_read_notification_ids(self, user_id: str) -> List[str]:
+        """Lấy danh sách ID thông báo đã đọc theo user để đồng bộ App <-> Web."""
+        try:
+            r = await self._client()
+            val = await r.get(f"notif:read_ids:{user_id}")
+            if val:
+                parsed = json.loads(val)
+                if isinstance(parsed, list):
+                    return [str(x) for x in parsed]
+            return []
+        except Exception as exc:
+            logger.debug("[Redis] Lỗi get_read_notification_ids (%s): %s", user_id, exc)
+            return []
+
+    async def update_read_notification_ids(
+        self,
+        user_id: str,
+        add_ids: Optional[List[str]] = None,
+        remove_ids: Optional[List[str]] = None,
+        max_items: int = 500,
+    ) -> List[str]:
+        """Cập nhật (add/remove) danh sách ID đã đọc cho user (giữ thứ tự mới nhất ở cuối, giới hạn 500 mục)."""
+        try:
+            r = await self._client()
+            key = f"notif:read_ids:{user_id}"
+            val = await r.get(key)
+            current: List[str] = json.loads(val) if val else []
+            remove_set = {str(x) for x in (remove_ids or []) if x}
+            next_list = [str(x) for x in current if x and str(x) not in remove_set]
+            seen = set(next_list)
+            for item in (add_ids or []):
+                s = str(item)
+                if s and s not in remove_set and s not in seen:
+                    seen.add(s)
+                    next_list.append(s)
+            if len(next_list) > max_items:
+                next_list = next_list[-max_items:]
+            await r.set(key, json.dumps(next_list, ensure_ascii=False))
+            return next_list
+        except Exception as exc:
+            logger.debug("[Redis] Lỗi update_read_notification_ids (%s): %s", user_id, exc)
+            return []
+
     # ==========================================================================
     # 8. BỘ NHỚ ĐỆM DANH SÁCH BỆNH NHÂN (DOCTOR ASSIGNED PATIENTS & PATIENTS LIST)
     # ==========================================================================

@@ -10,6 +10,7 @@ import { doctorWebSocket } from '../../services/websocket';
 import { useDoctorDataStore } from '../../store/useDoctorDataStore';
 import { useDoctorAuthStore } from '../../store/useDoctorAuthStore';
 import { formatAppointmentWsNotification } from '../../utils/appointmentHelpers';
+import { hydrateReadIdsFromServer, syncReadIdsFromServerPayload } from '../../utils/notificationSync';
 import {
   isBrowserNotificationSupported,
   getBrowserNotificationPermission,
@@ -55,6 +56,7 @@ export const DoctorLayout: React.FC = () => {
 
     // Tải trước dữ liệu toàn cục song song để các tab có dữ liệu ngay (0ms)
     useDoctorDataStore.getState().fetchAllData();
+    hydrateReadIdsFromServer().catch(() => {});
     const pollTimer = setInterval(() => {
       useDoctorDataStore.getState().fetchPatients(true);
     }, 15000);
@@ -148,6 +150,15 @@ export const DoctorLayout: React.FC = () => {
       // Đồng bộ "đọc tất cả" từ Mobile → Doctor Web
       if (event.type === 'INCIDENTS_ACKNOWLEDGED') {
         useDoctorDataStore.getState().fetchAllData(true);
+        return;
+      }
+
+      // Đồng bộ trạng thái đã đọc (readIds) Mobile <-> Doctor Web 0ms
+      if (event.type === 'NOTIFICATION_READ_STATE_UPDATED') {
+        const curUser = useDoctorAuthStore.getState().user;
+        if ((!event.user_id || !curUser?.id || String(event.user_id) === String(curUser.id)) && Array.isArray(event.read_ids)) {
+          syncReadIdsFromServerPayload(event.read_ids);
+        }
         return;
       }
 

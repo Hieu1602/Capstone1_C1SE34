@@ -2,9 +2,11 @@
 crud_incident.py – CRUD / Repository cho Incident model.
 """
 
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
 import json
+import re
 
 from sqlalchemy import select, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -266,20 +268,209 @@ class CRUDIncident:
                 grouped_incidents.append(inc)
 
         top_incidents = grouped_incidents[:limit]
-        # Bổ sung elderly_id từ Device để Web/App nhận diện đúng bệnh nhân kể cả khi notes bị ghi đè
-        try:
-            dev_ids = {inc.device_id for inc in top_incidents if getattr(inc, "device_id", None)}
-            if dev_ids:
-                from app.models.device import Device
+        await self._hydrate_doctor_incident_context(db, top_incidents, appointment_invite_types)
+        return top_incidents
 
-                dev_rows = await db.execute(select(Device.id, Device.elderly_id).where(Device.id.in_(list(dev_ids))))
-                dev_map = {row[0]: row[1] for row in dev_rows.fetchall() if row[1] is not None}
-                for inc in top_incidents:
-                    if not getattr(inc, "elderly_id", None):
-                        setattr(inc, "elderly_id", dev_map.get(inc.device_id))
+    async def _hydrate_doctor_incident_context(
+        self,
+        db: AsyncSession,
+        incidents: List[Incident],
+        appointment_invite_types: List[str],
+    ) -> None:
+        """Bổ sung elderly_id, patient_name và snapshot sinh hiệu (HR/SpO2) tại thời điểm phát hiện."""
+        if not incidents:
+            return
+        try:
+            from app.models.device import Device, DeviceType
+            from app.models.elderly_profile import ElderlyProfile
+            from app.models.vital_sign import VitalSign
+            from app.services.redis import redis_service
+
+            dev_ids = {inc.device_id for inc in incidents if getattr(inc, "device_id", None)}
+            if not dev_ids:
+                return
+
+            dev_rows = (
+                await db.execute(
+                    select(Device.id, Device.elderly_id, Device.house_id, Device.device_type).where(
+                        Device.id.in_(list(dev_ids))
+                    )
+                )
+            ).all()
+            dev_info = {row[0]: {"elderly_id": row[1], "house_id": row[2], "device_type": row[3]} for row in dev_rows}
+            house_ids = {info["house_id"] for info in dev_info.values() if info.get("house_id")}
+
+            elderly_by_id: dict[UUID, dict] = {}
+            elderly_by_house: dict[UUID, list[dict]] = {}
+            if house_ids:
+                ep_rows = (
+                    await db.execute(
+                        select(ElderlyProfile.id, ElderlyProfile.house_id, ElderlyProfile.full_name).where(
+                            ElderlyProfile.house_id.in_(list(house_ids))
+                        )
+                    )
+                ).all()
+                for ep_id, h_id, full_name in ep_rows:
+                    rec = {"id": ep_id, "house_id": h_id, "full_name": (full_name or "").strip()}
+                    elderly_by_id[ep_id] = rec
+                    elderly_by_house.setdefault(h_id, []).append(rec)
+
+            # Tìm toàn bộ Smartband trong các căn nhà liên quan để lấy đúng sinh hiệu vòng đeo tay khi Camera báo té ngã
+            band_by_elderly: dict[UUID, list[UUID]] = {}
+            band_by_house: dict[UUID, list[UUID]] = {}
+            if house_ids:
+                band_rows = (
+                    await db.execute(
+                        select(Device.id, Device.elderly_id, Device.house_id).where(
+                            Device.house_id.in_(list(house_ids)),
+                            Device.device_type == DeviceType.SMARTBAND,
+                        )
+                    )
+                ).all()
+                for b_id, b_ep_id, b_house_id in band_rows:
+                    if b_ep_id:
+                        band_by_elderly.setdefault(b_ep_id, []).append(b_id)
+                    if b_house_id:
+                        band_by_house.setdefault(b_house_id, []).append(b_id)
+
+            clinical_items: list[tuple[Incident, list[UUID]]] = []
+            all_vital_dev_ids: set[UUID] = set()
+            min_ts: Optional[datetime] = None
+            max_ts: Optional[datetime] = None
+
+            for inc in incidents:
+                info = dev_info.get(inc.device_id, {})
+                h_id = info.get("house_id")
+                ep_id = getattr(inc, "elderly_id", None) or info.get("elderly_id")
+
+                if not ep_id and inc.notes:
+                    m_pat = re.search(r"PATIENT:([0-9a-fA-F-]{36})", inc.notes)
+                    if m_pat:
+                        try:
+                            ep_id = UUID(m_pat.group(1))
+                        except ValueError:
+                            pass
+
+                if not ep_id and h_id and inc.message:
+                    msg_lower = inc.message.lower()
+                    candidates = sorted(
+                        elderly_by_house.get(h_id, []),
+                        key=lambda x: len(x["full_name"]),
+                        reverse=True,
+                    )
+                    for ep in candidates:
+                        if ep["full_name"] and ep["full_name"].lower() in msg_lower:
+                            ep_id = ep["id"]
+                            break
+
+                if ep_id:
+                    setattr(inc, "elderly_id", ep_id)
+                    ep_rec = elderly_by_id.get(ep_id)
+                    if ep_rec and ep_rec["full_name"]:
+                        setattr(inc, "patient_name", ep_rec["full_name"])
+
+                is_clinical = (
+                    inc.alert_type not in appointment_invite_types
+                    and inc.alert_type != "DEVICE_CONFIG_UPDATED"
+                )
+                if not is_clinical:
+                    continue
+
+                raw_text = f"{inc.message or ''} {inc.notes or ''}"
+                m_hr = re.search(r"(\d{2,3})\s*(?:bpm|nhịp/phút)", raw_text, re.IGNORECASE)
+                m_spo2 = re.search(
+                    r"(?:spo2|oxy)[:\s]*(\d{2,3})\s*%|(\d{2,3})\s*%\s*(?:spo2|oxy)",
+                    raw_text,
+                    re.IGNORECASE,
+                )
+                if m_hr:
+                    setattr(inc, "heart_rate", int(m_hr.group(1)))
+                if m_spo2:
+                    val_s = m_spo2.group(1) or m_spo2.group(2)
+                    if val_s:
+                        setattr(inc, "spo2", int(val_s))
+
+                if getattr(inc, "heart_rate", None) is not None and getattr(inc, "spo2", None) is not None:
+                    continue
+
+                cand_devs: list[UUID] = []
+                if ep_id and band_by_elderly.get(ep_id):
+                    cand_devs.extend(band_by_elderly[ep_id])
+                if info.get("device_type") == DeviceType.SMARTBAND and inc.device_id not in cand_devs:
+                    cand_devs.append(inc.device_id)
+                if h_id and band_by_house.get(h_id):
+                    for d_id in band_by_house[h_id]:
+                        if d_id not in cand_devs:
+                            cand_devs.append(d_id)
+
+                if cand_devs and inc.created_at:
+                    clinical_items.append((inc, cand_devs))
+                    all_vital_dev_ids.update(cand_devs)
+                    t_start = inc.created_at - timedelta(minutes=30)
+                    t_end = inc.created_at + timedelta(minutes=2)
+                    min_ts = t_start if min_ts is None or t_start < min_ts else min_ts
+                    max_ts = t_end if max_ts is None or t_end > max_ts else max_ts
+
+            if clinical_items and all_vital_dev_ids and min_ts and max_ts:
+                vs_rows = (
+                    await db.execute(
+                        select(VitalSign.device_id, VitalSign.time, VitalSign.heart_rate, VitalSign.spo2)
+                        .where(
+                            VitalSign.device_id.in_(list(all_vital_dev_ids)),
+                            VitalSign.time >= min_ts,
+                            VitalSign.time <= max_ts,
+                        )
+                        .order_by(VitalSign.time.desc())
+                        .limit(300)
+                    )
+                ).all()
+                vs_by_dev: dict[UUID, list[tuple[datetime, Optional[int], Optional[int]]]] = {}
+                for v_dev, v_time, v_hr, v_spo2 in vs_rows:
+                    vs_by_dev.setdefault(v_dev, []).append((v_time, v_hr, v_spo2))
+
+                now_utc = datetime.now(timezone.utc)
+                for inc, cand_devs in clinical_items:
+                    inc_t = inc.created_at
+                    if inc_t.tzinfo is None:
+                        inc_t = inc_t.replace(tzinfo=timezone.utc)
+                    best_hr = getattr(inc, "heart_rate", None)
+                    best_spo2 = getattr(inc, "spo2", None)
+                    best_diff: Optional[float] = None
+                    t_lo = inc_t - timedelta(minutes=30)
+                    t_hi = inc_t + timedelta(minutes=2)
+
+                    for d_id in cand_devs:
+                        for v_time, v_hr, v_spo2 in vs_by_dev.get(d_id, []):
+                            vt = v_time if v_time.tzinfo else v_time.replace(tzinfo=timezone.utc)
+                            if not (t_lo <= vt <= t_hi):
+                                continue
+                            if (v_hr is None or v_hr <= 0) and (v_spo2 is None or v_spo2 <= 0):
+                                continue
+                            diff = abs((inc_t - vt).total_seconds())
+                            if best_diff is None or diff < best_diff:
+                                best_diff = diff
+                                if best_hr is None and v_hr and v_hr > 0:
+                                    best_hr = int(v_hr)
+                                if best_spo2 is None and v_spo2 and v_spo2 > 0:
+                                    best_spo2 = int(v_spo2)
+
+                    if (best_hr is None or best_spo2 is None) and abs((now_utc - inc_t).total_seconds()) <= 180:
+                        for d_id in cand_devs:
+                            cached_vs = await redis_service.get_latest_vitals(str(d_id))
+                            if cached_vs and cached_vs.get("bracelet_connected") is not False:
+                                if best_hr is None and cached_vs.get("heart_rate"):
+                                    best_hr = int(cached_vs["heart_rate"])
+                                if best_spo2 is None and cached_vs.get("spo2"):
+                                    best_spo2 = int(cached_vs["spo2"])
+                                if best_hr is not None and best_spo2 is not None:
+                                    break
+
+                    if best_hr is not None:
+                        setattr(inc, "heart_rate", best_hr)
+                    if best_spo2 is not None:
+                        setattr(inc, "spo2", best_spo2)
         except Exception:
             pass
-        return top_incidents
 
     async def create(self, db: AsyncSession, data: dict) -> Incident:
         obj = Incident(**data)

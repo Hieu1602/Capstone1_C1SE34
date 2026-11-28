@@ -12,7 +12,7 @@ from app.api.deps import get_current_user, get_current_user_optional
 from app.core.database import get_db
 from app.crud.crud_incident import crud_incident
 from app.models.user import User
-from app.schemas.incident import IncidentAck, IncidentOut
+from app.schemas.incident import IncidentAck, IncidentOut, ReadStateOut, ReadStateUpdate
 
 logger = logging.getLogger("incidents")
 
@@ -174,6 +174,42 @@ async def acknowledge_all_incidents(
     return {"status": "success", "acknowledged_count": count}
 
 
+@router.get("/read-state", response_model=ReadStateOut)
+async def get_notification_read_state(
+    current_user: User = Depends(get_current_user),
+):
+    """Lấy danh sách ID thông báo đã đọc của user (đồng bộ App <-> Web)."""
+    from app.services.redis import redis_service
+
+    read_ids = await redis_service.get_read_notification_ids(str(current_user.id))
+    return ReadStateOut(read_ids=read_ids)
+
+
+@router.put("/read-state", response_model=ReadStateOut)
+async def update_notification_read_state(
+    payload: ReadStateUpdate,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+):
+    """Cập nhật danh sách ID thông báo đã đọc của user và phát WS để bên còn lại cập nhật 0ms."""
+    import json
+    from app.services.redis import redis_service
+
+    uid_str = str(current_user.id)
+    read_ids = await redis_service.update_read_notification_ids(
+        uid_str,
+        add_ids=payload.add,
+        remove_ids=payload.remove,
+    )
+    ws_payload = json.dumps({
+        "type": "NOTIFICATION_READ_STATE_UPDATED",
+        "user_id": uid_str,
+        "read_ids": read_ids,
+    }, ensure_ascii=False)
+    background_tasks.add_task(_broadcast_alert_payload, ws_payload)
+    return ReadStateOut(read_ids=read_ids)
+
+
 @router.get("/{incident_id}", response_model=IncidentOut)
 async def get_incident(
     incident_id: UUID,
@@ -189,44 +225,31 @@ async def get_incident(
     return incident
 
 
-async def _bg_post_acknowledge(ack_ws_payload: str):
-    """Background task: Phát WebSocket và xóa cache Redis sau khi phản hồi nhanh <200ms."""
+async def _broadcast_alert_payload(ws_payload: str):
+    """Phát WebSocket payload tới tất cả alert_clients."""
     try:
         from app.api.websockets.vitals_ws import alert_clients
         for client_ws in list(alert_clients):
             try:
-                await client_ws.send_text(ack_ws_payload)
+                await client_ws.send_text(ws_payload)
             except Exception:
                 if client_ws in alert_clients:
                     alert_clients.remove(client_ws)
     except Exception as ws_err:
-        logger.warning("[acknowledge_incident] WS broadcast error: %s", ws_err)
+        logger.warning("[incidents] WS broadcast error: %s", ws_err)
 
+
+async def _bg_post_acknowledge(ws_payload: str):
+    """Background task: Xóa cache Redis TRƯỚC khi phát WS để client re-fetch không dính cache cũ."""
     try:
         from app.services.redis import redis_service
         await redis_service.invalidate_incidents_cache()
     except Exception:
         pass
+    await _broadcast_alert_payload(ws_payload)
 
 
-async def _bg_post_reopen(reopen_ws_payload: str):
-    """Background task: Phát WebSocket kích hoạt lại còi & xóa cache Redis."""
-    try:
-        from app.api.websockets.vitals_ws import alert_clients
-        for client_ws in list(alert_clients):
-            try:
-                await client_ws.send_text(reopen_ws_payload)
-            except Exception:
-                if client_ws in alert_clients:
-                    alert_clients.remove(client_ws)
-    except Exception as ws_err:
-        logger.warning("[reopen_incident] WS broadcast error: %s", ws_err)
-
-    try:
-        from app.services.redis import redis_service
-        await redis_service.invalidate_incidents_cache()
-    except Exception:
-        pass
+_bg_post_reopen = _bg_post_acknowledge
 
 
 @router.patch("/{incident_id}/acknowledge", response_model=IncidentOut)

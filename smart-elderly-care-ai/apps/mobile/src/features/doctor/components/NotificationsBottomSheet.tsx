@@ -2,14 +2,15 @@
 // Bottom sheet hiển thị thông báo tập trung cho Bác sĩ: Cảnh báo y tế bệnh nhân & Lịch hẹn khám
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, Modal, StyleSheet, TouchableOpacity, FlatList, SafeAreaView, Alert, ScrollView } from 'react-native';
+import { View, Modal, StyleSheet, TouchableOpacity, FlatList, SafeAreaView, Alert, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAlertStore, isUrgentIncident } from '../../../store/useAlertStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
-import { adminBroadcastsApi, householdApi, SystemAnnouncement } from '../../../services/api';
+import { adminBroadcastsApi, householdApi, incidentsApi, SystemAnnouncement } from '../../../services/api';
+import { alertsWS } from '../../../services/websocket';
 import type { Incident } from '../../../store/useAlertStore';
 import type { AppointmentItem, PatientCardData } from './types';
 import {
@@ -87,6 +88,30 @@ export default function NotificationsBottomSheet({
         if (Array.isArray(res.data)) setAdminBroadcasts(res.data);
       })
       .catch(() => {});
+    incidentsApi
+      .getReadState()
+      .then((res) => {
+        const list = res.data?.read_ids;
+        if (Array.isArray(list)) {
+          const next = new Set<string>(list);
+          setReadIds(next);
+          AsyncStorage.setItem(readIdsStorageKey(userId), JSON.stringify(list)).catch(() => {});
+        }
+      })
+      .catch(() => {});
+
+    const unsub = alertsWS.subscribe((event: any) => {
+      if (
+        event?.type === 'NOTIFICATION_READ_STATE_UPDATED' &&
+        (!event.user_id || !userId || String(event.user_id) === String(userId)) &&
+        Array.isArray(event.read_ids)
+      ) {
+        const next = new Set<string>(event.read_ids);
+        setReadIds(next);
+        AsyncStorage.setItem(readIdsStorageKey(userId), JSON.stringify(event.read_ids)).catch(() => {});
+      }
+    });
+    return () => unsub();
   }, [visible, userId]);
 
   const persistReadIds = useCallback(async (newSet: Set<string>) => {
@@ -103,6 +128,7 @@ export default function NotificationsBottomSheet({
   const unifiedList = buildUnifiedNotifications({
     incidents,
     warningPatients,
+    patients,
     appointments,
     upcomingAppointments,
     readIds,
@@ -126,12 +152,16 @@ export default function NotificationsBottomSheet({
     return true;
   });
 
-  const addReadId = (set: Set<string>, item: UnifiedNotification) => {
-    set.add(item.id);
+  const collectItemIds = (item: UnifiedNotification): string[] => {
+    const ids = [item.id];
     if (item.rawIncidentId) {
-      set.add(item.rawIncidentId);
-      set.add(`inc_${item.rawIncidentId}`);
+      ids.push(item.rawIncidentId, `inc_${item.rawIncidentId}`);
     }
+    return ids;
+  };
+
+  const addReadId = (set: Set<string>, item: UnifiedNotification) => {
+    collectItemIds(item).forEach((id) => set.add(id));
   };
 
   const handleRespondInviteFromSheet = async (item: UnifiedNotification, action: 'accept' | 'reject') => {
@@ -157,6 +187,7 @@ export default function NotificationsBottomSheet({
       const updated = new Set(readIds);
       addReadId(updated, item);
       await persistReadIds(updated);
+      incidentsApi.updateReadState(collectItemIds(item)).catch(() => {});
     } catch (e: any) {
       console.warn('handleRespondInviteFromSheet error:', e);
       Alert.alert('Lỗi', e.response?.data?.detail || 'Không thể phản hồi lời mời. Vui lòng thử lại.');
@@ -181,6 +212,7 @@ export default function NotificationsBottomSheet({
         useAlertStore.getState().acknowledgeIncident(item.rawIncidentId);
       }
       await persistReadIds(updated);
+      incidentsApi.updateReadState(collectItemIds(item)).catch(() => {});
     }
     setSelectedNotification(item);
   };
@@ -203,10 +235,15 @@ export default function NotificationsBottomSheet({
 
   const handleMarkAllRead = async () => {
     const updated = new Set(readIds);
+    const addedIds: string[] = [];
     unifiedList.forEach((item) => {
-      if (item.type !== 'HOUSE_INVITE' || item.isRead) addReadId(updated, item);
+      if (item.type !== 'HOUSE_INVITE' || item.isRead) {
+        addReadId(updated, item);
+        addedIds.push(...collectItemIds(item));
+      }
     });
     await persistReadIds(updated);
+    incidentsApi.updateReadState(addedIds).catch(() => {});
     onMarkAllRead?.();
   };
 
@@ -242,22 +279,81 @@ export default function NotificationsBottomSheet({
         ) : (
           <>
             <View style={[styles.header, { borderBottomColor: border }]}>
-              <View style={styles.headerTitle}>
-                <Ionicons name="notifications" size={20} color="#2563EB" />
-                <LocalizedText style={[styles.title, { color: colors.textPrimary }]}>Trung tâm thông báo</LocalizedText>
-                <View style={[styles.countBadge, unreadCount === 0 && { backgroundColor: '#10B981' }]}>
-                  <LocalizedText style={styles.countText}>{unreadCount > 0 ? `${unreadCount} chưa đọc` : 'Đã đọc hết'}</LocalizedText>
+              <View style={styles.headerTopRow}>
+                <View style={styles.headerTitle}>
+                  <View style={[styles.headerIconBox, { backgroundColor: isDarkMode ? '#1E3A8A55' : '#EFF6FF' }]}>
+                    <Ionicons name="notifications" size={18} color="#2563EB" />
+                  </View>
+                  <LocalizedText style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
+                    Trung tâm thông báo
+                  </LocalizedText>
                 </View>
+
+                <TouchableOpacity
+                  onPress={onClose}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={[styles.closeBtn, { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9' }]}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="close" size={18} color={textSub} />
+                </TouchableOpacity>
               </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+
+              <View style={styles.headerMetaRow}>
+                <View
+                  style={[
+                    styles.countBadge,
+                    {
+                      backgroundColor:
+                        unreadCount > 0
+                          ? (isDarkMode ? '#1E3A8A66' : '#EFF6FF')
+                          : (isDarkMode ? '#064E3B66' : '#ECFDF5'),
+                      borderColor:
+                        unreadCount > 0
+                          ? (isDarkMode ? '#3B82F644' : '#BFDBFE')
+                          : (isDarkMode ? '#10B98144' : '#A7F3D0'),
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.countDot,
+                      { backgroundColor: unreadCount > 0 ? '#2563EB' : '#059669' },
+                    ]}
+                  />
+                  <LocalizedText
+                    style={[
+                      styles.countText,
+                      {
+                        color:
+                          unreadCount > 0
+                            ? (isDarkMode ? '#93C5FD' : '#1D4ED8')
+                            : (isDarkMode ? '#6EE7B7' : '#047857'),
+                      },
+                    ]}
+                  >
+                    {unreadCount > 0 ? `${unreadCount} chưa đọc` : 'Đã đọc hết'}
+                  </LocalizedText>
+                </View>
+
                 {unreadCount > 0 && (
-                  <TouchableOpacity onPress={handleMarkAllRead} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#2563EB' }}>Đã đọc tất cả</Text>
+                  <TouchableOpacity
+                    onPress={handleMarkAllRead}
+                    style={[
+                      styles.markAllBtn,
+                      {
+                        backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                        borderColor: isDarkMode ? '#334155' : '#DBEAFE',
+                      },
+                    ]}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons name="checkmark-done-outline" size={14} color={isDarkMode ? '#60A5FA' : '#2563EB'} />
+                    <LocalizedText style={[styles.markAllText, { color: isDarkMode ? '#60A5FA' : '#2563EB' }]}>
+                      Đã đọc tất cả
+                    </LocalizedText>
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="close" size={22} color={textSub} />
-                </TouchableOpacity>
               </View>
             </View>
 
@@ -313,14 +409,73 @@ export default function NotificationsBottomSheet({
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
   sheet: { height: '78%', borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTopWidth: 1 },
-  handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 10, marginBottom: 4 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
-  headerTitle: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  title: { fontSize: 16, fontWeight: '700' },
-  countBadge: { backgroundColor: '#2563EB', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 1 },
-  countText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
+  handle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 10, marginBottom: 6 },
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 10,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  headerTitle: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  headerIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  title: { fontSize: 17, fontWeight: '800', flexShrink: 1 },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  headerMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  countBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  countDot: { width: 6, height: 6, borderRadius: 3 },
+  countText: { fontSize: 12, fontWeight: '700' },
+  markAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    minHeight: 30,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  markAllText: { fontSize: 12, fontWeight: '700' },
   tabBar: { flexDirection: 'row', paddingHorizontal: 16 },
-  tabItem: { paddingVertical: 10, marginRight: 14, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabItem: { paddingVertical: 11, marginRight: 16, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabItemActive: { borderBottomColor: '#2563EB' },
   tabText: { fontSize: 12.5, fontWeight: '600' },
   tabTextActive: { fontWeight: '700' },

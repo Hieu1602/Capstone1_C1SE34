@@ -144,7 +144,7 @@ export const NotificationsPage: React.FC = () => {
   // Đảo trạng thái Đã đọc <-> Chưa đọc
   const handleToggleRead = (item: UnifiedNotification) => {
     if (!item.isRead && item.rawIncidentId) {
-      incidentsApi.acknowledge(item.rawIncidentId).catch(console.warn);
+      syncReadToServer(item.rawIncidentId, item.rawIncident);
     }
     const { nextIds, isRead } = toggleReadStatus(item.id, item.rawIncidentId);
     setReadIds(nextIds);
@@ -158,11 +158,14 @@ export const NotificationsPage: React.FC = () => {
   // Đánh dấu tất cả đã đọc
   const handleMarkAllRead = async () => {
     incidentsApi.acknowledgeAll().catch(console.warn);
-    const allIds = notifications.map((n) => n.id);
-    const rawIds = notifications.map((n) => n.rawIncidentId || '').filter(Boolean);
+    const eligible = notifications.filter((n) => n.type !== 'INVITE' || n.isRead);
+    const allIds = eligible.map((n) => n.id);
+    const rawIds = eligible.map((n) => n.rawIncidentId || '').filter(Boolean);
     const next = markAllAsRead(allIds, rawIds);
     setReadIds(next);
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    setNotifications((prev) =>
+      prev.map((n) => (n.type !== 'INVITE' || n.isRead ? { ...n, isRead: true } : n))
+    );
   };
 
   const handleRespondInvite = async (incident: Incident, action: 'accept' | 'reject') => {

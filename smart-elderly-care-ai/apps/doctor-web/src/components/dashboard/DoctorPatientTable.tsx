@@ -139,8 +139,8 @@ export const DoctorPatientTable: React.FC<DoctorPatientTableProps> = ({
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 text-xs">
               {patients.map((patient, idx) => {
-                const isDanger = patient.health_status === 'DANGER';
-                const isWarning = patient.health_status === 'WARNING' || isDanger;
+                const isDanger = Boolean(patient.is_online) && patient.health_status === 'DANGER';
+                const isWarning = Boolean(patient.is_online) && (patient.health_status === 'WARNING' || isDanger);
                 const mrCode = `MR-${String(idx + 1).padStart(3, '0')}`;
 
                 return (

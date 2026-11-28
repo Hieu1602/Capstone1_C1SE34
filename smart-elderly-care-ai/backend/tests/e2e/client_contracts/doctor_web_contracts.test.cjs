@@ -588,3 +588,68 @@ test('Doctor Web requires is_online for Ổn định status/filter and shows Ngo
   assert.match(tableCode, /patient\.is_online[\s\S]*?Ổn định[\s\S]*?Ngoại tuyến/);
   assert.match(tableCode, /patient\.is_online && patient\.heart_rate != null/);
 });
+
+test('Doctor Web buildNotificationItems hydrates snapshot vitals & matches offline patients without misparsing face %', () => {
+  const builder = transpileAndLoad(p('utils/notificationBuilder.ts'), {
+    './notificationSync': { cleanNotificationText: (s) => s || '' },
+    './appointmentHelpers': { isAppointmentOverdue: () => false },
+  });
+  const patients = [
+    { id: 'pat-1', name: 'Cụ Nguyễn Văn An', is_online: false, heart_rate: null, spo2: null, address: 'Đà Nẵng' },
+  ];
+
+  const fallWithSnapshot = {
+    id: 'inc-1',
+    alert_type: 'FALL_DETECTED',
+    alert_level: 'CRITICAL',
+    message: '🚨 CẢNH BÁO TÉ NGÃ: Phát hiện Cụ Nguyễn Văn An té ngã (Khớp khuôn mặt hồ sơ: 94%)!',
+    is_acknowledged: false,
+    created_at: '2026-11-28T13:31:00Z',
+    heart_rate: 108,
+    spo2: 95,
+  };
+  const fallWithoutSnapshot = { ...fallWithSnapshot, id: 'inc-2', heart_rate: null, spo2: null };
+
+  const notifs = builder.buildNotificationItems([fallWithSnapshot, fallWithoutSnapshot], patients, []);
+  const first = notifs.find((n) => n.rawIncidentId === 'inc-1');
+  const second = notifs.find((n) => n.rawIncidentId === 'inc-2');
+
+  assert.equal(first?.patientId, 'pat-1');
+  assert.equal(first?.patientName, 'Cụ Nguyễn Văn An');
+  assert.equal(first?.heartRate, 108);
+  assert.equal(first?.spo2, 95);
+
+  // Must not misread 94% face match confidence as SpO2 when snapshot is absent
+  assert.equal(second?.patientId, 'pat-1');
+  assert.equal(second?.spo2, undefined);
+
+  // Offline patient with stale DANGER must NOT spawn synthetic "Sinh hiệu nguy cấp" alert
+  const offlineDangerList = builder.buildNotificationItems(
+    [],
+    [{ id: 'pat-off', name: 'Đặng Văn Dũng', is_online: false, health_status: 'DANGER', heart_rate: null, spo2: null }],
+    []
+  );
+  assert.equal(offlineDangerList.some((n) => n.id === 'pat_pat-off'), false);
+});
+
+test('Doctor Web notification parity: limit=100, MEDICAL_RECORD_UPDATED & isNotificationReadInSet respects is_acknowledged', () => {
+  const builder = transpileAndLoad(p('utils/notificationBuilder.ts'), {
+    './notificationSync': { cleanNotificationText: (s) => s || '' },
+    './appointmentHelpers': { isAppointmentOverdue: () => false },
+  });
+  const sharedIncs = [
+    { id: 'med-1', alert_type: 'MEDICAL_RECORD_UPDATED', alert_level: 'LOW', message: 'Cập nhật hồ sơ bệnh án', is_acknowledged: false, created_at: '2026-11-28T10:00:00Z' },
+    { id: 'resched-1', alert_type: 'APPOINTMENT_RESCHEDULED', alert_level: 'LOW', message: 'Đã đổi giờ hẹn', is_acknowledged: false, created_at: '2026-11-28T10:05:00Z' },
+  ];
+  const items = builder.buildNotificationItems(sharedIncs, [], [], [], new Set(), 'doc-me');
+  assert.equal(items.length, 2);
+  assert.equal(
+    builder.isNotificationReadInSet({ id: 'inc_1', rawIncidentId: '1', rawIncident: { is_acknowledged: true } }, new Set()),
+    true
+  );
+
+  const apiCode = parseTsAst(p('services/api.ts')).code;
+  const navCode = parseTsAst(p('components/layout/navbarNotifications.ts')).code;
+  assert.match(apiCode, /limit\s*=\s*100/);
+  assert.match(navCode, /incidentsApi\.list\(undefined,\s*100\)/);
+});

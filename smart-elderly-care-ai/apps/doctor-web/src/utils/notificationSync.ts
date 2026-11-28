@@ -58,17 +58,36 @@ export function broadcastReadIds(nextIds: Set<string>): void {
   window.dispatchEvent(new CustomEvent<SyncPayload>(NOTIFS_SYNC_EVENT, { detail: payload }));
 }
 
+/** Ghi đè cache local từ danh sách read_ids trên server (dùng khi hydrate hoặc nhận WS từ Mobile). */
+export function syncReadIdsFromServerPayload(readIds: string[]): Set<string> {
+  const next = new Set<string>(readIds);
+  broadcastReadIds(next);
+  return next;
+}
+
+/** Tải danh sách ID đã đọc từ server về đồng bộ 2 chiều Web <-> App. */
+export async function hydrateReadIdsFromServer(): Promise<Set<string>> {
+  const serverIds = await incidentsApi.getReadState();
+  if (serverIds.length > 0) {
+    return syncReadIdsFromServerPayload(serverIds);
+  }
+  return getStoredReadIds();
+}
+
 /**
  * Đánh dấu một thông báo là đã đọc
  */
 export function markAsRead(id: string, rawIncidentId?: string): Set<string> {
   const current = getStoredReadIds();
+  const added = [id];
   current.add(id);
   if (rawIncidentId) {
     current.add(rawIncidentId);
     current.add(`inc_${rawIncidentId}`);
+    added.push(rawIncidentId, `inc_${rawIncidentId}`);
   }
   broadcastReadIds(current);
+  incidentsApi.updateReadState(added).catch(console.warn);
   return current;
 }
 
@@ -78,21 +97,16 @@ export function markAsRead(id: string, rawIncidentId?: string): Set<string> {
 export function toggleReadStatus(id: string, rawIncidentId?: string): { nextIds: Set<string>; isRead: boolean } {
   const current = getStoredReadIds();
   const isCurrentlyRead = current.has(id) || (rawIncidentId ? current.has(rawIncidentId) || current.has(`inc_${rawIncidentId}`) : false);
+  const targetIds = [id, ...(rawIncidentId ? [rawIncidentId, `inc_${rawIncidentId}`] : [])];
 
   if (isCurrentlyRead) {
     // Chuyển sang CHƯA ĐỌC
-    current.delete(id);
-    if (rawIncidentId) {
-      current.delete(rawIncidentId);
-      current.delete(`inc_${rawIncidentId}`);
-    }
+    targetIds.forEach((k) => current.delete(k));
+    incidentsApi.updateReadState([], targetIds).catch(console.warn);
   } else {
     // Chuyển sang ĐÃ ĐỌC
-    current.add(id);
-    if (rawIncidentId) {
-      current.add(rawIncidentId);
-      current.add(`inc_${rawIncidentId}`);
-    }
+    targetIds.forEach((k) => current.add(k));
+    incidentsApi.updateReadState(targetIds).catch(console.warn);
   }
 
   broadcastReadIds(current);
@@ -104,16 +118,24 @@ export function toggleReadStatus(id: string, rawIncidentId?: string): { nextIds:
  */
 export function markAllAsRead(allItemIds: string[], rawIncidentIds: string[] = []): Set<string> {
   const next = getStoredReadIds();
+  const added: string[] = [];
 
-  allItemIds.forEach((id) => next.add(id));
+  allItemIds.forEach((id) => {
+    next.add(id);
+    added.push(id);
+  });
   rawIncidentIds.forEach((rawId) => {
     if (rawId) {
       next.add(rawId);
       next.add(`inc_${rawId}`);
+      added.push(rawId, `inc_${rawId}`);
     }
   });
 
   broadcastReadIds(next);
+  if (added.length > 0) {
+    incidentsApi.updateReadState(added).catch(console.warn);
+  }
   return next;
 }
 

@@ -35,7 +35,7 @@ function formatNavbarDate(dateStr?: string): string {
 
 export async function fetchDoctorNavbarNotifications(doctorUserId?: string): Promise<UnifiedNotification[]> {
   const [incRes, patRes, aptRes, , sysRes] = await Promise.allSettled([
-    incidentsApi.list(undefined, 50),
+    incidentsApi.list(undefined, 100),
     doctorApi.getPatients(),
     doctorApi.getAppointments(),
     householdApi.getInvites(),
@@ -102,6 +102,7 @@ export async function fetchDoctorNavbarNotifications(doctorUserId?: string): Pro
       const isMedicalRecordMsg =
         inc.alert_type === 'MEDICAL_RECORD_UPDATED' ||
         ['bệnh án', 'dị ứng', 'dinh dưỡng'].some((k) => msgLower.includes(k));
+      const isConfigUpdate = inc.alert_type === 'DEVICE_CONFIG_UPDATED';
 
       // Chống tự làm phiền (No Self-Notification khi bác sĩ tự cập nhật hồ sơ)
       if (
@@ -111,8 +112,8 @@ export async function fetchDoctorNavbarNotifications(doctorUserId?: string): Pro
         return;
       }
 
-      // Tuyệt đối ẩn dao động nhẹ; Bác sĩ chỉ nhận Cảnh báo Nguy cấp HOẶC Lịch khám / Lời mời
-      if (!isCritical && !isHouseInvite && !isAppointmentMsg && !isAssignmentMsg) {
+      // Tuyệt đối ẩn dao động nhẹ; Bác sĩ chỉ nhận Cảnh báo Nguy cấp, Lịch khám / Lời mời, Hồ sơ y tế hoặc Cập nhật ngưỡng
+      if (!isCritical && !isHouseInvite && !isAppointmentMsg && !isAssignmentMsg && !isMedicalRecordMsg && !isConfigUpdate) {
         return;
       }
 
@@ -214,10 +215,10 @@ export async function fetchDoctorNavbarNotifications(doctorUserId?: string): Pro
     });
   }
 
-  // 2. Bệnh nhân có trạng thái sinh hiệu NGUY CẤP (DANGER)
+  // 2. Bệnh nhân có trạng thái sinh hiệu NGUY CẤP (chỉ khi trực tuyến và có dữ liệu sinh hiệu)
   patList.forEach((p, idx) => {
     const pId = `pat_${p.id}`;
-    if (p.health_status === 'DANGER' && !unifiedList.some((item) => item.id === pId)) {
+    if (Boolean(p.is_online) && p.health_status === 'DANGER' && !unifiedList.some((item) => item.id === pId)) {
       unifiedList.push({
         id: pId,
         type: 'ALERT',

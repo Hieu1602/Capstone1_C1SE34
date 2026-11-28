@@ -297,8 +297,8 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
   isDarkMode,
   colors,
 }) => {
-  const isWarn = patient.health_status === 'WARNING';
-  const isDanger = patient.health_status === 'DANGER';
+  const isWarn = Boolean(patient.is_online) && patient.health_status === 'WARNING';
+  const isDanger = Boolean(patient.is_online) && patient.health_status === 'DANGER';
 
   const rawName = patient.name || (patient as any).full_name || '';
   const displayName = (() => {

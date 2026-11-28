@@ -379,7 +379,7 @@ export const DashboardPage: React.FC = () => {
   };
 
   const warningPatients = patients.filter(
-    (p) => p.health_status === 'WARNING' || p.health_status === 'DANGER'
+    (p) => Boolean(p.is_online) && (p.health_status === 'WARNING' || p.health_status === 'DANGER')
   );
   const toLocalYMD = (iso?: string): string => {
     if (!iso) return '';
@@ -459,10 +459,10 @@ export const DashboardPage: React.FC = () => {
           medNorm.includes(qNorm) ||
           mrCode.includes(qNorm);
       }
-      const isAlert = p.health_status === 'WARNING' || p.health_status === 'DANGER';
+      const isAlert = Boolean(p.is_online) && (p.health_status === 'WARNING' || p.health_status === 'DANGER');
       if (tableFilter === 'ALERT') return matchSearch && isAlert;
       if (tableFilter === 'STABLE') return matchSearch && !isAlert && Boolean(p.is_online);
-      if (tableFilter === 'OFFLINE') return matchSearch && !isAlert && !p.is_online;
+      if (tableFilter === 'OFFLINE') return matchSearch && !p.is_online;
       return matchSearch;
     });
   }, [patients, tableSearch, tableFilter]);
