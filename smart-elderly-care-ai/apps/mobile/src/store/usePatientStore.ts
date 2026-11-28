@@ -223,11 +223,20 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
 
     set({ isLoadingReminders: true });
     try {
-      const targetId = patientId || get().activePatientId || undefined;
+      const firstPatient = get().patientsList?.[0];
+      const targetId = patientId || get().activePatientId || firstPatient?.id || firstPatient?.elderly_id || undefined;
       const res = await remindersApi.getToday(targetId);
       if (res.data) {
         const rawMeds = Array.isArray(res.data.medications) ? res.data.medications : [];
-        const meds: ReminderItem[] = rawMeds.map((m: any) => ({
+        const rxKeys = new Set(
+          rawMeds
+            .filter((m: any) => String(m.id || '').startsWith('rx-med-'))
+            .map((m: any) => `${m.name}__${m.time}`)
+        );
+        const dedupedRaw = rawMeds.filter(
+          (m: any) => String(m.id || '').startsWith('rx-med-') || !rxKeys.has(`${m.name}__${m.time}`)
+        );
+        const meds: ReminderItem[] = dedupedRaw.map((m: any) => ({
           ...m,
           takenAt: m.takenAt || undefined,
           instructions: m.instructions !== undefined && m.instructions !== null ? String(m.instructions) : undefined,
@@ -330,7 +339,9 @@ export const usePatientStore = create<PatientState>()((set, get) => ({
 
     try {
       if (idOrName && !idOrName.startsWith('med-')) {
-        await remindersApi.toggle(idOrName, patientId || get().activePatientId || undefined);
+        const firstPatient = get().patientsList?.[0];
+        const targetId = patientId || get().activePatientId || firstPatient?.id || firstPatient?.elderly_id || undefined;
+        await remindersApi.toggle(idOrName, targetId, taken);
       }
     } catch (error) {
       console.warn('markMedicationTaken API toggle failed, rolling back optimistic update:', error);

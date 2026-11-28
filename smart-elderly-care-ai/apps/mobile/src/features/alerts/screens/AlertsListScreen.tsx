@@ -193,11 +193,16 @@ export default function AlertsListScreen({ navigation, route }: any) {
   const handleConfirmMedication = async (med: ReminderItem) => {
     const d = new Date();
     const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    await markMedicationTaken(med.id, true, timeStr);
-    Alert.alert(
-      'Xác nhận thành công',
-      `Đã ghi nhận người cao tuổi đã uống thuốc "${med.name}" lúc ${timeStr}. Trạng thái đã được đồng bộ toàn hệ thống.`
-    );
+    const targetPatientId = activePatientId || patientsList?.[0]?.id || patientsList?.[0]?.elderly_id || undefined;
+    try {
+      await markMedicationTaken(med.id, true, timeStr, targetPatientId);
+      Alert.alert(
+        'Xác nhận thành công',
+        `Đã ghi nhận người cao tuổi đã uống thuốc "${med.name}" lúc ${timeStr}. Trạng thái đã được đồng bộ toàn hệ thống.`
+      );
+    } catch {
+      Alert.alert('Lỗi', 'Không thể đồng bộ trạng thái đã uống lên máy chủ. Vui lòng thử lại.');
+    }
   };
 
   const handleSnoozeMedication = (med: ReminderItem) => {

@@ -69,20 +69,21 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
     }
   }, [route?.params?.patientId]);
 
-  useEffect(() => {
-    if (hasNoHouse) return;
-    if (selectedPatientId) {
-      fetchReminders(selectedPatientId);
-    } else {
-      fetchReminders();
-    }
-  }, [selectedPatientId, hasNoHouse]);
-
   const currentPatient = hasNoHouse ? null : (
     (patientsList || []).find(
       (p: any) => p.id == selectedPatientId || p.elderly_id == selectedPatientId
     ) || (patientsList && patientsList.length > 0 ? patientsList[0] : null)
   );
+  const effectivePatientId = currentPatient?.id || currentPatient?.elderly_id || selectedPatientId;
+
+  useEffect(() => {
+    if (hasNoHouse) return;
+    if (effectivePatientId) {
+      fetchReminders(effectivePatientId);
+    } else {
+      fetchReminders();
+    }
+  }, [effectivePatientId, hasNoHouse]);
 
   const patientDisplayName =
     currentPatient?.full_name ||
@@ -109,17 +110,27 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
   // Danh sách cữ thuốc thực tế đồng bộ từ Store
   const medications: ReminderItem[] = todayReminders?.medications || [];
 
-  // Danh sách lịch uống nước trong ngày
-  const [hydrationList, setHydrationList] = useState<HydrationSchedule[]>([]);
+  // Danh sách lịch uống nước trong ngày (đồng bộ từ backend)
+  const hydrationList: Array<HydrationSchedule & { id?: string }> = todayReminders?.hydrations || [];
   const [isAddHydrationVisible, setAddHydrationVisible] = useState(false);
   const [hydrationDraft, setHydrationDraft] = useState({ time: '08:00', amount: '250ml', note: 'Uống 1 ly nước ấm' });
 
-  const handleAddHydrationSlot = () => {
+  const handleAddHydrationSlot = async () => {
     const t = hydrationDraft.time.trim() || '08:00';
     const amt = hydrationDraft.amount.trim() || '250ml';
     const nt = hydrationDraft.note.trim() || 'Nhắc uống nước qua loa Hub';
-    setHydrationList((prev) => [...prev, { time: t, amount: amt, note: nt, done: false }].sort((a, b) => a.time.localeCompare(b.time)));
-    setAddHydrationVisible(false);
+    try {
+      await remindersApi.createHydration({
+        time: t,
+        amount: amt,
+        note: nt,
+        patient_id: effectivePatientId ? String(effectivePatientId) : undefined,
+      });
+      await fetchReminders(effectivePatientId);
+      setAddHydrationVisible(false);
+    } catch {
+      LocalizedAlert.alert('Lỗi', 'Không thể thêm mốc uống nước. Vui lòng thử lại.');
+    }
   };
 
   // State quản lý Kê đơn thuốc mới (Chuẩn nghiệp vụ lâm sàng)
@@ -198,13 +209,30 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
     );
   };
 
+  const SESSION_DEFAULT_TIMES: Record<'MORNING' | 'NOON' | 'EVENING', string> = {
+    MORNING: '08:00',
+    NOON: '12:00',
+    EVENING: '20:00',
+  };
+
   const handleToggleMedSession = (id: string, session: 'MORNING' | 'NOON' | 'EVENING') => {
     setMedList((prev) =>
       prev.map((m) => {
         if (m.id !== id) return m;
         const exists = m.sessions.includes(session);
         const next = exists ? m.sessions.filter((s) => s !== session) : [...m.sessions, session];
-        return { ...m, sessions: next.length > 0 ? next : [session] };
+        const finalSessions = next.length > 0 ? next : [session];
+        const nextSessionTimes = { ...(m.sessionTimes || {}) };
+        if (!exists && !nextSessionTimes[session]) {
+          nextSessionTimes[session] = SESSION_DEFAULT_TIMES[session];
+        }
+        const primarySession = finalSessions[0];
+        return {
+          ...m,
+          sessions: finalSessions,
+          sessionTimes: nextSessionTimes,
+          time: nextSessionTimes[primarySession] || SESSION_DEFAULT_TIMES[primarySession],
+        };
       })
     );
   };
@@ -229,6 +257,10 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
       LocalizedAlert.alert('Thiếu thông tin', 'Vui lòng nhập Tên bệnh / Chẩn đoán điều trị.');
       return;
     }
+    if (startDate && endDate && endDate < startDate) {
+      LocalizedAlert.alert('Ngày không hợp lệ', 'Ngày kết thúc không được nhỏ hơn ngày bắt đầu.');
+      return;
+    }
     const emptyMed = medList.find((m) => !m.name.trim());
     if (emptyMed) {
       LocalizedAlert.alert('Thiếu thông tin', 'Vui lòng nhập tên & hàm lượng cho tất cả các loại thuốc trong đơn.');
@@ -241,58 +273,21 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
         diagnosis: diagTrimmed,
         start_date: startDate,
         end_date: endDate,
-        patient_id: selectedPatientId ? String(selectedPatientId) : undefined,
-        medications: medList.map((m) => ({
-          name: m.name.trim(),
-          dose: m.dose.trim() || '1 viên',
-          sessions: m.sessions,
-          time: m.time || (m.sessions.includes('MORNING') ? '08:00' : m.sessions.includes('NOON') ? '12:00' : '20:00'),
-          instructions: m.instructions.trim(),
-        })),
-      });
-
-      // Tạo các item cục bộ hiển thị tức thì trên giao diện
-      const newItems: ReminderItem[] = [];
-      const sessionTimes: Record<string, string> = {
-        MORNING: '08:00',
-        NOON: '12:00',
-        EVENING: '20:00',
-      };
-      medList.forEach((m) => {
-        m.sessions.forEach((sess) => {
-          newItems.push({
-            id: `med_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        patient_id: effectivePatientId ? String(effectivePatientId) : undefined,
+        medications: medList.map((m) => {
+          const primarySession = m.sessions[0] || 'MORNING';
+          return {
             name: m.name.trim(),
-            time: m.time || sessionTimes[sess] || '08:00',
-            session: sess,
-            dose: `${m.dose.trim() || '1 viên'}${m.instructions ? ` (${m.instructions})` : ''}`,
-            purpose: diagTrimmed,
-            taken: false,
-          });
-        });
+            dose: m.dose.trim() || '1 viên',
+            sessions: m.sessions,
+            time: m.sessionTimes?.[primarySession] || SESSION_DEFAULT_TIMES[primarySession],
+            session_times: m.sessionTimes,
+            instructions: m.instructions.trim(),
+          };
+        }),
       });
 
-      usePatientStore.setState((state) => {
-        const curMeds = state.todayReminders?.medications || [];
-        const updatedMeds = [...curMeds, ...newItems];
-        return {
-          todayReminders: {
-            date: state.todayReminders?.date || new Date().toISOString().split('T')[0],
-            total_medications: updatedMeds.length,
-            completed_medications: updatedMeds.filter((it) => it.taken).length,
-            hub_voice_reminder_enabled: state.todayReminders?.hub_voice_reminder_enabled ?? true,
-            medications: updatedMeds,
-            meals: state.todayReminders?.meals || [],
-          },
-        };
-      });
-
-      // Refetch for the selected patient
-      if (selectedPatientId) {
-        fetchReminders(selectedPatientId);
-      } else {
-        fetchReminders?.();
-      }
+      await fetchReminders(effectivePatientId);
 
       setAddMedModalVisible(false);
       setDiagnosis('');
@@ -306,18 +301,92 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
           instructions: 'Sau khi ăn no',
         },
       ]);
-      const alertMsg = `Đã lưu đơn thuốc "${diagTrimmed}" gồm ${medList.length} loại thuốc cho ${patientDisplayName}.`;
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        window.alert(`Thành công 🎉\n\n${alertMsg}`);
-      } else {
-        LocalizedAlert.alert('Thành công 🎉', alertMsg);
-      }
+      LocalizedAlert.alert(
+        'Thành công 🎉',
+        `Đã lưu đơn thuốc "${diagTrimmed}" gồm ${medList.length} loại thuốc cho ${patientDisplayName}.`
+      );
     } catch (err) {
       console.warn('Lỗi khi lưu đơn thuốc:', err);
       LocalizedAlert.alert('Lỗi', 'Không thể lưu đơn thuốc lên máy chủ. Vui lòng thử lại.');
     } finally {
       setIsSavingPrescription(false);
     }
+  };
+
+  const [deletingRxId, setDeletingRxId] = useState<string | null>(null);
+
+  const handleDeletePrescription = (rx: any) => {
+    if (!canManageRecords || deletingRxId) {
+      if (!canManageRecords) {
+        LocalizedAlert.alert(
+          'Không có quyền thao tác',
+          'Tài khoản Thành viên chưa được cấp quyền "Quản lý Lịch thuốc & Bệnh án".'
+        );
+      }
+      return;
+    }
+    const rxIdStr = String(rx.id);
+    LocalizedAlert.alert(
+      'Xóa đơn thuốc điều trị',
+      `Bạn có chắc muốn xóa đơn thuốc "${rx.medication_name}" khỏi lịch nhắc nhở của ${patientDisplayName}?`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Xóa',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingRxId(rxIdStr);
+            try {
+              await remindersApi.deletePrescription(rxIdStr, effectivePatientId);
+              const rxTimes = new Set(Array.isArray(rx.schedule_times) ? rx.schedule_times : []);
+              const orphaned = medications.filter(
+                (m) =>
+                  !String(m.id).startsWith('rx-med-') &&
+                  m.name === rx.medication_name &&
+                  (rxTimes.size === 0 || rxTimes.has(m.time))
+              );
+              await Promise.all(
+                orphaned.map((m) => remindersApi.delete(m.id, effectivePatientId).catch(() => {}))
+              );
+              await fetchReminders(effectivePatientId);
+            } catch {
+              LocalizedAlert.alert('Lỗi', 'Không thể xóa đơn thuốc. Vui lòng thử lại.');
+            } finally {
+              setDeletingRxId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteMedication = (med: ReminderItem) => {
+    if (!canManageRecords) {
+      LocalizedAlert.alert(
+        'Không có quyền thao tác',
+        'Tài khoản Thành viên chưa được cấp quyền "Quản lý Lịch thuốc & Bệnh án".'
+      );
+      return;
+    }
+    LocalizedAlert.alert(
+      'Xóa cữ thuốc',
+      `Bạn có chắc muốn xóa cữ thuốc "${med.name}" (${med.time})?`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Xóa',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await remindersApi.delete(med.id, effectivePatientId);
+              await fetchReminders(effectivePatientId);
+            } catch {
+              LocalizedAlert.alert('Lỗi', 'Không thể xóa cữ thuốc. Vui lòng thử lại.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Đánh dấu hoàn thành hoặc hoàn tác một cữ thuốc
@@ -327,7 +396,7 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
     const nextState = !med.taken;
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    await markMedicationTaken(id, nextState, nextState ? timeStr : undefined, selectedPatientId);
+    await markMedicationTaken(id, nextState, nextState ? timeStr : undefined, effectivePatientId);
     if (nextState) {
       LocalizedAlert.alert('Đã xác nhận', `Đã đánh dấu uống thuốc "${med.name}" lúc ${timeStr} cho ${patientDisplayName}.`);
     } else {
@@ -335,10 +404,24 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
     }
   };
 
-  const toggleHydrationDone = (index: number) => {
-    setHydrationList((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, done: !item.done } : item))
-    );
+  const toggleHydrationDone = async (hydrationId?: string) => {
+    if (!hydrationId) return;
+    try {
+      await remindersApi.toggleHydration(hydrationId, effectivePatientId);
+      await fetchReminders(effectivePatientId);
+    } catch {
+      LocalizedAlert.alert('Lỗi', 'Không thể cập nhật trạng thái uống nước.');
+    }
+  };
+
+  const handleDeleteHydrationSlot = async (hydrationId?: string) => {
+    if (!hydrationId || !canManageRecords) return;
+    try {
+      await remindersApi.deleteHydration(hydrationId, effectivePatientId);
+      await fetchReminders(effectivePatientId);
+    } catch {
+      LocalizedAlert.alert('Lỗi', 'Không thể xóa mốc uống nước.');
+    }
   };
 
   const [speakerVolume, setSpeakerVolume] = useState<number>(80);
@@ -588,7 +671,9 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
               </View>
             </View>
 
-            {todayReminders.doctor_prescriptions.map((rx: any) => (
+            {todayReminders.doctor_prescriptions.map((rx: any) => {
+              const isDeleting = deletingRxId === String(rx.id);
+              return (
               <View
                 key={rx.id}
                 style={[
@@ -596,6 +681,7 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
                   {
                     backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
                     borderColor: borderCol,
+                    opacity: isDeleting ? 0.55 : 1,
                   },
                 ]}
               >
@@ -606,11 +692,32 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
                       {rx.doctor_name || 'Bác sĩ phụ trách'}
                     </LocalizedText>
                   </View>
-                  {rx.created_at ? (
-                    <LocalizedText style={{ fontSize: 10.5, color: textSub }}>
-                      {rx.created_at.split(' ')[0]}
-                    </LocalizedText>
-                  ) : null}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {rx.created_at ? (
+                      <LocalizedText style={{ fontSize: 10.5, color: textSub }}>
+                        {rx.created_at.split(' ')[0]}
+                      </LocalizedText>
+                    ) : null}
+                    {canManageRecords && (
+                      <TouchableOpacity
+                        onPress={() => handleDeletePrescription(rx)}
+                        disabled={Boolean(deletingRxId)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                      >
+                        {isDeleting ? (
+                          <>
+                            <ActivityIndicator size="small" color="#EF4444" />
+                            <LocalizedText style={{ fontSize: 11, color: '#EF4444', fontWeight: '600' }}>
+                              Đang xóa...
+                            </LocalizedText>
+                          </>
+                        ) : (
+                          <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
 
                 <LocalizedText style={[styles.doctorRxName, { color: textTitle }]}>
@@ -642,7 +749,8 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
                   </View>
                 )}
               </View>
-            ))}
+              );
+            })}
           </View>
         )}
         {/* Loa thông minh Hub */}
@@ -811,16 +919,26 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
                     <LocalizedText style={[styles.medItemPurpose, { color: textSub }]}>Mục đích: {med.purpose}</LocalizedText>
                   </View>
 
-                  <TouchableOpacity
-                    style={[styles.medCheckBtn, med.taken ? styles.medCheckBtnDone : styles.medCheckBtnPending]}
-                    onPress={() => toggleMedicationTaken(med.id)}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name={med.taken ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={med.taken ? '#10B981' : '#94A3B8'} />
-                    <LocalizedText style={[styles.medCheckBtnText, { color: med.taken ? '#10B981' : '#64748B' }]}>
-                      {med.taken ? 'Đã uống' : 'Chưa'}
-                    </LocalizedText>
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <TouchableOpacity
+                      style={[styles.medCheckBtn, med.taken ? styles.medCheckBtnDone : styles.medCheckBtnPending]}
+                      onPress={() => toggleMedicationTaken(med.id)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name={med.taken ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={med.taken ? '#10B981' : '#94A3B8'} />
+                      <LocalizedText style={[styles.medCheckBtnText, { color: med.taken ? '#10B981' : '#64748B' }]}>
+                        {med.taken ? 'Đã uống' : 'Chưa'}
+                      </LocalizedText>
+                    </TouchableOpacity>
+                    {canManageRecords && !String(med.id).startsWith('rx-med-') && (
+                      <TouchableOpacity
+                        onPress={() => handleDeleteMedication(med)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
               ))
             )}
@@ -865,14 +983,27 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
             <View style={styles.hydrationGrid}>
               {hydrationList.map((h, idx) => (
                 <TouchableOpacity
-                  key={idx}
+                  key={h.id || idx}
                   style={[styles.hydrationCard, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC', borderColor: h.done ? '#0284C7' : borderCol }]}
-                  onPress={() => toggleHydrationDone(idx)}
+                  onPress={() => toggleHydrationDone(h.id)}
                   activeOpacity={0.8}
                 >
                   <View style={styles.hydrationCardTop}>
                     <LocalizedText style={styles.hydrationTimeText}>{h.time}</LocalizedText>
-                    <Ionicons name={h.done ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={h.done ? '#0284C7' : '#94A3B8'} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name={h.done ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={h.done ? '#0284C7' : '#94A3B8'} />
+                      {canManageRecords && h.id && (
+                        <TouchableOpacity
+                          onPress={(e) => {
+                            e.stopPropagation?.();
+                            handleDeleteHydrationSlot(h.id);
+                          }}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        >
+                          <Ionicons name="close-circle-outline" size={16} color="#94A3B8" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </View>
                   <LocalizedText style={[styles.hydrationAmountText, { color: textTitle }]}>{h.amount}</LocalizedText>
                   <LocalizedText style={[styles.hydrationNoteText, { color: textSub }]} numberOfLines={2}>
@@ -1181,7 +1312,7 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
                         { key: 'EVENING' as const, label: 'Tối', defaultTime: '20:00' },
                       ]).map((s) => {
                         const isChosen = med.sessions.includes(s.key);
-                        const slotTime = med.sessionTimes?.[s.key] || (med.sessions.length === 1 && isChosen ? med.time : s.defaultTime);
+                        const slotTime = med.sessionTimes?.[s.key] || s.defaultTime;
                         return (
                           <View
                             key={s.key}
@@ -1671,9 +1802,12 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   doctorRxBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: '#EEF2FF',
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#C7D2FE',
