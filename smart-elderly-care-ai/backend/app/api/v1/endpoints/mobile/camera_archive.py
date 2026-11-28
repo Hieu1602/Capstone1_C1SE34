@@ -243,6 +243,29 @@ async def playback(recording_id: UUID, response: Response, download: bool = Fals
     return {"url": url, "expires_in": 300}
 
 
+@router.delete("/{recording_id}")
+async def delete_archive_recording(
+    recording_id: UUID,
+    context=Depends(viewer),
+    db: AsyncSession = Depends(get_db),
+):
+    recording = await db.get(CameraRecording, recording_id)
+    if not recording or recording.device_id != context[1][0].id:
+        raise HTTPException(404, "Recording not found")
+    try:
+        await asyncio.to_thread(
+            lambda: video_storage.client().delete_object(
+                Bucket=video_storage.bucket(),
+                Key=recording.object_key,
+            )
+        )
+    except (BotoCoreError, ClientError):
+        pass
+    await db.delete(recording)
+    await db.commit()
+    return {"deleted": str(recording_id)}
+
+
 async def _fetch_edge_bytes(device: Device, resource_path: str) -> bytes:
     from app.api.v1.endpoints.mobile.camera import client as cam_client, extra_sources
     dev_id = str(device.id)

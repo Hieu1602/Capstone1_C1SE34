@@ -3,6 +3,7 @@
  */
 import React, { useState, useEffect, useRef } from "react";
 import {
+    ActivityIndicator,
     Animated,
     Image,
     Linking,
@@ -146,6 +147,8 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
     const incidents = useAlertStore((state) => state.incidents);
     // Panel Talk/Call/Pan-Tilt đang mở; null để hiện Function Grid.
     const [panel, setPanel] = useState<CameraPanel>(null);
+    // Hiện/ẩn thanh kéo âm lượng khi nhấn nút loa trên QuickActionBar.
+    const [showVolumeControl, setShowVolumeControl] = useState(false);
     // Modal cài đặt hoặc danh sách Playback đang hiển thị.
     const [sheet, setSheet] = useState<DetailSheet>(route?.params?.tab === "playback" ? "recordings" : null);
     const [recordingUri, setRecordingUri] = useState("");
@@ -154,6 +157,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
     const [archiveFiles, setArchiveFiles] = useState<ArchivedRecording[]>([]);
     const [loadingArchive, setLoadingArchive] = useState(false);
     const [downloadingId, setDownloadingId] = useState<string | null>(null);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
     const recordingRequest = useRef(0);
     const archiveFade = useRef(new Animated.Value(1)).current;
     useEffect(() => {
@@ -233,6 +237,19 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
         }
     };
 
+    const deleteArchiveRecording = async (item: ArchivedRecording) => {
+        if (deletingId) return;
+        setDeletingId(item.id);
+        try {
+            await cameraApi.deleteArchive(item.id, selectedCameraId);
+            setArchiveFiles((prev) => prev.filter((f) => f.id !== item.id));
+        } catch {
+            LocalizedAlert.alert("Xóa tệp", "Không xóa được tệp. Vui lòng thử lại.");
+        } finally {
+            setDeletingId(null);
+        }
+    };
+
     const openRecording = async (file: string, download = false) => {
         const request = ++recordingRequest.current;
         if (download) setDownloadingId(file);
@@ -298,6 +315,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
     const openSheet = (next: DetailSheet) => {
         if (next === "recordings") {
             intercom.stop();
+            setShowVolumeControl(false);
             setArchiveTab("playback");
         }
         setSheet(next);
@@ -366,10 +384,15 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                 onQuality={setQuality}
                 onSelectCamera={setSelectedCameraId}
                 selectedCameraId={selectedCameraId}
+                showVolumeControl={!panel && showVolumeControl}
             />
             <QuickActionBar
-                recording={!!connection.recordings.active}
-                speakerEnabled={intercom.speakerEnabled}
+                recording={connection.isRecording}
+                speakerEnabled={
+                    showVolumeControl ||
+                    (intercom.speakerEnabled && intercom.speakerVolume > 0)
+                }
+                speakerMuted={intercom.speakerVolume === 0}
                 callSelected={panel === "call"}
                 onSnapshot={() => {
                     void connection.captureSnapshot();
@@ -377,10 +400,18 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                 onRecord={() => {
                     void connection.record();
                 }}
-                onSpeakerToggle={intercom.toggleSpeaker}
+                onSpeakerToggle={() => setShowVolumeControl((prev) => !prev)}
                 onCall={() => changePanel("call")}
             />
             <View style={styles.controls}>
+                {!panel && connection.isRecording && (
+                    <Text
+                        accessibilityLiveRegion="polite"
+                        style={[styles.feedback, { color: "#EF4444", fontWeight: "600" }]}
+                    >
+                        {`Đang quay video camera (${connection.recordingSeconds}s)… Bấm lại nút quay để dừng và lưu.`}
+                    </Text>
+                )}
                 {!panel &&
                     (intercom.state === "connecting" ||
                         intercom.state === "connected" ||
@@ -413,9 +444,13 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                         <FunctionGrid
                             onTalk={() => changePanel("talk")}
                             onPanTilt={() => changePanel("pan")}
-                            onAlarm={() => unsupported("Còi camera")}
+                            onAlarm={() => {
+                                void connection.toggleAlarm();
+                            }}
+                            alarmActive={connection.alarm === true}
                             onPrivacy={() => {
                                 intercom.stop();
+                                setShowVolumeControl(false);
                                 void connection.togglePrivacy();
                             }}
                             privacyActive={connection.privacy === true}
@@ -658,18 +693,23 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                     color={colors.textPrimary}
                                 />
                             </TouchableOpacity>
-                                {(["playback", "download"] as const).map(tab => (
+                                {(
+                                    [
+                                        { id: "playback", label: "Xem lại" },
+                                        { id: "download", label: "Tải xuống" },
+                                    ] as const
+                                ).map((tab) => (
                                     <TouchableOpacity
-                                        key={tab}
+                                        key={tab.id}
                                         activeOpacity={1}
                                         accessibilityRole="tab"
-                                        accessibilityState={{ selected: archiveTab === tab }}
-                                        accessibilityLabel={tab === "playback" ? "Playback" : "Download"}
-                                        style={[styles.archiveTab, archiveTab === tab && { borderBottomColor: colors.primary }]}
-                                        onPress={() => { setRecordingUri(""); setPreviewImageUri(""); recordingRequest.current++; setArchiveTab(tab); }}
+                                        accessibilityState={{ selected: archiveTab === tab.id }}
+                                        accessibilityLabel={tab.label}
+                                        style={[styles.archiveTab, archiveTab === tab.id && { borderBottomColor: colors.primary }]}
+                                        onPress={() => { setRecordingUri(""); setPreviewImageUri(""); recordingRequest.current++; setArchiveTab(tab.id); }}
                                     >
-                                        <Text style={[styles.archiveTabText, { color: archiveTab === tab ? colors.primary : colors.textSecondary }]}>
-                                            {tab === "playback" ? "Playback" : "Download"}
+                                        <Text style={[styles.archiveTabText, { color: archiveTab === tab.id ? colors.primary : colors.textSecondary }]}>
+                                            {tab.label}
                                         </Text>
                                     </TouchableOpacity>
                                 ))}
@@ -721,7 +761,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                                 const kindLabel = item.kind === "manual_snapshot"
                                                     ? "Ảnh tự chụp"
                                                     : item.kind === "manual_clip"
-                                                    ? `${Math.round(item.duration)}s • Video Playback`
+                                                    ? `${Math.round(item.duration)}s • Video đã quay`
                                                     : `${item.duration}s • Sự kiện AI`;
                                                 return (
                                                 <View
@@ -761,6 +801,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                                         accessibilityRole="button"
                                                         accessibilityLabel={`Tải xuống lưu trữ ${item.id}`}
                                                         style={styles.iconButton}
+                                                        disabled={deletingId === item.id}
                                                         onPress={() => { void openArchiveRecording(item, true); }}
                                                     >
                                                         <Ionicons
@@ -769,6 +810,23 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                                             color={colors.primary}
                                                         />
                                                     </TouchableOpacity>
+                                                    <TouchableOpacity
+                                                        accessibilityRole="button"
+                                                        accessibilityLabel={`Xóa lưu trữ ${item.id}`}
+                                                        style={styles.iconButton}
+                                                        disabled={deletingId === item.id}
+                                                        onPress={() => { void deleteArchiveRecording(item); }}
+                                                    >
+                                                        {deletingId === item.id ? (
+                                                            <ActivityIndicator size="small" color="#EF4444" />
+                                                        ) : (
+                                                            <Ionicons
+                                                                name="trash-outline"
+                                                                size={20}
+                                                                color="#EF4444"
+                                                            />
+                                                        )}
+                                                    </TouchableOpacity>
                                                 </View>
                                                 );
                                             })}
@@ -776,7 +834,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                                 <View style={styles.downloadEmpty}>
                                                     <Ionicons name="download-outline" size={60} color={colors.textMuted} />
                                                     <Text style={[styles.sectionTitle, textStyle]}>Chưa có ảnh hoặc video đã lưu</Text>
-                                                    <Text style={{ color: colors.textSecondary, textAlign: "center" }}>Ảnh chụp và video tải xuống từ Playback sẽ xuất hiện tại đây.</Text>
+                                                    <Text style={{ color: colors.textSecondary, textAlign: "center" }}>Ảnh chụp và video tải xuống từ Xem lại sẽ xuất hiện tại đây.</Text>
                                                 </View>
                                             )}
                                         </View>

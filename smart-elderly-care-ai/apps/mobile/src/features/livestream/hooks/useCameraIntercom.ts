@@ -32,6 +32,10 @@ export function useCameraIntercom(
     const [micEnabled, setMicEnabled] = useState(false);
     // Ý định nghe remote audio, đồng bộ với track và adapter phát.
     const [speakerEnabled, setSpeakerEnabled] = useState(false);
+    // Âm lượng nghe camera (0..100%), đồng bộ với speaker_volume trên backend.
+    const [speakerVolume, setSpeakerVolumeState] = useState(80);
+    const speakerVolumeRef = useRef(80);
+    const volumeSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     // Phiên sở hữu peer, track và request cần hủy khi đổi màn hình.
     const session = useRef<IntercomSession | null>(null);
     // Chế độ cập nhật đồng bộ để nhả nút PTT không phụ thuộc render tiếp theo.
@@ -138,6 +142,7 @@ export function useCameraIntercom(
                 setSpeakerEnabled(listen);
                 next.setMicEnabled(transmit);
                 next.setSpeakerEnabled(listen);
+                next.setSpeakerVolume(speakerVolumeRef.current / 100);
                 void next.start();
             } catch (failure) {
                 setState("error");
@@ -202,6 +207,25 @@ export function useCameraIntercom(
             return !enabled;
         });
     };
+    /**
+     * Điều chỉnh âm lượng phát lại (0..100%) và đồng bộ với loa nhắc nhở trên backend.
+     * @param volume - Phần trăm âm lượng từ 0 đến 100.
+     */
+    const setSpeakerVolume = useCallback(
+        (volume: number) => {
+            const clamped = Math.max(0, Math.min(100, Math.round(volume)));
+            speakerVolumeRef.current = clamped;
+            setSpeakerVolumeState(clamped);
+            session.current?.setSpeakerVolume(clamped / 100);
+            if (volumeSaveTimer.current) clearTimeout(volumeSaveTimer.current);
+            if (cameraApi.setSpeakerVolume) {
+                volumeSaveTimer.current = setTimeout(() => {
+                    cameraApi.setSpeakerVolume(clamped, cameraId).catch(() => {});
+                }, 250);
+            }
+        },
+        [cameraId],
+    );
 
     const prevCameraId = useRef(cameraId);
     useEffect(() => {
@@ -214,6 +238,29 @@ export function useCameraIntercom(
             stop();
     }, [connection.privacy, connection.status?.can_control, stop]);
     useEffect(() => {
+        let cancelled = false;
+        if (!cameraApi.getSpeakerVolume) return;
+        cameraApi
+            .getSpeakerVolume(cameraId)
+            .then((res) => {
+                const vol = res?.data?.volume;
+                if (!cancelled && typeof vol === "number") {
+                    const clamped = Math.max(0, Math.min(100, Math.round(vol)));
+                    speakerVolumeRef.current = clamped;
+                    setSpeakerVolumeState(clamped);
+                    session.current?.setSpeakerVolume(clamped / 100);
+                }
+            })
+            .catch(() => {});
+        return () => {
+            cancelled = true;
+            if (volumeSaveTimer.current) {
+                clearTimeout(volumeSaveTimer.current);
+                volumeSaveTimer.current = null;
+            }
+        };
+    }, [cameraId]);
+    useEffect(() => {
         if (prevCameraId.current && cameraId && prevCameraId.current !== cameraId) {
             stop();
         }
@@ -223,6 +270,17 @@ export function useCameraIntercom(
             session.current = null;
         };
     }, [cameraId, stop]);
+    useEffect(() => {
+        if (
+            available &&
+            cameraId &&
+            isIntercomSupported() &&
+            !modeRef.current &&
+            state === "idle"
+        ) {
+            begin("listen");
+        }
+    }, [available, cameraId, state, begin]);
 
     return {
         state,
@@ -230,11 +288,13 @@ export function useCameraIntercom(
         error,
         micEnabled,
         speakerEnabled,
+        speakerVolume,
         startTalk,
         endTalk,
         toggleCall,
         toggleMic,
         toggleSpeaker,
+        setSpeakerVolume,
         stop,
     };
 }

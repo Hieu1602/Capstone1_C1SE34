@@ -9,6 +9,7 @@ export interface IntercomPlatform {
     getMicrophone: () => Promise<MediaStream>;
     playRemote: (track: MediaStreamTrack) => void;
     mutePlayback: (muted: boolean) => void;
+    setPlaybackVolume?: (volume: number) => void;
     closePlayback: () => void;
 }
 
@@ -39,6 +40,8 @@ export class IntercomSession {
     private micEnabled = false;
     // Yêu cầu nghe audio, áp dụng cả cho track nhận sau này.
     private speakerEnabled = true;
+    // Âm lượng phát lại (0..1), áp dụng cho track nhận và adapter.
+    private speakerVolume = 1;
     // Giới hạn thời gian thiết lập kết nối audio.
     private timeout: ReturnType<typeof setTimeout> | undefined;
     // Giới hạn thời lượng cuộc gọi sau khi đã kết nối.
@@ -139,8 +142,10 @@ export class IntercomSession {
                 }
                 this.remoteTracks.push(event.track);
                 event.track.enabled = this.speakerEnabled;
+                (event.track as { _setVolume?: (v: number) => void })._setVolume?.(this.speakerVolume);
                 platform.playRemote(event.track);
                 platform.mutePlayback(!this.speakerEnabled);
+                platform.setPlaybackVolume?.(this.speakerVolume);
             });
             // Mở preview trước để go2rtc dành kết nối Tapo thứ hai cho backchannel.
             peer.addTransceiver("audio", { direction: "recvonly" });
@@ -207,6 +212,19 @@ export class IntercomSession {
     }
 
     /**
+     * Điều chỉnh âm lượng phát lại (0..1) cho remote track và adapter.
+     * @param volume - Mức âm lượng chuẩn hóa từ 0 đến 1.
+     */
+    setSpeakerVolume(volume: number) {
+        const clamped = Math.max(0, Math.min(1, volume));
+        this.speakerVolume = clamped;
+        this.remoteTracks.forEach((track) => {
+            (track as { _setVolume?: (v: number) => void })._setVolume?.(clamped);
+        });
+        this.options.platform.setPlaybackVolume?.(clamped);
+    }
+
+    /**
      * Đóng phiên một lần và giải phóng toàn bộ tài nguyên audio.
      * @returns Không có giá trị trả về.
      * @remarks Tác động: Hủy request SDP, timer, track, peer và phần tử phát; không tự phát sự kiện lỗi.
@@ -248,9 +266,12 @@ export class IntercomSession {
              * @param error - Có lỗi thì reject; bỏ trống để resolve.
              * @returns Không có giá trị trả về.
              */
+            let settleTimer: ReturnType<typeof setTimeout> | undefined;
             const finish = (error?: Error) => {
                 clearTimeout(timer);
+                clearTimeout(settleTimer);
                 peer.removeEventListener("icegatheringstatechange", changed);
+                peer.removeEventListener("icecandidate", onCandidate);
                 this.abort.signal.removeEventListener("abort", cancelled);
                 if (error) reject(error);
                 else resolve();
@@ -261,6 +282,15 @@ export class IntercomSession {
              */
             const changed = () => {
                 if (peer.iceGatheringState === "complete") finish();
+            };
+            const onCandidate = (event: Event & { candidate?: unknown }) => {
+                if (!event.candidate) {
+                    finish();
+                    return;
+                }
+                if (!settleTimer) {
+                    settleTimer = setTimeout(() => finish(), 800);
+                }
             };
             /**
              * Chuyển tín hiệu hủy phiên thành lỗi của bước gom ICE.
@@ -274,6 +304,7 @@ export class IntercomSession {
                 10000,
             );
             peer.addEventListener("icegatheringstatechange", changed);
+            peer.addEventListener("icecandidate", onCandidate);
             this.abort.signal.addEventListener("abort", cancelled, {
                 once: true,
             });

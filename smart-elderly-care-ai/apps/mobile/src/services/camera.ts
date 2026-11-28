@@ -77,6 +77,8 @@ export const cameraApi = {
         api.get<{ url: string; expires_in: number }>(`/camera/archive/${id}/playback`, {
             params: { ...sourceConfig(cameraId).params, download },
         }),
+    deleteArchive: (id: string, cameraId?: string) =>
+        api.delete<{ deleted: string }>(`/camera/archive/${id}`, sourceConfig(cameraId)),
     saveSnapshot: (cameraId?: string) =>
         api.post<{ id: string; kind: string; started_at: string; url: string }>(
             "/camera/archive/snapshot",
@@ -189,6 +191,10 @@ export const cameraApi = {
      */
     setMotion: (enabled: boolean, cameraId?: string) =>
         api.post("/camera/motion", { enabled }, sourceConfig(cameraId)),
+    alarm: (cameraId?: string) =>
+        api.get<{ enabled: boolean }>("/camera/alarm", sourceConfig(cameraId)),
+    setAlarm: (enabled: boolean, cameraId?: string) =>
+        api.post<{ enabled: boolean }>("/camera/alarm", { enabled }, sourceConfig(cameraId)),
     fallDetection: (cameraId?: string) =>
         api.get<FallDetectionStatus>(
             "/camera/fall-detection",
@@ -223,7 +229,9 @@ export const cameraApi = {
      * @remarks Tác động: Server chạy FFmpeg và tạo tệp MP4.
      */
     record: (cameraId?: string) =>
-        api.post("/camera/recordings", { seconds: 30 }, sourceConfig(cameraId)),
+        api.post<{ file?: string; status?: string }>("/camera/recordings", { seconds: 300 }, sourceConfig(cameraId)),
+    stopRecord: (cameraId?: string) =>
+        api.post<{ file?: string; status?: string }>("/camera/recordings/stop", {}, sourceConfig(cameraId)),
     /**
      * Trao đổi SDP audio qua backend đã xác thực.
      * @param cameraId - ID camera phải khớp camera được cấu hình.

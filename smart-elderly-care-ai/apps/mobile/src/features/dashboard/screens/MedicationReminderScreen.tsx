@@ -9,7 +9,8 @@
 //   4. Hiển thị trạng thái trống (Empty State) chuẩn xác khi chưa tạo lịch nhắc nhở.
 // ==============================================================================
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Switch, Modal, Pressable, ActivityIndicator, Platform, Image, PanResponder } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -430,13 +431,15 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
   const speakerVolumeRef = useRef(80);
   speakerVolumeRef.current = speakerVolume;
 
-  useEffect(() => {
-    cameraApi.getSpeakerVolume().then((res) => {
-      if (typeof res.data?.volume === 'number') {
-        setSpeakerVolume(res.data.volume);
-      }
-    }).catch(() => {});
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      cameraApi.getSpeakerVolume().then((res) => {
+        if (typeof res.data?.volume === 'number') {
+          setSpeakerVolume(res.data.volume);
+        }
+      }).catch(() => {});
+    }, [])
+  );
 
   const persistSpeakerVolume = (vol: number) => {
     cameraApi.setSpeakerVolume(vol).catch(() => {});
