@@ -27,6 +27,7 @@ class SmartCareBackgroundService : Service() {
     private var authToken: String? = null
     private var workerThread: Thread? = null
     private var isFirstPoll = true
+    private var hadActiveEmergency = false
 
     companion object {
         const val SERVICE_CHANNEL_ID = "smartcare_service_monitor_channel"
@@ -357,6 +358,7 @@ class SmartCareBackgroundService : Service() {
                         }
                     }
                     markIncidentsSeen(this, seenIds)
+                    hadActiveEmergency = hasActiveEmergency
                     return
                 }
 
@@ -395,10 +397,11 @@ class SmartCareBackgroundService : Service() {
                 }
                 markIncidentsSeen(this, ackedIds)
 
-                // Nếu không còn cảnh báo nguy hiểm nào chưa xử lý -> Tắt ngay chuông báo động
-                if (!hasActiveEmergency) {
+                // Chỉ tắt chuông khi trước đó có sự cố khẩn cấp đang kêu mà nay đã được xử lý hết trên server
+                if (hadActiveEmergency && !hasActiveEmergency) {
                     NativeNotificationModule.stopAlarm(this)
                 }
+                hadActiveEmergency = hasActiveEmergency
             }
         } catch (e: Exception) {
             // Lỗi mạng bình thường khi đang ngắt kết nối
@@ -441,7 +444,6 @@ class SmartCareBackgroundService : Service() {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("OPEN_INCIDENT_ID", incidentId)
             putExtra("OPEN_INCIDENT_TYPE", alertType)
-            putExtra("STOP_ALARM", true)
         }
 
         val pendingIntent = PendingIntent.getActivity(
