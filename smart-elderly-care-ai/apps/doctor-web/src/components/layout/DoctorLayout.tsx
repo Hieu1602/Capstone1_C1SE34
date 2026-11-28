@@ -126,6 +126,31 @@ export const DoctorLayout: React.FC = () => {
         return;
       }
 
+      // Đồng bộ acknowledge từ Mobile → Doctor Web: cập nhật store cục bộ, không cần re-fetch toàn bộ
+      if (event.type === 'INCIDENT_RESOLVED') {
+        const incId = event.incident_id || (event.data as { id?: string } | undefined)?.id;
+        if (incId) {
+          const store = useDoctorDataStore.getState();
+          const ackName = (event.data as { acknowledged_by_name?: string } | undefined)?.acknowledged_by_name;
+          const patchInc = (inc: import('../../types').Incident) =>
+            String(inc.id) === String(incId)
+              ? { ...inc, is_acknowledged: true, acknowledged_by_name: ackName }
+              : inc;
+          store.setIncidents(store.incidents.map(patchInc));
+          // shortcut: clinicalIncidents cũng cần patch; setIncidents chỉ update incidents
+          if (store.clinicalIncidents.some((i) => String(i.id) === String(incId))) {
+            useDoctorDataStore.setState({ clinicalIncidents: store.clinicalIncidents.map(patchInc) });
+          }
+        }
+        return;
+      }
+
+      // Đồng bộ "đọc tất cả" từ Mobile → Doctor Web
+      if (event.type === 'INCIDENTS_ACKNOWLEDGED') {
+        useDoctorDataStore.getState().fetchAllData(true);
+        return;
+      }
+
       if (event.type === 'ALERT_NEW' || event.message || event.heart_rate || event.spo2) {
         // Revalidate background data khi nhận cảnh báo lâm sàng mới
         useDoctorDataStore.getState().fetchAllData(true);
