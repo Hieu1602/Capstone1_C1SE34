@@ -75,7 +75,7 @@ export const DashboardPage: React.FC = () => {
 
   // Table search & filter
   const [tableSearch, setTableSearch] = useState('');
-  const [tableFilter, setTableFilter] = useState<'ALL' | 'ALERT' | 'STABLE'>('ALL');
+  const [tableFilter, setTableFilter] = useState<'ALL' | 'ALERT' | 'STABLE' | 'OFFLINE'>('ALL');
 
   // Mini Calendar month state & selected date (Local YYYY-MM-DD)
   const [selectedDate, setSelectedDate] = useState<string>(() => {
@@ -302,7 +302,8 @@ export const DashboardPage: React.FC = () => {
       }
       const isAlert = p.health_status === 'WARNING' || p.health_status === 'DANGER';
       if (tableFilter === 'ALERT') return matchSearch && isAlert;
-      if (tableFilter === 'STABLE') return matchSearch && !isAlert;
+      if (tableFilter === 'STABLE') return matchSearch && !isAlert && Boolean(p.is_online);
+      if (tableFilter === 'OFFLINE') return matchSearch && !isAlert && !p.is_online;
       return matchSearch;
     });
   }, [patients, tableSearch, tableFilter]);

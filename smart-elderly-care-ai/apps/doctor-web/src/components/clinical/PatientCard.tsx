@@ -74,10 +74,12 @@ export const PatientCard: React.FC<PatientCardProps> = ({
                 ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900/60'
                 : isWarning
                   ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-900/60'
-                  : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-900/60'
+                  : patient.is_online
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-900/60'
+                    : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
             }`}
           >
-            {isDanger ? 'Khẩn cấp' : isWarning ? 'Cần chú ý' : 'Ổn định'}
+            {isDanger ? 'Khẩn cấp' : isWarning ? 'Cần chú ý' : patient.is_online ? 'Ổn định' : 'Ngoại tuyến'}
           </span>
         </div>
 
@@ -112,7 +114,7 @@ export const PatientCard: React.FC<PatientCardProps> = ({
             <div>
               <p className="text-[10px] font-bold text-slate-400">Nhịp tim</p>
               <p className="text-xs font-black text-slate-800 dark:text-slate-100">
-                {patient.heart_rate ? `${patient.heart_rate} bpm` : '-- bpm'}
+                {patient.is_online && patient.heart_rate != null ? `${patient.heart_rate} bpm` : '-- bpm'}
               </p>
             </div>
           </div>
@@ -123,7 +125,7 @@ export const PatientCard: React.FC<PatientCardProps> = ({
             <div>
               <p className="text-[10px] font-bold text-slate-400">Nồng độ SpO2</p>
               <p className="text-xs font-black text-slate-800 dark:text-slate-100">
-                {patient.spo2 ? `${patient.spo2}%` : '--%'}
+                {patient.is_online && patient.spo2 != null ? `${patient.spo2}%` : '--%'}
               </p>
             </div>
           </div>

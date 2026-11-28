@@ -7,6 +7,7 @@ import { LocalizedText } from '../../../../i18n/LocalizedComponents';
 interface SmartbandHeroCardProps {
   pulseAnim: Animated.Value;
   deviceParam?: any;
+  batteryValue?: number | null;
   isSyncing: boolean;
   isFinding: boolean;
   onSyncNow: () => void;
@@ -19,6 +20,7 @@ interface SmartbandHeroCardProps {
 export const SmartbandHeroCard: React.FC<SmartbandHeroCardProps> = ({
   pulseAnim,
   deviceParam,
+  batteryValue,
   isSyncing,
   isFinding,
   onSyncNow,
@@ -27,6 +29,13 @@ export const SmartbandHeroCard: React.FC<SmartbandHeroCardProps> = ({
   colors = {},
   isDarkMode = false,
 }) => {
+  const resolvedBattery =
+    typeof batteryValue === 'number'
+      ? batteryValue
+      : typeof deviceParam?.battery_level === 'number'
+      ? deviceParam.battery_level
+      : null;
+
   return (
     <View style={[styles.heroCard, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.heroTopRow}>
@@ -99,10 +108,14 @@ export const SmartbandHeroCard: React.FC<SmartbandHeroCardProps> = ({
             <Ionicons name="battery-charging" size={18} color="#10B981" />
           </View>
           <LocalizedText style={[styles.specQuickVal, isDarkMode && { color: colors.textPrimary }]}>
-            {deviceParam?.battery_level !== null && deviceParam?.battery_level !== undefined ? `${deviceParam.battery_level}%` : '--'}
+            {resolvedBattery !== null ? `${resolvedBattery}%` : '--'}
           </LocalizedText>
           <LocalizedText style={[styles.specQuickLabel, isDarkMode && { color: colors.textSecondary }]}>
-            {deviceParam?.battery_level !== null && deviceParam?.battery_level !== undefined ? 'Pin (~5 ngày)' : 'Chưa kết nối'}
+            {resolvedBattery !== null
+              ? 'Pin (~5 ngày)'
+              : deviceParam?.status === 'online'
+              ? 'Chưa đọc pin'
+              : 'Chưa kết nối'}
           </LocalizedText>
         </View>
 

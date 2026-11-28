@@ -37,10 +37,11 @@ export interface DoctorPatientsHeaderProps {
   warningCount: number;
   dangerCount?: number;
   normalCount?: number;
+  offlineCount?: number;
   searchQuery: string;
-  filterTab: 'ALL' | 'DANGER' | 'WARNING' | 'NORMAL';
+  filterTab: 'ALL' | 'DANGER' | 'WARNING' | 'NORMAL' | 'OFFLINE';
   onChangeSearch: (val: string) => void;
-  onChangeFilter: (tab: 'ALL' | 'DANGER' | 'WARNING' | 'NORMAL') => void;
+  onChangeFilter: (tab: 'ALL' | 'DANGER' | 'WARNING' | 'NORMAL' | 'OFFLINE') => void;
   onRefresh: () => void;
   refreshing?: boolean;
   isDarkMode: boolean;
@@ -54,6 +55,7 @@ export const DoctorPatientsHeader: React.FC<DoctorPatientsHeaderProps> = ({
   warningCount,
   dangerCount = 0,
   normalCount = 0,
+  offlineCount = 0,
   searchQuery,
   filterTab,
   onChangeSearch,
@@ -71,6 +73,7 @@ export const DoctorPatientsHeader: React.FC<DoctorPatientsHeaderProps> = ({
     { key: 'DANGER' as const, label: 'Nguy cấp', count: dangerCount, color: '#EF4444', bg: '#FEF2F2' },
     { key: 'WARNING' as const, label: 'Cần chú ý', count: warningCount, color: '#F59E0B', bg: '#FFFBEB' },
     { key: 'NORMAL' as const, label: 'Ổn định', count: normalCount, color: '#10B981', bg: '#ECFDF5' },
+    { key: 'OFFLINE' as const, label: 'Ngoại tuyến', count: offlineCount, color: '#64748B', bg: '#F1F5F9' },
   ];
 
   return (
@@ -169,7 +172,7 @@ export const DoctorPatientsHeader: React.FC<DoctorPatientsHeaderProps> = ({
               style={[
                 styles.quickPill,
                 isSelected
-                  ? { backgroundColor: opt.color, borderColor: opt.color, shadowColor: opt.color, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3, elevation: 3 }
+                  ? { backgroundColor: opt.color, borderColor: opt.color }
                   : { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6', borderColor: 'transparent' },
               ]}
             >
@@ -310,9 +313,23 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
     return parts[parts.length - 1]?.[0]?.toUpperCase() || 'B';
   })();
 
-  const statusColor = isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#10B981';
-  const statusLabel = isDanger ? 'Nguy cấp' : isWarn ? 'Cần chú ý' : 'Ổn định';
-  const statusBg = isDanger ? '#FEE2E2' : isWarn ? '#FEF3C7' : '#ECFDF5';
+  const isOfflineUnmonitored = !isDanger && !isWarn && !patient.is_online;
+  const statusColor = isDanger ? '#EF4444' : isWarn ? '#F59E0B' : isOfflineUnmonitored ? '#94A3B8' : '#10B981';
+  const statusLabel = isDanger ? 'Nguy cấp' : isWarn ? 'Cần chú ý' : isOfflineUnmonitored ? 'Ngoại tuyến' : 'Ổn định';
+  const statusBg = isDanger
+    ? (isDarkMode ? '#7F1D1D66' : '#FEE2E2')
+    : isWarn
+      ? (isDarkMode ? '#78350F66' : '#FEF3C7')
+      : isOfflineUnmonitored
+        ? (isDarkMode ? '#334155' : '#F1F5F9')
+        : (isDarkMode ? '#064E3B66' : '#ECFDF5');
+  const statusTextColor = isDanger
+    ? (isDarkMode ? '#FCA5A5' : '#DC2626')
+    : isWarn
+      ? (isDarkMode ? '#FDE68A' : '#B45309')
+      : isOfflineUnmonitored
+        ? (isDarkMode ? '#CBD5E1' : '#475569')
+        : (isDarkMode ? '#6EE7B7' : '#047857');
 
   return (
     <View
@@ -368,7 +385,7 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
             </LocalizedText>
             <View style={[cardStyles.statusBadge, { backgroundColor: statusBg }]}>
               <View style={[cardStyles.statusBadgeDot, { backgroundColor: statusColor }]} />
-              <LocalizedText style={[cardStyles.statusBadgeText, { color: statusColor }]}>
+              <LocalizedText style={[cardStyles.statusBadgeText, { color: statusTextColor }]}>
                 {statusLabel}
               </LocalizedText>
             </View>
@@ -408,10 +425,10 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
           {/* Nhịp tim */}
           <View style={cardStyles.vitalItem}>
-            <Ionicons name="heart" size={14} color="#EF4444" style={{ marginRight: 4 }} />
+            <Ionicons name="heart" size={14} color={patient.is_online ? '#EF4444' : '#94A3B8'} style={{ marginRight: 4 }} />
             <View>
-              <LocalizedText style={[cardStyles.vitalValue, { color: colors.textPrimary }]}>
-                {patient.heart_rate != null ? `${patient.heart_rate} bpm` : '-- bpm'}
+              <LocalizedText style={[cardStyles.vitalValue, { color: patient.is_online ? colors.textPrimary : '#94A3B8' }]}>
+                {patient.is_online && patient.heart_rate != null ? `${patient.heart_rate} bpm` : '-- bpm'}
               </LocalizedText>
               <LocalizedText style={cardStyles.vitalSub}>Nhịp tim</LocalizedText>
             </View>
@@ -421,10 +438,10 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
 
           {/* SpO2 */}
           <View style={cardStyles.vitalItem}>
-            <Ionicons name="water" size={14} color="#0284C7" style={{ marginRight: 4 }} />
+            <Ionicons name="water" size={14} color={patient.is_online ? '#0284C7' : '#94A3B8'} style={{ marginRight: 4 }} />
             <View>
-              <LocalizedText style={[cardStyles.vitalValue, { color: colors.textPrimary }]}>
-                {patient.spo2 != null ? `${patient.spo2}%` : '--%'}
+              <LocalizedText style={[cardStyles.vitalValue, { color: patient.is_online ? colors.textPrimary : '#94A3B8' }]}>
+                {patient.is_online && patient.spo2 != null ? `${patient.spo2}%` : '--%'}
               </LocalizedText>
               <LocalizedText style={cardStyles.vitalSub}>SpO2</LocalizedText>
             </View>
@@ -433,15 +450,14 @@ export const DoctorPatientCard: React.FC<DoctorPatientCardProps> = ({
 
         {/* Mini Sparkline Chart & Online/Offline tag */}
         <View style={cardStyles.sparklineWrap}>
-          {!patient.is_online && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 2 }}>
-              <Ionicons name="cloud-offline-outline" size={11} color="#94A3B8" />
-              <LocalizedText style={{ fontSize: 9.5, color: '#94A3B8', fontWeight: '600' }}>Ngoại tuyến</LocalizedText>
+          {patient.is_online ? (
+            <MiniSparkline color={isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#0D9488'} />
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+              <Ionicons name="cloud-offline-outline" size={12} color="#94A3B8" />
+              <LocalizedText style={{ fontSize: 10.5, color: '#94A3B8', fontWeight: '600' }}>Ngoại tuyến</LocalizedText>
             </View>
           )}
-          <View style={!patient.is_online ? { opacity: 0.45 } : undefined}>
-            <MiniSparkline color={isDanger ? '#EF4444' : isWarn ? '#F59E0B' : '#0D9488'} />
-          </View>
         </View>
       </View>
 
@@ -746,10 +762,11 @@ const cardStyles = StyleSheet.create({
   },
   btnActionPrimary: {
     flex: 1.2,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 38,
+    minHeight: 44,
     borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 8,
@@ -760,10 +777,11 @@ const cardStyles = StyleSheet.create({
   },
   btnActionSecondary: {
     flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 38,
+    minHeight: 44,
     borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 8,

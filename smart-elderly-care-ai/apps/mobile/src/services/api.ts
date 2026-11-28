@@ -96,7 +96,36 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    config.headers['x-client-platform'] = 'MOBILE_APP';
+    config.headers['x-client-platform'] = Platform.OS === 'web' ? 'WEB' : 'MOBILE_APP';
+    if (Platform.OS !== 'web') {
+      try {
+        const pConst = (Platform.constants || {}) as Record<string, any>;
+        const brand = String(pConst.Brand || pConst.Manufacturer || '').trim();
+        const model = String(pConst.Model || Constants.deviceName || '').trim();
+        let phoneName = '';
+        if (Platform.OS === 'ios') {
+          phoneName = String(Constants.deviceName || pConst.systemName || 'iPhone').trim();
+        } else if (model) {
+          const brandCap = brand ? brand.charAt(0).toUpperCase() + brand.slice(1) : '';
+          phoneName =
+            brandCap && !model.toLowerCase().startsWith(brand.toLowerCase())
+              ? `${brandCap} ${model}`
+              : model;
+        } else if (brand) {
+          phoneName = brand.charAt(0).toUpperCase() + brand.slice(1);
+        }
+        if (phoneName) {
+          config.headers['x-device-name'] = encodeURIComponent(phoneName);
+        }
+        const osStr =
+          Platform.OS === 'android'
+            ? `Android ${pConst.Release || Platform.Version || ''}`.trim()
+            : `iOS ${Platform.Version || ''}`.trim();
+        if (osStr) {
+          config.headers['x-device-os'] = encodeURIComponent(osStr);
+        }
+      } catch {}
+    }
     try {
       const language = await AsyncStorage.getItem('smartcare-user-language');
       if (language === 'en' || language === 'vi') {

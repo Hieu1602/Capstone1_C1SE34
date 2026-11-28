@@ -48,7 +48,7 @@ export const PatientsPage: React.FC = () => {
   } = useDoctorDataStore();
 
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('search') || '');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'NORMAL' | 'WARNING' | 'ONLINE'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'NORMAL' | 'WARNING' | 'OFFLINE' | 'ONLINE'>('ALL');
 
   useEffect(() => {
     const qFromUrl = searchParams.get('search');
@@ -137,10 +137,10 @@ export const PatientsPage: React.FC = () => {
         avatar_url: cardData.avatar_url || undefined,
         house_name: cardData.house_name,
         house_address: cardData.house_address,
-        heart_rate: cardData.heart_rate,
-        spo2: cardData.spo2,
-        blood_pressure: cardData.blood_pressure,
-        skin_temp_max: cardData.skin_temp_max,
+        heart_rate: cardData.is_online ? cardData.heart_rate : null,
+        spo2: cardData.is_online ? cardData.spo2 : null,
+        blood_pressure: cardData.is_online ? cardData.blood_pressure : null,
+        skin_temp_max: cardData.is_online ? cardData.skin_temp_max : null,
         health_status: cardData.health_status,
         is_online: cardData.is_online,
         conditions: [],
@@ -268,8 +268,13 @@ export const PatientsPage: React.FC = () => {
       (p) => p.health_status === 'WARNING' || p.health_status === 'DANGER'
     ).length;
     const online = patients.filter((p) => p.is_online).length;
-    const normal = total - warning;
-    return { total, warning, online, normal };
+    const normal = patients.filter(
+      (p) => Boolean(p.is_online) && p.health_status !== 'WARNING' && p.health_status !== 'DANGER'
+    ).length;
+    const offline = patients.filter(
+      (p) => !p.is_online && p.health_status !== 'WARNING' && p.health_status !== 'DANGER'
+    ).length;
+    return { total, warning, online, normal, offline };
   }, [patients]);
 
   const filteredPatients = useMemo(() => {
@@ -298,8 +303,9 @@ export const PatientsPage: React.FC = () => {
       }
 
       const isWarn = p.health_status === 'WARNING' || p.health_status === 'DANGER';
-      if (statusFilter === 'NORMAL') return matchesSearch && !isWarn;
+      if (statusFilter === 'NORMAL') return matchesSearch && Boolean(p.is_online) && !isWarn;
       if (statusFilter === 'WARNING') return matchesSearch && isWarn;
+      if (statusFilter === 'OFFLINE') return matchesSearch && !p.is_online && !isWarn;
       if (statusFilter === 'ONLINE') return matchesSearch && Boolean(p.is_online);
       return matchesSearch;
     });
@@ -342,6 +348,7 @@ export const PatientsPage: React.FC = () => {
     { key: 'ALL' as const, label: `Tất cả (${stats.total})` },
     { key: 'WARNING' as const, label: `Cần lưu ý (${stats.warning})` },
     { key: 'NORMAL' as const, label: `Ổn định (${stats.normal})` },
+    { key: 'OFFLINE' as const, label: `Ngoại tuyến (${stats.offline})` },
     { key: 'ONLINE' as const, label: `Đang đeo Smartband (${stats.online})` },
   ];
 

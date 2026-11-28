@@ -7,9 +7,9 @@ import {
     Pressable,
     StatusBar,
     StyleSheet,
-    Text,
     View,
 } from "react-native";
+import { LocalizedText as Text } from "../../../i18n/LocalizedComponents";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import {

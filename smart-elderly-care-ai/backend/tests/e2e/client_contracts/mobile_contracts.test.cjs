@@ -316,3 +316,13 @@ test('T2-F13-05 Mobile family screens & api.ts have zero hardcoded numeric 1 or 
   const apiCode = parseTsAst(p('services/api.ts')).code;
   assert.equal(/completeAppointment:\s*\(\s*appointmentId:\s*string\s*\)\s*=>/.test(apiCode), false, 'mobile doctorApi.completeAppointment should accept optional clinicalNotes');
 });
+
+test('DoctorPatients requires is_online for Ổn định and labels offline patients Ngoại tuyến', () => {
+  const screenCode = parseTsAst(p('features/doctor/screens/DoctorPatientsScreen.tsx')).code;
+  const compCode = parseTsAst(p('features/doctor/components/DoctorPatientsComponents.tsx')).code;
+  assert.match(screenCode, /normalCount[\s\S]*?is_online/);
+  assert.match(screenCode, /filterTab === 'NORMAL'[\s\S]*?is_online/);
+  assert.match(compCode, /isOfflineUnmonitored[\s\S]*?'Ngoại tuyến'/);
+  assert.match(compCode, /patient\.is_online && patient\.heart_rate != null/);
+  assert.match(compCode, /patient\.is_online && patient\.spo2 != null/);
+});
