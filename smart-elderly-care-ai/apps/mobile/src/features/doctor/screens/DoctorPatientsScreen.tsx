@@ -137,7 +137,7 @@ export default function DoctorPatientsScreen() {
   const [selectedPatientForApt, setSelectedPatientForApt] = useState<PatientCardData | null>(null);
   const [scheduledAt, setScheduledAt] = useState('');
   const [examType, setExamType] = useState('Khám định kỳ');
-  const [visitType, setVisitType] = useState<'HOME_VISIT' | 'CLINIC'>('HOME_VISIT');
+  const [visitType, setVisitType] = useState<'HOME_VISIT' | 'CLINIC' | 'TELEHEALTH'>('HOME_VISIT');
   const [location, setLocation] = useState('');
   const [instructions, setInstructions] = useState('');
   const [enableSpeaker, setEnableSpeaker] = useState(true);

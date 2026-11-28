@@ -661,9 +661,21 @@ async def update_doctor_appointment(
             detail="Chỉ có thể cập nhật lịch khám ở trạng thái sắp tới (UPCOMING/CONFIRMED).",
         )
 
+    schedule_changed = (
+        appointment_in.scheduled_at is not None
+        or appointment_in.visit_type is not None
+        or appointment_in.location is not None
+    )
+    doc_actor_id = current_user.id if current_user else (existing.doctor_id or DEMO_DOCTOR_ID)
+
     try:
         updated = await crud_appointment.update_appointment(
-            db=db, appointment_id=apt_uuid, obj_in=appointment_in
+            db=db,
+            appointment_id=apt_uuid,
+            obj_in=appointment_in,
+            reset_confirmation=schedule_changed,
+            new_created_by=doc_actor_id if schedule_changed else None,
+            doctor_rescheduled=schedule_changed,
         )
     except ValueError as e:
         raise _map_appointment_value_error(e)
@@ -680,12 +692,29 @@ async def update_doctor_appointment(
         if updated.doctor
         else (current_user.full_name if current_user else "BS. Trần Văn Minh")
     )
-    doc_id = updated.doctor_id or (current_user.id if current_user else DEMO_DOCTOR_ID)
+    doc_id = updated.doctor_id or doc_actor_id
     scheduled_str = format_vn_dt(updated.scheduled_at, "thời gian đã hẹn")
     notify_title = f"🗓️ Lịch khám đã được dời bởi Bác sĩ {doctor_name}"
-    notify_msg = f"Bác sĩ {doctor_name} đã dời lịch khám cho {patient_name} sang {scheduled_str}."
+    notify_msg = (
+        f"Bác sĩ {doctor_name} đã dời lịch khám cho {patient_name} sang {scheduled_str}. "
+        "Gia đình vui lòng xác nhận lại lịch mới."
+    )
 
     try:
+        prior_stmt = select(Incident).where(
+            Incident.alert_type.in_(["APPOINTMENT_SCHEDULED", "APPOINTMENT_CONFIRMED"]),
+            Incident.is_acknowledged.is_(False),
+            or_(
+                Incident.notes == str(updated.id),
+                Incident.notes.contains(f"APT:{updated.id}"),
+            ),
+        )
+        prior_incidents = list((await db.execute(prior_stmt)).scalars().all())
+        for inc in prior_incidents:
+            inc.is_acknowledged = True
+            inc.acknowledged_at = datetime.now(timezone.utc)
+            inc.acknowledged_by = current_user.id if current_user else None
+
         device_id = await _resolve_device_id(db, target_house_id)
         inc_id_str = f"inc-rescheduled-{updated.id}"
         if device_id:
@@ -702,6 +731,9 @@ async def update_doctor_appointment(
             await db.refresh(resched_incident)
             inc_id_str = str(resched_incident.id)
             await _invalidate_incidents_cache_safe()
+        elif prior_incidents:
+            await db.commit()
+            await _invalidate_incidents_cache_safe()
 
         await broadcast_alert_ws(
             {
@@ -715,6 +747,7 @@ async def update_doctor_appointment(
                     "alert_type": "APPOINTMENT_RESCHEDULED",
                     "appointment_id": str(updated.id),
                     "patient_id": str(updated.patient_id),
+                    "created_by": str(doc_actor_id) if doc_actor_id else None,
                     "patient_name": patient_name,
                     "doctor_name": doctor_name,
                     "scheduled_at": updated.scheduled_at.isoformat() if updated.scheduled_at else None,
@@ -738,6 +771,139 @@ async def update_doctor_appointment(
         logger.warning("[NOTIFY] Lỗi đồng bộ dời lịch khám: %s", notify_err)
 
     return build_appointment_response(updated, patient_name=patient_name, doctor_name=doctor_name)
+
+
+@router.post(
+    "/appointments/{appointment_id}/confirm",
+    response_model=AppointmentResponse,
+    summary="Bác sĩ xác nhận lịch khám do gia đình đặt",
+)
+async def confirm_doctor_appointment(
+    appointment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Xác nhận lịch khám UPCOMING -> CONFIRMED và thông báo lại cho gia đình."""
+    try:
+        apt_uuid = uuid.UUID(appointment_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ID lịch khám không hợp lệ.")
+
+    existing = await crud_appointment.get_by_id(db, apt_uuid)
+    if not existing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy lịch khám yêu cầu.",
+        )
+    _check_doctor_access(current_user, existing)
+
+    try:
+        confirmed = await crud_appointment.confirm_appointment(db=db, appointment_id=apt_uuid)
+    except ValueError as e:
+        raise _map_appointment_value_error(e)
+
+    if not confirmed:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy lịch khám yêu cầu.",
+        )
+
+    patient_name, target_house_id = await _resolve_patient_info(db, confirmed.patient_id, confirmed.house_id)
+    doctor_name = (
+        confirmed.doctor.full_name
+        if confirmed.doctor
+        else (current_user.full_name if current_user else "Bác sĩ phụ trách")
+    )
+
+    try:
+        inc_stmt = select(Incident).where(
+            Incident.alert_type.in_(["APPOINTMENT_SCHEDULED", "APPOINTMENT_RESCHEDULED"]),
+            Incident.is_acknowledged.is_(False),
+            or_(
+                Incident.notes == str(confirmed.id),
+                Incident.notes.contains(f"APT:{confirmed.id}"),
+            ),
+        )
+        related_incidents = list((await db.execute(inc_stmt)).scalars().all())
+        resolved_inc_ids: list[str] = []
+        for inc in related_incidents:
+            inc.is_acknowledged = True
+            inc.acknowledged_at = datetime.now(timezone.utc)
+            inc.acknowledged_by = current_user.id if current_user else None
+            resolved_inc_ids.append(str(inc.id))
+
+        scheduled_str = format_vn_dt(confirmed.scheduled_at, "thời gian đã hẹn")
+        msg = f"✅ {doctor_name} đã xác nhận lịch khám của {patient_name} vào lúc {scheduled_str}."
+
+        dev_id = await _resolve_device_id(db, target_house_id)
+        confirm_inc_id = f"inc-doc-conf-{confirmed.id}"
+        notes_str = f"PATIENT:{confirmed.patient_id}|APPOINTMENT_CONFIRMED|APT:{confirmed.id}"
+        if dev_id:
+            confirm_inc = Incident(
+                device_id=dev_id,
+                alert_type="APPOINTMENT_CONFIRMED",
+                alert_level="LOW",
+                message=msg,
+                is_acknowledged=False,
+                notes=notes_str,
+            )
+            db.add(confirm_inc)
+            await db.commit()
+            await db.refresh(confirm_inc)
+            confirm_inc_id = str(confirm_inc.id)
+        elif related_incidents:
+            await db.commit()
+
+        await _invalidate_incidents_cache_safe()
+
+        await broadcast_alert_ws(
+            {
+                "type": "APPOINTMENT_CONFIRMED",
+                "alert_type": "APPOINTMENT_CONFIRMED",
+                "appointment_id": str(confirmed.id),
+                "patient_id": str(confirmed.patient_id),
+                "house_id": str(target_house_id) if target_house_id else None,
+                "confirmed_by_role": "doctor",
+                "data": {
+                    "id": confirm_inc_id,
+                    "alert_type": "APPOINTMENT_CONFIRMED",
+                    "appointment_id": str(confirmed.id),
+                    "patient_id": str(confirmed.patient_id),
+                    "house_id": str(target_house_id) if target_house_id else None,
+                    "confirmed_by_role": "doctor",
+                    "doctor_id": str(confirmed.doctor_id) if confirmed.doctor_id else None,
+                    "created_by": str(current_user.id) if current_user else None,
+                    "message": msg,
+                    "notes": notes_str,
+                },
+            }
+        )
+        for resolved_id in resolved_inc_ids:
+            await broadcast_alert_ws(
+                {
+                    "type": "INCIDENT_RESOLVED",
+                    "incident_id": resolved_id,
+                    "appointment_id": str(confirmed.id),
+                    "data": {"id": resolved_id, "is_acknowledged": True},
+                }
+            )
+        if target_house_id:
+            await send_appointment_fcm(
+                db=db,
+                target_house_id=target_house_id,
+                doctor_id=None,
+                title="✅ Bác sĩ đã xác nhận lịch khám",
+                body=msg,
+                data={
+                    "type": "APPOINTMENT_CONFIRMED",
+                    "appointment_id": str(confirmed.id),
+                    "patient_id": str(confirmed.patient_id),
+                },
+            )
+    except Exception as notify_err:
+        logger.warning("[NOTIFY] Lỗi đồng bộ bác sĩ xác nhận lịch: %s", notify_err)
+
+    return build_appointment_response(confirmed, patient_name=patient_name, doctor_name=doctor_name)
 
 
 @router.post(

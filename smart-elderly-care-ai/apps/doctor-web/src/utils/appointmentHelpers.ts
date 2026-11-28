@@ -45,10 +45,34 @@ export function parseAppointmentNotes(clinicalNotes?: string | null): {
 } {
   const raw = clinicalNotes || '';
   const isFamilyConfirmedByNote = raw.includes(CONFIRM_RECEPTION_TAG);
-  const cleanNotes = isFamilyConfirmedByNote
-    ? raw.replace(/\[ĐÃ XÁC NHẬN ĐÓN TIẾP\]\s*/g, '').trim()
-    : raw.trim();
+  const cleanNotes = raw
+    .replace(/\[ĐÃ XÁC NHẬN ĐÓN TIẾP\]\s*/g, '')
+    .replace(/\[Yêu cầu lịch khám\]\s*/gi, '')
+    .replace(/\[BS dời lịch\]\s*/g, '')
+    .trim();
   return { isFamilyConfirmedByNote, cleanNotes };
+}
+
+export function getAppointmentConfirmationBadge(apt: {
+  status?: string | null;
+  clinical_notes?: string | null;
+  created_by?: string | null;
+  doctor_id?: string | null;
+}): {
+  isFamilyRequested: boolean;
+  isConfirmed: boolean;
+  confirmedLabel: string;
+  pendingLabel: string;
+} {
+  const { isFamilyConfirmedByNote } = parseAppointmentNotes(apt.clinical_notes);
+  const isFamilyRequested = Boolean(apt.created_by && apt.doctor_id && String(apt.created_by) !== String(apt.doctor_id));
+  const isConfirmed = isFamilyConfirmedByNote || apt.status === 'CONFIRMED';
+  return {
+    isFamilyRequested,
+    isConfirmed,
+    confirmedLabel: isFamilyRequested ? 'Bác sĩ đã xác nhận lịch' : 'Gia đình đã xác nhận đón tiếp',
+    pendingLabel: isFamilyRequested ? 'Gia đình đặt — Chờ xác nhận' : 'Chờ gia đình xác nhận',
+  };
 }
 
 export function isHomeVisitType(visitType?: string | null): boolean {

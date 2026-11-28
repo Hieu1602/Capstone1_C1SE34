@@ -19,7 +19,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import type { AppointmentItem } from '../../types';
-import { isAppointmentOverdue, parseAppointmentNotes } from '../../utils/appointmentHelpers';
+import { getAppointmentConfirmationBadge, isAppointmentOverdue, parseAppointmentNotes } from '../../utils/appointmentHelpers';
 
 interface DayAppointmentsModalProps {
   isOpen: boolean;
@@ -157,12 +157,14 @@ export const DayAppointmentsModal: React.FC<DayAppointmentsModalProps> = ({
                 <span className="text-[11px] text-slate-400">Sắp xếp theo khung giờ</span>
               </div>
 
-              {appointments.map((apt) => {
+              {[...appointments]
+                .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
+                .map((apt) => {
                 const isCompleted = apt.status === 'COMPLETED';
                 const isCancelled = apt.status === 'CANCELLED';
                 const isOverdue = isAppointmentOverdue(apt.scheduled_at, apt.status);
-                const { isFamilyConfirmedByNote, cleanNotes } = parseAppointmentNotes(apt.clinical_notes);
-                const isFamilyConfirmed = isFamilyConfirmedByNote || apt.status === 'CONFIRMED';
+                const { cleanNotes } = parseAppointmentNotes(apt.clinical_notes);
+                const { isConfirmed: isFamilyConfirmed, confirmedLabel } = getAppointmentConfirmationBadge(apt);
 
                 // Format thời gian
                 const timeStr = (() => {
@@ -258,7 +260,7 @@ export const DayAppointmentsModal: React.FC<DayAppointmentsModalProps> = ({
                           {isFamilyConfirmed && (
                             <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800/60 dark:text-emerald-300">
                               <CheckCircle2 className="h-3 w-3" />
-                              <span>Gia đình đã xác nhận đón tiếp</span>
+                              <span>{confirmedLabel}</span>
                             </span>
                           )}
                           {cleanNotes && (

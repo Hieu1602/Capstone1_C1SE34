@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { PrescriptionItem, AppointmentItem, AnalyticsData } from '../../types';
 import { doctorApi } from '../../services/api';
-import { parseAppointmentNotes } from '../../utils/appointmentHelpers';
+import { getAppointmentConfirmationBadge, parseAppointmentNotes } from '../../utils/appointmentHelpers';
 import { VitalsTrendChart, VitalMetricKey } from './VitalsTrendChart';
 import {
   VitalFilterState,
@@ -765,8 +765,8 @@ export const PatientDrawerAppointmentsTab: React.FC<PatientDrawerAppointmentsTab
       .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
       .map((apt) => {
         const badge = APPOINTMENT_STATUS_BADGE[apt.status] ?? DEFAULT_APPOINTMENT_BADGE;
-        const { isFamilyConfirmedByNote, cleanNotes } = parseAppointmentNotes(apt.clinical_notes);
-        const isFamilyConfirmed = isFamilyConfirmedByNote || apt.status === 'CONFIRMED';
+        const { cleanNotes } = parseAppointmentNotes(apt.clinical_notes);
+        const { isConfirmed: isFamilyConfirmed, confirmedLabel, pendingLabel } = getAppointmentConfirmationBadge(apt);
         return (
           <div
             key={apt.id}
@@ -780,11 +780,15 @@ export const PatientDrawerAppointmentsTab: React.FC<PatientDrawerAppointmentsTab
                 {badge.label}
               </span>
             </div>
-            {isFamilyConfirmed && (
+            {isFamilyConfirmed ? (
               <span className="mt-1 inline-block rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800/60 dark:text-emerald-300">
-                Gia đình đã xác nhận đón tiếp
+                {confirmedLabel}
               </span>
-            )}
+            ) : apt.status === 'UPCOMING' ? (
+              <span className="mt-1 inline-block rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950/40 dark:border-amber-800/60 dark:text-amber-300">
+                {pendingLabel}
+              </span>
+            ) : null}
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               {new Date(apt.scheduled_at).toLocaleString('vi-VN')} • {apt.location}
             </p>

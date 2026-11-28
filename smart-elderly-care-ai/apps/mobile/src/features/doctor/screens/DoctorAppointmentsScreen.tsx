@@ -1,7 +1,7 @@
 // DoctorAppointmentsScreen.tsx
 // Quản lý toàn bộ lịch hẹn khám, tái khám định kỳ & đồng bộ lịch phát loa nhắc nhở cho Bác sĩ gia đình
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -28,6 +28,7 @@ import {
   isTodayLocal,
   isAppointmentHappeningNow,
   isAppointmentOverdue,
+  stripDoctorAppointmentTags,
 } from '../utils/dateUtils';
 
 import {
@@ -70,7 +71,7 @@ export default function DoctorAppointmentsScreen() {
   const [patientName, setPatientName] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
   const [examType, setExamType] = useState('');
-  const [visitType, setVisitType] = useState<'HOME_VISIT' | 'CLINIC'>('HOME_VISIT');
+  const [visitType, setVisitType] = useState<'HOME_VISIT' | 'CLINIC' | 'TELEHEALTH'>('HOME_VISIT');
   const [location, setLocation] = useState('');
   const [instructions, setInstructions] = useState('');
   const [enableSpeaker, setEnableSpeaker] = useState(true);
@@ -88,7 +89,12 @@ export default function DoctorAppointmentsScreen() {
   const [targetCompleteApt, setTargetCompleteApt] = useState<AppointmentItem | null>(null);
   const [isCompleting, setIsCompleting] = useState(false);
 
+  const isFetchingRef = useRef(false);
+  const wsRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const fetchAppointments = useCallback(async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     try {
       const [, patRes] = await Promise.allSettled([
         fetchStoreAppointments(),
@@ -98,23 +104,27 @@ export default function DoctorAppointmentsScreen() {
         setPatients(patRes.value.data);
       }
     } catch {} finally {
+      isFetchingRef.current = false;
       setRefreshing(false);
     }
   }, [fetchStoreAppointments]);
 
   useEffect(() => {
-    fetchAppointments();
     alertsWS.connect();
     const unsub = alertsWS.subscribe((event: any) => {
       const t = String(event?.alert_type || event?.type || '');
       if (t.startsWith('APPOINTMENT_') || t === 'INCIDENT_RESOLVED') {
-        fetchAppointments();
+        if (wsRefreshTimerRef.current) clearTimeout(wsRefreshTimerRef.current);
+        wsRefreshTimerRef.current = setTimeout(() => {
+          fetchAppointments();
+        }, 350);
       }
     });
     const timer = setInterval(() => setNowMs(Date.now()), 30000);
     return () => {
       unsub();
       clearInterval(timer);
+      if (wsRefreshTimerRef.current) clearTimeout(wsRefreshTimerRef.current);
     };
   }, [fetchAppointments]);
 
@@ -175,11 +185,12 @@ export default function DoctorAppointmentsScreen() {
     setPatientName(apt.patient_name);
     setScheduledAt(apt.scheduled_at);
 
-    // Strip family confirmation prefix and extract [examType] instructions if exam_type/instructions missing
-    const rawNotes = (apt.clinical_notes || '').replace(/\[ĐÃ XÁC NHẬN ĐÓN TIẾP\]\s*/g, '').trim();
+    const rawNotes = stripDoctorAppointmentTags(apt.clinical_notes);
     const tagMatch = rawNotes.match(/^\[([^\]]+)\]\s*(.*)$/s);
     const derivedExam = apt.exam_type || (tagMatch ? tagMatch[1].trim() : rawNotes) || 'Khám tổng quát định kỳ';
-    const derivedInst = apt.instructions ?? (tagMatch ? tagMatch[2].trim() : '');
+    const derivedInst =
+      stripDoctorAppointmentTags(apt.instructions) ||
+      (tagMatch ? tagMatch[2].trim() : rawNotes && rawNotes !== derivedExam ? rawNotes : '');
 
     setExamType(derivedExam);
     setVisitType((apt.visit_type as any) || 'HOME_VISIT');
@@ -220,8 +231,6 @@ export default function DoctorAppointmentsScreen() {
       }
       const chosenPatientName = patientName.trim() || patients.find((p) => String(p.id) === String(chosenPatientId))?.name || 'Bệnh nhân';
 
-      const editingTarget = editingAptId ? appointments.find((a) => a.id === editingAptId) : null;
-      const hadFamilyConfirmTag = Boolean(editingTarget?.clinical_notes?.includes('[ĐÃ XÁC NHẬN ĐÓN TIẾP]'));
       const baseNotes = instructions.trim() ? `[${examType.trim()}] ${instructions.trim()}` : examType.trim();
 
       const payload: any = {
@@ -231,7 +240,7 @@ export default function DoctorAppointmentsScreen() {
         visit_type: visitType,
         exam_type: examType.trim(),
         location: location.trim() || 'Tại nhà bệnh nhân',
-        clinical_notes: hadFamilyConfirmTag ? `[ĐÃ XÁC NHẬN ĐÓN TIẾP] ${baseNotes}` : baseNotes,
+        clinical_notes: baseNotes,
         instructions: instructions.trim(),
         enable_speaker_reminder: enableSpeaker,
         recurrence_pattern: recurrencePattern,
@@ -381,6 +390,19 @@ export default function DoctorAppointmentsScreen() {
     }
   };
 
+  const handleConfirmAppointment = async (aptId: string) => {
+    try {
+      await doctorApi.confirmAppointment(aptId);
+      updateAppointmentStatus(aptId, 'CONFIRMED');
+      fetchAppointments();
+      if (Platform.OS !== 'web') {
+        LocalizedAlert.alert('Đã xác nhận', 'Đã xác nhận lịch khám và gửi thông báo tới gia đình.');
+      }
+    } catch (err: any) {
+      LocalizedAlert.alert('Lỗi', err?.response?.data?.detail || 'Không thể xác nhận lịch khám lúc này.');
+    }
+  };
+
   const handleViewPatient = (pId: string) => {
     navigation.navigate('DoctorPatientDetail', { patientId: pId });
   };
@@ -390,18 +412,20 @@ export default function DoctorAppointmentsScreen() {
   const completedCount = appointments.filter((a) => a.status === 'COMPLETED').length;
   const cancelledCount = appointments.filter((a) => a.status === 'CANCELLED').length;
 
-  const filteredAppointments = appointments.filter((a) => {
-    if (filterTab === 'UPCOMING' && a.status !== 'UPCOMING' && a.status !== 'CONFIRMED') return false;
-    if (filterTab === 'COMPLETED' && a.status !== 'COMPLETED') return false;
-    if (filterTab === 'CANCELLED' && a.status !== 'CANCELLED') return false;
+  const filteredAppointments = appointments
+    .filter((a) => {
+      if (filterTab === 'UPCOMING' && a.status !== 'UPCOMING' && a.status !== 'CONFIRMED') return false;
+      if (filterTab === 'COMPLETED' && a.status !== 'COMPLETED') return false;
+      if (filterTab === 'CANCELLED' && a.status !== 'CANCELLED') return false;
 
-    if (selectedWeekDate) {
-      if (!a.scheduled_at || !isSameLocalDay(a.scheduled_at, selectedWeekDate)) {
-        return false;
+      if (selectedWeekDate) {
+        if (!a.scheduled_at || !isSameLocalDay(a.scheduled_at, selectedWeekDate)) {
+          return false;
+        }
       }
-    }
-    return true;
-  });
+      return true;
+    })
+    .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
 
   return (
     <View style={[styles.container, { backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC' }]}>
@@ -463,7 +487,7 @@ export default function DoctorAppointmentsScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {loading && !refreshing && (
+        {loading && appointments.length === 0 && !refreshing && (
           <ActivityIndicator size="small" color="#2563EB" style={{ marginVertical: 20 }} />
         )}
 
@@ -488,6 +512,7 @@ export default function DoctorAppointmentsScreen() {
               isCurrentOrNext={(apt.status === 'UPCOMING' || apt.status === 'CONFIRMED') && isAppointmentHappeningNow(apt.scheduled_at, nowMs)}
               isOverdue={isAppointmentOverdue(apt.scheduled_at, apt.status, nowMs)}
               onViewPatient={handleViewPatient}
+              onConfirm={handleConfirmAppointment}
               onMarkCompleted={handleOpenCompleteModal}
               onEdit={handleOpenEditModal}
               onCancel={handleOpenCancelModal}

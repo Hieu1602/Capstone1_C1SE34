@@ -23,26 +23,36 @@ const sortAppointmentsAsc = (items: AppointmentItem[]): AppointmentItem[] =>
     (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
   );
 
+let _inFlightFetch: Promise<AppointmentItem[]> | null = null;
+
 export const useDoctorAppointmentsStore = create<DoctorAppointmentsState>((set, get) => ({
   appointments: [],
   loading: false,
   lastFetchedAt: null,
 
   fetchAppointments: async () => {
-    set({ loading: true });
-    try {
-      const res = await doctorApi.getAppointments();
-      if (res?.data && Array.isArray(res.data)) {
-        const sorted = sortAppointmentsAsc(res.data);
-        set({ appointments: sorted, lastFetchedAt: Date.now() });
-        return sorted;
+    if (_inFlightFetch) return _inFlightFetch;
+    const isInitialLoad = get().appointments.length === 0;
+    if (isInitialLoad) set({ loading: true });
+
+    _inFlightFetch = (async () => {
+      try {
+        const res = await doctorApi.getAppointments();
+        if (res?.data && Array.isArray(res.data)) {
+          const sorted = sortAppointmentsAsc(res.data);
+          set({ appointments: sorted, lastFetchedAt: Date.now() });
+          return sorted;
+        }
+        return get().appointments;
+      } catch {
+        return get().appointments;
+      } finally {
+        _inFlightFetch = null;
+        if (isInitialLoad || get().loading) set({ loading: false });
       }
-      return get().appointments;
-    } catch {
-      return get().appointments;
-    } finally {
-      set({ loading: false });
-    }
+    })();
+
+    return _inFlightFetch;
   },
 
   setAppointments: (items) => {

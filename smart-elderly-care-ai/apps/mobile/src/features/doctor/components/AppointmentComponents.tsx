@@ -16,6 +16,7 @@ import {
   getLocalToday,
   getCleanAppointmentTitle,
   isAppointmentFamilyConfirmed,
+  stripDoctorAppointmentTags,
 } from '../utils/dateUtils';
 
 // =============================================================
@@ -507,6 +508,7 @@ export interface AppointmentCardProps {
   isCurrentOrNext?: boolean;
   isOverdue?: boolean;
   onViewPatient: (patientId: string) => void;
+  onConfirm?: (aptId: string) => void;
   onMarkCompleted: (aptId: string) => void;
   onEdit: (apt: AppointmentItem) => void;
   onCancel?: (apt: AppointmentItem) => void;
@@ -522,6 +524,7 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
   isCurrentOrNext = false,
   isOverdue = false,
   onViewPatient,
+  onConfirm,
   onMarkCompleted,
   onEdit,
   onCancel,
@@ -532,11 +535,12 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
   const isUpcoming = apt.status === 'UPCOMING' || apt.status === 'CONFIRMED';
   const isCompleted = apt.status === 'COMPLETED';
   const isCancelled = apt.status === 'CANCELLED';
+  const isFamilyRequested = Boolean(apt.created_by && apt.doctor_id && String(apt.created_by) !== String(apt.doctor_id));
   const isFamilyConfirmed = isAppointmentFamilyConfirmed(apt);
 
-  const cleanInstructions = (apt.instructions || '')
-    .replace(/\[ĐÃ XÁC NHẬN ĐÓN TIẾP\]/g, '')
-    .trim();
+  const cleanInstructions = stripDoctorAppointmentTags(
+    apt.instructions || (isFamilyRequested ? apt.clinical_notes : '')
+  );
   const initial = (apt.patient_name || 'B').trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'B';
   const isHomeVisit = apt.visit_type === 'HOME_VISIT' || apt.exam_type === 'HOME_VISIT';
 
@@ -618,7 +622,7 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
           <View style={styles.cardTopRow}>
             <View style={styles.examTypeHeader}>
               <Ionicons
-                name={isHomeVisit ? 'home' : 'business'}
+                name={isHomeVisit ? 'home' : apt.visit_type === 'TELEHEALTH' ? 'videocam' : 'business'}
                 size={14}
                 color="#2563EB"
                 style={{ marginRight: 5 }}
@@ -642,10 +646,22 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
                   {
                     backgroundColor: isUpcoming
                       ? isOverdue
-                        ? '#FFF7ED'
+                        ? isDarkMode
+                          ? '#7C2D1266'
+                          : '#FFF7ED'
+                        : apt.status === 'CONFIRMED'
+                        ? isDarkMode
+                          ? '#064E3B66'
+                          : '#D1FAE5'
+                        : isDarkMode
+                        ? '#78350F55'
                         : '#FEF3C7'
                       : isCompleted
-                      ? '#D1FAE5'
+                      ? isDarkMode
+                        ? '#064E3B66'
+                        : '#D1FAE5'
+                      : isDarkMode
+                      ? '#7F1D1D55'
                       : '#FEE2E2',
                   },
                 ]}
@@ -656,15 +672,35 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
                     {
                       color: isUpcoming
                         ? isOverdue
-                          ? '#C2410C'
+                          ? isDarkMode
+                            ? '#FDBA74'
+                            : '#C2410C'
+                          : apt.status === 'CONFIRMED'
+                          ? isDarkMode
+                            ? '#34D399'
+                            : '#059669'
+                          : isDarkMode
+                          ? '#FBBF24'
                           : '#D97706'
                         : isCompleted
-                        ? '#059669'
+                        ? isDarkMode
+                          ? '#34D399'
+                          : '#059669'
+                        : isDarkMode
+                        ? '#FCA5A5'
                         : '#DC2626',
                     },
                   ]}
                 >
-                  {isUpcoming ? (isOverdue ? 'QUÁ GIỜ' : 'SẮP TỚI') : isCompleted ? 'ĐÃ KHÁM XONG' : 'ĐÃ HỦY'}
+                  {isUpcoming
+                    ? isOverdue
+                      ? 'QUÁ GIỜ'
+                      : apt.status === 'CONFIRMED'
+                      ? 'ĐÃ XÁC NHẬN'
+                      : 'SẮP TỚI'
+                    : isCompleted
+                    ? 'ĐÃ KHÁM XONG'
+                    : 'ĐÃ HỦY'}
                 </LocalizedText>
               </View>
             </View>
@@ -730,94 +766,127 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
                 style={[
                   styles.familyBadge,
                   isFamilyConfirmed
-                    ? { backgroundColor: '#ECFDF5', borderColor: '#10B98155' }
-                    : { backgroundColor: '#FEF3C7', borderColor: '#F59E0B66' },
+                    ? {
+                        backgroundColor: isDarkMode ? '#064E3B66' : '#ECFDF5',
+                        borderColor: isDarkMode ? '#10B98166' : '#10B98155',
+                      }
+                    : {
+                        backgroundColor: isDarkMode ? '#78350F55' : '#FEF3C7',
+                        borderColor: isDarkMode ? '#F59E0B66' : '#F59E0B66',
+                      },
                 ]}
               >
                 <Ionicons
                   name={isFamilyConfirmed ? 'checkmark-circle' : 'hourglass-outline'}
                   size={12}
-                  color={isFamilyConfirmed ? '#059669' : '#D97706'}
+                  color={isFamilyConfirmed ? (isDarkMode ? '#34D399' : '#059669') : (isDarkMode ? '#FBBF24' : '#D97706')}
                   style={{ marginRight: 4 }}
                 />
                 <LocalizedText
                   style={[
                     styles.familyBadgeText,
-                    { color: isFamilyConfirmed ? '#059669' : '#B45309' },
+                    { color: isFamilyConfirmed ? (isDarkMode ? '#6EE7B7' : '#047857') : (isDarkMode ? '#FDE68A' : '#92400E') },
                   ]}
                 >
-                  {isFamilyConfirmed ? 'Gia đình đã xác nhận đón tiếp' : 'Chờ gia đình xác nhận'}
+                  {isFamilyConfirmed
+                    ? isFamilyRequested
+                      ? 'Bác sĩ đã xác nhận lịch'
+                      : 'Gia đình đã xác nhận đón tiếp'
+                    : isFamilyRequested
+                      ? 'Gia đình yêu cầu — Chờ BS xác nhận'
+                      : 'Chờ gia đình xác nhận'}
                 </LocalizedText>
               </View>
             </View>
           )}
 
-          <View style={[styles.actionRow, { borderTopColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
-            <TouchableOpacity
-              style={[
-                styles.btnViewPatient,
-                { backgroundColor: isDarkMode ? '#1E293B' : '#EFF6FF', borderColor: isDarkMode ? '#334155' : '#BFDBFE' },
-              ]}
-              onPress={() => onViewPatient(apt.patient_id)}
-              activeOpacity={0.75}
-            >
-              <Ionicons name="document-text" size={14} color="#2563EB" style={{ marginRight: 4 }} />
-              <LocalizedText style={styles.btnViewPatientText} numberOfLines={1}>
-                Hồ sơ
-              </LocalizedText>
-            </TouchableOpacity>
-
-            {isUpcoming && (
+          <View style={[styles.actionGroup, { borderTopColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
+            <View style={styles.actionRow}>
               <TouchableOpacity
-                style={styles.btnComplete}
-                onPress={() => onMarkCompleted(apt.id)}
-                activeOpacity={0.85}
+                style={[
+                  styles.btnViewPatient,
+                  { backgroundColor: isDarkMode ? '#1E293B' : '#EFF6FF', borderColor: isDarkMode ? '#334155' : '#BFDBFE' },
+                ]}
+                onPress={() => onViewPatient(apt.patient_id)}
+                activeOpacity={0.75}
               >
-                <Ionicons name="checkmark-circle" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
-                <LocalizedText style={styles.btnCompleteText} numberOfLines={1}>
-                  Đã khám
+                <Ionicons name="document-text" size={14} color="#2563EB" style={{ marginRight: 4 }} />
+                <LocalizedText style={styles.btnViewPatientText} numberOfLines={1}>
+                  Hồ sơ
                 </LocalizedText>
               </TouchableOpacity>
-            )}
+
+              {isUpcoming && isFamilyRequested && apt.status === 'UPCOMING' && onConfirm && (
+                <TouchableOpacity
+                  style={[styles.btnComplete, { backgroundColor: '#0284C7', shadowColor: '#0284C7' }]}
+                  onPress={() => onConfirm(apt.id)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="checkmark-done" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+                  <LocalizedText style={styles.btnCompleteText} numberOfLines={1}>
+                    Xác nhận
+                  </LocalizedText>
+                </TouchableOpacity>
+              )}
+
+              {isUpcoming && (
+                <TouchableOpacity
+                  style={styles.btnComplete}
+                  onPress={() => onMarkCompleted(apt.id)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="checkmark-circle" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+                  <LocalizedText style={styles.btnCompleteText} numberOfLines={1}>
+                    Đã khám
+                  </LocalizedText>
+                </TouchableOpacity>
+              )}
+
+              {!isUpcoming && (
+                <TouchableOpacity
+                  style={[
+                    styles.btnDelete,
+                    { backgroundColor: isDarkMode ? '#450A0A55' : '#FEE2E2', borderColor: isDarkMode ? '#7F1D1D55' : '#FECACA' },
+                  ]}
+                  onPress={() => onDelete(apt.id, apt.exam_type || 'Khám bệnh')}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                >
+                  <Ionicons name="trash-outline" size={15} color="#DC2626" />
+                </TouchableOpacity>
+              )}
+            </View>
 
             {isUpcoming && (
-              <TouchableOpacity
-                style={[
-                  styles.btnEdit,
-                  { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9', borderColor: isDarkMode ? '#475569' : '#E2E8F0' },
-                ]}
-                onPress={() => onEdit(apt)}
-                activeOpacity={0.7}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              >
-                <Ionicons name="pencil" size={15} color={isDarkMode ? '#CBD5E1' : '#475569'} />
-              </TouchableOpacity>
-            )}
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.btnSecondaryAction,
+                    { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: isDarkMode ? '#475569' : '#CBD5E1' },
+                  ]}
+                  onPress={() => onEdit(apt)}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="calendar-outline" size={14} color={isDarkMode ? '#E2E8F0' : '#334155'} style={{ marginRight: 5 }} />
+                  <LocalizedText style={[styles.btnSecondaryText, { color: isDarkMode ? '#E2E8F0' : '#334155' }]} numberOfLines={1}>
+                    Dời lịch
+                  </LocalizedText>
+                </TouchableOpacity>
 
-            {isUpcoming ? (
-              <TouchableOpacity
-                style={[
-                  styles.btnDelete,
-                  { backgroundColor: isDarkMode ? '#450A0A55' : '#FEE2E2', borderColor: isDarkMode ? '#7F1D1D55' : '#FECACA' },
-                ]}
-                onPress={() => (onCancel ? onCancel(apt) : onDelete(apt.id, apt.exam_type || 'Khám bệnh'))}
-                activeOpacity={0.7}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              >
-                <Ionicons name="close-circle-outline" size={17} color="#DC2626" />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={[
-                  styles.btnDelete,
-                  { backgroundColor: isDarkMode ? '#450A0A55' : '#FEE2E2', borderColor: isDarkMode ? '#7F1D1D55' : '#FECACA' },
-                ]}
-                onPress={() => onDelete(apt.id, apt.exam_type || 'Khám bệnh')}
-                activeOpacity={0.7}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              >
-                <Ionicons name="trash-outline" size={15} color="#DC2626" />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.btnSecondaryAction,
+                    { backgroundColor: isDarkMode ? '#450A0A44' : '#FFFFFF', borderColor: isDarkMode ? '#7F1D1D' : '#FECACA' },
+                  ]}
+                  onPress={() => (onCancel ? onCancel(apt) : onDelete(apt.id, apt.exam_type || 'Khám bệnh'))}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="close-circle-outline" size={15} color="#DC2626" style={{ marginRight: 5 }} />
+                  <LocalizedText style={[styles.btnSecondaryText, { color: isDarkMode ? '#FCA5A5' : '#DC2626' }]} numberOfLines={1}>
+                    Hủy lịch
+                  </LocalizedText>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         </View>
@@ -1060,57 +1129,70 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 9,
-    height: 26,
+    paddingVertical: 4,
+    minHeight: 26,
     borderRadius: 8,
     borderWidth: 1,
   },
   familyBadgeText: { fontSize: 11, fontWeight: '700' },
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  actionGroup: {
     paddingTop: 10,
     marginTop: 2,
     borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 6,
+    gap: 8,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   btnViewPatient: {
     flex: 1,
+    flexBasis: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 38,
-    paddingHorizontal: 8,
-    borderRadius: 12,
+    minHeight: 42,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
     borderWidth: 1,
   },
   btnViewPatientText: { fontSize: 12.5, color: '#2563EB', fontWeight: '700' },
   btnComplete: {
-    flex: 1.15,
+    flex: 1,
+    flexBasis: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 38,
-    paddingHorizontal: 8,
-    borderRadius: 12,
+    minHeight: 42,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
     backgroundColor: '#059669',
     shadowColor: '#059669',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.18,
     shadowRadius: 3,
     elevation: 2,
   },
   btnCompleteText: { color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' },
-  btnEdit: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+  btnSecondaryAction: {
+    flex: 1,
+    flexBasis: 0,
+    minHeight: 42,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
     borderWidth: 1,
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
   },
+  btnSecondaryText: { fontSize: 12.5, fontWeight: '700' },
   btnDelete: {
-    width: 38,
-    height: 38,
+    width: 44,
+    minHeight: 44,
     borderRadius: 12,
     borderWidth: 1,
     justifyContent: 'center',

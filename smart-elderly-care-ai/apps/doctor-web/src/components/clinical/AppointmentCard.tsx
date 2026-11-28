@@ -10,10 +10,16 @@ import {
   Volume2,
   Home,
   Building,
+  Video,
   Calendar as CalendarIcon,
 } from 'lucide-react';
 import type { AppointmentItem } from '../../types';
-import { isAppointmentOverdue, isUpcomingAppointmentStatus, parseAppointmentNotes } from '../../utils/appointmentHelpers';
+import {
+  getAppointmentConfirmationBadge,
+  isAppointmentOverdue,
+  isUpcomingAppointmentStatus,
+  parseAppointmentNotes,
+} from '../../utils/appointmentHelpers';
 
 const STATUS_BADGE_MAP: Record<string, { label: string; className: string }> = {
   COMPLETED: {
@@ -37,6 +43,7 @@ const STATUS_BADGE_MAP: Record<string, { label: string; className: string }> = {
 interface AppointmentCardProps {
   apt: AppointmentItem;
   onBroadcastReminder?: (apt: AppointmentItem) => void;
+  onConfirm?: (apt: AppointmentItem) => void;
   onReschedule: (apt: AppointmentItem) => void;
   onCancel: (apt: AppointmentItem) => void;
   onComplete: (apt: AppointmentItem) => void;
@@ -45,6 +52,7 @@ interface AppointmentCardProps {
 export const AppointmentCard: React.FC<AppointmentCardProps> = ({
   apt,
   onBroadcastReminder,
+  onConfirm,
   onReschedule,
   onCancel,
   onComplete,
@@ -58,8 +66,9 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
         className: 'bg-orange-100 text-orange-800 border border-orange-200 dark:bg-orange-950/60 dark:text-orange-300 dark:border-orange-900/60',
       }
     : STATUS_BADGE_MAP[apt.status] || STATUS_BADGE_MAP.UPCOMING;
-  const { isFamilyConfirmedByNote, cleanNotes } = parseAppointmentNotes(apt.clinical_notes);
-  const isFamilyConfirmed = isFamilyConfirmedByNote || apt.status === 'CONFIRMED';
+  const { cleanNotes } = parseAppointmentNotes(apt.clinical_notes);
+  const { isFamilyRequested, isConfirmed: isFamilyConfirmed, confirmedLabel, pendingLabel } =
+    getAppointmentConfirmationBadge(apt);
 
   let timeStr = '--:--';
   let dateStr = apt.scheduled_at;
@@ -96,12 +105,23 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
               <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${statusBadge.className}`}>
                 {statusBadge.label}
               </span>
-              {isFamilyConfirmed && (
-                <span className="inline-flex items-center space-x-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800/60 dark:text-emerald-300">
-                  <CheckCircle2 className="h-3 w-3" />
-                  <span>Gia đình đã xác nhận đón tiếp</span>
+              {isFamilyRequested && apt.status === 'UPCOMING' && (
+                <span className="inline-flex items-center space-x-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950/40 dark:border-amber-800/60 dark:text-amber-300">
+                  <Clock className="h-3 w-3" />
+                  <span>{pendingLabel}</span>
                 </span>
               )}
+              {isFamilyConfirmed ? (
+                <span className="inline-flex items-center space-x-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800/60 dark:text-emerald-300">
+                  <CheckCircle2 className="h-3 w-3" />
+                  <span>{confirmedLabel}</span>
+                </span>
+              ) : !isFamilyRequested && apt.status === 'UPCOMING' ? (
+                <span className="inline-flex items-center space-x-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950/40 dark:border-amber-800/60 dark:text-amber-300">
+                  <Clock className="h-3 w-3" />
+                  <span>{pendingLabel}</span>
+                </span>
+              ) : null}
               <span
                 className={`inline-flex items-center space-x-1 rounded-lg px-2.5 py-0.5 text-[10px] font-bold ${
                   isClinic
@@ -109,7 +129,7 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
                     : 'bg-teal-50 text-teal-700 border border-teal-100 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-900/40'
                 }`}
               >
-                {isClinic ? <Building className="h-3 w-3 mr-1" /> : <Home className="h-3 w-3 mr-1" />}
+                {isClinic ? <Building className="h-3 w-3 mr-1" /> : isTelehealth ? <Video className="h-3 w-3 mr-1" /> : <Home className="h-3 w-3 mr-1" />}
                 <span>
                   {isClinic ? 'Khám tại Phòng khám' : isTelehealth ? 'Tư vấn từ xa (Telehealth)' : 'Khám tại nhà'}
                 </span>
@@ -157,6 +177,15 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
 
         {isUpcomingAppointmentStatus(apt.status) && (
           <div className="flex flex-wrap items-center gap-2">
+            {isFamilyRequested && apt.status === 'UPCOMING' && onConfirm && (
+              <button
+                onClick={() => onConfirm(apt)}
+                className="inline-flex items-center space-x-1.5 rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition cursor-pointer"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span>Xác nhận lịch</span>
+              </button>
+            )}
             <button
               onClick={() => onReschedule(apt)}
               className="inline-flex items-center space-x-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700"

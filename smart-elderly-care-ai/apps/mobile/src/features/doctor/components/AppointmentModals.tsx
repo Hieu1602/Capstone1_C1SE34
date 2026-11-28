@@ -47,7 +47,15 @@ const formatModalDateTime = (dateStr?: string) => {
 };
 
 const formatModalExamType = (type?: string) =>
-  !type ? 'Khám sức khỏe định kỳ' : type === 'CLINIC' ? 'Khám tại phòng khám' : type === 'HOME_VISIT' ? 'Khám bệnh tại nhà' : type;
+  !type
+    ? 'Khám sức khỏe định kỳ'
+    : type === 'CLINIC'
+      ? 'Khám tại phòng khám'
+      : type === 'TELEHEALTH'
+        ? 'Tư vấn từ xa'
+        : type === 'HOME_VISIT'
+          ? 'Khám bệnh tại nhà'
+          : type;
 
 const maskPhoneNumber = (phone?: string) => {
   const clean = phone?.trim() || '';
@@ -139,7 +147,7 @@ export interface AppointmentFormModalProps extends ThemeProps {
   visible: boolean; isEditing: boolean; patients?: any[];
   appointments?: AppointmentItem[]; editingAppointmentId?: string | null;
   patientId: string; patientName: string; scheduledAt: string;
-  examType: string; visitType?: 'HOME_VISIT' | 'CLINIC';
+  examType: string; visitType?: 'HOME_VISIT' | 'CLINIC' | 'TELEHEALTH';
   location: string; instructions: string; enableSpeaker: boolean;
   recurrencePattern?: 'NONE' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY';
   recurrenceOccurrences?: number; isSubmitting: boolean;
@@ -147,7 +155,7 @@ export interface AppointmentFormModalProps extends ThemeProps {
   onChangePatientName: (val: string) => void;
   onChangeScheduledAt: (val: string) => void;
   onChangeExamType: (val: string) => void;
-  onChangeVisitType?: (val: 'HOME_VISIT' | 'CLINIC') => void;
+  onChangeVisitType?: (val: 'HOME_VISIT' | 'CLINIC' | 'TELEHEALTH') => void;
   onChangeLocation: (val: string) => void;
   onChangeInstructions: (val: string) => void;
   onToggleEnableSpeaker: (val: boolean) => void;
@@ -175,8 +183,10 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
 
   const syncScheduledAt = (date: Date, timeSlot: string) => {
     const m = timeSlot.trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
-    const hours = m ? Number(m[1]) : 8;
-    const minutes = m ? Number(m[2]) : 30;
+    const parsedH = m ? Number(m[1]) : NaN;
+    const parsedM = m ? Number(m[2]) : NaN;
+    const hours = Number.isFinite(parsedH) ? parsedH : 8;
+    const minutes = Number.isFinite(parsedM) ? parsedM : 30;
     const normSlot = `${pad2(hours)}:${pad2(minutes)}`;
     const target = new Date(date);
     target.setHours(hours, minutes, 0, 0);
@@ -268,7 +278,9 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
                   {isEditing ? 'Chỉnh Sửa Lịch Khám' : 'Đặt Lịch Tái Khám Mới'}
                 </LocalizedText>
                 <LocalizedText style={[styles.sheetSubtitle, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
-                  Lập kế hoạch khám & gửi xác nhận tới người nhà
+                  {isEditing
+                    ? 'Cập nhật thời gian & gửi yêu cầu xác nhận lại tới gia đình'
+                    : 'Lập kế hoạch khám & gửi xác nhận tới người nhà'}
                 </LocalizedText>
               </View>
             </View>
@@ -327,8 +339,9 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
               <SectionTitle icon="medical" label="Hình thức & Địa điểm (*)" />
               <View style={[styles.pillSwitchContainer, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }]}>
                 {[
-                  { key: 'HOME_VISIT' as const, label: 'Khám tại nhà (In Person)', icon: 'home' },
-                  { key: 'CLINIC' as const, label: 'Phòng khám SECA (Clinic)', icon: 'business' },
+                  { key: 'HOME_VISIT' as const, label: 'Tại nhà', icon: 'home' },
+                  { key: 'CLINIC' as const, label: 'Phòng khám', icon: 'business' },
+                  { key: 'TELEHEALTH' as const, label: 'Từ xa', icon: 'videocam' },
                 ].map((item) => {
                   const active = visitType === item.key;
                   return (
@@ -342,7 +355,13 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
                       ]}
                       onPress={() => {
                         onChangeVisitType?.(item.key);
-                        item.key === 'HOME_VISIT' ? applyHomeLocation(selectedPatientObj) : onChangeLocation('Phòng khám Bác sĩ Gia đình SECA');
+                        if (item.key === 'HOME_VISIT') {
+                          applyHomeLocation(selectedPatientObj);
+                        } else if (item.key === 'TELEHEALTH') {
+                          onChangeLocation('Tư vấn trực tuyến (Telehealth)');
+                        } else {
+                          onChangeLocation('Phòng khám Bác sĩ Gia đình SECA');
+                        }
                       }}
                     >
                       <Ionicons
@@ -715,6 +734,13 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
             style={styles.btnConfirmSmall}
             onPress={() => {
               const trimmed = customTimeInput.trim();
+              if (trimmed && !/^([01]?\d|2[0-3]):([0-5]\d)$/.test(trimmed)) {
+                LocalizedAlert.alert(
+                  'Giờ không hợp lệ',
+                  'Vui lòng nhập giờ theo định dạng HH:mm (00:00 - 23:59).'
+                );
+                return;
+              }
               if (trimmed && isSlotPast(trimmed)) {
                 LocalizedAlert.alert(
                   'Khung giờ đã qua',
@@ -896,7 +922,7 @@ export const AppointmentDetailModal: React.FC<AppointmentDetailModalProps> = ({
     .trim();
   const rows = [
     { icon: 'person-outline', label: 'Bệnh nhân:', val: `${appointment.patient_name || 'Bệnh nhân'}${patientInfo ? ` (${patientInfo.age ? `${patientInfo.age} tuổi` : ''}${patientInfo.gender ? ` • ${formatGenderVN(patientInfo.gender)}` : ''})` : ''}` },
-    { icon: 'time-outline', label: 'Thời gian & Hình thức:', val: `${formatAppointmentDateTimeLabel(appointment.scheduled_at)} • ${appointment.visit_type === 'CLINIC' ? 'Tại phòng khám' : 'Khám tại nhà'}` },
+    { icon: 'time-outline', label: 'Thời gian & Hình thức:', val: `${formatAppointmentDateTimeLabel(appointment.scheduled_at)} • ${appointment.visit_type === 'CLINIC' ? 'Tại phòng khám' : appointment.visit_type === 'TELEHEALTH' ? 'Tư vấn từ xa' : 'Khám tại nhà'}` },
     { icon: 'location-outline', label: 'Địa chỉ khám:', val: appointment.location || patientInfo?.house_address || 'Nhà riêng bệnh nhân' },
     { icon: 'call-outline', label: 'Số điện thoại người nhà:', val: maskPhoneNumber(patientInfo?.emergency_contact_phone) },
     { icon: 'document-text-outline', label: 'Dặn dò y tế / Ghi chú:', val: cleanNotes || 'Khám sức khỏe định kỳ.' },

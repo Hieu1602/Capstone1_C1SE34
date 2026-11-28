@@ -256,6 +256,11 @@ export const doctorApi = {
     return res.data;
   },
 
+  confirmAppointment: async (appointmentId: string): Promise<AppointmentItem> => {
+    const res = await api.post(`/doctor/appointments/${appointmentId}/confirm`);
+    return res.data;
+  },
+
   completeAppointment: async (appointmentId: string, clinicalNotes?: string) => {
     const payload = clinicalNotes?.trim() ? { clinical_notes: clinicalNotes.trim() } : undefined;
     const res = await api.post(`/doctor/appointments/${appointmentId}/complete`, payload);

@@ -114,7 +114,7 @@ export interface AppointmentItem {
   patient_name: string;
   patient_avatar_url?: string | null;
   house_id?: string;
-  visit_type?: 'CLINIC' | 'HOME' | 'HOME_VISIT' | string;
+  visit_type?: 'CLINIC' | 'HOME' | 'HOME_VISIT' | 'TELEHEALTH' | string;
   scheduled_at: string;
   duration_minutes?: number;
   exam_type?: string;

@@ -34,10 +34,10 @@ function createWsHarness(initialIncidents = [], authOverrides = {}) {
       if (target) target.is_acknowledged = true;
       calls.acknowledged.push({ id, note, by });
     },
-    setVitals: () => {},
+    setVitals: () => { },
     setSirenActive: (val) => calls.siren.push(val),
-    fetchHouseFromBackend: () => {},
-    syncAllWithBackend: async () => {},
+    fetchHouseFromBackend: () => { },
+    syncAllWithBackend: async () => { },
   };
 
   const authState = {
@@ -45,14 +45,14 @@ function createWsHarness(initialIncidents = [], authOverrides = {}) {
     user_id: 'fam-user-1',
     viewRole: 'FAMILY',
     role: 'owner',
-    fetchMyPermissions: async () => {},
+    fetchMyPermissions: async () => { },
     ...authOverrides,
   };
 
   const escalationState = {
     triggerEscalation: (payload) => calls.escalations.push(payload),
     clearEscalation: (id) => calls.clearedEscalations.push(id),
-    markEscalated: () => {},
+    markEscalated: () => { },
   };
 
   const mod = transpileAndLoad(p('services/websocket.ts'), {
@@ -121,7 +121,7 @@ test('T1-F12-05 notificationHelpers formatDate labels early-morning UTC+7 appoin
   const mod = transpileAndLoad(
     p('features/doctor/components/notifications/notificationHelpers.ts'),
     { '@expo/vector-icons': { Ionicons: { glyphMap: {} } } },
-    { fixedNow: '2026-11-22T01:00:00Z' } // 2026-11-22 08:00+07:00
+    { fixedNow: '2026-11-21T17:10:00Z' } // 2026-11-22 00:10+07:00 (before 00:30+07:00 appointment)
   );
   const label = mod.formatDate('2026-11-21T18:30:00Z'); // 2026-11-22 01:30+07:00
   assert.ok(label.startsWith('Hôm nay,'), `Expected "Hôm nay, 01:30", got "${label}"`);
@@ -143,15 +143,15 @@ test('T2-F12-01 AppointmentModals preserves 00:00 and 08:00 without falsy fallba
 
 test('T2-F12-02 AppointmentModals validates customTimeInput HH:mm (00-23:00-59)', () => {
   const { code } = parseTsAst(p('features/doctor/components/AppointmentModals.tsx'));
-  assert.match(code, /customTimeInput[\s\S]*?(23|hours\s*<\s*0|hours\s*>\s*23|\^\\d\{1,2\}:\\d\{2\}\$|RegExp)/);
+  assert.match(code, /customTimeInput[\s\S]*?(23|2\[0-3\]|hours\s*<\s*0|hours\s*>\s*23|\^\\d\{1,2\}:\\d\{2\}\$|RegExp)/);
 });
 
 test('T2-F12-03 AppointmentModals and DoctorPatientsScreen guard against past scheduled_at timestamps', () => {
   const { code: modCode } = parseTsAst(p('features/doctor/components/AppointmentModals.tsx'));
   const { code: patCode } = parseTsAst(p('features/doctor/screens/DoctorPatientsScreen.tsx'));
   assert.ok(
-    /getTime\(\)\s*<\s*Date\.now\(\)|<\s*new Date\(\)/.test(modCode) ||
-      /getTime\(\)\s*<\s*Date\.now\(\)|<\s*new Date\(\)/.test(patCode),
+    /getTime\(\)\s*<=?\s*Date\.now\(\)|<\s*new Date\(\)/.test(modCode) ||
+    /getTime\(\)\s*<=?\s*Date\.now\(\)|<\s*new Date\(\)/.test(patCode),
     'Mobile scheduling must validate against past date/time before submit'
   );
 });
@@ -165,7 +165,7 @@ test('T2-F12-05 notificationHelpers buildUnifiedNotifications matches 00:30+07:0
   const mod = transpileAndLoad(
     p('features/doctor/components/notifications/notificationHelpers.ts'),
     { '@expo/vector-icons': { Ionicons: { glyphMap: {} } } },
-    { fixedNow: '2026-11-22T01:00:00Z' } // 2026-11-22 08:00+07:00
+    { fixedNow: '2026-11-21T17:10:00Z' } // 2026-11-22 00:10+07:00 (before 00:30+07:00 appointment)
   );
   const list = mod.buildUnifiedNotifications({
     incidents: [],

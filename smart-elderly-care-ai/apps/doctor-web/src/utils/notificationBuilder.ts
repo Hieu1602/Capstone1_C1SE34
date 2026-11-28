@@ -163,7 +163,7 @@ export function getDateGroup(str?: string) {
 export function isNotificationReadInSet(n: Pick<UnifiedNotification, 'id' | 'rawIncidentId'>, readSet: Set<string>): boolean {
   return Boolean(
     readSet.has(n.id) ||
-      (n.rawIncidentId && (readSet.has(n.rawIncidentId) || readSet.has(`inc_${n.rawIncidentId}`)))
+    (n.rawIncidentId && (readSet.has(n.rawIncidentId) || readSet.has(`inc_${n.rawIncidentId}`)))
   );
 }
 
@@ -174,11 +174,11 @@ export function applyAcknowledgeToItem<T extends UnifiedNotification>(item: T, d
     badgeLabel: 'Đã xử lý',
     rawIncident: item.rawIncident
       ? {
-          ...item.rawIncident,
-          is_acknowledged: true,
-          acknowledged_by_name: doctorName,
-          acknowledged_at: new Date().toISOString(),
-        }
+        ...item.rawIncident,
+        is_acknowledged: true,
+        acknowledged_by_name: doctorName,
+        acknowledged_at: new Date().toISOString(),
+      }
       : undefined,
   };
 }
@@ -214,7 +214,7 @@ export function buildNotificationItems(
       lower.includes('lời mời bạn tham gia') ||
       lower.includes('xác nhận vào nhà');
     const isAppointment =
-      ['APPOINTMENT_CONFIRMED', 'APPOINTMENT_SCHEDULED', 'APPOINTMENT_CANCELLED'].includes(inc.alert_type || '') ||
+      Boolean(inc.alert_type?.startsWith('APPOINTMENT_')) ||
       lower.includes('lịch khám') ||
       lower.includes('lịch hẹn');
     const isAssignment = lower.includes('bệnh nhân mới') || lower.includes('phụ trách');

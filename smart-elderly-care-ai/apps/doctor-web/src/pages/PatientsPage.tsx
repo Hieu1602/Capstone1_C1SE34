@@ -256,6 +256,7 @@ export const PatientsPage: React.FC = () => {
 
   const handleRefreshDetail = async () => {
     if (selectedPatientId) {
+      patientDrawerCache.delete(selectedPatientId);
       await handleSelectPatient(selectedPatientId, true);
       await loadPatients(true);
     }

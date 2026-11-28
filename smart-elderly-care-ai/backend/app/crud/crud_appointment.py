@@ -6,6 +6,7 @@ Implements conflict verification, recurrence series generation, and reminder man
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import re
 from typing import Dict, Iterable, List, Optional, Tuple
 import uuid
 
@@ -343,6 +344,10 @@ class CRUDAppointment:
         db: AsyncSession,
         appointment_id: uuid.UUID,
         obj_in: AppointmentUpdate,
+        *,
+        reset_confirmation: bool = False,
+        new_created_by: Optional[uuid.UUID] = None,
+        doctor_rescheduled: bool = False,
     ) -> Optional[Appointment]:
         """Dời lịch hẹn hoặc cập nhật ghi chú y khoa."""
         apt = await self.get_by_id(db, appointment_id)
@@ -399,6 +404,39 @@ class CRUDAppointment:
         if obj_in.enable_speaker_reminder is not None:
             apt.enable_speaker_reminder = obj_in.enable_speaker_reminder
 
+        if reset_confirmation:
+            apt.status = AppointmentStatusEnum.UPCOMING.value
+            for attr in ("clinical_notes", "instructions"):
+                val = getattr(apt, attr, None)
+                if val:
+                    cleaned = re.sub(r"\[ĐÃ XÁC NHẬN ĐÓN TIẾP\]\s*", "", val)
+                    cleaned = re.sub(r"\[BS dời lịch\]\s*", "", cleaned)
+                    if new_created_by is not None:
+                        cleaned = re.sub(r"\[Yêu cầu lịch khám\]\s*", "", cleaned, flags=re.IGNORECASE)
+                    setattr(apt, attr, cleaned.strip() or None)
+        if doctor_rescheduled:
+            notes_now = apt.clinical_notes or ""
+            if "[BS dời lịch]" not in notes_now:
+                apt.clinical_notes = f"[BS dời lịch] {notes_now}".strip()
+        if new_created_by is not None:
+            apt.created_by = new_created_by
+
+        await db.commit()
+        return await self.get_by_id(db, appointment_id)
+
+    async def confirm_appointment(
+        self,
+        db: AsyncSession,
+        appointment_id: uuid.UUID,
+    ) -> Optional[Appointment]:
+        """Bác sĩ xác nhận lịch khám do gia đình yêu cầu (UPCOMING -> CONFIRMED)."""
+        apt = await self.get_by_id(db, appointment_id)
+        if not apt:
+            return None
+        if apt.status != AppointmentStatusEnum.UPCOMING.value:
+            raise ValueError("Chỉ có thể xác nhận lịch khám đang chờ xử lý (UPCOMING).")
+
+        apt.status = AppointmentStatusEnum.CONFIRMED.value
         await db.commit()
         return await self.get_by_id(db, appointment_id)
 
