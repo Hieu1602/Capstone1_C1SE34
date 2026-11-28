@@ -242,7 +242,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
+            <div className="min-w-0">
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Hình thức thăm khám *</label>
               <select
                 value={visitType}
@@ -267,37 +267,39 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
               </select>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Thời gian hẹn *</label>
-              <div className="flex gap-2">
-                <input
-                  type="datetime-local"
-                  required
-                  min={minDatetimeLocal}
-                  value={scheduledAt}
-                  onChange={(e) => {
-                    hasEditedDatetimeRef.current = true;
-                    setScheduledAt(e.target.value);
-                  }}
-                  className={inputCls}
-                />
-                <select
-                  value={durationMinutes}
-                  onChange={(e) => {
-                    const nextDur = Number(e.target.value);
-                    setDurationMinutes(nextDur);
-                    refreshAutoSuggestedDatetime(visitType, nextDur);
-                  }}
-                  aria-label="Thời lượng khám"
-                  className="w-24 shrink-0 rounded-xl border border-slate-200 px-2 py-2 text-xs focus:border-blue-500 focus:outline-hidden bg-white dark:border-slate-700/60 dark:bg-[#0F172A] dark:text-slate-100"
-                >
-                  <option value={15}>15 phút</option>
-                  <option value={30}>30 phút</option>
-                  <option value={45}>45 phút</option>
-                  <option value={60}>60 phút</option>
-                </select>
-              </div>
+            <div className="min-w-0">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Thời lượng khám *</label>
+              <select
+                value={durationMinutes}
+                onChange={(e) => {
+                  const nextDur = Number(e.target.value);
+                  setDurationMinutes(nextDur);
+                  refreshAutoSuggestedDatetime(visitType, nextDur);
+                }}
+                aria-label="Thời lượng khám"
+                className={inputCls}
+              >
+                <option value={15}>15 phút</option>
+                <option value={30}>30 phút</option>
+                <option value={45}>45 phút</option>
+                <option value={60}>60 phút</option>
+              </select>
             </div>
+          </div>
+
+          <div className="min-w-0">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Thời gian hẹn *</label>
+            <input
+              type="datetime-local"
+              required
+              min={minDatetimeLocal}
+              value={scheduledAt}
+              onChange={(e) => {
+                hasEditedDatetimeRef.current = true;
+                setScheduledAt(e.target.value);
+              }}
+              className={inputCls}
+            />
           </div>
 
           <div>

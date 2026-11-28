@@ -95,6 +95,7 @@ export const CancelAppointmentModal: React.FC<CancelAppointmentModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     const finalReason = reason.trim();
     if (finalReason.length < 3) {
       setErrorMsg('Vui lòng nhập lý do hủy lịch tối thiểu 3 ký tự.');

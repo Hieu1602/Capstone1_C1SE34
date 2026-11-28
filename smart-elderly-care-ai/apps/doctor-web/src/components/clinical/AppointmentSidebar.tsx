@@ -43,10 +43,11 @@ export const AppointmentSidebar: React.FC<AppointmentSidebarProps> = ({
     },
   ];
 
+  const activeTotal = Math.max(0, counts.ALL - counts.CANCELLED);
   const hubRows = [
     {
       label: 'Ca khám bật Loa nhắc:',
-      value: `${hubEnabledCount} / ${counts.ALL} ca`,
+      value: `${hubEnabledCount} / ${activeTotal} ca`,
       valClass: 'font-extrabold text-slate-900 dark:text-white',
     },
     {

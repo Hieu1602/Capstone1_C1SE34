@@ -134,7 +134,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const [familyAppointmentsModalVisible, setFamilyAppointmentsModalVisible] = useState(false);
   const [isMicSpeaking] = useState(false);
-  const [nextMedTaken, setNextMedTaken] = useState(false);
+  const [, setNextMedTaken] = useState(false);
 
   useEffect(() => {
     loadDashboardData(true);
@@ -675,6 +675,7 @@ export default function HomeScreen({ navigation }: any) {
         visible={familyAppointmentsModalVisible}
         patientId={appointmentPatientInfo.id}
         patientName={appointmentPatientInfo.name}
+        canManageRecords={isOwnerOrAdmin || Boolean(permissions?.can_manage_records)}
         onClose={() => { setFamilyAppointmentsModalVisible(false); fetchNotifications(); }}
       />
     </SafeAreaView>

@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BusySlotItem, patientApi } from '../../../services/api';
 import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
 import { useTheme } from '../../../store/useThemeStore';
+import { useVitalStore } from '../../../store/useVitalStore';
 import {
   FAMILY_TIME_SLOTS,
   buildLocalDateTime,
@@ -34,6 +35,7 @@ interface FamilyAppointmentsModalProps {
   initialMode?: 'LIST' | 'BOOK';
   doctorName?: string;
   defaultClinicLocation?: string;
+  canManageRecords?: boolean;
   onAppointmentChanged?: () => void;
 }
 
@@ -86,6 +88,7 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
   initialMode = 'LIST',
   doctorName,
   defaultClinicLocation,
+  canManageRecords = true,
   onAppointmentChanged,
 }) => {
   const { isDarkMode, colors } = useTheme();
@@ -212,19 +215,20 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
 
   useEffect(() => {
     if (!visible) return;
-    setMode(initialMode);
-    if (initialMode === 'BOOK') {
+    const effectiveMode = canManageRecords ? initialMode : 'LIST';
+    setMode(effectiveMode);
+    if (effectiveMode === 'BOOK') {
       openBookForm(busySlots);
     }
     fetchAppointments();
     fetchBusySlots().then((slots) => {
-      if (initialMode === 'BOOK' && !userPickedSlotRef.current) {
+      if (effectiveMode === 'BOOK' && !userPickedSlotRef.current) {
         const best = findFirstAvailableSlot(dateOptions, 'HOME_VISIT', slots);
         setSelectedDateKey(best.dateKey);
         setSelectedTimeSlot(best.timeSlot);
       }
     });
-  }, [visible, initialMode, normalizedPatientId]);
+  }, [visible, initialMode, normalizedPatientId, canManageRecords]);
 
   const selectedDateObj = useMemo(
     () => dateOptions.find((d) => d.key === selectedDateKey)?.date || dateOptions[0]?.date || new Date(),
@@ -239,7 +243,7 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
   };
 
   const handleConfirmAppointment = async (aptId: string) => {
-    if (!normalizedPatientId) return;
+    if (!normalizedPatientId || !canManageRecords) return;
     try {
       setConfirmingId(aptId);
       await patientApi.confirmAppointment(normalizedPatientId, aptId);
@@ -248,11 +252,15 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
           a.id === aptId
             ? {
                 ...a,
-                clinical_notes: `[ĐÃ XÁC NHẬN ĐÓN TIẾP] ${a.clinical_notes || ''}`.trim(),
+                clinical_notes: `[ĐÃ XÁC NHẬN ĐÓN TIẾP] ${stripAppointmentSystemTags(a.clinical_notes)}`.trim(),
               }
             : a
         )
       );
+      const vitalState = useVitalStore.getState();
+      (vitalState.incidents || [])
+        .filter((inc: any) => String(inc.note || inc.notes || '').includes(String(aptId)) && !inc.is_acknowledged)
+        .forEach((inc: any) => vitalState.acknowledgeIncident(inc.id, 'Gia đình đã xác nhận đón tiếp'));
       onAppointmentChanged?.();
       LocalizedAlert.alert(
         'Đã xác nhận đón tiếp',
@@ -266,7 +274,7 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
   };
 
   const handleConfirmCancelAppointment = (apt: FamilyAppointmentItem) => {
-    if (!normalizedPatientId) return;
+    if (!normalizedPatientId || !canManageRecords) return;
     LocalizedAlert.alert(
       'Xác nhận hủy lịch khám',
       `Bạn có chắc muốn hủy lịch khám lúc ${formatAppointmentTime(apt.scheduled_at)} không?`,
@@ -301,6 +309,10 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
   };
 
   const handleSubmitForm = async () => {
+    if (!canManageRecords) {
+      LocalizedAlert.alert('Không có quyền', 'Tài khoản thành viên chỉ xem không thể đặt hoặc dời lịch khám.');
+      return;
+    }
     if (!normalizedPatientId) {
       LocalizedAlert.alert('Chưa có hồ sơ', 'Không tìm thấy mã bệnh nhân hợp lệ để đặt lịch khám.');
       return;
@@ -418,7 +430,7 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
             </View>
 
             <View style={styles.headerActionsRow}>
-              {!isFormMode && normalizedPatientId ? (
+              {!isFormMode && normalizedPatientId && canManageRecords ? (
                 <TouchableOpacity
                   style={styles.btnHeaderBook}
                   onPress={() => {
@@ -449,7 +461,7 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
           </View>
 
           {isFormMode ? (
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollList}>
+            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollList}>
               {mode === 'RESCHEDULE' && editingAppointment ? (
                 <View
                   style={[
@@ -712,7 +724,9 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
               >
                 <Ionicons name="shield-checkmark" size={14} color="#0284C7" style={{ marginRight: 6 }} />
                 <LocalizedText style={[styles.noticeText, { color: isDarkMode ? '#93C5FD' : '#0369A1' }]}>
-                  Theo dõi lịch khám từ Bác sĩ hoặc đặt yêu cầu lịch khám mới cho gia đình.
+                  {canManageRecords
+                    ? 'Theo dõi lịch khám từ Bác sĩ hoặc đặt yêu cầu lịch khám mới cho gia đình.'
+                    : 'Chế độ chỉ xem: bạn có thể theo dõi lịch khám (Chủ hộ hoặc người quản lý mới có quyền đặt/đổi lịch).'}
                 </LocalizedText>
               </View>
 
@@ -753,6 +767,7 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
 
               {/* Appointments list */}
               <ScrollView
+                style={{ flex: 1 }}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollList}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -771,7 +786,7 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
                 ) : (
                   filteredAppointments.map((apt) => {
                     const statusInfo = getFamilyAppointmentStatusInfo(apt);
-                    const canManage = canFamilyManageAppointment(apt);
+                    const canManage = canManageRecords && canFamilyManageAppointment(apt);
                     const isCompleted = apt.status === 'COMPLETED';
                     const cleanInstructions = stripAppointmentSystemTags(apt.instructions || apt.clinical_notes);
 
@@ -874,7 +889,7 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
                         ) : null}
 
                         {/* Doctor-scheduled: family confirm prompt */}
-                        {statusInfo.showFamilyConfirmPrompt && (
+                        {canManageRecords && statusInfo.showFamilyConfirmPrompt && (
                           <View
                             style={[
                               styles.confirmPromptBox,
@@ -887,7 +902,7 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
                             <View style={styles.confirmPromptRow}>
                               <Ionicons name="notifications" size={15} color="#D97706" style={{ marginRight: 6 }} />
                               <LocalizedText style={[styles.confirmPromptText, { color: isDarkMode ? '#FDE68A' : '#92400E' }]}>
-                                Bác sĩ vừa lên lịch. Gia đình vui lòng xác nhận sẵn sàng đón tiếp.
+                                Lịch khám đang chờ gia đình xác nhận sẵn sàng đón tiếp.
                               </LocalizedText>
                             </View>
                             <TouchableOpacity
@@ -949,15 +964,29 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
                         {canManage && (
                           <View style={styles.familyActionRow}>
                             <TouchableOpacity
-                              style={[styles.btnReschedule, { borderColor: '#0284C7' }]}
+                              style={[
+                                styles.btnReschedule,
+                                {
+                                  borderColor: '#0284C7',
+                                  backgroundColor: isDarkMode ? '#0F2942' : '#EFF6FF',
+                                },
+                              ]}
                               onPress={() => openRescheduleForm(apt)}
                               disabled={cancellingId === apt.id}
                             >
-                              <Ionicons name="calendar-outline" size={14} color="#0284C7" />
-                              <LocalizedText style={styles.btnRescheduleText}>Dời lịch</LocalizedText>
+                              <Ionicons name="calendar-outline" size={14} color={isDarkMode ? '#60A5FA' : '#0284C7'} />
+                              <LocalizedText style={[styles.btnRescheduleText, isDarkMode && { color: '#93C5FD' }]}>
+                                Dời lịch
+                              </LocalizedText>
                             </TouchableOpacity>
                             <TouchableOpacity
-                              style={[styles.btnCancelApt, { borderColor: '#FCA5A5' }]}
+                              style={[
+                                styles.btnCancelApt,
+                                {
+                                  borderColor: isDarkMode ? '#7F1D1D' : '#FCA5A5',
+                                  backgroundColor: isDarkMode ? '#450A0A55' : '#FEF2F2',
+                                },
+                              ]}
                               onPress={() => handleConfirmCancelAppointment(apt)}
                               disabled={cancellingId === apt.id}
                             >
@@ -965,8 +994,10 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
                                 <ActivityIndicator size="small" color="#DC2626" />
                               ) : (
                                 <>
-                                  <Ionicons name="close-circle-outline" size={14} color="#DC2626" />
-                                  <LocalizedText style={styles.btnCancelAptText}>Hủy lịch</LocalizedText>
+                                  <Ionicons name="close-circle-outline" size={14} color={isDarkMode ? '#FCA5A5' : '#DC2626'} />
+                                  <LocalizedText style={[styles.btnCancelAptText, isDarkMode && { color: '#FCA5A5' }]}>
+                                    Hủy lịch
+                                  </LocalizedText>
                                 </>
                               )}
                             </TouchableOpacity>
@@ -991,25 +1022,27 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
                           </View>
                         ) : null}
 
-                        {/* Hub reminder status */}
-                        <View style={styles.reminderRow}>
-                          <Ionicons
-                            name={apt.enable_speaker_reminder ? 'volume-high' : 'volume-mute'}
-                            size={12}
-                            color={apt.enable_speaker_reminder ? '#059669' : '#94A3B8'}
-                            style={{ marginRight: 4 }}
-                          />
-                          <LocalizedText
-                            style={[
-                              styles.reminderText,
-                              { color: apt.enable_speaker_reminder ? '#059669' : '#64748B' },
-                            ]}
-                          >
-                            {apt.enable_speaker_reminder
-                              ? 'Loa Hub tự động nhắc trước 24h & 2h'
-                              : 'Nhắc qua loa: Tắt'}
-                          </LocalizedText>
-                        </View>
+                        {/* Hub reminder status (chỉ hiển thị cho lịch sắp tới / đã xác nhận) */}
+                        {statusInfo.isUpcoming && (
+                          <View style={styles.reminderRow}>
+                            <Ionicons
+                              name={apt.enable_speaker_reminder ? 'volume-high' : 'volume-mute'}
+                              size={12}
+                              color={apt.enable_speaker_reminder ? '#059669' : '#94A3B8'}
+                              style={{ marginRight: 4 }}
+                            />
+                            <LocalizedText
+                              style={[
+                                styles.reminderText,
+                                { color: apt.enable_speaker_reminder ? '#059669' : '#64748B' },
+                              ]}
+                            >
+                              {apt.enable_speaker_reminder
+                                ? 'Loa Hub tự động nhắc trước 24h & 2h'
+                                : 'Nhắc qua loa: Tắt'}
+                            </LocalizedText>
+                          </View>
+                        )}
                       </View>
                     );
                   })
@@ -1040,6 +1073,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 24,
+    height: '84%',
     maxHeight: '88%',
   },
   modalHeader: {
@@ -1058,13 +1092,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     backgroundColor: '#059669',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    minHeight: 40,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
   },
   btnHeaderBookText: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
   },
   btnHeaderBack: {
@@ -1072,13 +1107,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     borderWidth: 1,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 8,
+    minHeight: 40,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 10,
   },
   btnHeaderBackText: {
     color: '#0284C7',
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
   },
   modalTitle: {
@@ -1090,7 +1126,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   btnClose: {
-    padding: 4,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   noticeBox: {
     flexDirection: 'row',
@@ -1114,16 +1153,21 @@ const styles = StyleSheet.create({
   },
   tabItem: {
     flex: 1,
-    paddingVertical: 8,
+    minHeight: 44,
+    paddingVertical: 10,
     alignItems: 'center',
+    justifyContent: 'center',
+    ...(typeof window !== 'undefined' ? ({ outlineStyle: 'none' } as any) : {}),
   },
   tabText: {
     fontSize: 12.5,
   },
   scrollList: {
+    flexGrow: 1,
     paddingBottom: 10,
   },
   emptyContainer: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 36,
@@ -1247,16 +1291,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   btnConfirmFamily: {
-    backgroundColor: '#0284C7',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 9,
-    borderRadius: 8,
+    backgroundColor: '#0284C7',
+    minHeight: 48,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
   },
   btnConfirmFamilyText: {
     color: '#FFFFFF',
-    fontSize: 12.5,
+    fontSize: 13.5,
     fontWeight: '700',
   },
   pendingDoctorBox: {
@@ -1299,13 +1345,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 5,
     borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 7,
+    borderRadius: 10,
+    minHeight: 44,
+    paddingVertical: 10,
     backgroundColor: '#EFF6FF',
   },
   btnRescheduleText: {
     color: '#0284C7',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
   },
   btnCancelApt: {
@@ -1315,13 +1362,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 5,
     borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 7,
+    borderRadius: 10,
+    minHeight: 44,
+    paddingVertical: 10,
     backgroundColor: '#FEF2F2',
   },
   btnCancelAptText: {
     color: '#DC2626',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
   },
   formLabel: {
@@ -1341,7 +1389,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     borderRadius: 10,
-    paddingVertical: 9,
+    minHeight: 44,
+    paddingVertical: 10,
   },
   visitTypeText: {
     fontSize: 12.5,
@@ -1385,7 +1434,8 @@ const styles = StyleSheet.create({
   },
   timeSlotBtn: {
     width: '23%',
-    paddingVertical: 8,
+    minHeight: 44,
+    paddingVertical: 9,
     paddingHorizontal: 4,
     borderRadius: 8,
     borderWidth: 1,
@@ -1420,7 +1470,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   formTextArea: {
-    height: 62,
+    minHeight: 72,
     textAlignVertical: 'top',
   },
   formActionsRow: {
@@ -1432,23 +1482,27 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderRadius: 10,
-    paddingVertical: 11,
+    minHeight: 48,
+    paddingVertical: 12,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   btnFormCancelText: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '700',
   },
   btnFormSubmit: {
     flex: 1.4,
     backgroundColor: '#059669',
     borderRadius: 10,
-    paddingVertical: 11,
+    minHeight: 48,
+    paddingVertical: 12,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   btnFormSubmitText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '700',
   },
 });

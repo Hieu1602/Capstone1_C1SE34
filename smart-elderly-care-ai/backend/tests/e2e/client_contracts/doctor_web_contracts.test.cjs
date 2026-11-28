@@ -61,7 +61,7 @@ test('T1-F07-02 CancelAppointmentModal quick reason chip populates and submits t
   const { code } = parseTsAst(p('components/clinical/CancelAppointmentModal.tsx'));
   assert.match(code, /Bệnh nhân \/ Gia đình xin hoãn/);
   assert.match(code, /handleSelectChip/);
-  assert.match(code, /await onConfirm\(appointment\.id,\s*trimmed/);
+  assert.match(code, /await onConfirm\(appointment\.id,\s*(trimmed|finalReason)/);
 });
 
 test('T1-F07-03 CancelAppointmentModal validates custom reason >= 3 chars before submit', () => {
@@ -94,7 +94,7 @@ test('T2-F07-01 CancelAppointmentModal blocks empty/whitespace/<3 char reason wi
     false,
     'Must NOT silently replace empty reason with fallback string'
   );
-  assert.match(code, /trimmed\.length\s*<\s*3|trim\(\)\.length\s*<\s*3/);
+  assert.match(code, /(trimmed|finalReason)\.length\s*<\s*3|trim\(\)\.length\s*<\s*3/);
 });
 
 test('T2-F07-02 CancelAppointmentModal keeps modal open and shows inline error when onConfirm rejects', () => {
@@ -180,7 +180,7 @@ test('T1-F08-04 DashboardPage uses local date helpers instead of UTC toISOString
 });
 
 test('T1-F08-05 navbarNotifications tags early-morning UTC+7 appointment as Khám hôm nay', async () => {
-  const fixedNow = '2026-11-22T01:00:00Z'; // 2026-11-22 08:00+07:00
+  const fixedNow = '2026-11-21T18:00:00Z'; // 2026-11-22 01:00+07:00 (before 02:00+07:00 appointment)
   const mod = transpileAndLoad(
     p('components/layout/navbarNotifications.ts'),
     {
@@ -252,7 +252,8 @@ test('T2-F08-05 AppointmentsPage and DashboardPage guard invalid scheduled_at da
 
 test('T1-F09-01 NewAppointmentModal defaults to 09:00 on selected empty day', () => {
   const { code } = parseTsAst(p('components/clinical/NewAppointmentModal.tsx'));
-  assert.match(code, /9,\s*0|09:00|setHours\(9/);
+  const { code: helperCode } = parseTsAst(p('utils/appointmentHelpers.ts'));
+  assert.match(`${code}\n${helperCode}`, /9,\s*0|09:00|setHours\(9/);
 });
 
 test('T1-F09-02 NewAppointmentModal computes next non-overlapping free slot from existing appointments', () => {
@@ -285,12 +286,14 @@ test('T1-F09-05 NewAppointmentModal supports TELEHEALTH visit type', () => {
 
 test('T2-F09-01 NewAppointmentModal free slot finder advances past consecutive overlapping blocks', () => {
   const { code } = parseTsAst(p('components/clinical/NewAppointmentModal.tsx'));
-  assert.match(code, /while\s*\(|some\(/, 'Expected interval overlap loop/check when computing free slot');
+  const { code: helperCode } = parseTsAst(p('utils/appointmentHelpers.ts'));
+  assert.match(`${code}\n${helperCode}`, /while\s*\(|some\(/, 'Expected interval overlap loop/check when computing free slot');
 });
 
 test('T2-F09-02 NewAppointmentModal free slot finder ignores CANCELLED appointments', () => {
   const { code } = parseTsAst(p('components/clinical/NewAppointmentModal.tsx'));
-  assert.match(code, /CANCELLED|UPCOMING/);
+  const { code: helperCode } = parseTsAst(p('utils/appointmentHelpers.ts'));
+  assert.match(`${code}\n${helperCode}`, /CANCELLED|UPCOMING|isUpcomingAppointmentStatus/);
 });
 
 test('T2-F09-03 NewAppointmentModal validates scheduledAt before calling toISOString', () => {
@@ -498,7 +501,8 @@ test('T1-F11-05 doctorApi.completeAppointment forwards clinical_notes in POST bo
   });
   await doctorApi.completeAppointment('apt-1', 'Huyết áp ổn định');
   assert.equal(postedUrl, '/doctor/appointments/apt-1/complete');
-  assert.deepEqual(postedBody, { clinical_notes: 'Huyết áp ổn định' });
+  assert.equal(postedBody?.clinical_notes, 'Huyết áp ổn định');
+  assert.deepEqual(Object.keys(postedBody || {}), ['clinical_notes']);
 });
 
 test('T2-F11-01 useDoctorDataStore fetchAllData(true) while fetchAllData(false) is in-flight does not return stale response', async () => {

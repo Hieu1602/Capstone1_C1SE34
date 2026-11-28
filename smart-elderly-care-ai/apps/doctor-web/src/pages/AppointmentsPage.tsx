@@ -57,6 +57,22 @@ export const AppointmentsPage: React.FC = () => {
     fetchAllData();
   }, [fetchAllData]);
 
+  const handleConfirmAppointment = async (apt: AppointmentItem) => {
+    try {
+      const updated = await doctorApi.confirmAppointment(apt.id);
+      const store = useDoctorDataStore.getState();
+      store.setAppointments(
+        store.appointments.map((a) =>
+          a.id === apt.id ? { ...a, ...updated, status: 'CONFIRMED', patient_name: apt.patient_name || updated?.patient_name } : a
+        )
+      );
+      showToast(`Đã xác nhận lịch khám cho bệnh nhân ${apt.patient_name || ''}`);
+      fetchAllData(true);
+    } catch {
+      showToast('Không thể xác nhận lịch khám lúc này.');
+    }
+  };
+
   const handleComplete = async (apt: AppointmentItem) => {
     try {
       const updated = await doctorApi.completeAppointment(apt.id, apt.clinical_notes || 'Hoàn tất ca khám');
@@ -306,6 +322,7 @@ export const AppointmentsPage: React.FC = () => {
                 key={apt.id}
                 apt={apt}
                 onBroadcastReminder={handleBroadcastReminder}
+                onConfirm={handleConfirmAppointment}
                 onReschedule={handleReschedule}
                 onCancel={setCancellingApt}
                 onComplete={handleComplete}

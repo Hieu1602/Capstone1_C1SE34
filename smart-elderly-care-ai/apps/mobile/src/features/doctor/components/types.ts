@@ -131,6 +131,7 @@ export interface AppointmentItem {
   recurrence_occurrences?: number;
   parent_recurring_id?: string;
   enable_speaker_reminder?: boolean;
+  created_by?: string | null;
   created_at?: string;
   updated_at?: string;
 }

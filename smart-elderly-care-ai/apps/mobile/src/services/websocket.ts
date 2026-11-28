@@ -6,7 +6,6 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { useVitalStore, Incident } from '../store/useVitalStore';
 import { useAuthStore } from '../store/useAuthStore';
-import { useAlertStore } from '../store/useAlertStore';
 import { useEscalationStore } from '../store/useEscalationStore';
 import { notificationService } from './notificationService';
 import { dialEmergencyNumber, EMERGENCY_TEST_PHONE } from './emergency';
@@ -165,6 +164,11 @@ class AlertsWebSocket {
       event.type === 'APPOINTMENT_REQUESTED'
     ) {
       const incData = event.data || {};
+      const currentUserId = useAuthStore.getState().userId || useAuthStore.getState().user_id;
+      const creatorId = event.created_by ?? incData.created_by;
+      if (creatorId && currentUserId && String(creatorId) === String(currentUserId)) {
+        return;
+      }
       const isRequestedByFamily =
         event.alert_type === 'APPOINTMENT_REQUESTED' ||
         event.type === 'APPOINTMENT_REQUESTED' ||
@@ -225,8 +229,37 @@ class AlertsWebSocket {
       }
 
       // 2. Phía Bác sĩ: Thêm thông báo mới xác nhận từ Người nhà & Bắn Notification
+      const confirmedByRole = incData.confirmed_by_role || event.confirmed_by_role;
+      const targetHouseId = incData.house_id || event.house_id;
       const isTargetForThisDoctor = (targetUserId && currentUserId && String(targetUserId) === String(currentUserId)) || isDoctor;
-      if (isTargetForThisDoctor && event.type !== 'INCIDENT_RESOLVED') {
+      if (confirmedByRole === 'doctor' && !isDoctor && event.type !== 'INCIDENT_RESOLVED') {
+        const sameHouse = !targetHouseId || !store.house?.id || String(store.house.id) === String(targetHouseId);
+        if (sameHouse) {
+          const newFamilyInc: Incident = {
+            id: incData.id || `inc-fam-conf-${Date.now()}`,
+            device_id: incData.device_id || targetHouseId || 'system',
+            alert_type: 'APPOINTMENT_CONFIRMED',
+            alert_level: 'LOW',
+            message: incData.message || '✅ Bác sĩ đã xác nhận lịch khám của gia đình.',
+            video_clip_url: null,
+            thumbnail_url: null,
+            is_acknowledged: false,
+            created_at: incData.created_at || new Date().toISOString(),
+            note: aptId || null,
+            notes: incData.notes || `APPOINTMENT_CONFIRMED|APT:${aptId || ''}`,
+          };
+          store.addIncident(newFamilyInc);
+          notificationService.triggerEmergencyNotification({
+            title: '✅ BÁC SĨ ĐÃ XÁC NHẬN LỊCH KHÁM',
+            body: newFamilyInc.message,
+            data: {
+              incident_id: newFamilyInc.id,
+              alert_type: 'APPOINTMENT_CONFIRMED',
+              appointment_id: aptId,
+            },
+          });
+        }
+      } else if (isTargetForThisDoctor && event.type !== 'INCIDENT_RESOLVED') {
         const newDocIncident: Incident = {
           id: incData.id || `inc-doc-apt-${Date.now()}`,
           device_id: incData.device_id || 'system',
@@ -329,7 +362,7 @@ class AlertsWebSocket {
       if (alertType === 'HOUSE_MEMBER_REMOVED') {
         try {
           useVitalStore.getState().fetchHouseFromBackend?.();
-        } catch {}
+        } catch { }
       }
 
       const newIncident: Incident = {
@@ -346,8 +379,8 @@ class AlertsWebSocket {
       };
 
       store.addIncident(newIncident);
-      useAuthStore.getState().fetchMyPermissions?.().catch(() => {});
-      useVitalStore.getState().syncAllWithBackend?.().catch(() => {});
+      useAuthStore.getState().fetchMyPermissions?.().catch(() => { });
+      useVitalStore.getState().syncAllWithBackend?.().catch(() => { });
 
       notificationService.triggerEmergencyNotification({
         title: alertType === 'HOUSE_INVITE_PENDING' ? '🏠 LỜI MỜI THAM GIA NHÀ' : '🏠 THÀNH VIÊN GIA ĐÌNH',
@@ -368,25 +401,30 @@ class AlertsWebSocket {
     ) {
       const aType = String(event.alert_type || event.type || '');
       const incData = event.data || {};
+      const currentUserId = useAuthStore.getState().userId || useAuthStore.getState().user_id;
+      const creatorId = event.created_by ?? incData.created_by;
+      if (creatorId && currentUserId && String(creatorId) === String(currentUserId)) {
+        return;
+      }
       const aptId = event.appointment_id || incData.appointment_id;
       const msg =
         incData.message ||
         (aType === 'APPOINTMENT_RESCHEDULED'
           ? '🗓️ Lịch khám của người cao tuổi vừa được Bác sĩ dời sang khung giờ mới.'
           : aType === 'APPOINTMENT_COMPLETED'
-          ? '✅ Buổi khám bệnh cho người cao tuổi đã hoàn tất.'
-          : aType === 'APPOINTMENT_REMINDER'
-          ? '⏰ Sắp đến giờ khám bệnh theo lịch hẹn. Gia đình vui lòng chuẩn bị sẵn sàng.'
-          : '🗓️ Một lịch khám đã được xóa khỏi hệ thống.');
+            ? '✅ Buổi khám bệnh cho người cao tuổi đã hoàn tất.'
+            : aType === 'APPOINTMENT_REMINDER'
+              ? '⏰ Sắp đến giờ khám bệnh theo lịch hẹn. Gia đình vui lòng chuẩn bị sẵn sàng.'
+              : '🗓️ Một lịch khám đã được xóa khỏi hệ thống.');
       const title =
         incData.title ||
         (aType === 'APPOINTMENT_RESCHEDULED'
           ? '🗓️ LỊCH KHÁM ĐÃ ĐƯỢC DỜI'
           : aType === 'APPOINTMENT_COMPLETED'
-          ? '✅ ĐÃ HOÀN TẤT BUỔI KHÁM'
-          : aType === 'APPOINTMENT_REMINDER'
-          ? '⏰ NHẮC NHỞ LỊCH KHÁM SẮP TỚI'
-          : '🗓️ LỊCH KHÁM ĐÃ ĐƯỢC XÓA');
+            ? '✅ ĐÃ HOÀN TẤT BUỔI KHÁM'
+            : aType === 'APPOINTMENT_REMINDER'
+              ? '⏰ NHẮC NHỞ LỊCH KHÁM SẮP TỚI'
+              : '🗓️ LỊCH KHÁM ĐÃ ĐƯỢC XÓA');
 
       if (aType === 'APPOINTMENT_RESCHEDULED' || aType === 'APPOINTMENT_REMINDER') {
         const reschedIncident: Incident = {
@@ -438,15 +476,15 @@ class AlertsWebSocket {
         notes: incData.patient_id ? `PATIENT:${incData.patient_id}` : null,
       };
       store.addIncident(newIncident);
-      store.fetchReminders?.(incData.patient_id).catch(() => {});
+      store.fetchReminders?.(incData.patient_id).catch(() => { });
 
       notificationService.triggerEmergencyNotification({
         title:
           aType === 'MEDICATION_REMINDER'
             ? '💊 ĐẾN GIỜ UỐNG THUỐC'
             : aType === 'HYDRATION_REMINDER'
-            ? '💧 ĐẾN GIỜ UỐNG NƯỚC'
-            : '💊 ĐƠN THUỐC & LỊCH UỐNG THUỐC MỚI',
+              ? '💧 ĐẾN GIỜ UỐNG NƯỚC'
+              : '💊 ĐƠN THUỐC & LỊCH UỐNG THUỐC MỚI',
         body: newIncident.message,
         data: {
           incident_id: newIncident.id,

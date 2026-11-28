@@ -69,7 +69,7 @@ export const getCustomServerUrl = async (): Promise<string> => {
       api.defaults.baseURL = saved.trim();
       return saved.trim();
     }
-  } catch {}
+  } catch { }
   return api.defaults.baseURL || BASE_URL;
 };
 
@@ -90,7 +90,7 @@ api.interceptors.request.use(
       if (saved && saved.trim()) {
         config.baseURL = saved.trim();
       }
-    } catch {}
+    } catch { }
 
     const token = useAuthStore.getState().accessToken;
     if (token) {
@@ -146,7 +146,7 @@ export default api;
 
 export const authApi = {
   logout: (userName?: string, role?: string) =>
-    api.post('/auth/logout', { user_name: userName, role }).catch(() => {}),
+    api.post('/auth/logout', { user_name: userName, role }).catch(() => { }),
   checkPhone: (phone: string) => api.post('/auth/check-phone', { phone }),
   requestOtp: (phone: string) => api.post('/auth/request-otp', { phone }),
   verifyOtp: (phone: string, otp_code: string) => api.post('/auth/verify-otp', { phone, otp_code }),
@@ -512,8 +512,13 @@ export const doctorApi = {
       `/doctor/appointments/${appointmentId}`,
       data
     ),
-  completeAppointment: (appointmentId: string) =>
-    api.post(`/doctor/appointments/${appointmentId}/complete`),
+  confirmAppointment: (appointmentId: string) =>
+    api.post(`/doctor/appointments/${appointmentId}/confirm`),
+  completeAppointment: (appointmentId: string, clinicalNotes?: string) =>
+    api.post(
+      `/doctor/appointments/${appointmentId}/complete`,
+      clinicalNotes?.trim() ? { clinical_notes: clinicalNotes.trim() } : undefined
+    ),
   cancelAppointment: (appointmentId: string, data: { cancellation_reason: string }) =>
     api.post(`/doctor/appointments/${appointmentId}/cancel`, data),
   deleteAppointment: (appointmentId: string) =>

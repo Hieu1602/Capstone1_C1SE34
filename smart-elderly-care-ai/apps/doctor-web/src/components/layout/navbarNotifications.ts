@@ -92,7 +92,7 @@ export async function fetchDoctorNavbarNotifications(doctorUserId?: string): Pro
           msgLower.includes(k)
         );
       const isAppointmentMsg =
-        ['APPOINTMENT_CONFIRMED', 'APPOINTMENT_SCHEDULED', 'APPOINTMENT_CANCELLED'].includes(inc.alert_type || '') ||
+        Boolean(inc.alert_type?.startsWith('APPOINTMENT_')) ||
         ['lịch khám', 'lịch hẹn', 'đã hủy', '[đã hủy]', 'tái khám', 'xác nhận lịch'].some((k) =>
           msgLower.includes(k)
         );
