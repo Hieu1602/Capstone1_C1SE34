@@ -183,6 +183,20 @@ class ChatbotRAGService:
             ],
         )
 
+    @staticmethod
+    def _matches_patient_name(text_lower: str, full_name: str) -> bool:
+        p_name = (full_name or "").strip().lower()
+        if not p_name:
+            return False
+        if p_name in text_lower:
+            return True
+        parts = p_name.split()
+        if any(part in text_lower for part in parts if len(part) > 2):
+            return True
+        # Match short given names (e.g. "A" in "Nguyễn Văn A" when user writes "Cụ A") as a standalone token
+        last_part = parts[-1]
+        return bool(re.search(rf'(?:^|\s){re.escape(last_part)}(?:\s|$|[.,?!])', text_lower))
+
     def _resolve_active_patient(
         self,
         question: str,
@@ -206,8 +220,7 @@ class ChatbotRAGService:
         q_lower = question.lower()
         # 1. Tìm trong câu hỏi hiện tại
         for p in patients:
-            p_name = (p.get("full_name") or "").lower()
-            if p_name and (p_name in q_lower or any(part in q_lower for part in p_name.split() if len(part) > 2)):
+            if self._matches_patient_name(q_lower, p.get("full_name") or ""):
                 return p
 
         # 2. Dò ngược trong lịch sử hội thoại gần nhất
@@ -215,8 +228,7 @@ class ChatbotRAGService:
             for msg in reversed(chat_history):
                 text = (msg.get("text") or "").lower()
                 for p in patients:
-                    p_name = (p.get("full_name") or "").lower()
-                    if p_name and (p_name in text or any(part in text for part in p_name.split() if len(part) > 2)):
+                    if self._matches_patient_name(text, p.get("full_name") or ""):
                         return p
 
         return None
@@ -529,7 +541,10 @@ class ChatbotRAGService:
                     snippet = clean_text[:300] + ("..." if len(clean_text) > 300 else "")
                     sections.append(f"• {snippet}")
         elif not sections:
-            if is_en:
+            if patient and patient.get("full_name") and self._matches_patient_name(q_lower, patient.get("full_name", "")):
+                sections.append(self.context_builder.format_patient_summary(patient, language=language))
+                sections.append(self.context_builder.format_vitals_summary(vitals, language=language))
+            elif is_en:
                 sections.append(
                     "I could not find a directly matching topic in the current clinical guidelines (.pdf, .docx, .xlsx, .txt).\n\n"
                     "💡 **Hybrid Mode Note**: When connected to Cloud AI, I can answer out-of-document medical queries using general geriatric knowledge.\n\n"
