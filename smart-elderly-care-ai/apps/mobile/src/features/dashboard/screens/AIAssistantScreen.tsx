@@ -24,6 +24,7 @@ import {
   KeyboardAvoidingView,
   Keyboard,
   StatusBar,
+  Image,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,7 +34,8 @@ import { AudioModule, requestRecordingPermissionsAsync, setAudioModeAsync } from
 import AIBotIcon from '../../../components/AIBotIcon';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useTheme } from '../../../store/useThemeStore';
-import { chatbotApi } from '../../../services/api';
+import { chatbotApi, usersApi } from '../../../services/api';
+import { resolveAvatarUrl } from '../../auth/hooks/useProfileManager';
 
 // Cấu trúc dữ liệu cho tin nhắn chat
 export interface ChatMessage {
@@ -203,8 +205,29 @@ const ChatMessageRow = memo(
 // ----------------------------------------------------------------------------
 export default function AIAssistantScreen({ navigation }: any) {
   const { isDarkMode, colors } = useTheme();
-  const { userName, full_name } = useAuthStore();
+  const { userName, full_name, avatarUrl, avatar_url, setProfile, setAvatar } = useAuthStore();
   const displayName = full_name || userName || 'Người dùng';
+  const [avatarError, setAvatarError] = useState(false);
+  const userAvatarUri = useMemo(() => {
+    const raw = avatarUrl || avatar_url;
+    return raw && !raw.startsWith('blob:') ? resolveAvatarUrl(raw) : null;
+  }, [avatarUrl, avatar_url]);
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [userAvatarUri]);
+
+  useEffect(() => {
+    usersApi
+      .getMe()
+      .then((res) => {
+        const u = res?.data;
+        if (!u) return;
+        setProfile({ avatar_url: u.avatar_url, full_name: u.full_name });
+        setAvatar(u.avatar_url || '');
+      })
+      .catch(() => {});
+  }, [setProfile, setAvatar]);
 
   // State điều khiển Drawer Sidebar (In-tree, Không dùng Modal nặng)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -1069,16 +1092,31 @@ export default function AIAssistantScreen({ navigation }: any) {
             keyboardShouldPersistTaps="handled"
           >
             <TouchableOpacity
-              style={[styles.newChatPill, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
+              style={[
+                styles.newChatPill,
+                isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' },
+              ]}
               onPress={handleNewChat}
               activeOpacity={0.8}
             >
-              <Ionicons name="create-outline" size={20} color={isDarkMode ? colors.textPrimary : '#0F172A'} style={{ marginRight: 12 }} />
-              <Text style={[styles.newChatPillText, isDarkMode && { color: colors.textPrimary }]}>Cuộc trò chuyện mới</Text>
+              <Ionicons
+                name="create-outline"
+                size={19}
+                color={isDarkMode ? '#60A5FA' : '#2563EB'}
+                style={{ marginRight: 10 }}
+              />
+              <Text style={[styles.newChatPillText, isDarkMode && { color: colors.textPrimary }]}>
+                Cuộc trò chuyện mới
+              </Text>
             </TouchableOpacity>
 
             {isSearching ? (
-              <View style={[styles.searchBarBox, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View
+                style={[
+                  styles.searchBarBox,
+                  isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' },
+                ]}
+              >
                 <Ionicons name="search-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
                 <TextInput
                   style={[styles.searchBarInput, isDarkMode && { color: colors.textPrimary }]}
@@ -1100,18 +1138,21 @@ export default function AIAssistantScreen({ navigation }: any) {
               </View>
             ) : (
               <TouchableOpacity
-                style={[styles.searchRow, isDarkMode && { backgroundColor: colors.card }]}
+                style={[
+                  styles.searchRow,
+                  isDarkMode && { backgroundColor: '#0F172A', borderColor: '#334155' },
+                ]}
                 onPress={() => setIsSearching(true)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="search-outline" size={20} color="#64748B" style={{ marginRight: 12 }} />
-                <Text style={[styles.searchRowText, isDarkMode && { color: colors.textSecondary }]}>
+                <Ionicons name="search-outline" size={18} color="#94A3B8" style={{ marginRight: 10 }} />
+                <Text style={[styles.searchRowText, isDarkMode && { color: '#94A3B8' }]} numberOfLines={1}>
                   Tìm kiếm trong các cuộc trò chuyện
                 </Text>
               </TouchableOpacity>
             )}
 
-            <Text style={[styles.sidebarGroupTitle, isDarkMode && { color: colors.textSecondary }]}>
+            <Text style={[styles.sidebarGroupTitle, isDarkMode && { color: '#64748B' }]}>
               {isSearching && searchQuery.trim() ? `Kết quả tìm kiếm (${filteredChats.length})` : 'Gần đây'}
             </Text>
 
@@ -1123,52 +1164,52 @@ export default function AIAssistantScreen({ navigation }: any) {
                 </Text>
               </View>
             ) : (
-              filteredChats.map((chat) => (
-                <View
-                  key={chat.id}
-                  style={[
-                    styles.sidebarItemRow,
-                    isDarkMode && { backgroundColor: colors.card },
-                    currentSessionId === chat.id && {
-                      borderColor: '#0284C7',
-                      borderWidth: 1.5,
-                      backgroundColor: isDarkMode ? 'rgba(2, 132, 199, 0.15)' : '#F0F9FF',
-                    },
-                  ]}
-                >
-                  <TouchableOpacity
-                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}
-                    onPress={() => handleOpenHistoryChat(chat)}
-                    activeOpacity={0.7}
+              filteredChats.map((chat) => {
+                const isActive = currentSessionId === chat.id;
+                return (
+                  <View
+                    key={chat.id}
+                    style={[
+                      styles.sidebarItemRow,
+                      isActive && {
+                        backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.16)' : '#EFF6FF',
+                        borderColor: isDarkMode ? 'rgba(59, 130, 246, 0.4)' : '#BFDBFE',
+                      },
+                    ]}
                   >
-                    <Ionicons
-                      name="chatbubble-ellipses-outline"
-                      size={16}
-                      color={currentSessionId === chat.id ? '#0284C7' : isDarkMode ? '#94A3B8' : '#64748B'}
-                      style={{ marginRight: 10 }}
-                    />
-                    <Text
-                      style={[
-                        styles.sidebarItemText,
-                        { flex: 1 },
-                        isDarkMode && { color: colors.textPrimary },
-                        currentSessionId === chat.id && { fontWeight: '600', color: '#0284C7' },
-                      ]}
-                      numberOfLines={1}
+                    <TouchableOpacity
+                      style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' }}
+                      onPress={() => handleOpenHistoryChat(chat)}
+                      activeOpacity={0.7}
                     >
-                      {chat.title}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => handleDeleteHistoryChat(chat.id, chat.title)}
-                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                    style={{ padding: 8, marginLeft: 4 }}
-                    accessibilityLabel="Xoá cuộc trò chuyện"
-                  >
-                    <Ionicons name="trash-outline" size={18} color={isDarkMode ? '#EF4444' : '#DC2626'} />
-                  </TouchableOpacity>
-                </View>
-              ))
+                      <Ionicons
+                        name="chatbubble-ellipses-outline"
+                        size={16}
+                        color={isActive ? (isDarkMode ? '#60A5FA' : '#2563EB') : (isDarkMode ? '#64748B' : '#94A3B8')}
+                        style={{ marginRight: 10 }}
+                      />
+                      <Text
+                        style={[
+                          styles.sidebarItemText,
+                          isDarkMode && { color: '#CBD5E1' },
+                          isActive && { fontWeight: '700', color: isDarkMode ? '#FFFFFF' : '#1D4ED8' },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {chat.title}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleDeleteHistoryChat(chat.id, chat.title)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={styles.sidebarDeleteBtn}
+                      accessibilityLabel="Xoá cuộc trò chuyện"
+                    >
+                      <Ionicons name="trash-outline" size={16} color={isDarkMode ? '#64748B' : '#94A3B8'} />
+                    </TouchableOpacity>
+                  </View>
+                );
+              })
             )}
           </ScrollView>
 
@@ -1181,11 +1222,22 @@ export default function AIAssistantScreen({ navigation }: any) {
               }}
               activeOpacity={0.7}
             >
-              <View style={styles.userAvatarCircle}>
-                <Ionicons name="person" size={20} color="#0284C7" />
+              <View style={[styles.userAvatarCircle, isDarkMode && { backgroundColor: '#1E293B' }]}>
+                {userAvatarUri && !avatarError ? (
+                  <Image
+                    source={{ uri: userAvatarUri }}
+                    style={styles.userAvatarImg}
+                    resizeMode="cover"
+                    onError={() => setAvatarError(true)}
+                  />
+                ) : (
+                  <Ionicons name="person" size={18} color={isDarkMode ? '#60A5FA' : '#2563EB'} />
+                )}
               </View>
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={[styles.userNameText, isDarkMode && { color: colors.textPrimary }]}>{displayName}</Text>
+              <View style={{ flex: 1, minWidth: 0, marginLeft: 10 }}>
+                <Text style={[styles.userNameText, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1}>
+                  {displayName}
+                </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
             </TouchableOpacity>
@@ -1556,11 +1608,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E2E8F0',
   },
   sidebarBrandTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     color: '#0F172A',
     marginLeft: 8,
@@ -1568,41 +1620,49 @@ const styles = StyleSheet.create({
   newChatPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 24,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 12,
+    minHeight: 44,
+    paddingHorizontal: 14,
     marginTop: 14,
     marginBottom: 8,
   },
   newChatPillText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#1D4ED8',
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    minHeight: 44,
+    paddingHorizontal: 14,
   },
   searchRowText: {
-    fontSize: 14,
-    color: '#334155',
+    flex: 1,
+    fontSize: 13.5,
+    color: '#64748B',
     fontWeight: '500',
   },
   searchBarBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginVertical: 6,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    minHeight: 44,
+    paddingHorizontal: 14,
   },
   searchBarInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 13.5,
     color: '#0F172A',
     padding: 0,
   },
@@ -1618,47 +1678,68 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
   },
   sidebarGroupTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
+    letterSpacing: 0.6,
     color: '#94A3B8',
     marginTop: 18,
     marginBottom: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 6,
     textTransform: 'uppercase',
   },
   sidebarItemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
+    minHeight: 44,
+    paddingVertical: 6,
+    paddingLeft: 12,
+    paddingRight: 4,
+    marginBottom: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   sidebarItemText: {
-    fontSize: 13,
+    fontSize: 13.5,
     color: '#334155',
     fontWeight: '500',
     flex: 1,
   },
+  sidebarDeleteBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
+  },
   sidebarFooter: {
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E2E8F0',
+    paddingTop: 12,
+    paddingBottom: 10,
   },
   userProfileRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 44,
   },
   userAvatarCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#E0F2FE',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  userAvatarImg: {
+    width: '100%',
+    height: '100%',
   },
   userNameText: {
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 14.5,
+    fontWeight: '700',
     color: '#0F172A',
   },
 });
