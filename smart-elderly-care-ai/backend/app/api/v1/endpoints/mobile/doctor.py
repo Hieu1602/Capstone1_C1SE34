@@ -54,6 +54,7 @@ from app.schemas.patient import (
     PatientMedicalRecordUpdate,
 )
 from app.services import appointment_history
+from app.services.prescription_policy import ensure_can_edit_prescriptions
 from app.services.notification.appointment_notify import (
     broadcast_alert_ws,
     format_vn_dt,
@@ -127,7 +128,7 @@ async def get_patient_prescriptions(
 async def create_prescription(
     elderly_id: str,
     prescription_in: PrescriptionCreate,
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -135,8 +136,9 @@ async def create_prescription(
     - Lưu vào hồ sơ điều trị trong PostgreSQL.
     - Tự động đồng bộ lịch nhắc uống thuốc xuống Hub Orange Pi 5 để phát loa giọng nói tiếng Việt.
     """
-    doctor_name = current_user.full_name if current_user else "BS. Trần Văn Minh"
-    doctor_id = current_user.id if current_user else None
+    await ensure_can_edit_prescriptions(db, current_user, elderly_id)
+    doctor_name = current_user.full_name
+    doctor_id = current_user.id
     return await crud_doctor.add_prescription_db(
         db=db,
         elderly_id=elderly_id,
@@ -155,11 +157,12 @@ async def create_prescription(
 async def create_batch_prescriptions(
     elderly_id: str,
     batch_in: BatchPrescriptionCreate,
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    doctor_name = current_user.full_name if current_user else "BS. Trần Văn Minh"
-    doctor_id = current_user.id if current_user else None
+    await ensure_can_edit_prescriptions(db, current_user, elderly_id)
+    doctor_name = current_user.full_name
+    doctor_id = current_user.id
     return await crud_doctor.add_batch_prescriptions_db(
         db=db,
         elderly_id=elderly_id,
@@ -179,8 +182,10 @@ async def update_prescription(
     rx_id: str,
     prescription_in: PrescriptionUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Chỉnh sửa liều lượng, giờ uống hoặc hướng dẫn của đơn thuốc."""
+    await ensure_can_edit_prescriptions(db, current_user, elderly_id)
     updated = await crud_doctor.update_prescription_db(db, elderly_id, rx_id, prescription_in)
     if not updated:
         updated = crud_doctor.update_prescription(elderly_id, rx_id, prescription_in)
@@ -197,8 +202,10 @@ async def delete_prescription(
     elderly_id: str,
     rx_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Ngừng dùng hoặc loại bỏ đơn thuốc khỏi phác đồ."""
+    await ensure_can_edit_prescriptions(db, current_user, elderly_id)
     success = await crud_doctor.delete_prescription_db(db, elderly_id, rx_id)
     if not success:
         success = crud_doctor.delete_prescription(elderly_id, rx_id)
@@ -216,8 +223,10 @@ async def toggle_prescription_reminder(
     elderly_id: str,
     rx_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Bật/tắt tính năng loa thông minh Hub nhắc giờ uống thuốc."""
+    await ensure_can_edit_prescriptions(db, current_user, elderly_id)
     updated = await crud_doctor.toggle_prescription_reminder_db(db, elderly_id, rx_id)
     if not updated:
         updated = crud_doctor.toggle_prescription_reminder(elderly_id, rx_id)

@@ -10,7 +10,6 @@ import {
   DoctorEditProfileModal,
   DoctorChangePasswordModal,
   DoctorDevicesModal,
-  DoctorNotificationModal,
   DoctorComplianceModal,
   DoctorLogoutModal,
   DoctorProfileColumn,
@@ -19,7 +18,7 @@ import {
   type AlertSwitchItem,
   type SettingsMenuAction,
 } from '../components/settings';
-import { KeyRound, Bell, FileCheck2, Monitor, CheckCircle2 } from 'lucide-react';
+import { KeyRound, FileCheck2, Monitor, CheckCircle2 } from 'lucide-react';
 
 const getDoctorInitial = (name?: string) => {
   if (!name) return 'M';
@@ -92,7 +91,7 @@ export const SettingsPage: React.FC = () => {
 
   // Modals state
   const [activeModal, setActiveModal] = useState<
-    'NONE' | 'EDIT_PROFILE' | 'PASSWORD' | 'NOTIF' | 'COMPLIANCE' | 'DEVICES' | 'LOGOUT'
+    'NONE' | 'EDIT_PROFILE' | 'PASSWORD' | 'COMPLIANCE' | 'DEVICES' | 'LOGOUT'
   >('NONE');
   const [isPreviewAvatarOpen, setIsPreviewAvatarOpen] = useState(false);
 
@@ -110,13 +109,17 @@ export const SettingsPage: React.FC = () => {
   const [pwdError, setPwdError] = useState('');
   const [savingPwd, setSavingPwd] = useState(false);
 
-  // Notification switches
-  const [notifyEmergency, setNotifyEmergency] = useState(true);
-  const [notifyAppt, setNotifyAppt] = useState(true);
-  const [notifyHubSpeaker, setNotifyHubSpeaker] = useState(true);
-  const [notifyFallAlert, setNotifyFallAlert] = useState(true);
-  const [autoEscalationEnabled, setAutoEscalationEnabled] = useState<boolean>(() => {
-    const saved = localStorage.getItem('@seca_auto_escalation_enabled');
+  // Notification switches (persisted in localStorage)
+  const [notifyEmergency, setNotifyEmergency] = useState<boolean>(() => {
+    const saved = localStorage.getItem('@doctor_notify_emergency');
+    return saved === null ? true : saved === 'true';
+  });
+  const [notifyAppt, setNotifyAppt] = useState<boolean>(() => {
+    const saved = localStorage.getItem('@doctor_notify_appt');
+    return saved === null ? true : saved === 'true';
+  });
+  const [notifyFallAlert, setNotifyFallAlert] = useState<boolean>(() => {
+    const saved = localStorage.getItem('@doctor_notify_fall_alert');
     return saved === null ? true : saved === 'true';
   });
   const [isDarkMode, setIsDarkMode] = useState<boolean>(
@@ -295,50 +298,36 @@ export const SettingsPage: React.FC = () => {
 
   const alertSwitches: AlertSwitchItem[] = [
     {
-      title: 'Cảnh báo Nhịp tim & SpO2 vượt ngưỡng an toàn',
-      sub: 'Báo động khi sinh hiệu vượt ngưỡng riêng của từng bệnh nhân (trong Hồ sơ bệnh án)',
+      title: 'Thông báo sinh hiệu bất thường',
+      sub: 'Hiển thị thông báo khi nhịp tim hoặc SpO2 của bệnh nhân vượt ngưỡng an toàn',
       val: notifyEmergency,
       onToggle: () => {
-        setNotifyEmergency((v) => !v);
-        showToast('Đã cập nhật cấu hình: Cảnh báo Nhịp tim & SpO2 vượt ngưỡng an toàn');
+        const nextVal = !notifyEmergency;
+        setNotifyEmergency(nextVal);
+        localStorage.setItem('@doctor_notify_emergency', String(nextVal));
+        showToast('Đã cập nhật: Thông báo sinh hiệu bất thường');
       },
     },
     {
-      title: 'Tự động phát giọng nói nhắc nhở qua Loa Hub',
-      sub: 'Đồng bộ lịch uống thuốc và lịch khám xuống thiết bị Hub gia đình',
-      val: notifyHubSpeaker,
-      onToggle: () => {
-        setNotifyHubSpeaker((v) => !v);
-        showToast('Đã cập nhật cấu hình: Tự động phát giọng nói nhắc nhở qua Loa Hub');
-      },
-    },
-    {
-      title: 'Nhắc lịch khám định kỳ (Trước 24h & 2h)',
-      sub: 'Gửi thông báo đẩy đồng thời trên Web Máy tính và App Điện thoại',
-      val: notifyAppt,
-      onToggle: () => {
-        setNotifyAppt((v) => !v);
-        showToast('Đã cập nhật cấu hình: Nhắc lịch khám định kỳ (Trước 24h & 2h)');
-      },
-    },
-    {
-      title: 'Ưu tiên cuộc gọi & cảnh báo té ngã khẩn cấp',
-      sub: 'Phát âm thanh cảnh báo mức cao nhất ngay cả khi ở chế độ im lặng',
+      title: 'Thông báo sự cố khẩn cấp (Té ngã / SOS)',
+      sub: 'Hiển thị thông báo ưu tiên khi phát hiện té ngã hoặc bệnh nhân nhấn SOS',
       val: notifyFallAlert,
       onToggle: () => {
-        setNotifyFallAlert((v) => !v);
-        showToast('Đã cập nhật cấu hình: Ưu tiên cuộc gọi & cảnh báo té ngã khẩn cấp');
+        const nextVal = !notifyFallAlert;
+        setNotifyFallAlert(nextVal);
+        localStorage.setItem('@doctor_notify_fall_alert', String(nextVal));
+        showToast('Đã cập nhật: Thông báo sự cố khẩn cấp (Té ngã / SOS)');
       },
     },
     {
-      title: 'Tự động gọi cấp cứu nếu không có phản hồi sau [45 giây]',
-      sub: 'Tự động chuyển trạng thái ESCALATED_AUTO_CALL và kích hoạt gọi 115 khi gia đình không phản hồi',
-      val: autoEscalationEnabled,
+      title: 'Nhắc lịch khám định kỳ',
+      sub: 'Gửi thông báo nhắc trước giờ thăm khám (24h & 2h)',
+      val: notifyAppt,
       onToggle: () => {
-        const nextVal = !autoEscalationEnabled;
-        setAutoEscalationEnabled(nextVal);
-        localStorage.setItem('@seca_auto_escalation_enabled', String(nextVal));
-        showToast('Đã cập nhật cấu hình: Tự động gọi cấp cứu nếu không có phản hồi sau [45 giây]');
+        const nextVal = !notifyAppt;
+        setNotifyAppt(nextVal);
+        localStorage.setItem('@doctor_notify_appt', String(nextVal));
+        showToast('Đã cập nhật: Nhắc lịch khám định kỳ');
       },
     },
   ];
@@ -365,13 +354,6 @@ export const SettingsPage: React.FC = () => {
         setPwdError('');
         setActiveModal('PASSWORD');
       },
-    },
-    {
-      icon: Bell,
-      bg: 'bg-amber-500',
-      title: 'Cài đặt thông báo ca trực',
-      sub: 'Chuông cảnh báo sinh hiệu & nhắc lịch khám',
-      onClick: () => setActiveModal('NOTIF'),
     },
     {
       icon: FileCheck2,
@@ -454,20 +436,6 @@ export const SettingsPage: React.FC = () => {
           loadingTerminals={loadingTerminals}
           onRefresh={fetchStatsAndDevices}
           onRevokeTerminal={handleRevokeTerminal}
-          onClose={() => setActiveModal('NONE')}
-        />
-      )}
-
-      {activeModal === 'NOTIF' && (
-        <DoctorNotificationModal
-          notifyEmergency={notifyEmergency}
-          setNotifyEmergency={setNotifyEmergency}
-          notifyAppt={notifyAppt}
-          setNotifyAppt={setNotifyAppt}
-          onSave={() => {
-            setActiveModal('NONE');
-            showToast('Đã lưu cài đặt thông báo ca trực.');
-          }}
           onClose={() => setActiveModal('NONE')}
         />
       )}

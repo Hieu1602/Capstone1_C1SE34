@@ -72,6 +72,7 @@ const english: Record<string, string> = {
   'Danh mục Bệnh lý nền (Chẩn đoán)': 'Medical conditions (diagnoses)',
   'Danh mục Bệnh lý nền': 'Medical conditions',
   'Danh mục cữ thuốc hôm nay': 'Today’s medication schedule',
+  'Theo đơn bác sĩ': 'Doctor prescribed',
   'Danh sách': 'List',
   'Danh sách các nhóm khu vực đã thiết lập trong nhà': 'Configured room groups in this home',
   'Danh sách sự kiện đã qua theo thời gian': 'Past events in chronological order',

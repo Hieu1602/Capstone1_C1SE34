@@ -25,6 +25,8 @@ export interface PrescriptionItem {
   doctor_name: string;
   enable_speaker_reminder: boolean;
   created_at?: string;
+  /** Đơn do người nhà tự nhập (dữ liệu cũ) – không phải chỉ định của bác sĩ */
+  is_family_added?: boolean;
 }
 
 export interface MedicationFormItem {

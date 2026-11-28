@@ -76,6 +76,8 @@ class PrescriptionItem(BaseModel):
     status: str = "ACTIVE"
     enable_speaker_reminder: bool = True
     created_at: Optional[str] = None
+    # True nếu đơn do người nhà tự thêm (dữ liệu cũ) – không phải chỉ định của bác sĩ
+    is_family_added: bool = False
 
 
 class PrescriptionCreate(BaseModel):

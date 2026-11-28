@@ -735,6 +735,9 @@ async def get_patient_doctor_busy_slots(
             Appointment.scheduled_at,
             Appointment.duration_minutes,
             Appointment.visit_type,
+            Appointment.status,
+            Appointment.created_by,
+            Appointment.patient_id,
         )
         .where(
             Appointment.doctor_id == doctor_id,
@@ -742,6 +745,8 @@ async def get_patient_doctor_busy_slots(
         )
         .order_by(Appointment.scheduled_at.asc())
     )
+    from app.crud.crud_appointment import classify_busy_slot
+
     rows = (await db.execute(stmt)).all()
     return [
         BusySlotItem(
@@ -749,8 +754,10 @@ async def get_patient_doctor_busy_slots(
             scheduled_at=sat,
             duration_minutes=dur or 30,
             visit_type=vt or "HOME_VISIT",
+            kind=classify_busy_slot(st, created_by, doctor_id),
+            is_own=(pid == patient_uuid),
         )
-        for aid, sat, dur, vt in rows
+        for aid, sat, dur, vt, st, created_by, pid in rows
     ]
 
 

@@ -701,7 +701,17 @@ export const PatientDrawerPrescriptionsTab: React.FC<PatientDrawerPrescriptionsT
         className="rounded-2xl border border-slate-200/80 bg-white dark:bg-[#0F172A] dark:border-slate-800/80 p-4 shadow-xs"
       >
         <div className="flex items-center justify-between">
-          <span className="font-extrabold text-slate-900 dark:text-white text-xs">{rx.medication_name}</span>
+          <span className="flex items-center gap-1.5 font-extrabold text-slate-900 dark:text-white text-xs">
+            {rx.medication_name}
+            {rx.is_family_added && (
+              <span
+                className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
+                title="Người nhà tự nhập, chưa phải chỉ định của bác sĩ"
+              >
+                Người nhà tự thêm
+              </span>
+            )}
+          </span>
           <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700 border border-blue-100 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-900/60">
             {rx.dosage}
           </span>

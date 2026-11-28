@@ -100,6 +100,13 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
     Boolean(permissions?.is_owner) ||
     permissions?.role_in_house === 'OWNER';
   const canManageRecords = isOwnerOrAdmin || Boolean(permissions?.can_manage_records);
+  // Đơn thuốc là chỉ định y khoa: chỉ bác sĩ phụ trách được thêm/sửa/xóa. Chủ nhà & người nhà chỉ xem.
+  const canEditPrescriptions = userRole === 'doctor' || role === 'doctor';
+  const showPrescriptionViewOnly = () =>
+    LocalizedAlert.alert(
+      'Chỉ bác sĩ được thay đổi đơn thuốc',
+      'Đơn thuốc do bác sĩ phụ trách kê. Gia đình chỉ xem và đánh dấu đã uống; muốn thay đổi thuốc vui lòng liên hệ bác sĩ.'
+    );
 
   // Trạng thái bật/tắt phát giọng nói nhắc nhở qua Loa thông minh Edge Hub (FR12)
   const [hubVoiceReminderEnabled, setHubVoiceReminderEnabled] = useState(true);
@@ -246,11 +253,8 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
   };
 
   const handleSavePrescription = async () => {
-    if (!canManageRecords) {
-      LocalizedAlert.alert(
-        'Không có quyền thay đổi',
-        'Tài khoản Thành viên chưa được cấp quyền "Quản lý Lịch thuốc & Bệnh án". Vui lòng liên hệ Chủ hộ để được cấp quyền.'
-      );
+    if (!canEditPrescriptions) {
+      showPrescriptionViewOnly();
       return;
     }
     const diagTrimmed = diagnosis.trim();
@@ -317,13 +321,8 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
   const [deletingRxId, setDeletingRxId] = useState<string | null>(null);
 
   const handleDeletePrescription = (rx: any) => {
-    if (!canManageRecords || deletingRxId) {
-      if (!canManageRecords) {
-        LocalizedAlert.alert(
-          'Không có quyền thao tác',
-          'Tài khoản Thành viên chưa được cấp quyền "Quản lý Lịch thuốc & Bệnh án".'
-        );
-      }
+    if (!canEditPrescriptions || deletingRxId) {
+      if (!canEditPrescriptions) showPrescriptionViewOnly();
       return;
     }
     const rxIdStr = String(rx.id);
@@ -362,11 +361,8 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
   };
 
   const handleDeleteMedication = (med: ReminderItem) => {
-    if (!canManageRecords) {
-      LocalizedAlert.alert(
-        'Không có quyền thao tác',
-        'Tài khoản Thành viên chưa được cấp quyền "Quản lý Lịch thuốc & Bệnh án".'
-      );
+    if (!canEditPrescriptions) {
+      showPrescriptionViewOnly();
       return;
     }
     LocalizedAlert.alert(
@@ -689,19 +685,29 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
                 ]}
               >
                 <View style={styles.doctorRxHeader}>
-                  <View style={styles.doctorRxBadge}>
-                    <Ionicons name="shield-checkmark" size={11} color="#2563EB" />
-                    <LocalizedText style={styles.doctorRxBadgeText}>
-                      {rx.doctor_name || 'Bác sĩ phụ trách'}
-                    </LocalizedText>
-                  </View>
+                  {rx.is_family_added ? (
+                    // Dữ liệu cũ: người nhà tự nhập, KHÔNG phải chỉ định của bác sĩ
+                    <View style={[styles.doctorRxBadge, { backgroundColor: isDarkMode ? '#33415588' : '#F1F5F9', borderColor: '#CBD5E1' }]}>
+                      <Ionicons name="people-outline" size={11} color="#64748B" />
+                      <LocalizedText style={[styles.doctorRxBadgeText, { color: '#64748B' }]}>
+                        {`Người nhà tự thêm${rx.doctor_name ? ` · ${rx.doctor_name}` : ''}`}
+                      </LocalizedText>
+                    </View>
+                  ) : (
+                    <View style={styles.doctorRxBadge}>
+                      <Ionicons name="shield-checkmark" size={11} color="#2563EB" />
+                      <LocalizedText style={styles.doctorRxBadgeText}>
+                        {rx.doctor_name ? `BS. ${String(rx.doctor_name).replace(/^(BS\.?|Bác sĩ)\s*/i, '')}` : 'Bác sĩ phụ trách'}
+                      </LocalizedText>
+                    </View>
+                  )}
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     {rx.created_at ? (
                       <LocalizedText style={{ fontSize: 10.5, color: textSub }}>
                         {rx.created_at.split(' ')[0]}
                       </LocalizedText>
                     ) : null}
-                    {canManageRecords && (
+                    {canEditPrescriptions && (
                       <TouchableOpacity
                         onPress={() => handleDeletePrescription(rx)}
                         disabled={Boolean(deletingRxId)}
@@ -836,25 +842,53 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
         {/* Danh mục cữ thuốc hôm nay */}
         <View style={[styles.sectionCard, { backgroundColor: bgCard, borderColor: borderCol }]}>
           <View style={styles.sectionHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={[styles.sectionIconBox, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+              <View style={[styles.sectionIconBox, { backgroundColor: isDarkMode ? '#1E3A8A' : '#EFF6FF', flexShrink: 0 }]}>
                 <Ionicons name="medical" size={20} color="#2563EB" />
               </View>
-              <LocalizedText style={[styles.sectionTitle, { color: textTitle }]}>Danh mục cữ thuốc hôm nay</LocalizedText>
-            </View>
-            <TouchableOpacity onPress={() => {
-              if (!canManageRecords) {
-                LocalizedAlert.alert(
-                  'Không có quyền thao tác',
-                  'Tài khoản Thành viên chưa được cấp quyền "Quản lý Lịch thuốc & Bệnh án".'
-                );
-                return;
-              }
-              setAddMedModalVisible(true);
-            }}>
-              <LocalizedText style={[styles.addMedLink, !canManageRecords && { color: textSub }]}>
-                {canManageRecords ? '+ Thêm cữ' : '🔒 Chỉ xem'}
+              <LocalizedText
+                style={[styles.sectionTitle, { color: textTitle, flexShrink: 1 }]}
+                numberOfLines={2}
+              >
+                Danh mục cữ thuốc hôm nay
               </LocalizedText>
+            </View>
+            <TouchableOpacity
+              activeOpacity={0.75}
+              style={{ flexShrink: 0 }}
+              onPress={() => {
+                if (!canEditPrescriptions) {
+                  showPrescriptionViewOnly();
+                  return;
+                }
+                setAddMedModalVisible(true);
+              }}
+            >
+              {canEditPrescriptions ? (
+                <LocalizedText style={styles.addMedLink}>+ Thêm cữ</LocalizedText>
+              ) : (
+                <View
+                  style={[
+                    styles.doctorRxHeaderPill,
+                    isDarkMode && styles.doctorRxHeaderPillDark,
+                  ]}
+                >
+                  <Ionicons
+                    name="shield-checkmark-outline"
+                    size={14}
+                    color={isDarkMode ? '#93C5FD' : '#1D4ED8'}
+                  />
+                  <LocalizedText
+                    style={[
+                      styles.doctorRxHeaderPillText,
+                      isDarkMode && { color: '#93C5FD' },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    Theo đơn bác sĩ
+                  </LocalizedText>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -888,7 +922,9 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
                 <Ionicons name="medical-outline" size={36} color={isDarkMode ? '#64748B' : '#94A3B8'} />
                 <LocalizedText style={[styles.emptyBoxTitle, { color: textTitle }]}>Chưa có lịch uống thuốc</LocalizedText>
                 <LocalizedText style={[styles.emptyBoxSub, { color: textSub }]}>
-                  Bấm "+ Thêm cữ" ở góc trên để tạo lịch nhắc nhở uống thuốc cho người cao tuổi.
+                  {canEditPrescriptions
+                    ? 'Bấm "+ Thêm cữ" ở góc trên để tạo lịch nhắc nhở uống thuốc cho người cao tuổi.'
+                    : 'Lịch uống thuốc sẽ hiện ở đây khi bác sĩ phụ trách kê đơn.'}
                 </LocalizedText>
               </View>
             ) : (
@@ -933,7 +969,7 @@ export default function MedicationReminderScreen({ navigation, route }: any) {
                         {med.taken ? 'Đã uống' : 'Chưa'}
                       </LocalizedText>
                     </TouchableOpacity>
-                    {canManageRecords && !String(med.id).startsWith('rx-med-') && (
+                    {canEditPrescriptions && !String(med.id).startsWith('rx-med-') && (
                       <TouchableOpacity
                         onPress={() => handleDeleteMedication(med)}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -1601,11 +1637,31 @@ const styles = StyleSheet.create({
   testVoiceBtnText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
 
   sectionCard: { borderRadius: 18, padding: 16, borderWidth: 1 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14 },
   sectionIconBox: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   sectionTitle: { fontSize: 15, fontWeight: '700' },
   sectionSubtitle: { fontSize: 11, marginTop: 2 },
   addMedLink: { fontSize: 13, fontWeight: '700', color: Colors.primary },
+  doctorRxHeaderPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 9999,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  doctorRxHeaderPillDark: {
+    backgroundColor: 'rgba(30, 58, 138, 0.35)',
+    borderColor: '#1E40AF',
+  },
+  doctorRxHeaderPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1D4ED8',
+  },
 
   sessionTabRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   sessionTabBtn: { flex: 1, paddingVertical: 8, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center' },

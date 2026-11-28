@@ -453,7 +453,9 @@ export const PatientPrescriptionsTab: React.FC<PatientPrescriptionsTabProps> = (
 
             <View style={tabStyles.rxActionRow}>
               <Text style={[tabStyles.rxDoctorCredit, { color: isDarkMode ? '#64748B' : '#94A3B8' }]}>
-                Kê bởi: {item.doctor_name || 'Bác sĩ'}
+                {item.is_family_added
+                  ? `Người nhà tự thêm${item.doctor_name ? ` · ${item.doctor_name}` : ''}`
+                  : `Kê bởi: ${item.doctor_name || 'Bác sĩ'}`}
               </Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <TouchableOpacity style={tabStyles.rxEditBtn} onPress={() => handleEdit(item)}>

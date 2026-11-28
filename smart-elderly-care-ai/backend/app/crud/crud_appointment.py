@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import re
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 import uuid
 
 from sqlalchemy import and_, or_, select, update
@@ -42,6 +42,17 @@ async def get_patient_names_map(
         select(ElderlyProfile.id, ElderlyProfile.full_name).where(ElderlyProfile.id.in_(ids))
     )
     return {pid: name for pid, name in res.all() if name}
+
+
+def classify_busy_slot(status: Optional[str], created_by: Any, doctor_id: Any) -> str:
+    """
+    Loại ô giờ bị chiếm trên lịch bác sĩ:
+    - "PENDING": gia đình yêu cầu / dời lịch, bác sĩ CHƯA xác nhận (vẫn giữ chỗ theo nguyên tắc ai đặt trước).
+    - "BUSY": lịch bác sĩ đã nhận (đã xác nhận, hoặc do chính bác sĩ tạo/dời).
+    """
+    if status == "UPCOMING" and created_by is not None and str(created_by) != str(doctor_id):
+        return "PENDING"
+    return "BUSY"
 
 
 def build_appointment_response(
@@ -257,7 +268,7 @@ class CRUDAppointment:
             visit_type=obj_in.visit_type,
         )
         if is_conflict:
-            raise ValueError("Khung giờ này đã có lịch khám khác. Vui lòng chọn giờ khác.")
+            raise ValueError("Khung giờ này đã có lịch khám khác (đã xác nhận hoặc đang chờ bác sĩ duyệt). Vui lòng chọn giờ khác.")
 
         # 3. Tạo cuộc hẹn chính (Root Appointment)
         pattern = (obj_in.recurrence_pattern or RecurrencePatternEnum.NONE.value).strip().upper()
@@ -373,7 +384,7 @@ class CRUDAppointment:
                 visit_type=obj_in.visit_type or apt.visit_type,
             )
             if is_conflict:
-                raise ValueError("Khung giờ này đã có lịch khám khác. Vui lòng chọn giờ khác.")
+                raise ValueError("Khung giờ này đã có lịch khám khác (đã xác nhận hoặc đang chờ bác sĩ duyệt). Vui lòng chọn giờ khác.")
 
             apt.scheduled_at = new_time
             apt.duration_minutes = new_duration

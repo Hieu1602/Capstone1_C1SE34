@@ -136,6 +136,10 @@ class BusySlotItem(BaseModel):
     scheduled_at: datetime
     duration_minutes: int = 30
     visit_type: str
+    # BUSY = bác sĩ đã nhận lịch; PENDING = gia đình yêu cầu, chờ bác sĩ xác nhận (vẫn giữ chỗ)
+    kind: str = "BUSY"
+    # True nếu là lịch của chính bệnh nhân đang đặt (không lộ thông tin bệnh nhân khác)
+    is_own: bool = False
 
 
 class AppointmentCompleteRequest(BaseModel):

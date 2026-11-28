@@ -3,7 +3,35 @@ export interface BusySlotLike {
   scheduled_at: string;
   duration_minutes?: number | null;
   visit_type?: string | null;
+  /** BUSY = bác sĩ đã nhận lịch; PENDING = gia đình yêu cầu, chờ bác sĩ xác nhận (vẫn giữ chỗ) */
+  kind?: 'BUSY' | 'PENDING' | string;
+  /** Lịch của chính bệnh nhân đang đặt */
+  is_own?: boolean;
 }
+
+/** Lý do ô giờ không chọn được: bác sĩ bận / yêu cầu của chính nhà mình đang chờ / nhà khác đã đặt trước */
+export type SlotConflictKind = 'BUSY' | 'OWN_PENDING' | 'OTHER_PENDING';
+
+export const SLOT_CONFLICT_LABEL: Record<SlotConflictKind, string> = {
+  BUSY: 'Bác sĩ bận',
+  OWN_PENDING: 'Lịch của bạn · chờ BS duyệt',
+  OTHER_PENDING: 'Đã có người đặt · chờ BS duyệt',
+};
+
+export const SLOT_CONFLICT_ALERT: Record<SlotConflictKind, { title: string; message: string }> = {
+  BUSY: {
+    title: 'Khung giờ bác sĩ bận',
+    message: 'Bác sĩ đã có lịch khám khác trong khung giờ này. Vui lòng chọn khung giờ trống khác.',
+  },
+  OWN_PENDING: {
+    title: 'Bạn đã gửi yêu cầu ở khung giờ này',
+    message: 'Yêu cầu khám của bạn trong khung giờ này đang chờ bác sĩ xác nhận. Vui lòng chọn khung giờ khác nếu muốn đặt thêm.',
+  },
+  OTHER_PENDING: {
+    title: 'Khung giờ đã có người đặt trước',
+    message: 'Một gia đình khác đã đặt khung giờ này trước và đang chờ bác sĩ xác nhận. Vui lòng chọn khung giờ khác.',
+  },
+};
 
 export interface FamilyAppointmentLike {
   id: string;
@@ -76,13 +104,25 @@ export function isDoctorBusyForSlot(
   excludeAppointmentId?: string | null,
   durationMinutes = 30
 ): boolean {
+  return getSlotConflict(date, timeSlot, visitType, busySlots, excludeAppointmentId, durationMinutes) !== null;
+}
+
+/** Giống isDoctorBusyForSlot nhưng cho biết lý do (ưu tiên: bác sĩ bận > lịch của mình > nhà khác giữ chỗ) */
+export function getSlotConflict(
+  date: Date,
+  timeSlot: string,
+  visitType: string,
+  busySlots: BusySlotLike[],
+  excludeAppointmentId?: string | null,
+  durationMinutes = 30
+): SlotConflictKind | null {
   const slotStart = buildLocalDateTime(date, timeSlot);
-  if (!slotStart) return false;
+  if (!slotStart) return null;
   const slotStartMs = slotStart.getTime();
   const slotEndMs = slotStartMs + durationMinutes * 60_000;
   const isNewHome = (visitType || '').toUpperCase() === 'HOME_VISIT';
 
-  return busySlots.some((slot) => {
+  const overlapping = busySlots.filter((slot) => {
     if (excludeAppointmentId && String(slot.id) === String(excludeAppointmentId)) return false;
     const exStartMs = new Date(slot.scheduled_at).getTime();
     if (isNaN(exStartMs)) return false;
@@ -94,6 +134,10 @@ export function isDoctorBusyForSlot(
     }
     return exStartMs < slotEndMs && exEndMs > slotStartMs;
   });
+  if (overlapping.length === 0) return null;
+  if (overlapping.some((s) => (s.kind || 'BUSY') !== 'PENDING')) return 'BUSY';
+  if (overlapping.some((s) => s.is_own)) return 'OWN_PENDING';
+  return 'OTHER_PENDING';
 }
 
 export function findFirstAvailableSlot(

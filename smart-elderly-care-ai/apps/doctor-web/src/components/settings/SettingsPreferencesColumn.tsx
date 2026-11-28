@@ -54,23 +54,39 @@ export const SettingsPreferencesColumn: React.FC<SettingsPreferencesColumnProps>
   isDarkMode,
   onToggleDarkMode,
   onOpenLogout,
-}) => (
-  <div className="lg:col-span-6 space-y-5">
-    {/* 1. Thẻ Cấu hình Ngưỡng Cảnh báo Sinh hiệu & Thông báo Loa Hub */}
-    <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-[#131C31]">
-      <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-3 mb-4">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
-            <Bell className="h-4 w-4" />
+}) => {
+  const activeCount = alertSwitches.filter((sw) => sw.val).length;
+  const allActive = activeCount === alertSwitches.length && alertSwitches.length > 0;
+  const statusLabel =
+    activeCount === 0
+      ? 'Đã tắt'
+      : allActive
+      ? 'Đang kích hoạt'
+      : `Đang bật ${activeCount}/${alertSwitches.length}`;
+
+  return (
+    <div className="lg:col-span-6 space-y-5">
+      {/* 1. Thẻ Cấu hình Cảnh báo Sinh hiệu & Thông báo */}
+      <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800/80 dark:bg-[#131C31]">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-3 mb-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
+              <Bell className="h-4 w-4" />
+            </div>
+            <span className="text-xs font-extrabold uppercase tracking-wide text-slate-900 dark:text-white">
+              Cài đặt Thông báo
+            </span>
           </div>
-          <span className="text-xs font-extrabold uppercase tracking-wide text-slate-900 dark:text-white">
-            Cảnh báo Sinh hiệu &amp; Loa Hub
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold whitespace-nowrap ${
+              activeCount > 0
+                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+            }`}
+          >
+            {statusLabel}
           </span>
         </div>
-        <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-          Đang kích hoạt
-        </span>
-      </div>
 
       <div className="space-y-3.5 divide-y divide-slate-100 dark:divide-slate-800">
         {alertSwitches.map((sw) => (
@@ -138,4 +154,5 @@ export const SettingsPreferencesColumn: React.FC<SettingsPreferencesColumnProps>
       <span>Đăng xuất khỏi tài khoản Bác sĩ</span>
     </button>
   </div>
-);
+  );
+};

@@ -688,7 +688,13 @@ class CRUDDoctor:
             .order_by(desc(Prescription.created_at))
         )
         prescriptions = res.scalars().all()
-        return [_prescription_model_to_item(rx) for rx in prescriptions]
+        from app.services.prescription_policy import family_added_map
+
+        fam = await family_added_map(db, prescriptions)
+        items = [_prescription_model_to_item(rx) for rx in prescriptions]
+        for it in items:
+            it.is_family_added = fam.get(it.id, False)
+        return items
 
     async def add_prescription_db(
         self,

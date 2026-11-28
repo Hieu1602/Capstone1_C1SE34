@@ -23,6 +23,7 @@ from redis.asyncio import Redis
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.prescription_policy import ensure_can_edit_prescriptions
 from app.api.deps import get_current_user_optional
 from app.core.database import get_redis, get_db
 from app.models.user import User
@@ -162,10 +163,15 @@ async def get_today_reminders(
     synced_doses: List[Dict[str, Any]] = []
     seen_rx_ids = set()
 
+    from app.services.prescription_policy import family_added_map
+
+    family_added = await family_added_map(db, db_prescriptions)
     for rx in db_prescriptions:
         rx_id_str = str(rx.id)
         seen_rx_ids.add(rx_id_str)
+        is_family_added = family_added.get(rx_id_str, False)
         doctor_prescriptions.append({
+            "is_family_added": is_family_added,
             "id": rx_id_str,
             "patient_id": str(rx.patient_id),
             "medication_name": rx.medication_name,
@@ -204,7 +210,7 @@ async def get_today_reminders(
                 "category": "MEDICATION",
                 "taken": is_taken,
                 "takenAt": taken_at,
-                "from_doctor": True,
+                "from_doctor": not is_family_added,
                 "doctor_name": rx.doctor_name,
                 "enable_speaker_reminder": rx.enable_speaker_reminder,
                 "created_at": rx.created_at.strftime("%Y-%m-%d %H:%M:%S") if rx.created_at else today_str,
@@ -275,8 +281,13 @@ async def create_reminder(
     item_in: ReminderItemIn,
     current_user: Optional[User] = Depends(get_current_user_optional),
     redis: Redis = Depends(get_redis),
+    db: AsyncSession = Depends(get_db),
 ) -> Dict[str, Any]:
     """Thêm một cữ thuốc hoặc hoạt động nhắc nhở thực tế cho người cao tuổi."""
+    # Cữ thuốc thuộc đơn thuốc -> chỉ bác sĩ phụ trách được thêm
+    if not item_in.patient_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Thiếu ID người cao tuổi.")
+    await ensure_can_edit_prescriptions(db, current_user, item_in.patient_id)
     today_str = _now_vn().strftime("%Y-%m-%d")
     user_id_str = str(current_user.id) if current_user else None
     target_id = item_in.patient_id or user_id_str
@@ -339,6 +350,10 @@ async def create_prescription(
     - Tự động phân rã thành các cữ nhắc nhở cụ thể trong ngày (Sáng / Trưa / Chiều / Tối).
     - Lưu đồng thời vào PostgreSQL (Prescription table) để đồng bộ hoàn toàn với Doctor Web.
     """
+    # Đơn thuốc là chỉ định y khoa: chỉ bác sĩ phụ trách được kê; người nhà chỉ xem
+    if not prescription_in.patient_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Thiếu ID người cao tuổi.")
+    await ensure_can_edit_prescriptions(db, current_user, prescription_in.patient_id)
     today_now = _now_vn()
     today_str = today_now.strftime("%Y-%m-%d")
     user_id_str = str(current_user.id) if current_user else None
@@ -471,6 +486,9 @@ async def delete_prescription_reminder(
     """Xóa một đơn thuốc khỏi PostgreSQL, in-memory store và dọn cữ thuốc liên quan trong Redis."""
     from app.crud.crud_doctor import crud_doctor
 
+    if not patient_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Thiếu ID người cao tuổi.")
+    await ensure_can_edit_prescriptions(db, current_user, patient_id)
     user_id_str = str(current_user.id) if current_user else None
     target_id = patient_id or user_id_str or ""
 
@@ -591,8 +609,13 @@ async def delete_reminder(
     patient_id: Optional[str] = Query(None, description="Lọc theo ID người cao tuổi"),
     current_user: Optional[User] = Depends(get_current_user_optional),
     redis: Redis = Depends(get_redis),
+    db: AsyncSession = Depends(get_db),
 ) -> Dict[str, Any]:
     """Xóa một cữ thuốc khỏi lịch nhắc nhở hôm nay."""
+    # Cữ thuốc thuộc đơn thuốc -> chỉ bác sĩ phụ trách được xóa (người nhà chỉ xem / đánh dấu đã uống)
+    if not patient_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Thiếu ID người cao tuổi.")
+    await ensure_can_edit_prescriptions(db, current_user, patient_id)
     today_str = _now_vn().strftime("%Y-%m-%d")
     user_id_str = str(current_user.id) if current_user else None
     target_id = patient_id or user_id_str

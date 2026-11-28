@@ -60,6 +60,8 @@ export interface PrescriptionItem {
   start_date?: string;
   end_date?: string;
   diagnosis?: string;
+  /** Đơn do người nhà tự nhập trước khi khóa quyền – không phải chỉ định của bác sĩ */
+  is_family_added?: boolean;
 }
 
 export interface BatchPrescriptionPayload {

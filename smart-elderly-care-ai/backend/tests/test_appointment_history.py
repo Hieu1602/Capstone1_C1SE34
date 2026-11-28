@@ -25,3 +25,13 @@ def test_non_time_edit_is_plain_update():
     changes = h.diff(h.snapshot(_apt()), h.snapshot(_apt(location="Tại nhà")))
     assert changes == {"location": ["PK", "Tại nhà"]}
     assert h.resolve_update_action(changes) == "UPDATED"
+
+
+def test_busy_slot_kind_pending_only_for_unconfirmed_family_requests():
+    from app.crud.crud_appointment import classify_busy_slot
+
+    doctor, family = "doc-1", "user-9"
+    assert classify_busy_slot("UPCOMING", family, doctor) == "PENDING"  # gia đình yêu cầu, chờ BS
+    assert classify_busy_slot("CONFIRMED", family, doctor) == "BUSY"  # BS đã xác nhận
+    assert classify_busy_slot("UPCOMING", doctor, doctor) == "BUSY"  # BS tự tạo / dời lịch
+    assert classify_busy_slot("UPCOMING", None, doctor) == "BUSY"

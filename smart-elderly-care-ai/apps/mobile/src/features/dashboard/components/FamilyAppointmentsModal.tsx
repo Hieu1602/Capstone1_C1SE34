@@ -22,10 +22,12 @@ import {
   findFirstAvailableSlot,
   getFamilyAppointmentStatusInfo,
   getUpcomingDateOptions,
-  isDoctorBusyForSlot,
   isSlotInPast,
   stripAppointmentSystemTags,
   toLocalDateKey,
+  getSlotConflict,
+  SLOT_CONFLICT_ALERT,
+  SLOT_CONFLICT_LABEL,
 } from '../utils/familyAppointments';
 
 interface FamilyAppointmentsModalProps {
@@ -332,11 +334,9 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
     }
 
     const excludeId = mode === 'RESCHEDULE' ? editingAppointment?.id : null;
-    if (isDoctorBusyForSlot(selectedDateObj, selectedTimeSlot, visitType, busySlots, excludeId)) {
-      LocalizedAlert.alert(
-        'Khung giờ bác sĩ bận',
-        'Bác sĩ đã có lịch khám khác trong khung giờ này. Vui lòng chọn khung giờ trống khác.'
-      );
+    const conflict = getSlotConflict(selectedDateObj, selectedTimeSlot, visitType, busySlots, excludeId);
+    if (conflict) {
+      LocalizedAlert.alert(SLOT_CONFLICT_ALERT[conflict].title, SLOT_CONFLICT_ALERT[conflict].message);
       return;
     }
 
@@ -573,7 +573,14 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
                   <ActivityIndicator size="small" color="#0284C7" />
                 ) : (
                   <LocalizedText style={styles.slotHintText}>
-                    {busySlots.length > 0 ? `${busySlots.length} lịch bận của BS` : 'Bác sĩ đang trống lịch'}
+                    {(() => {
+                      const pending = busySlots.filter((s) => s.kind === 'PENDING').length;
+                      const busy = busySlots.length - pending;
+                      if (busySlots.length === 0) return 'Bác sĩ đang trống lịch';
+                      return [busy > 0 ? `${busy} lịch bận` : '', pending > 0 ? `${pending} chờ BS duyệt` : '']
+                        .filter(Boolean)
+                        .join(' · ');
+                    })()}
                   </LocalizedText>
                 )}
               </View>
@@ -581,9 +588,12 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
               <View style={styles.timeSlotGrid}>
                 {FAMILY_TIME_SLOTS.map((slot) => {
                   const isPast = isSlotInPast(selectedDateObj, slot);
-                  const isBusy =
-                    !isPast &&
-                    isDoctorBusyForSlot(selectedDateObj, slot, visitType, busySlots, excludeSlotId);
+                  // Ai đặt trước giữ chỗ: ô có yêu cầu chờ BS duyệt cũng không chọn được, nhưng hiện đúng lý do
+                  const conflict = isPast
+                    ? null
+                    : getSlotConflict(selectedDateObj, slot, visitType, busySlots, excludeSlotId);
+                  const isBusy = conflict !== null;
+                  const isPending = conflict === 'OWN_PENDING' || conflict === 'OTHER_PENDING';
                   const disabled = isPast || isBusy;
                   const active = selectedTimeSlot === slot && !disabled;
 
@@ -593,7 +603,13 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
                       disabled={disabled}
                       style={[
                         styles.timeSlotBtn,
-                        isBusy
+                        isPending
+                          ? {
+                              backgroundColor: isDarkMode ? '#451A0344' : '#FFFBEB',
+                              borderColor: '#FCD34D',
+                              opacity: 0.85,
+                            }
+                          : isBusy
                           ? {
                               backgroundColor: isDarkMode ? '#450A0A44' : '#FEF2F2',
                               borderColor: '#FCA5A5',
@@ -618,7 +634,9 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
                         style={[
                           styles.timeSlotText,
                           {
-                            color: isBusy
+                            color: isPending
+                              ? '#B45309'
+                              : isBusy
                               ? '#DC2626'
                               : isPast
                               ? '#94A3B8'
@@ -626,14 +644,19 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
                               ? '#FFFFFF'
                               : colors.textPrimary,
                             fontWeight: active ? '700' : '600',
-                            textDecorationLine: disabled ? 'line-through' : 'none',
+                            textDecorationLine: disabled && !isPending ? 'line-through' : 'none',
                           },
                         ]}
                       >
                         {slot}
                       </LocalizedText>
-                      {isBusy ? (
-                        <LocalizedText style={styles.slotBusyLabel}>Bác sĩ bận</LocalizedText>
+                      {conflict ? (
+                        <LocalizedText
+                          style={[styles.slotBusyLabel, isPending ? { color: '#B45309' } : null]}
+                          numberOfLines={2}
+                        >
+                          {SLOT_CONFLICT_LABEL[conflict]}
+                        </LocalizedText>
                       ) : isPast ? (
                         <LocalizedText style={styles.slotPastLabel}>Đã qua</LocalizedText>
                       ) : null}

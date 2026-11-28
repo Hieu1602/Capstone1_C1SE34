@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../../theme/colors';
 import { usersApi } from '../../../services/api';
 import { DoctorProfileInfo } from './types';
@@ -378,9 +379,37 @@ export const DoctorProfileSettings: React.FC<DoctorProfileSettingsProps> = ({
   const [notifVisible, setNotifVisible] = useState(false);
   const [notifyAppt, setNotifyAppt] = useState(true);
   const [notifyEmergency, setNotifyEmergency] = useState(true);
+  const [notifyFallAlert, setNotifyFallAlert] = useState(true);
   const [complianceVisible, setComplianceVisible] = useState(false);
   const [devicesVisible, setDevicesVisible] = useState(false);
   const [terminals, setTerminals] = useState<any[]>([]);
+
+  useEffect(() => {
+    Promise.all([
+      AsyncStorage.getItem('@doctor_notify_emergency'),
+      AsyncStorage.getItem('@doctor_notify_fall_alert'),
+      AsyncStorage.getItem('@doctor_notify_appt'),
+    ])
+      .then(([em, fall, appt]) => {
+        if (em !== null) setNotifyEmergency(em === 'true');
+        if (fall !== null) setNotifyFallAlert(fall === 'true');
+        if (appt !== null) setNotifyAppt(appt === 'true');
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleToggleEmergency = (val: boolean) => {
+    setNotifyEmergency(val);
+    AsyncStorage.setItem('@doctor_notify_emergency', String(val)).catch(() => {});
+  };
+  const handleToggleFallAlert = (val: boolean) => {
+    setNotifyFallAlert(val);
+    AsyncStorage.setItem('@doctor_notify_fall_alert', String(val)).catch(() => {});
+  };
+  const handleToggleAppt = (val: boolean) => {
+    setNotifyAppt(val);
+    AsyncStorage.setItem('@doctor_notify_appt', String(val)).catch(() => {});
+  };
 
   const loadTerminals = useCallback(async () => {
     try {
@@ -401,13 +430,14 @@ export const DoctorProfileSettings: React.FC<DoctorProfileSettingsProps> = ({
   const menuActions = [
     { icon: 'laptop-outline' as const, bg: '#6366F1', title: 'Thiết bị đang đăng nhập (Web & App)', sub: hasWeb ? 'Đang mở trên cả Điện thoại & Máy tính (Web)' : 'Đang mở trên Ứng dụng Điện thoại', onPress: () => { setDevicesVisible(true); loadTerminals(); } },
     { icon: 'key' as const, bg: '#0284C7', title: 'Đổi mật khẩu', sub: 'Bảo mật tài khoản đăng nhập', onPress: onOpenPasswordModal },
-    { icon: 'notifications' as const, bg: '#F59E0B', title: 'Cài đặt thông báo ca trực', sub: 'Chuông cảnh báo sinh hiệu & nhắc lịch', onPress: () => setNotifVisible(true) },
+    { icon: 'notifications' as const, bg: '#F59E0B', title: 'Cài đặt thông báo', sub: 'Thông báo sinh hiệu, sự cố & nhắc lịch khám', onPress: () => setNotifVisible(true) },
     { icon: 'shield-checkmark' as const, bg: '#10B981', title: 'Chính sách & Bảo mật dữ liệu', sub: 'Tiêu chuẩn an toàn hồ sơ bệnh án', onPress: () => setComplianceVisible(true) },
   ];
 
   const switches = [
-    { title: 'Cảnh báo sinh hiệu nguy cấp', sub: 'Tự động phát chuông to khi phát hiện cụ bị té ngã hoặc suy hô hấp', val: notifyEmergency, onChange: setNotifyEmergency },
-    { title: 'Nhắc nhở ca trực & Lịch khám', sub: 'Thông báo trước giờ thăm khám định kỳ của bệnh nhân', val: notifyAppt, onChange: setNotifyAppt, noBorder: true },
+    { title: 'Thông báo sinh hiệu bất thường', sub: 'Hiển thị thông báo khi nhịp tim hoặc SpO2 của bệnh nhân vượt ngưỡng an toàn', val: notifyEmergency, onChange: handleToggleEmergency },
+    { title: 'Thông báo sự cố khẩn cấp (Té ngã / SOS)', sub: 'Hiển thị thông báo ưu tiên khi phát hiện té ngã hoặc bệnh nhân nhấn SOS', val: notifyFallAlert, onChange: handleToggleFallAlert },
+    { title: 'Nhắc lịch khám định kỳ', sub: 'Gửi thông báo nhắc trước giờ thăm khám (24h & 2h)', val: notifyAppt, onChange: handleToggleAppt, noBorder: true },
   ];
 
   return (

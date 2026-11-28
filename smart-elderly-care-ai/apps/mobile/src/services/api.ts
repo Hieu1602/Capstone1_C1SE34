@@ -427,6 +427,10 @@ export interface BusySlotItem {
   scheduled_at: string;
   duration_minutes: number;
   visit_type: string;
+  /** BUSY = bác sĩ đã nhận lịch; PENDING = gia đình yêu cầu, chờ bác sĩ xác nhận (vẫn giữ chỗ) */
+  kind?: 'BUSY' | 'PENDING' | string;
+  /** Lịch của chính bệnh nhân đang đặt */
+  is_own?: boolean;
 }
 
 export interface AppointmentItem {
