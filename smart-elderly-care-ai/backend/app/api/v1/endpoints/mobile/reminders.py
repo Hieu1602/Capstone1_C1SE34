@@ -14,10 +14,10 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from redis.asyncio import Redis
 from sqlalchemy import select, or_
@@ -49,6 +49,7 @@ class MedicationItemIn(BaseModel):
     dose: str = Field(default="1 viên", description="Liều lượng (VD: 1 viên)")
     sessions: List[str] = Field(default=["MORNING"], description="Cữ uống: MORNING, NOON, AFTERNOON, EVENING")
     time: Optional[str] = Field(default="08:00", description="Giờ hẹn cụ thể (HH:mm)")
+    session_times: Optional[Dict[str, str]] = Field(default=None, description="Giờ hẹn riêng cho từng buổi")
     instructions: Optional[str] = Field(default="Sau khi ăn", description="Ghi chú / Hướng dẫn (trước/sau ăn)")
 
 
@@ -65,6 +66,13 @@ class PrescriptionCreateIn(BaseModel):
     end_date: str = Field(..., description="Ngày kết thúc đợt thuốc (YYYY-MM-DD)")
     medications: List[MedicationItemIn] = Field(..., description="Danh sách các loại thuốc trong đơn")
     patient_id: Optional[str] = Field(default=None, description="ID người cao tuổi")
+
+
+VN_TZ = timezone(timedelta(hours=7))
+
+
+def _now_vn() -> datetime:
+    return datetime.now(VN_TZ)
 
 
 def _get_redis_key(target_id: Optional[str], date_str: str) -> str:
@@ -84,10 +92,10 @@ async def get_today_reminders(
     - Nếu chưa có cữ thuốc nào được tạo: trả về danh sách rỗng (Zero Fake Data).
     - Đồng bộ theo ngày hiện tại, tài khoản người dùng và ID người cao tuổi từ PostgreSQL.
     """
-    today_now = datetime.now()
+    today_now = _now_vn()
     today_str = today_now.strftime("%Y-%m-%d")
-    today_start = datetime.combine(today_now.date(), datetime.min.time()).astimezone()
-    today_end = datetime.combine(today_now.date(), datetime.max.time()).astimezone()
+    today_start = datetime.combine(today_now.date(), datetime.min.time(), tzinfo=VN_TZ)
+    today_end = datetime.combine(today_now.date(), datetime.max.time(), tzinfo=VN_TZ)
 
     user_id_str = str(current_user.id) if current_user else None
     target_id = patient_id or user_id_str
@@ -123,10 +131,13 @@ async def get_today_reminders(
             if not m_id.startswith("rx-med-"):
                 custom_meds.append(m)
 
-    # Truy vấn đơn thuốc còn hiệu lực từ PostgreSQL
+    # Truy vấn đơn thuốc còn hiệu lực từ PostgreSQL (tránh query thừa nếu target_id đã là UUID)
     patient_uuid = None
     if target_id:
-        patient_uuid = await _resolve_elderly_id(db, target_id, create_if_missing=False)
+        try:
+            patient_uuid = uuid.UUID(target_id)
+        except (ValueError, TypeError):
+            patient_uuid = await _resolve_elderly_id(db, target_id, create_if_missing=False)
 
     db_prescriptions: List[Prescription] = []
     if patient_uuid:
@@ -229,7 +240,9 @@ async def get_today_reminders(
                         "created_at": rx.created_at or today_str,
                     })
 
-    consolidated_medications = synced_doses + custom_meds
+    synced_keys = {(d.get("name"), d.get("time")) for d in synced_doses}
+    deduped_custom = [m for m in custom_meds if (m.get("name"), m.get("time")) not in synced_keys]
+    consolidated_medications = synced_doses + deduped_custom
 
     # Lưu lại toàn bộ cữ thuốc đồng bộ vào Redis để endpoint toggle luôn tìm thấy mục tương ứng
     data_to_store = {
@@ -264,13 +277,14 @@ async def create_reminder(
     redis: Redis = Depends(get_redis),
 ) -> Dict[str, Any]:
     """Thêm một cữ thuốc hoặc hoạt động nhắc nhở thực tế cho người cao tuổi."""
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = _now_vn().strftime("%Y-%m-%d")
     user_id_str = str(current_user.id) if current_user else None
     target_id = item_in.patient_id or user_id_str
     redis_key = _get_redis_key(target_id, today_str)
 
     medications: List[Dict[str, Any]] = []
     meals: List[Dict[str, Any]] = []
+    hydrations: List[Dict[str, Any]] = []
 
     try:
         raw_data = await redis.get(redis_key)
@@ -279,6 +293,7 @@ async def create_reminder(
             if isinstance(parsed, dict):
                 medications = parsed.get("medications", [])
                 meals = parsed.get("meals", [])
+                hydrations = parsed.get("hydrations", [])
             elif isinstance(parsed, list):
                 medications = parsed
     except Exception:
@@ -294,7 +309,7 @@ async def create_reminder(
         "category": item_in.category,
         "patient_id": item_in.patient_id,
         "taken": False,
-        "created_at": datetime.now().isoformat(),
+        "created_at": _now_vn().isoformat(),
     }
     medications.append(new_item)
 
@@ -302,6 +317,7 @@ async def create_reminder(
     data_to_store = {
         "medications": medications,
         "meals": meals,
+        "hydrations": hydrations,
     }
     await redis.set(redis_key, json.dumps(data_to_store), ex=7 * 86400)
 
@@ -311,6 +327,7 @@ async def create_reminder(
 @router.post("/prescription", summary="Thêm đơn thuốc điều trị mới với nhiều loại thuốc")
 async def create_prescription(
     prescription_in: PrescriptionCreateIn,
+    background_tasks: BackgroundTasks,
     current_user: Optional[User] = Depends(get_current_user_optional),
     redis: Redis = Depends(get_redis),
     db: AsyncSession = Depends(get_db),
@@ -322,7 +339,7 @@ async def create_prescription(
     - Tự động phân rã thành các cữ nhắc nhở cụ thể trong ngày (Sáng / Trưa / Chiều / Tối).
     - Lưu đồng thời vào PostgreSQL (Prescription table) để đồng bộ hoàn toàn với Doctor Web.
     """
-    today_now = datetime.now()
+    today_now = _now_vn()
     today_str = today_now.strftime("%Y-%m-%d")
     user_id_str = str(current_user.id) if current_user else None
     target_id = prescription_in.patient_id or user_id_str
@@ -330,6 +347,13 @@ async def create_prescription(
 
     # 1. Lưu vào PostgreSQL để bác sĩ và hệ thống dùng chung
     patient_uuid = await _resolve_elderly_id(db, target_id or "", create_if_missing=True)
+    if patient_uuid is None and not prescription_in.patient_id:
+        patient_uuid = await _resolve_elderly_id(db, "", create_if_missing=False)
+    if patient_uuid is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy hồ sơ người cao tuổi để lưu đơn thuốc.",
+        )
     try:
         s_date = datetime.strptime(prescription_in.start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     except Exception:
@@ -339,21 +363,6 @@ async def create_prescription(
     except Exception:
         e_date = None
 
-    medications: List[Dict[str, Any]] = []
-    meals: List[Dict[str, Any]] = []
-
-    try:
-        raw_data = await redis.get(redis_key)
-        if raw_data:
-            parsed = json.loads(raw_data)
-            if isinstance(parsed, dict):
-                medications = parsed.get("medications", [])
-                meals = parsed.get("meals", [])
-            elif isinstance(parsed, list):
-                medications = parsed
-    except Exception:
-        pass
-
     session_default_times = {
         "MORNING": "08:00",
         "NOON": "12:00",
@@ -361,35 +370,21 @@ async def create_prescription(
         "EVENING": "20:00",
     }
 
-    created_reminders = []
+    reminders_count = 0
     for med in prescription_in.medications:
         chosen_sessions = med.sessions if med.sessions else ["MORNING"]
         sched_times = []
         for sess in chosen_sessions:
-            item_time = med.time if med.time else session_default_times.get(sess, "08:00")
+            item_time = (
+                (med.session_times or {}).get(sess)
+                or (med.time if len(chosen_sessions) == 1 else None)
+                or session_default_times.get(sess, "08:00")
+            )
             if item_time not in sched_times:
                 sched_times.append(item_time)
-            instructions_note = f" - {med.instructions}" if med.instructions else ""
-            full_dose = f"{med.dose}{instructions_note}"
-            new_item = {
-                "id": f"rem-{uuid.uuid4().hex[:8]}",
-                "name": med.name,
-                "time": item_time,
-                "session": sess if sess in ("MORNING", "NOON", "EVENING") else "EVENING",
-                "dose": full_dose,
-                "purpose": prescription_in.diagnosis,
-                "category": "MEDICATION",
-                "start_date": prescription_in.start_date,
-                "end_date": prescription_in.end_date,
-                "diagnosis": prescription_in.diagnosis,
-                "patient_id": str(patient_uuid),
-                "taken": False,
-                "created_at": datetime.now().isoformat(),
-            }
-            medications.append(new_item)
-            created_reminders.append(new_item)
+        reminders_count += len(sched_times or ["08:00"])
 
-        # Lưu bản ghi PostgreSQL Prescription
+        # Lưu bản ghi PostgreSQL Prescription; GET /today sẽ tự đồng bộ cữ rx-med-* từ bảng này
         db_rx = Prescription(
             patient_id=patient_uuid,
             doctor_id=current_user.id if current_user else None,
@@ -409,12 +404,6 @@ async def create_prescription(
 
     await db.commit()
 
-    data_to_store = {
-        "medications": medications,
-        "meals": meals,
-    }
-    await redis.set(redis_key, json.dumps(data_to_store), ex=7 * 86400)
-
     # Lưu đơn thuốc theo tài khoản hoặc người cao tuổi
     rx_key = f"prescriptions:{target_id or 'default_user'}"
     rx_entry = {
@@ -425,7 +414,7 @@ async def create_prescription(
         "end_date": prescription_in.end_date,
         "medications_count": len(prescription_in.medications),
         "medications": [m.model_dump() for m in prescription_in.medications],
-        "created_at": datetime.now().isoformat(),
+        "created_at": _now_vn().isoformat(),
     }
     try:
         raw_rxs = await redis.get(rx_key)
@@ -435,45 +424,90 @@ async def create_prescription(
     except Exception:
         pass
 
-    # Thông báo cho tất cả thành viên trong gia đình trên thanh thông báo Android (Incident + WS + FCM)
-    try:
-        from app.crud.crud_doctor import crud_doctor
+    # Thông báo cho gia đình chạy nền để không làm timeout request lưu đơn thuốc
+    creator_name = (
+        current_user.full_name
+        if (current_user and getattr(current_user, "full_name", None))
+        else "Chủ hộ / Người chăm sóc"
+    )
+    med_summary = ", ".join(f"{m.name} ({m.dose})" for m in prescription_in.medications[:3])
+    if len(prescription_in.medications) > 3:
+        med_summary += f" và {len(prescription_in.medications) - 3} thuốc khác"
 
-        creator_name = (
-            current_user.full_name
-            if (current_user and getattr(current_user, "full_name", None))
-            else "Chủ hộ / Người chăm sóc"
-        )
-        med_summary = ", ".join(f"{m.name} ({m.dose})" for m in prescription_in.medications[:3])
-        if len(prescription_in.medications) > 3:
-            med_summary += f" và {len(prescription_in.medications) - 3} thuốc khác"
-        await crud_doctor._notify_family_prescription(
-            db=db,
-            patient_uuid=patient_uuid,
-            doctor_name=creator_name,
-            med_summary=med_summary,
-            diagnosis=prescription_in.diagnosis,
-        )
-    except Exception as exc:
-        logger.warning("[Reminders] Lỗi gửi thông báo đơn thuốc mới cho gia đình: %s", exc)
+    async def _bg_notify_prescription() -> None:
+        try:
+            from app.core.database import AsyncSessionLocal
+            from app.crud.crud_doctor import crud_doctor
+
+            async with AsyncSessionLocal() as bg_db:
+                await crud_doctor._notify_family_prescription(
+                    db=bg_db,
+                    patient_uuid=patient_uuid,
+                    doctor_name=creator_name,
+                    med_summary=med_summary,
+                    diagnosis=prescription_in.diagnosis,
+                )
+        except Exception as exc:
+            logger.warning("[Reminders] Lỗi gửi thông báo đơn thuốc mới cho gia đình: %s", exc)
+
+    background_tasks.add_task(_bg_notify_prescription)
 
     return {
         "status": "success",
         "message": f"Đã lưu đơn thuốc '{prescription_in.diagnosis}' với {len(prescription_in.medications)} loại thuốc thành công.",
         "prescription": rx_entry,
-        "reminders_count": len(created_reminders),
+        "reminders_count": reminders_count,
     }
+
+
+@router.delete("/prescription/{rx_id}", summary="Xóa đơn thuốc điều trị")
+async def delete_prescription_reminder(
+    rx_id: str,
+    patient_id: Optional[str] = Query(None, description="ID người cao tuổi"),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    redis: Redis = Depends(get_redis),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """Xóa một đơn thuốc khỏi PostgreSQL, in-memory store và dọn cữ thuốc liên quan trong Redis."""
+    from app.crud.crud_doctor import crud_doctor
+
+    user_id_str = str(current_user.id) if current_user else None
+    target_id = patient_id or user_id_str or ""
+
+    deleted = await crud_doctor.delete_prescription_db(db, target_id, rx_id)
+    if not deleted:
+        deleted = crud_doctor.delete_prescription(target_id, rx_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy đơn thuốc cần xóa")
+
+    today_str = _now_vn().strftime("%Y-%m-%d")
+    redis_key = _get_redis_key(target_id or None, today_str)
+    try:
+        raw_data = await redis.get(redis_key)
+        if raw_data:
+            parsed = json.loads(raw_data)
+            if isinstance(parsed, dict) and isinstance(parsed.get("medications"), list):
+                prefix = f"rx-med-{rx_id}-"
+                parsed["medications"] = [
+                    m for m in parsed["medications"] if not str(m.get("id", "")).startswith(prefix)
+                ]
+                await redis.set(redis_key, json.dumps(parsed), ex=7 * 86400)
+    except Exception as exc:
+        logger.warning("[Reminders] Không thể dọn cache Redis sau khi xóa đơn thuốc: %s", exc)
+
+    return {"status": "success", "message": "Đã xóa đơn thuốc thành công"}
 
 
 @router.put("/{reminder_id}/toggle", summary="Đánh dấu đã uống hoặc chưa uống thuốc")
 async def toggle_reminder(
     reminder_id: str,
     patient_id: Optional[str] = Query(None, description="Lọc theo ID người cao tuổi"),
+    taken: Optional[bool] = Query(None, description="Trạng thái đã uống mong muốn"),
     current_user: Optional[User] = Depends(get_current_user_optional),
     redis: Redis = Depends(get_redis),
 ) -> Dict[str, Any]:
     """Cập nhật trạng thái đã uống thuốc / hoàn thành một cữ nhắc nhở."""
-    today_now = datetime.now()
+    today_now = _now_vn()
     today_str = today_now.strftime("%Y-%m-%d")
     user_id_str = str(current_user.id) if current_user else None
     target_id = patient_id or user_id_str
@@ -494,7 +528,7 @@ async def toggle_reminder(
         taken_at = None
         for m in medications:
             if m.get("id") == reminder_id:
-                m["taken"] = not m.get("taken", False)
+                m["taken"] = taken if taken is not None else (not m.get("taken", False))
                 new_state = m["taken"]
                 taken_at = today_now.strftime("%H:%M") if new_state else None
                 m["takenAt"] = taken_at
@@ -559,7 +593,7 @@ async def delete_reminder(
     redis: Redis = Depends(get_redis),
 ) -> Dict[str, Any]:
     """Xóa một cữ thuốc khỏi lịch nhắc nhở hôm nay."""
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = _now_vn().strftime("%Y-%m-%d")
     user_id_str = str(current_user.id) if current_user else None
     target_id = patient_id or user_id_str
     redis_key = _get_redis_key(target_id, today_str)
@@ -604,7 +638,7 @@ async def create_hydration_reminder(
     redis: Redis = Depends(get_redis),
 ) -> Dict[str, Any]:
     """Thêm một mốc nhắc nhở uống nước trong ngày cho người cao tuổi."""
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = _now_vn().strftime("%Y-%m-%d")
     user_id_str = str(current_user.id) if current_user else None
     target_id = item_in.patient_id or user_id_str
     redis_key = _get_redis_key(target_id, today_str)
@@ -626,7 +660,7 @@ async def create_hydration_reminder(
         "amount": item_in.amount,
         "note": item_in.note,
         "done": False,
-        "created_at": datetime.now().isoformat(),
+        "created_at": _now_vn().isoformat(),
     }
     data["hydrations"].append(new_h)
     data["hydrations"].sort(key=lambda x: x.get("time", ""))
@@ -641,7 +675,7 @@ async def create_standard_hydration_template(
     redis: Redis = Depends(get_redis),
 ) -> Dict[str, Any]:
     """Tự động tạo lịch uống nước 4 cữ chuẩn y tế lão khoa (1.5 - 2L/ngày)."""
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = _now_vn().strftime("%Y-%m-%d")
     user_id_str = str(current_user.id) if current_user else None
     target_id = patient_id or user_id_str
     redis_key = _get_redis_key(target_id, today_str)
@@ -675,7 +709,7 @@ async def toggle_hydration(
     redis: Redis = Depends(get_redis),
 ) -> Dict[str, Any]:
     """Cập nhật trạng thái đã bổ sung nước cho một mốc giờ."""
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = _now_vn().strftime("%Y-%m-%d")
     user_id_str = str(current_user.id) if current_user else None
     target_id = patient_id or user_id_str
     redis_key = _get_redis_key(target_id, today_str)
@@ -713,7 +747,7 @@ async def delete_hydration(
     redis: Redis = Depends(get_redis),
 ) -> Dict[str, Any]:
     """Xóa một mốc nhắc nhở uống nước."""
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = _now_vn().strftime("%Y-%m-%d")
     user_id_str = str(current_user.id) if current_user else None
     target_id = patient_id or user_id_str
     redis_key = _get_redis_key(target_id, today_str)

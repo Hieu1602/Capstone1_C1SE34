@@ -312,11 +312,23 @@ export const vitalsApi = {
 // 3. Reminders API
 export const remindersApi = {
   getToday: (patientId?: string | number) =>
-    api.get('/reminders/today', { params: patientId ? { patient_id: patientId } : undefined }),
+    api.get('/reminders/today', {
+      params: patientId ? { patient_id: patientId } : undefined,
+      timeout: 25000,
+    }),
   create: (data: any) => api.post('/reminders', data),
-  createPrescription: (data: any) => api.post('/reminders/prescription', data),
-  toggle: (reminderId: string, patientId?: string | number) =>
-    api.put(`/reminders/${reminderId}/toggle`, null, { params: patientId ? { patient_id: patientId } : undefined }),
+  createPrescription: (data: any) => api.post('/reminders/prescription', data, { timeout: 25000 }),
+  deletePrescription: (rxId: string, patientId?: string | number) =>
+    patientId
+      ? api.delete(`/doctor/patients/${patientId}/prescriptions/${rxId}`)
+      : api.delete(`/reminders/prescription/${rxId}`),
+  toggle: (reminderId: string, patientId?: string | number, taken?: boolean) =>
+    api.put(`/reminders/${reminderId}/toggle`, null, {
+      params: {
+        ...(patientId ? { patient_id: patientId } : {}),
+        ...(taken !== undefined ? { taken } : {}),
+      },
+    }),
   delete: (reminderId: string, patientId?: string | number) =>
     api.delete(`/reminders/${reminderId}`, { params: patientId ? { patient_id: patientId } : undefined }),
   createHydration: (data: { time: string; amount: string; note: string; patient_id?: string | number }) =>
