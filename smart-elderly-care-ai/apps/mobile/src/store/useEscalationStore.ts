@@ -32,7 +32,7 @@ interface EscalationStoreState {
 
 export const useEscalationStore = create<EscalationStoreState>((set, get) => ({
   autoCallEnabled: true,
-  autoCallDelaySec: 15,
+  autoCallDelaySec: 30,
   activeEscalation: null,
   isLoaded: false,
 
@@ -44,7 +44,7 @@ export const useEscalationStore = create<EscalationStoreState>((set, get) => ({
       ]);
       set({
         autoCallEnabled: enabledStr === null ? true : enabledStr === 'true',
-        autoCallDelaySec: delayStr ? Math.max(10, Number(delayStr) || 15) : 15,
+        autoCallDelaySec: delayStr ? Math.max(10, Number(delayStr) || 30) : 30,
         isLoaded: true,
       });
     } catch {

@@ -168,7 +168,34 @@ function localizeString(value: string, translate: (key: string, options?: any) =
     return value.replace(trimmed, `Call now: ${callMatch[1]}`);
   }
 
-  const stepMatch = normalized.match(/^Bước\s*(\d+[A-Za-z]?):\s*(.+)$/i);
+  const callSimpleMatch = normalized.match(/^(?:📞\s*)?Gọi\s+([+\d\s.-]+)$/i);
+  if (callSimpleMatch) {
+    return value.replace(trimmed, `Call ${callSimpleMatch[1].trim()}`);
+  }
+
+  const hotlineConnectMatch = normalized.match(
+    /^Kết nối trực tiếp tổng đài hỗ trợ kết nối camera, vòng tay, hub AI qua số\s+([+\d\s.-]+)\??$/i,
+  );
+  if (hotlineConnectMatch) {
+    return value.replace(
+      trimmed,
+      `Connect directly to the support hotline for camera, band, and AI Hub via ${hotlineConnectMatch[1].trim()}?`,
+    );
+  }
+
+  const sessionCountMatch = normalized.match(/^(Sáng|Trưa|Chiều|Tối)\s*\(([^)]+)\)$/i);
+  if (sessionCountMatch) {
+    const map: Record<string, string> = {
+      'sáng': 'Morning',
+      'trưa': 'Noon',
+      'chiều': 'Afternoon',
+      'tối': 'Evening',
+    };
+    const labelEn = map[sessionCountMatch[1].toLowerCase()] || sessionCountMatch[1];
+    return value.replace(trimmed, `${labelEn} (${sessionCountMatch[2]})`);
+  }
+
+  const stepMatch = normalized.match(/^Bước\s*(\d+(?:\/\d+)?[A-Za-z]?):\s*(.+)$/i);
   if (stepMatch) {
     const innerStep = stepMatch[2].trim();
     const trStep = translate(innerStep, { defaultValue: innerStep });
@@ -179,7 +206,27 @@ function localizeString(value: string, translate: (key: string, options?: any) =
   const birthGenderMatch = normalized.match(/^Năm sinh:\s*(\d+)\s*\((.+?)\)\s*[•·]\s*Giới tính:\s*(.+)$/i);
   if (birthGenderMatch) {
     const gender = translate(birthGenderMatch[3].trim(), { defaultValue: birthGenderMatch[3].trim() });
-    return value.replace(trimmed, `Birth year: ${birthGenderMatch[1]} (${birthGenderMatch[2]}) • Gender: ${gender}`);
+    const ageText = birthGenderMatch[2].trim().replace(/(\d+)\s+tuổi/i, '$1 yrs');
+    return value.replace(trimmed, `Birth year: ${birthGenderMatch[1]} (${ageText}) • Gender: ${gender}`);
+  }
+
+  const bmiMatch = normalized.match(/^BMI:\s*([\d.]+)\s*\((.+)\)$/i);
+  if (bmiMatch) {
+    const rawCat = bmiMatch[2].trim();
+    const cat = translate(rawCat, { defaultValue: rawCat });
+    return value.replace(trimmed, `BMI: ${bmiMatch[1]} (${cat})`);
+  }
+
+  const facilityMatch = normalized.match(/^Cơ sở:\s*(.+)$/i);
+  if (facilityMatch) {
+    return value.replace(trimmed, `Facility: ${facilityMatch[1].trim()}`);
+  }
+
+  const followupMatch = normalized.match(/^Lịch tái khám:\s*(.+)$/i);
+  if (followupMatch) {
+    const rawVal = followupMatch[1].trim();
+    const val = translate(rawVal, { defaultValue: rawVal });
+    return value.replace(trimmed, `Follow-up: ${val}`);
   }
 
   const todayPillMatch = normalized.match(/^Hôm nay\s*\((.+)\)$/i);
