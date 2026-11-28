@@ -1,12 +1,13 @@
 # Tài liệu Cấu trúc Cơ sở Dữ liệu — Smart Elderly Care AI (SECA)
 
-Tài liệu này mô tả đầy đủ **22 bảng (`BASE TABLE`)** và **282 cột** đang tồn tại thực tế trong schema `public` của cơ sở dữ liệu PostgreSQL phục vụ hệ thống **Smart Elderly Care AI (SECA)** (Mobile App, Doctor Web, Web Admin, FastAPI Backend và Edge AI/BLE Gateway).
+Tài liệu này mô tả đầy đủ **22 bảng (`BASE TABLE`)** và **284 cột** đang tồn tại thực tế trong schema `public` của cơ sở dữ liệu PostgreSQL phục vụ hệ thống **Smart Elderly Care AI (SECA)** (Mobile App, Doctor Web, Web Admin, FastAPI Backend và Edge AI/BLE Gateway).
 
 > [!NOTE]
 > **Ghi chú kỹ thuật thực tế trên PostgreSQL:**
+> - **Phiên bản & Extensions thực tế trên AWS RDS:** Instance AWS RDS đang vận hành **PostgreSQL 18.3 (`aarch64`)** với 3 extensions đã kích hoạt: `plpgsql (1.0)`, `uuid-ossp (1.1)`, `pgcrypto (1.4)` (môi trường Docker local sử dụng image `timescale/timescaledb:latest-pg16`).
 > - Toàn bộ khóa chính đa phần sử dụng kiểu `uuid` (sinh ngẫu nhiên qua `uuid.uuid4` ở tầng ứng dụng hoặc `gen_random_uuid()` ở tầng DB), riêng `security_policies` dùng mã chuỗi `varchar(50)` và `vital_signs` dùng khóa chính kép `(id, time)`.
 > - Các cột thời gian đều dùng `timestamp with time zone` (`TIMESTAMPTZ`) để lưu chuẩn UTC và chuyển đổi múi giờ Việt Nam (`UTC+7`) khi hiển thị.
-> - Bảng `vital_signs` được thiết kế tương thích TimescaleDB Hypertable (khóa chính `(id, time)` + index `DESC` trên `time`); trên instance PostgreSQL hiện tại chưa kích hoạt extension `timescaledb`, bảng hoạt động như bảng PostgreSQL tiêu chuẩn với các B-Tree index tối ưu truy vấn chuỗi thời gian.
+> - Bảng `vital_signs` được thiết kế tương thích TimescaleDB Hypertable (khóa chính `(id, time)` + index `DESC` trên `time`); trên AWS RDS PostgreSQL 18.3 hiện tại chưa kích hoạt extension `timescaledb`, bảng hoạt động như bảng PostgreSQL tiêu chuẩn với các B-Tree index tối ưu truy vấn chuỗi thời gian.
 
 ---
 
@@ -26,7 +27,7 @@ Tài liệu này mô tả đầy đủ **22 bảng (`BASE TABLE`)** và **282 c�
 | 10 | `vital_signs` | Sinh hiệu & Cảnh báo | 12 | `id, time` | Chuỗi thời gian sinh hiệu (nhịp tim, SpO2, huyết áp, nhiệt độ da, té ngã) |
 | 11 | `incidents` | Sinh hiệu & Cảnh báo | 14 | `id` | Sự kiện cảnh báo khẩn cấp (té ngã AI, bất thường sinh hiệu, SOS) |
 | 12 | `camera_recordings` | Sinh hiệu & Cảnh báo | 8 | `id` | Metadata các đoạn video/ảnh lưu trên S3 phục vụ phát lại & bằng chứng sự cố |
-| 13 | `appointments` | Y tế Lâm sàng | 20 | `id` | Lịch khám, tái khám và nhắc lịch định kỳ của bác sĩ với bệnh nhân |
+| 13 | `appointments` | Y tế Lâm sàng | 22 | `id` | Lịch khám, tái khám và nhắc lịch định kỳ của bác sĩ với bệnh nhân |
 | 14 | `appointment_reminders` | Y tế Lâm sàng | 7 | `id` | Hàng đợi mốc nhắc nhở tự động trước giờ khám (24h, 2h) |
 | 15 | `prescriptions` | Y tế Lâm sàng | 18 | `id` | Đơn thuốc điều trị và khung giờ nhắc uống thuốc qua loa/app |
 | 16 | `chat_sessions` | Trợ lý AI & Hỗ trợ | 8 | `id` | Phiên hội thoại với Trợ lý ảo AI Sức khỏe |
@@ -394,11 +395,11 @@ erDiagram
 
 ## V. Phân hệ Y tế Lâm sàng (Lịch khám & Đơn thuốc)
 
-### 13. Bảng `appointments` (20 cột)
+### 13. Bảng `appointments` (22 cột)
 - **Mục đích:** Quản lý toàn bộ lịch hẹn khám/tái khám giữa bác sĩ và người cao tuổi, hỗ trợ lặp định kỳ theo chuỗi cha–con và nhắc qua loa thông minh.
 - **Khóa chính:** `id`
 - **Khóa ngoại:** `doctor_id -> users.id (SET NULL)`, `house_id -> houses.id (CASCADE)`, `created_by -> users.id (SET NULL)`, `parent_recurring_id -> appointments.id (SET NULL)`, `elderly_id -> elderly_profiles.id (CASCADE)`.
-- **Chỉ mục:** 12 chỉ mục tối ưu lọc theo bác sĩ, bệnh nhân, nhà, trạng thái và thời gian (`scheduled_at`, `recorded_at`).
+- **Chỉ mục:** 13 chỉ mục (`pk_appointments`, `ix_appointments_doctor_id`, `ix_appointments_doctor_recorded`, `ix_appointments_doctor_time`, `ix_appointments_elderly_id`, `ix_appointments_house_id`, `ix_appointments_parent_recurring_id`, `ix_appointments_patient_id`, `ix_appointments_patient_time`, `ix_appointments_recorded_at_desc`, `ix_appointments_scheduled_at`, `ix_appointments_scheduled_at_desc`, `ix_appointments_status`).
 
 | # | Tên cột | Kiểu dữ liệu | Null | Mặc định / Ràng buộc | Giải thích ý nghĩa |
 |---:|---|---|---|---|---|
@@ -406,13 +407,13 @@ erDiagram
 | 2 | `doctor_id` | `uuid` | NULL | `FK -> users.id (ON DELETE SET NULL)` | Bác sĩ phụ trách lịch khám |
 | 3 | `patient_id` | `uuid` | NOT NULL | `INDEX` | UUID bệnh nhân người cao tuổi (giữ tương thích logic cũ/schema chính) |
 | 4 | `house_id` | `uuid` | NULL | `FK -> houses.id (ON DELETE CASCADE)` | Căn nhà của bệnh nhân |
-| 5 | `created_by` | `uuid` | NULL | `FK -> users.id (ON DELETE SET NULL)` | Người tạo lịch hẹn (bác sĩ hoặc người thân) |
+| 5 | `created_by` | `uuid` | NULL | `FK -> users.id (ON DELETE SET NULL)` | Người tạo/điều chỉnh gần nhất lịch hẹn (bác sĩ hoặc người thân) |
 | 6 | `visit_type` | `varchar(30)` | NOT NULL | — | Hình thức khám: `CLINIC` (tại phòng khám), `HOME_VISIT` (tại nhà), `TELEHEALTH` (từ xa) |
 | 7 | `scheduled_at` | `timestamp with time zone` | NOT NULL | — | Thời gian hẹn khám dự kiến |
 | 8 | `duration_minutes` | `integer` | NOT NULL | — | Thời lượng dự kiến của buổi khám (phút, vd: `30`) |
 | 9 | `location` | `varchar(255)` | NOT NULL | — | Địa điểm khám cụ thể hoặc tên phòng khám |
-| 10 | `clinical_notes` | `text` | NULL | — | Dặn dò chuẩn bị trước khám hoặc ghi chú lâm sàng |
-| 11 | `status` | `varchar(20)` | NOT NULL | — | Trạng thái lịch hẹn: `UPCOMING` (sắp tới), `COMPLETED` (hoàn thành), `CANCELLED` (đã hủy) |
+| 10 | `clinical_notes` | `text` | NULL | — | Dặn dò chuẩn bị trước khám, lý do dời lịch hoặc ghi chú lâm sàng |
+| 11 | `status` | `varchar(20)` | NOT NULL | — | Trạng thái lịch hẹn: `UPCOMING` (sắp tới), `CONFIRMED` (đã xác nhận), `COMPLETED` (hoàn thành), `CANCELLED` (đã hủy) |
 | 12 | `cancellation_reason` | `text` | NULL | — | Lý do hủy lịch khám (nếu `status = 'CANCELLED'`) |
 | 13 | `recurrence_pattern` | `varchar(20)` | NOT NULL | — | Chu kỳ lặp lại: `NONE`, `WEEKLY`, `MONTHLY`, `QUARTERLY` |
 | 14 | `recurrence_end_date` | `timestamp with time zone` | NULL | — | Ngày kết thúc chuỗi lịch hẹn lặp lại |
@@ -422,6 +423,8 @@ erDiagram
 | 18 | `updated_at` | `timestamp with time zone` | NOT NULL | `DEFAULT now()` | Thời điểm cập nhật lịch hẹn |
 | 19 | `elderly_id` | `uuid` | NULL | `FK -> elderly_profiles.id (ON DELETE CASCADE)` | FK tường minh trỏ sang `elderly_profiles.id` (bổ sung qua schema upgrade) |
 | 20 | `recorded_at` | `timestamp with time zone` | NULL | `DEFAULT CURRENT_TIMESTAMP` | Mốc thời gian ghi nhận/sắp xếp lịch sử khám của bác sĩ |
+| 21 | `exam_type` | `varchar(255)` | NULL | — | Chuyên khoa hoặc loại/nội dung khám chi tiết (vd: `Khám định kỳ`, `Tim mạch`) |
+| 22 | `instructions` | `text` | NULL | — | Hướng dẫn chuẩn bị trước khi khám dành cho người cao tuổi/gia đình |
 
 ---
 
