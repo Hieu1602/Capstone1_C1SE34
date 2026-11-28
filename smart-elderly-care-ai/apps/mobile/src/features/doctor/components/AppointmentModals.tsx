@@ -5,7 +5,7 @@
 // 3. AppointmentCompleteModal: Xác nhận hoàn tất ca khám
 // 4. AppointmentDetailModal: Chi tiết lịch hẹn khám khi nhấn vào Banner Trang chủ
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View, StyleSheet, ScrollView, TouchableOpacity, Modal,
   Switch, ActivityIndicator, KeyboardAvoidingView, Platform, Image,
@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LocalizedText, LocalizedTextInput, LocalizedAlert } from '../../../i18n/LocalizedComponents';
 import { formatGenderVN } from '../../../utils/formatters';
+import { useKeyboardHeight } from '../../../hooks/useKeyboardHeight';
 import { AppointmentItem, PatientCardData, getPatientAvatarUrl } from './types';
 import { formatAppointmentDateTimeLabel, isSameLocalDay } from '../utils/dateUtils';
 
@@ -119,9 +120,14 @@ const PopoverCard: React.FC<ThemeProps & {
 const DialogModal: React.FC<ThemeProps & {
   visible: boolean; onClose: () => void; icon: string; iconBg: string;
   iconColor: string; title: string; cardStyle?: any; children: React.ReactNode;
-}> = ({ visible, onClose, icon, iconBg, iconColor, title, isDarkMode, colors, cardStyle, children }) => (
+}> = ({ visible, onClose, icon, iconBg, iconColor, title, isDarkMode, colors, cardStyle, children }) => {
+  const keyboardHeight = useKeyboardHeight();
+  return (
   <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.dialogOverlay}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={[styles.dialogOverlay, Platform.OS === 'android' && keyboardHeight > 0 ? { paddingBottom: keyboardHeight + 12 } : null]}
+    >
       <View style={[cardStyle || styles.dialogBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: colors.border }]}>
         <View style={styles.dialogHeader}>
           <View style={styles.rowCenter}>
@@ -138,7 +144,8 @@ const DialogModal: React.FC<ThemeProps & {
       </View>
     </KeyboardAvoidingView>
   </Modal>
-);
+  );
+};
 
 // =============================================================
 // 1. MODAL ĐẶT / CHỈNH SỬA LỊCH KHÁM (FORM)
@@ -264,9 +271,27 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
 
   const fieldBg = isDarkMode ? '#0F172A' : '#F8FAFC';
 
+  // Bàn phím che ô nhập: đẩy khung lên trên bàn phím (Android) và tự cuộn tới ô đang nhập
+  const keyboardHeight = useKeyboardHeight();
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const sectionY = useRef<Record<string, number>>({});
+  const trackSection = (key: string) => (e: any) => {
+    sectionY.current[key] = e.nativeEvent.layout.y;
+  };
+  const scrollToSection = (key: string) => () => {
+    // Chờ bàn phím mở xong (khung đã co lại) rồi mới cuộn
+    setTimeout(() => {
+      const y = sectionY.current[key];
+      if (y != null) scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+    }, 280);
+  };
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.sheetOverlay}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={[styles.sheetOverlay, Platform.OS === 'android' && keyboardHeight > 0 ? { paddingBottom: keyboardHeight } : null]}
+      >
         <View style={[styles.sheetBox, { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF' }]}>
           <View style={[styles.sheetHeader, { borderBottomColor: colors.border }]}>
             <View style={[styles.rowCenter, { gap: 8 }]}>
@@ -289,9 +314,9 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollBody} keyboardShouldPersistTaps="handled">
+          <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollBody} keyboardShouldPersistTaps="handled">
             {/* 1. Chọn Bệnh nhân */}
-            <View style={styles.sectionBlock}>
+            <View style={styles.sectionBlock} onLayout={trackSection('patient')}>
               <SectionTitle icon="person" label="Chọn bệnh nhân (*)" />
               {patients?.length > 0 ? (
                 <TouchableOpacity style={[styles.dropdownTrigger, { backgroundColor: fieldBg, borderColor: colors.border }]} activeOpacity={0.7} onPress={() => setActivePopover('PATIENT')}>
@@ -310,7 +335,7 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
                   <Ionicons name="chevron-down" size={18} color="#94A3B8" />
                 </TouchableOpacity>
               ) : (
-                <LocalizedTextInput style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]} value={patientName} onChangeText={onChangePatientName} placeholder="Nhập tên bệnh nhân" placeholderTextColor="#94A3B8" />
+                <LocalizedTextInput style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.border }]} value={patientName} onChangeText={onChangePatientName} onFocus={scrollToSection('patient')} placeholder="Nhập tên bệnh nhân" placeholderTextColor="#94A3B8" />
               )}
             </View>
 
@@ -335,7 +360,7 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
             </View>
 
             {/* 3. Hình thức khám & Địa điểm */}
-            <View style={styles.sectionBlock}>
+            <View style={styles.sectionBlock} onLayout={trackSection('location')}>
               <SectionTitle icon="medical" label="Hình thức & Địa điểm (*)" />
               <View style={[styles.pillSwitchContainer, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }]}>
                 {[
@@ -390,27 +415,28 @@ export const AppointmentFormModal: React.FC<AppointmentFormModalProps> = ({
                 ]}
                 value={location}
                 onChangeText={onChangeLocation}
+                onFocus={scrollToSection('location')}
                 placeholder="Địa chỉ nhà cụ hoặc phòng khám..."
                 placeholderTextColor="#94A3B8"
               />
             </View>
 
             {/* 4. Chuyên khoa / Lý do khám */}
-            <View style={styles.sectionBlock}>
+            <View style={styles.sectionBlock} onLayout={trackSection('exam')}>
               <SectionTitle icon="clipboard" label="Chuyên khoa / Lý do khám (*)" />
               <TouchableOpacity style={[styles.dropdownTrigger, { backgroundColor: fieldBg, borderColor: colors.border }]} activeOpacity={0.7} onPress={() => setActivePopover('EXAM')}>
                 <LocalizedText style={[styles.dropdownValueText, { color: colors.textPrimary, flex: 1 }]} numberOfLines={1}>{examTypeDisplay}</LocalizedText>
                 <Ionicons name="chevron-down" size={18} color="#94A3B8" />
               </TouchableOpacity>
               {(isCustomExamType || examType === 'Khác') && (
-                <LocalizedTextInput style={[styles.inputField, { marginTop: 8, color: colors.textPrimary, borderColor: colors.border }]} value={examType === 'Khác' ? '' : examType} onChangeText={onChangeExamType} placeholder="Nhập lý do / chuyên khoa khám cụ thể..." placeholderTextColor="#94A3B8" />
+                <LocalizedTextInput style={[styles.inputField, { marginTop: 8, color: colors.textPrimary, borderColor: colors.border }]} value={examType === 'Khác' ? '' : examType} onChangeText={onChangeExamType} onFocus={scrollToSection('exam')} placeholder="Nhập lý do / chuyên khoa khám cụ thể..." placeholderTextColor="#94A3B8" />
               )}
             </View>
 
             {/* 5. Dặn dò chuẩn bị */}
-            <View style={styles.sectionBlock}>
+            <View style={styles.sectionBlock} onLayout={trackSection('instructions')}>
               <SectionTitle icon="chatbubble-ellipses" label="Dặn dò chuẩn bị trước khám" />
-              <LocalizedTextInput style={[styles.inputField, { height: 52, textAlignVertical: 'top', color: colors.textPrimary, borderColor: colors.border }]} multiline value={instructions} onChangeText={onChangeInstructions} placeholder="Nhập lời dặn của bác sĩ nếu có..." placeholderTextColor="#94A3B8" />
+              <LocalizedTextInput style={[styles.inputField, { height: 52, textAlignVertical: 'top', color: colors.textPrimary, borderColor: colors.border }]} multiline value={instructions} onChangeText={onChangeInstructions} onFocus={scrollToSection('instructions')} placeholder="Nhập lời dặn của bác sĩ nếu có..." placeholderTextColor="#94A3B8" />
             </View>
 
             {/* 6. Accordion: Tuỳ chọn nâng cao */}

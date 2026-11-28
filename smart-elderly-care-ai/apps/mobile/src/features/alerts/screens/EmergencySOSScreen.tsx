@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { emergencyApi } from '../../../services/api';
-import { EMERGENCY_TEST_PHONE } from '../../../services/emergency';
+import { DOCTOR_SOS_BLOCKED_MESSAGE, EMERGENCY_TEST_PHONE } from '../../../services/emergency';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useDeviceStore } from '../../../store/useDeviceStore';
 import { useTheme } from '../../../store/useThemeStore';
@@ -27,6 +27,28 @@ import { MapLocationPickerModal } from '../components/MapLocationPickerModal';
 import { resolveAddressFromCoords, uniqueAddressParts } from '../utils/geocode';
 
 export default function EmergencySOSScreen({ navigation }: any) {
+  const blocked = useAuthStore((s) => s.viewRole === 'DOCTOR' || String(s.role || '').toLowerCase() === 'doctor');
+  if (blocked) {
+    return (
+      <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 14 }}>
+        <Ionicons name="medkit-outline" size={44} color="#64748B" />
+        <Text style={{ fontSize: 16, fontWeight: '700', textAlign: 'center', color: '#0F172A' }}>
+          Bác sĩ không dùng chức năng gọi SOS
+        </Text>
+        <Text style={{ fontSize: 13.5, textAlign: 'center', color: '#64748B', lineHeight: 20 }}>{DOCTOR_SOS_BLOCKED_MESSAGE}</Text>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={{ marginTop: 6, paddingHorizontal: 22, paddingVertical: 10, borderRadius: 12, backgroundColor: '#2563EB' }}
+        >
+          <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Quay lại</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+  return <EmergencySOSForm navigation={navigation} />;
+}
+
+function EmergencySOSForm({ navigation }: any) {
   const { colors } = useTheme();
   const { userName, full_name, userPhone, phone_number } = useAuthStore();
   const house = useDeviceStore((s) => s.house);

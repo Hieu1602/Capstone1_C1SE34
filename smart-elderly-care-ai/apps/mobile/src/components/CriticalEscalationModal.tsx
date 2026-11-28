@@ -78,7 +78,7 @@ export const CriticalEscalationModal: React.FC = () => {
 
   // Tự động kích hoạt gọi số khẩn cấp khi đếm ngược về 0 HOẶC khi nhận tín hiệu ESCALATED từ server
   useEffect(() => {
-    if (!activeEscalation || !autoCallEnabled) return;
+    if (!activeEscalation || !autoCallEnabled || isDoctorSession()) return;
     const isTimeToCall = secondsLeft === 0 || activeEscalation.status === 'ESCALATED';
     if (isTimeToCall && !hasAutoCalled) {
       setHasAutoCalled(true);
@@ -106,7 +106,7 @@ export const CriticalEscalationModal: React.FC = () => {
     return () => { active = false; };
   }, [activeEscalation?.incidentId, activeEscalation?.thumbnailUrl]);
 
-  if (!activeEscalation) {
+  if (!activeEscalation || isDoctorSession()) {
     return null;
   }
 

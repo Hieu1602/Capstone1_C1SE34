@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.emergency_policy import ensure_can_trigger_emergency
 from app.api.deps import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
@@ -111,6 +112,7 @@ async def trigger_emergency_sos(
     db: AsyncSession = Depends(get_db),
 ) -> EmergencySOSResponse:
     """Notify household accounts and return 115 for the mobile app's phone dialer."""
+    ensure_can_trigger_emergency(current_user)
     recipients = await _get_household_recipients(db, current_user.id)
     # Bỏ token trống và token trùng để chỉ gửi một thông báo đến mỗi thiết bị.
     tokens = list(

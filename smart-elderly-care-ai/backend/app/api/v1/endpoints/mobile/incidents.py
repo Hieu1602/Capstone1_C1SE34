@@ -12,6 +12,7 @@ from app.api.deps import get_current_user, get_current_user_optional
 from app.core.database import get_db
 from app.crud.crud_incident import crud_incident
 from app.models.user import User
+from app.services.emergency_policy import ensure_can_trigger_emergency
 from app.schemas.incident import IncidentAck, IncidentOut
 
 logger = logging.getLogger("incidents")
@@ -350,6 +351,7 @@ async def escalate_incident(
     incident_id: UUID,
     ack: IncidentAck | None = Body(default=None),
     note: str | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Leo thang khẩn cấp tự động (ESCALATED_AUTO_CALL):
@@ -358,6 +360,8 @@ async def escalate_incident(
     """
     from app.services.escalation_service import cancel_auto_escalation, mark_incident_escalated
 
+    # Bác sĩ quản lý nhiều bệnh nhân -> không được leo thang gọi cấp cứu thay gia đình
+    ensure_can_trigger_emergency(current_user)
     cancel_auto_escalation(incident_id)
     reason = ack.notes if (ack and ack.notes) else note
     result = await mark_incident_escalated(incident_id, reason=reason)
