@@ -14,7 +14,10 @@ import {
   markAllAsRead,
   markAsRead,
   toggleReadStatus,
+  syncReadToServer,
   NOTIFS_SYNC_EVENT,
+  syncReadsFromServer,
+  handleReadsWsMessage,
   SyncPayload,
 } from '../../utils/notificationSync';
 import { isNotificationReadInSet, applyAcknowledgeToItem } from '../../utils/notificationBuilder';
@@ -80,8 +83,13 @@ export const DoctorNavbar: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    setDoctorAvatar(getDoctorAvatarUri(user?.avatar_url));
+  }, [user?.avatar_url]);
+
+  useEffect(() => {
     const handleProfileUpdate = () => {
-      setDoctorAvatar(getDoctorAvatarUri(user?.avatar_url));
+      const latestUser = useDoctorAuthStore.getState().user;
+      setDoctorAvatar(getDoctorAvatarUri(latestUser?.avatar_url));
     };
 
     window.addEventListener('doctor-profile-updated', handleProfileUpdate);
@@ -90,7 +98,7 @@ export const DoctorNavbar: React.FC = () => {
       window.removeEventListener('doctor-profile-updated', handleProfileUpdate);
       window.removeEventListener('storage', handleProfileUpdate);
     };
-  }, [user]);
+  }, []);
 
   // Lắng nghe sự kiện đồng bộ trạng thái đọc/chưa đọc toàn cục từ bất kỳ component nào (0ms)
   useEffect(() => {
@@ -122,13 +130,17 @@ export const DoctorNavbar: React.FC = () => {
   // Lắng nghe dữ liệu ban đầu và WebSocket Real-time
   useEffect(() => {
     fetchNotifData();
+    syncReadsFromServer();
     const interval = setInterval(fetchNotifData, 30000);
     const unsubscribe = doctorWebSocket.subscribe((data) => {
+      // Thiết bị khác (App bác sĩ) của chính tài khoản này vừa đọc thông báo
+      if (handleReadsWsMessage(data)) return;
       if (
         data?.type === 'ALERT_NEW' ||
         data?.type === 'INITIAL_ALERTS' ||
         data?.type === 'INCIDENT_RESOLVED' ||
         data?.type === 'INCIDENT_ESCALATED' ||
+        data?.type === 'INCIDENTS_ACKNOWLEDGED' ||
         data?.alert_type
       ) {
         fetchNotifData();
@@ -195,6 +207,7 @@ export const DoctorNavbar: React.FC = () => {
   // Click vào một thông báo: Đánh dấu đã đọc & mở ngay Modal chi tiết
   const handleNotificationClick = (item: UnifiedNotification) => {
     markAsRead(item.id, item.rawIncidentId);
+    syncReadToServer(item.rawIncidentId, item.rawIncident);
     setNotifications((prev) => prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n)));
     setShowNotifMenu(false);
     setSelectedNotif(item);

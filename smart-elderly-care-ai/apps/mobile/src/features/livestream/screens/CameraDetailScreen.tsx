@@ -3,7 +3,9 @@
  */
 import React, { useState, useEffect, useRef } from "react";
 import {
+    ActivityIndicator,
     Animated,
+    Image,
     Linking,
     Modal,
     Platform,
@@ -145,13 +147,17 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
     const incidents = useAlertStore((state) => state.incidents);
     // Panel Talk/Call/Pan-Tilt đang mở; null để hiện Function Grid.
     const [panel, setPanel] = useState<CameraPanel>(null);
+    // Hiện/ẩn thanh kéo âm lượng khi nhấn nút loa trên QuickActionBar.
+    const [showVolumeControl, setShowVolumeControl] = useState(false);
     // Modal cài đặt hoặc danh sách Playback đang hiển thị.
     const [sheet, setSheet] = useState<DetailSheet>(route?.params?.tab === "playback" ? "recordings" : null);
     const [recordingUri, setRecordingUri] = useState("");
+    const [previewImageUri, setPreviewImageUri] = useState("");
     const [archiveTab, setArchiveTab] = useState<"playback" | "download">("playback");
     const [archiveFiles, setArchiveFiles] = useState<ArchivedRecording[]>([]);
     const [loadingArchive, setLoadingArchive] = useState(false);
     const [downloadingId, setDownloadingId] = useState<string | null>(null);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
     const recordingRequest = useRef(0);
     const archiveFade = useRef(new Animated.Value(1)).current;
     useEffect(() => {
@@ -172,6 +178,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
     }, [route?.params]);
     useEffect(() => {
         setRecordingUri("");
+        setPreviewImageUri("");
         return () => { recordingRequest.current++; };
     }, [selectedCameraId, sheet]);
     const loadArchiveFiles = async () => {
@@ -179,13 +186,18 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
         setLoadingArchive(true);
         try {
             const now = new Date();
-            const past = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
+            const past = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
             const { data } = await cameraApi.timeline(
                 past.toISOString(),
                 now.toISOString(),
                 selectedCameraId,
+                undefined,
+                "manual_snapshot,manual_clip",
             );
-            setArchiveFiles(data?.items || []);
+            const items = [...(data?.items || [])].sort(
+                (a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime(),
+            );
+            setArchiveFiles(items);
         } catch {
             // Không ngắt giao diện khi chưa tải được danh sách lưu trữ
         } finally {
@@ -208,16 +220,33 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
             if (result?.data?.url && request === recordingRequest.current) {
                 if (download) {
                     await downloadVideo(result.data.url);
-                    LocalizedAlert.alert("Tải xuống", "Đang bắt đầu tải video xuống thiết bị.");
+                    LocalizedAlert.alert("Tải xuống", "Đang bắt đầu tải tệp xuống thiết bị.");
+                } else if (item.kind === "manual_snapshot" || item.kind === "snapshot") {
+                    setRecordingUri("");
+                    setPreviewImageUri(result.data.url);
                 } else {
+                    setPreviewImageUri("");
                     setRecordingUri(result.data.url);
                 }
             }
         } catch {
             if (request === recordingRequest.current)
-                LocalizedAlert.alert(download ? "Tải xuống" : "Xem lại", "Không tải được video. Vui lòng thử lại.");
+                LocalizedAlert.alert(download ? "Tải xuống" : "Xem lại", "Không tải được tệp. Vui lòng thử lại.");
         } finally {
             if (download && request === recordingRequest.current) setDownloadingId(null);
+        }
+    };
+
+    const deleteArchiveRecording = async (item: ArchivedRecording) => {
+        if (deletingId) return;
+        setDeletingId(item.id);
+        try {
+            await cameraApi.deleteArchive(item.id, selectedCameraId);
+            setArchiveFiles((prev) => prev.filter((f) => f.id !== item.id));
+        } catch {
+            LocalizedAlert.alert("Xóa tệp", "Không xóa được tệp. Vui lòng thử lại.");
+        } finally {
+            setDeletingId(null);
         }
     };
 
@@ -286,6 +315,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
     const openSheet = (next: DetailSheet) => {
         if (next === "recordings") {
             intercom.stop();
+            setShowVolumeControl(false);
             setArchiveTab("playback");
         }
         setSheet(next);
@@ -354,21 +384,34 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                 onQuality={setQuality}
                 onSelectCamera={setSelectedCameraId}
                 selectedCameraId={selectedCameraId}
+                showVolumeControl={!panel && showVolumeControl}
             />
             <QuickActionBar
-                recording={!!connection.recordings.active}
-                speakerEnabled={intercom.speakerEnabled}
+                recording={connection.isRecording}
+                speakerEnabled={
+                    showVolumeControl ||
+                    (intercom.speakerEnabled && intercom.speakerVolume > 0)
+                }
+                speakerMuted={intercom.speakerVolume === 0}
                 callSelected={panel === "call"}
                 onSnapshot={() => {
-                    void connection.open("snapshot.jpg");
+                    void connection.captureSnapshot();
                 }}
                 onRecord={() => {
                     void connection.record();
                 }}
-                onSpeakerToggle={intercom.toggleSpeaker}
+                onSpeakerToggle={() => setShowVolumeControl((prev) => !prev)}
                 onCall={() => changePanel("call")}
             />
             <View style={styles.controls}>
+                {!panel && connection.isRecording && (
+                    <Text
+                        accessibilityLiveRegion="polite"
+                        style={[styles.feedback, { color: "#EF4444", fontWeight: "600" }]}
+                    >
+                        {`Đang quay video camera (${connection.recordingSeconds}s)… Bấm lại nút quay để dừng và lưu.`}
+                    </Text>
+                )}
                 {!panel &&
                     (intercom.state === "connecting" ||
                         intercom.state === "connected" ||
@@ -401,9 +444,13 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                         <FunctionGrid
                             onTalk={() => changePanel("talk")}
                             onPanTilt={() => changePanel("pan")}
-                            onAlarm={() => unsupported("Còi camera")}
+                            onAlarm={() => {
+                                void connection.toggleAlarm();
+                            }}
+                            alarmActive={connection.alarm === true}
                             onPrivacy={() => {
                                 intercom.stop();
+                                setShowVolumeControl(false);
                                 void connection.togglePrivacy();
                             }}
                             privacyActive={connection.privacy === true}
@@ -646,18 +693,23 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                     color={colors.textPrimary}
                                 />
                             </TouchableOpacity>
-                                {(["playback", "download"] as const).map(tab => (
+                                {(
+                                    [
+                                        { id: "playback", label: "Xem lại" },
+                                        { id: "download", label: "Tải xuống" },
+                                    ] as const
+                                ).map((tab) => (
                                     <TouchableOpacity
-                                        key={tab}
+                                        key={tab.id}
                                         activeOpacity={1}
                                         accessibilityRole="tab"
-                                        accessibilityState={{ selected: archiveTab === tab }}
-                                        accessibilityLabel={tab === "playback" ? "Playback" : "Download"}
-                                        style={[styles.archiveTab, archiveTab === tab && { borderBottomColor: colors.primary }]}
-                                        onPress={() => { setRecordingUri(""); recordingRequest.current++; setArchiveTab(tab); }}
+                                        accessibilityState={{ selected: archiveTab === tab.id }}
+                                        accessibilityLabel={tab.label}
+                                        style={[styles.archiveTab, archiveTab === tab.id && { borderBottomColor: colors.primary }]}
+                                        onPress={() => { setRecordingUri(""); setPreviewImageUri(""); recordingRequest.current++; setArchiveTab(tab.id); }}
                                     >
-                                        <Text style={[styles.archiveTabText, { color: archiveTab === tab ? colors.primary : colors.textSecondary }]}>
-                                            {tab === "playback" ? "Playback" : "Download"}
+                                        <Text style={[styles.archiveTabText, { color: archiveTab === tab.id ? colors.primary : colors.textSecondary }]}>
+                                            {tab.label}
                                         </Text>
                                     </TouchableOpacity>
                                 ))}
@@ -668,6 +720,17 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                         <CameraTimeline key={selectedCameraId || "default"} cameraId={selectedCameraId} />
                                     ) : (
                                         <View style={styles.downloadContent}>
+                                            {previewImageUri ? <>
+                                                <Image
+                                                    source={{ uri: previewImageUri }}
+                                                    style={{ width: "100%", aspectRatio: 16 / 9, borderRadius: 12, backgroundColor: "#000" }}
+                                                    resizeMode="contain"
+                                                />
+                                                <TouchableOpacity accessibilityRole="button" style={styles.iconButton}
+                                                    accessibilityLabel="Đóng ảnh xem trước" onPress={() => setPreviewImageUri("")}>
+                                                    <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+                                                </TouchableOpacity>
+                                            </> : null}
                                             {recordingUri ? <>
                                                 <ArchivePlayer key={recordingUri} uri={recordingUri}
                                                     onEnd={() => {}}
@@ -679,7 +742,7 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                             </> : null}
                                             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                                                 <Text style={[styles.sectionTitle, textStyle]}>
-                                                    Bản ghi thẻ nhớ & thiết bị
+                                                    Ảnh chụp & Video đã tải
                                                 </Text>
                                                 <TouchableOpacity
                                                     accessibilityRole="button"
@@ -687,64 +750,20 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                                     style={styles.iconButton}
                                                     onPress={() => {
                                                         void loadArchiveFiles();
-                                                        void connection.refresh?.();
                                                     }}
                                                 >
                                                     <Ionicons name="refresh" size={20} color={colors.primary} />
                                                 </TouchableOpacity>
                                             </View>
-                                            {connection.recordings.active && (
-                                                <Text style={textStyle}>
-                                                    Đang ghi hình…
-                                                </Text>
-                                            )}
-                                            {!!connection.recordings.error && (
-                                                <Text style={styles.error}>
-                                                    {connection.recordings.error}
-                                                </Text>
-                                            )}
-                                            {/* Chỉ mở các tệp do server trả về. */}
-                                            {[...connection.recordings.files]
-                                                .reverse()
-                                                .map((file) => (
-                                                    <View
-                                                        key={file}
-                                                        style={[
-                                                            styles.row,
-                                                            {
-                                                                borderColor:
-                                                                    colors.border,
-                                                                },
-                                                        ]}
-                                                    >
-                                                        <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Phát ${file}`}
-                                                            style={styles.iconButton} onPress={() => { void openRecording(file); }}>
-                                                            <Ionicons
-                                                                name="play-circle-outline"
-                                                                size={25}
-                                                                color={colors.textPrimary}
-                                                            />
-                                                        </TouchableOpacity>
-                                                        <Text
-                                                            style={[
-                                                                styles.rowText,
-                                                                textStyle,
-                                                            ]}
-                                                        >
-                                                            {file}
-                                                        </Text>
-                                                        <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Tải xuống ${file}`}
-                                                            style={styles.iconButton} onPress={() => { void openRecording(file, true); }}>
-                                                            <Ionicons
-                                                                name="download-outline"
-                                                                size={22}
-                                                                color={colors.textPrimary}
-                                                            />
-                                                        </TouchableOpacity>
-                                                    </View>
-                                                ))}
-                                            {/* Danh sách bản ghi từ Cloud / Edge Hub Archive */}
-                                            {archiveFiles.map((item) => (
+                                            {/* Danh sách ảnh chụp & video đã lưu trên AWS S3 */}
+                                            {archiveFiles.map((item) => {
+                                                const isSnap = item.kind === "manual_snapshot" || item.kind === "snapshot";
+                                                const kindLabel = item.kind === "manual_snapshot"
+                                                    ? "Ảnh tự chụp"
+                                                    : item.kind === "manual_clip"
+                                                    ? `${Math.round(item.duration)}s • Video đã quay`
+                                                    : `${item.duration}s • Sự kiện AI`;
+                                                return (
                                                 <View
                                                     key={item.id}
                                                     style={[
@@ -754,12 +773,12 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                                 >
                                                     <TouchableOpacity
                                                         accessibilityRole="button"
-                                                        accessibilityLabel={`Phát lưu trữ ${item.id}`}
+                                                        accessibilityLabel={`Xem lưu trữ ${item.id}`}
                                                         style={styles.iconButton}
                                                         onPress={() => { void openArchiveRecording(item); }}
                                                     >
                                                         <Ionicons
-                                                            name="play-circle-outline"
+                                                            name={isSnap ? "image-outline" : "play-circle-outline"}
                                                             size={25}
                                                             color={colors.primary}
                                                         />
@@ -775,13 +794,14 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                                             })}
                                                         </Text>
                                                         <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                                                            {item.duration}s • {item.kind === "incident" ? "Sự kiện AI" : "Đoạn lưu trữ"}
+                                                            {kindLabel}
                                                         </Text>
                                                     </View>
                                                     <TouchableOpacity
                                                         accessibilityRole="button"
                                                         accessibilityLabel={`Tải xuống lưu trữ ${item.id}`}
                                                         style={styles.iconButton}
+                                                        disabled={deletingId === item.id}
                                                         onPress={() => { void openArchiveRecording(item, true); }}
                                                     >
                                                         <Ionicons
@@ -790,13 +810,31 @@ export default function CameraDetailScreen({ navigation, route }: Props) {
                                                             color={colors.primary}
                                                         />
                                                     </TouchableOpacity>
+                                                    <TouchableOpacity
+                                                        accessibilityRole="button"
+                                                        accessibilityLabel={`Xóa lưu trữ ${item.id}`}
+                                                        style={styles.iconButton}
+                                                        disabled={deletingId === item.id}
+                                                        onPress={() => { void deleteArchiveRecording(item); }}
+                                                    >
+                                                        {deletingId === item.id ? (
+                                                            <ActivityIndicator size="small" color="#EF4444" />
+                                                        ) : (
+                                                            <Ionicons
+                                                                name="trash-outline"
+                                                                size={20}
+                                                                color="#EF4444"
+                                                            />
+                                                        )}
+                                                    </TouchableOpacity>
                                                 </View>
-                                            ))}
-                                            {connection.recordings.files.length === 0 && archiveFiles.length === 0 && !loadingArchive && (
+                                                );
+                                            })}
+                                            {archiveFiles.length === 0 && !loadingArchive && (
                                                 <View style={styles.downloadEmpty}>
                                                     <Ionicons name="download-outline" size={60} color={colors.textMuted} />
-                                                    <Text style={[styles.sectionTitle, textStyle]}>Chưa có bản ghi để tải</Text>
-                                                    <Text style={{ color: colors.textSecondary, textAlign: "center" }}>Các bản ghi hoàn tất sẽ xuất hiện tại đây.</Text>
+                                                    <Text style={[styles.sectionTitle, textStyle]}>Chưa có ảnh hoặc video đã lưu</Text>
+                                                    <Text style={{ color: colors.textSecondary, textAlign: "center" }}>Ảnh chụp và video tải xuống từ Xem lại sẽ xuất hiện tại đây.</Text>
                                                 </View>
                                             )}
                                         </View>

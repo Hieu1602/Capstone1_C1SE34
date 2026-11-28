@@ -62,6 +62,13 @@ export function createIntercomPlatform(): IntercomPlatform {
             if (!muted && audio.srcObject) void audio.play().catch(() => {});
         },
         /**
+         * Điều chỉnh âm lượng phát lại của phần tử audio (0..1).
+         * @param volume - Mức âm lượng chuẩn hóa từ 0 đến 1.
+         */
+        setPlaybackVolume: (volume) => {
+            audio.volume = Math.max(0, Math.min(1, volume));
+        },
+        /**
          * Dừng phát và bỏ tham chiếu tới remote stream.
          */
         closePlayback: () => {

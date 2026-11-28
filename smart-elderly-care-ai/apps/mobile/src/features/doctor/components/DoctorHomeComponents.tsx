@@ -55,11 +55,26 @@ export const getDoctorInitial = (name?: string | null) => {
   return parts[parts.length - 1]?.[0]?.toUpperCase() || 'M';
 };
 
-export const getSafetyScore = (p: PatientCardData | null) => {
-  if (!p) return 86;
-  if (p.health_status === 'DANGER') return 48;
-  if (p.health_status === 'WARNING') return 74;
-  return 92;
+export const getSafetyScore = (p: PatientCardData | null, activeOnline = true): string | number => {
+  if (!p || !activeOnline || (p.heart_rate == null && p.spo2 == null)) return '--';
+  let score = 100;
+  if (p.heart_rate != null) {
+    if (p.heart_rate < 50 || p.heart_rate > 120) score -= 35;
+    else if (p.heart_rate < 55 || p.heart_rate > 100) score -= 15;
+    else if (p.heart_rate < 60 || p.heart_rate > 95) score -= 5;
+  }
+  if (p.spo2 != null) {
+    if (p.spo2 < 90) score -= 40;
+    else if (p.spo2 < 95) score -= 20;
+    else if (p.spo2 < 97) score -= 5;
+  }
+  if (p.skin_temp_max != null) {
+    if (p.skin_temp_max >= 38.0 || p.skin_temp_max <= 35.0) score -= 20;
+    else if (p.skin_temp_max >= 37.5) score -= 8;
+  }
+  if (p.health_status === 'DANGER') score = Math.min(score, 48);
+  else if (p.health_status === 'WARNING') score = Math.min(score, 74);
+  return Math.max(0, Math.min(100, score));
 };
 
 interface DoctorInviteCardProps {
@@ -372,10 +387,6 @@ export const PatientQuickStrip: React.FC<PatientQuickStripProps> = ({
                   backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
                   borderColor: '#2563EB',
                   borderWidth: 1.5,
-                  shadowColor: '#2563EB',
-                  shadowOpacity: 0.15,
-                  shadowRadius: 6,
-                  elevation: 3,
                 },
               ]}
               activeOpacity={0.8}
@@ -416,7 +427,7 @@ interface HeroHealthCardProps {
 export const HeroHealthCard: React.FC<HeroHealthCardProps> = ({ patient, nowMs, onPress }) => {
   if (!patient) return null;
   const activeOnline = isPatientOnline(patient, nowMs);
-  const safetyScore = getSafetyScore(patient);
+  const safetyScore = getSafetyScore(patient, activeOnline);
   const statusColor = !activeOnline
     ? '#94A3B8'
     : patient.health_status === 'DANGER'
@@ -435,7 +446,7 @@ export const HeroHealthCard: React.FC<HeroHealthCardProps> = ({ patient, nowMs, 
   return (
     <TouchableOpacity style={styles.heroHealthCard} activeOpacity={0.92} onPress={() => onPress(patient.id)}>
       <View style={styles.heroCardTop}>
-        <View style={styles.heroScoreCircle}>
+        <View style={[styles.heroScoreCircle, { borderColor: statusColor }]}>
           <Text style={styles.heroScoreVal}>{safetyScore}</Text>
           <Text style={styles.heroScoreMax}>/100</Text>
         </View>
@@ -454,37 +465,51 @@ export const HeroHealthCard: React.FC<HeroHealthCardProps> = ({ patient, nowMs, 
           </Text>
         </View>
 
-        <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.7)" style={{ alignSelf: 'center' }} />
+        <View style={styles.heroChevronWrap}>
+          <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
+        </View>
       </View>
 
       <View style={styles.glassPillsRow}>
         {[
           {
             icon: 'heart',
-            color: activeOnline ? '#F87171' : '#CBD5E1',
+            color: activeOnline ? '#F87171' : '#E2E8F0',
             label: 'Nhịp tim',
             val: activeOnline && patient.heart_rate ? `${patient.heart_rate} bpm` : '-- bpm',
+            flex: 0.95,
           },
           {
             icon: 'water',
-            color: activeOnline ? '#67E8F9' : '#CBD5E1',
+            color: activeOnline ? '#67E8F9' : '#E2E8F0',
             label: 'SpO2',
             val: activeOnline && patient.spo2 ? `${patient.spo2}%` : '--%',
+            flex: 0.75,
           },
           {
             icon: 'watch-outline',
-            color: activeOnline ? '#A7F3D0' : '#CBD5E1',
+            color: activeOnline ? '#6EE7B7' : '#E2E8F0',
             label: 'Smartband',
-            val: activeOnline ? 'CooSpo HW706' : 'Chờ tín hiệu',
-            isSmall: true,
+            val: activeOnline ? (patient.device_name || patient.device_id || 'Smartband') : 'Chờ tín hiệu',
+            flex: 1.55,
+            isDevice: true,
           },
         ].map((pill) => (
-          <View key={pill.label} style={styles.glassPill}>
+          <View key={pill.label} style={[styles.glassPill, { flex: pill.flex }]}>
             <View style={styles.pillIconRow}>
               <Ionicons name={pill.icon as any} size={14} color={pill.color} />
-              <Text style={styles.glassPillLabel}>{pill.label}</Text>
+              <Text style={styles.glassPillLabel} numberOfLines={1}>
+                {pill.label}
+              </Text>
             </View>
-            <Text style={[styles.glassPillVal, pill.isSmall && { fontSize: 12 }]} numberOfLines={1}>
+            <Text
+              style={[
+                styles.glassPillVal,
+                pill.isDevice && styles.glassPillValCompact,
+                !activeOnline && { color: '#CBD5E1' },
+              ]}
+              numberOfLines={pill.isDevice ? 2 : 1}
+            >
               {pill.val}
             </Text>
           </View>
@@ -577,29 +602,70 @@ const styles = StyleSheet.create({
   stripPatientName: { fontSize: 11, fontWeight: '600' },
 
   heroHealthCard: {
-    borderRadius: 24,
+    width: '100%',
+    minWidth: 0,
+    borderRadius: 20,
     backgroundColor: '#1E40AF',
-    padding: 18,
+    borderWidth: 1,
+    borderColor: '#1D4ED8',
+    padding: 16,
     marginBottom: 16,
-    shadowColor: '#1E40AF',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
   },
-  heroCardTop: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },
-  heroScoreCircle: { width: 58, height: 58, borderRadius: 29, backgroundColor: 'rgba(255, 255, 255, 0.18)', borderWidth: 2.5, borderColor: '#34D399', alignItems: 'center', justifyContent: 'center' },
-  heroScoreVal: { color: '#FFFFFF', fontSize: 19, fontWeight: '900', lineHeight: 22 },
-  heroScoreMax: { color: 'rgba(255,255,255,0.7)', fontSize: 9.5, fontWeight: '700' },
-  heroPatientMeta: { flex: 1 },
-  heroStatusBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.2)', paddingHorizontal: 8, paddingVertical: 2.5, borderRadius: 12, alignSelf: 'flex-start', marginBottom: 4, gap: 4 },
+  heroCardTop: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
+  heroScoreCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    borderWidth: 2.5,
+    borderColor: '#34D399',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  heroScoreVal: { color: '#FFFFFF', fontSize: 19, fontWeight: '800', lineHeight: 22 },
+  heroScoreMax: { color: 'rgba(219, 234, 254, 0.85)', fontSize: 10.5, fontWeight: '700' },
+  heroPatientMeta: { flex: 1, minWidth: 0 },
+  heroStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.22)',
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 5,
+    gap: 5,
+  },
   heroStatusDot: { width: 6, height: 6, borderRadius: 3 },
-  heroStatusText: { color: '#FFFFFF', fontSize: 10.5, fontWeight: '700' },
-  heroPatientName: { color: '#FFFFFF', fontSize: 15.5, fontWeight: '800' },
-  heroAddressText: { color: 'rgba(255, 255, 255, 0.8)', fontSize: 11.5, marginTop: 1 },
-  glassPillsRow: { flexDirection: 'row', gap: 8 },
-  glassPill: { flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.15)', borderRadius: 16, paddingVertical: 10, paddingHorizontal: 10, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.2)' },
-  pillIconRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 3 },
-  glassPillLabel: { color: 'rgba(255, 255, 255, 0.85)', fontSize: 10, fontWeight: '600' },
-  glassPillVal: { color: '#FFFFFF', fontSize: 14.5, fontWeight: '800' },
+  heroStatusText: { color: '#FFFFFF', fontSize: 11.5, fontWeight: '700' },
+  heroPatientName: { color: '#FFFFFF', fontSize: 16, fontWeight: '800', lineHeight: 21 },
+  heroAddressText: { color: 'rgba(219, 234, 254, 0.88)', fontSize: 12, marginTop: 2 },
+  heroChevronWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  glassPillsRow: { flexDirection: 'row', width: '100%', minWidth: 0, gap: 8 },
+  glassPill: {
+    flexBasis: 0,
+    minWidth: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 9,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'flex-start',
+  },
+  pillIconRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 },
+  glassPillLabel: { color: 'rgba(224, 242, 254, 0.9)', fontSize: 11.5, fontWeight: '600' },
+  glassPillVal: { color: '#FFFFFF', fontSize: 14.5, fontWeight: '800', lineHeight: 19 },
+  glassPillValCompact: { fontSize: 12, lineHeight: 17, fontWeight: '700' },
 });

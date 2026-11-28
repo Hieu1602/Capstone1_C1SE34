@@ -9,7 +9,6 @@ import {
   RefreshControl,
   StatusBar,
   Animated,
-  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,7 +17,6 @@ import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/nativ
 import { Colors } from '../../../theme/colors';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAuthStore } from '../../../store/useAuthStore';
-import { useDoctorPatientsStore } from '../../../store/useDoctorPatientsStore';
 import { doctorApi } from '../../../services/api';
 import { useDoctorAppointmentsStore } from '../../../store/useDoctorAppointmentsStore';
 import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
@@ -30,6 +28,7 @@ import {
   DoctorPatientCard,
   AppointmentFormModal,
 } from '../components';
+import { normalizePatientsList } from './DoctorHomeScreen';
 
 export type { PatientCardData };
 
@@ -43,12 +42,12 @@ const PatientSkeletonCard = ({ isDarkMode }: { isDarkMode: boolean }) => {
         Animated.timing(pulseAnim, {
           toValue: 0.85,
           duration: 750,
-          useNativeDriver: Platform.OS !== 'web',
+          useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
           toValue: 0.35,
           duration: 750,
-          useNativeDriver: Platform.OS !== 'web',
+          useNativeDriver: true,
         }),
       ])
     ).start();
@@ -127,23 +126,18 @@ export default function DoctorPatientsScreen() {
   const searchRef = useRef<any>(null);
   const { appointments, upsertAppointments } = useDoctorAppointmentsStore();
 
-  const {
-    patients,
-    loading: storeLoading,
-    fetchPatients: fetchSharedPatients,
-  } = useDoctorPatientsStore();
-
+  const [patients, setPatients] = useState<PatientCardData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const loading = storeLoading && patients.length === 0;
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterTab, setFilterTab] = useState<'ALL' | 'DANGER' | 'WARNING' | 'NORMAL'>('ALL');
+  const [filterTab, setFilterTab] = useState<'ALL' | 'DANGER' | 'WARNING' | 'NORMAL' | 'OFFLINE'>('ALL');
 
   // Modal Đặt lịch hẹn nhanh cho bệnh nhân từ Card
   const [appointmentModalVisible, setAppointmentModalVisible] = useState(false);
   const [selectedPatientForApt, setSelectedPatientForApt] = useState<PatientCardData | null>(null);
   const [scheduledAt, setScheduledAt] = useState('');
   const [examType, setExamType] = useState('Khám định kỳ');
-  const [visitType, setVisitType] = useState<'HOME_VISIT' | 'CLINIC'>('HOME_VISIT');
+  const [visitType, setVisitType] = useState<'HOME_VISIT' | 'CLINIC' | 'TELEHEALTH'>('HOME_VISIT');
   const [location, setLocation] = useState('');
   const [instructions, setInstructions] = useState('');
   const [enableSpeaker, setEnableSpeaker] = useState(true);
@@ -153,15 +147,21 @@ export default function DoctorPatientsScreen() {
 
   const fetchPatients = useCallback(async (isManual = false) => {
     try {
-      await fetchSharedPatients();
+      const res = await doctorApi.getPatients();
+      setPatients(normalizePatientsList(res.data));
     } catch {
       if (isManual) {
         LocalizedAlert.alert('Không thể tải lại', 'Vui lòng kiểm tra kết nối mạng và thử lại.');
       }
     } finally {
+      setLoading(false);
       setRefreshing(false);
     }
-  }, [fetchSharedPatients]);
+  }, []);
+
+  useEffect(() => {
+    fetchPatients();
+  }, [fetchPatients]);
 
   useFocusEffect(
     useCallback(() => {
@@ -203,18 +203,19 @@ export default function DoctorPatientsScreen() {
 
     if (filterTab === 'DANGER') return p.health_status === 'DANGER';
     if (filterTab === 'WARNING') return p.health_status === 'WARNING';
-    if (filterTab === 'NORMAL') return p.health_status === 'NORMAL';
+    if (filterTab === 'NORMAL') return p.health_status === 'NORMAL' && Boolean(p.is_online);
+    if (filterTab === 'OFFLINE') return p.health_status === 'NORMAL' && !p.is_online;
     return true;
   });
 
   const totalPatients = patients.length;
   const dangerCount = patients.filter((p) => p.health_status === 'DANGER').length;
   const warningCount = patients.filter((p) => p.health_status === 'WARNING').length;
-  const normalCount = patients.filter((p) => p.health_status === 'NORMAL').length;
+  const normalCount = patients.filter((p) => p.health_status === 'NORMAL' && Boolean(p.is_online)).length;
+  const offlineCount = patients.filter((p) => p.health_status === 'NORMAL' && !p.is_online).length;
 
   const handleViewDetail = (patientId: string) => {
-    const target = patients.find((item) => String(item.id) === String(patientId));
-    navigation.navigate('DoctorPatientDetail', { patientId, initialPatient: target });
+    navigation.navigate('DoctorPatientDetail', { patientId });
   };
 
   const handleViewAnalytics = (patientId: string) => {
@@ -223,19 +224,19 @@ export default function DoctorPatientsScreen() {
       patientId,
       patient: p
         ? {
-            id: String(p.id),
-            name: p.name,
-            age: p.age,
-            gender: p.gender,
-            condition: p.medical_history || '',
-            deviceId: p.device_id || '',
-            houseName: p.house_name ? `${p.house_name}${p.house_address ? ` • ${p.house_address}` : ''}` : undefined,
-            bloodPressure: p.blood_pressure,
-            heartRate: p.heart_rate,
-            spo2: p.spo2,
-            healthStatus: p.health_status,
-            lastUpdated: p.last_updated,
-          }
+          id: String(p.id),
+          name: p.name,
+          age: p.age,
+          gender: p.gender,
+          condition: p.medical_history || '',
+          deviceId: p.device_id || '',
+          houseName: p.house_name ? `${p.house_name}${p.house_address ? ` • ${p.house_address}` : ''}` : undefined,
+          bloodPressure: p.blood_pressure,
+          heartRate: p.heart_rate,
+          spo2: p.spo2,
+          healthStatus: p.health_status,
+          lastUpdated: p.last_updated,
+        }
         : undefined,
     });
   };
@@ -308,6 +309,7 @@ export default function DoctorPatientsScreen() {
         warningCount={warningCount}
         dangerCount={dangerCount}
         normalCount={normalCount}
+        offlineCount={offlineCount}
         searchQuery={searchQuery}
         filterTab={filterTab}
         onChangeSearch={setSearchQuery}
@@ -367,7 +369,7 @@ export default function DoctorPatientsScreen() {
           isEditing={false}
           patientId={selectedPatientForApt.id}
           patientName={selectedPatientForApt.name}
-          onChangePatientName={() => {}}
+          onChangePatientName={() => { }}
           scheduledAt={scheduledAt}
           onChangeScheduledAt={setScheduledAt}
           examType={examType}

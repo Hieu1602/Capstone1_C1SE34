@@ -837,14 +837,18 @@ class CRUDVital:
 
         # 2. Bắn thông điệp Real-time qua WebSocket cho các client đang mở màn hình
         try:
-            from app.api.websockets.vitals_ws import manager
+            from app.api.websockets.vitals_ws import alert_clients, manager
             dev_str = str(data.get("device_id", obj.device_id))
             serial_str = str(raw_dev) if raw_dev else dev_str
+            elderly_id_val = getattr(locals().get("dev"), "elderly_id", None)
+            elderly_id_str = str(elderly_id_val) if elderly_id_val else None
             act_state = data.get("activity_state") or data.get("activity") or (raw_payload.get("activity_state") if isinstance(raw_payload, dict) else None) or "Sinh hoạt"
             ws_data = {
                 "type": "vital_update",
                 "device_id": serial_str,
                 "device_uuid": str(obj.device_id),
+                "patient_id": elderly_id_str,
+                "elderly_id": elderly_id_str,
                 "heart_rate": obj.heart_rate,
                 "spo2": obj.spo2,
                 "skin_temp_max": obj.skin_temp_max,
@@ -860,6 +864,16 @@ class CRUDVital:
             if serial_str != dev_str:
                 await manager.broadcast_to_device(serial_str, ws_data)
             await manager.broadcast_all(ws_data)
+
+            # Đẩy thêm sang /ws/alerts để Mobile & Doctor Web nhận sinh hiệu real-time
+            if alert_clients:
+                ws_text = json.dumps(ws_data, ensure_ascii=False)
+                for c_ws in list(alert_clients):
+                    try:
+                        await c_ws.send_text(ws_text)
+                    except Exception:
+                        if c_ws in alert_clients:
+                            alert_clients.remove(c_ws)
         except Exception as exc:
             logger.warning("[CRUDVital] Lỗi broadcast WebSocket: %s", exc)
 
@@ -1279,19 +1293,43 @@ class CRUDVital:
 
             # Gửi Push Notification (FCM)
             try:
+                from app.models.house import House, HouseMember
+                from app.models.user import User
+
                 target_user_ids = set()
                 if band.owner_id:
                     target_user_ids.add(band.owner_id)
-                for uid in target_user_ids:
-                    await FCMService.send_to_user(
-                        db=db,
-                        user_id=uid,
-                        title=f"⚠️ Cảnh báo an toàn - Cụ {wearer}",
-                        body=msg,
-                        data=alert_dict,
+                if band.house_id:
+                    house_obj = await db.get(House, band.house_id)
+                    if house_obj and house_obj.owner_id:
+                        target_user_ids.add(house_obj.owner_id)
+                    mem_res = await db.execute(
+                        select(HouseMember.user_id).where(HouseMember.house_id == band.house_id)
                     )
-            except Exception:
-                pass
+                    for m_uid in mem_res.scalars():
+                        if m_uid:
+                            target_user_ids.add(m_uid)
+                if target_user_ids:
+                    u_res = await db.execute(
+                        select(User.fcm_token).where(
+                            User.id.in_(target_user_ids),
+                            User.is_active.is_(True),
+                            User.fcm_token.isnot(None),
+                        )
+                    )
+                    fcm_tokens = [t for t in u_res.scalars().all() if t]
+                    if fcm_tokens:
+                        fcm = FCMService()
+                        fcm.initialize()
+                        fcm.send_alert(
+                            fcm_tokens=fcm_tokens,
+                            title=f"⚠️ Cảnh báo an toàn - Cụ {wearer}",
+                            body=msg,
+                            data=alert_dict,
+                            priority="high",
+                        )
+            except Exception as fcm_err:
+                logger.warning("[CRUDVital] Lỗi gửi FCM OUT_OF_RANGE_NO_PHONE: %s", fcm_err)
 
         return created_alerts
 

@@ -45,10 +45,34 @@ export function parseAppointmentNotes(clinicalNotes?: string | null): {
 } {
   const raw = clinicalNotes || '';
   const isFamilyConfirmedByNote = raw.includes(CONFIRM_RECEPTION_TAG);
-  const cleanNotes = isFamilyConfirmedByNote
-    ? raw.replace(/\[ĐÃ XÁC NHẬN ĐÓN TIẾP\]\s*/g, '').trim()
-    : raw.trim();
+  const cleanNotes = raw
+    .replace(/\[ĐÃ XÁC NHẬN ĐÓN TIẾP\]\s*/g, '')
+    .replace(/\[Yêu cầu lịch khám\]\s*/gi, '')
+    .replace(/\[BS dời lịch\]\s*/g, '')
+    .trim();
   return { isFamilyConfirmedByNote, cleanNotes };
+}
+
+export function getAppointmentConfirmationBadge(apt: {
+  status?: string | null;
+  clinical_notes?: string | null;
+  created_by?: string | null;
+  doctor_id?: string | null;
+}): {
+  isFamilyRequested: boolean;
+  isConfirmed: boolean;
+  confirmedLabel: string;
+  pendingLabel: string;
+} {
+  const { isFamilyConfirmedByNote } = parseAppointmentNotes(apt.clinical_notes);
+  const isFamilyRequested = Boolean(apt.created_by && apt.doctor_id && String(apt.created_by) !== String(apt.doctor_id));
+  const isConfirmed = isFamilyConfirmedByNote || apt.status === 'CONFIRMED';
+  return {
+    isFamilyRequested,
+    isConfirmed,
+    confirmedLabel: isFamilyRequested ? 'Bác sĩ đã xác nhận lịch' : 'Gia đình đã xác nhận đón tiếp',
+    pendingLabel: isFamilyRequested ? 'Gia đình đặt — Chờ xác nhận' : 'Chờ gia đình xác nhận',
+  };
 }
 
 export function isHomeVisitType(visitType?: string | null): boolean {
@@ -178,3 +202,18 @@ export function formatAppointmentWsNotification(event: {
       return { title: '📅 Cập nhật lịch khám', body };
   }
 }
+
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+/** Lấy mã lịch khám từ notes của Incident: "...|APT:<uuid>" hoặc notes chỉ gồm đúng 1 uuid */
+export function extractAppointmentId(notes?: string | null): string | null {
+  if (!notes) return null;
+  const tagged = notes.match(/APT:([0-9a-f-]{36})/i);
+  if (tagged && UUID_RE.test(tagged[1])) return tagged[1];
+  const trimmed = notes.trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed) ? trimmed : null;
+}
+
+/** Link mở trang Lịch khám và tự cuộn tới đúng lịch */
+export const appointmentDeepLink = (appointmentId?: string | null) =>
+  appointmentId ? `/appointments?apt=${encodeURIComponent(appointmentId)}` : '/appointments';

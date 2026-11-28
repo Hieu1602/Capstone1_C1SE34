@@ -826,14 +826,8 @@ export default function SettingsScreen({ navigation, route }: any) {
                 isDarkMode={isDarkMode}
                 languageMode={languageMode}
                 appearanceMode={isDarkMode ? "dark" : "light"}
-                onOpenLanguage={() => {
-                    setGeneralSettingsVisible(false);
-                    setLanguageVisible(true);
-                }}
-                onOpenAppearance={() => {
-                    setGeneralSettingsVisible(false);
-                    setAppearanceVisible(true);
-                }}
+                onOpenLanguage={() => setLanguageVisible(true)}
+                onOpenAppearance={() => setAppearanceVisible(true)}
                 onClose={() => setGeneralSettingsVisible(false)}
             />
 
@@ -844,12 +838,8 @@ export default function SettingsScreen({ navigation, route }: any) {
                 onSelectLanguage={(lang) => {
                     void handleLanguageChange(lang);
                     setLanguageVisible(false);
-                    setGeneralSettingsVisible(true);
                 }}
-                onClose={() => {
-                    setLanguageVisible(false);
-                    setGeneralSettingsVisible(true);
-                }}
+                onClose={() => setLanguageVisible(false)}
             />
 
             <AppearanceSettingsModal
@@ -860,7 +850,6 @@ export default function SettingsScreen({ navigation, route }: any) {
                 onClose={() =>
                     closeWithProfileReturn(() => {
                         setAppearanceVisible(false);
-                        setGeneralSettingsVisible(true);
                     })
                 }
             />

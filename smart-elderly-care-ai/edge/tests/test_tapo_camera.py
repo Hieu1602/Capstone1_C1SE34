@@ -184,6 +184,49 @@ class APITests(unittest.IsolatedAsyncioTestCase):
         resp = await self.client.get("/recordings/fall_snap.jpg", auth=self.auth)
         self.assertEqual(resp.status, 200)
 
+    async def test_sd_coverage_filters_dates_and_archive_session_uses_local_hit(self):
+        # Local SD_ file uses time.localtime in filename and half-open [st, st+dur)
+        st = 1_700_000_000
+        dt_str = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime(st))
+        local_mp4 = Path(self.temp.name) / f"SD_{dt_str}_60s.mp4"
+        local_mp4.write_bytes(b"\x00" * 2048)
+        from datetime import datetime, timezone
+        target_iso = datetime.fromtimestamp(st + 10, tz=timezone.utc).isoformat()
+        res = await self.client.get("/archive/session", params={"start": target_iso}, auth=self.auth)
+        self.assertEqual(res.status, 200)
+        body = await res.json()
+        self.assertEqual(body["file"], local_mp4.name)
+        self.assertEqual(body["duration"], 60)
+
+        # Coverage filters out unrelated dates and merges adjacent segments
+        fake_cl = Mock()
+        fake_cl.getRecordingsList.return_value = [
+            {"0": {"date": "20231101"}},
+            {"1": {"date": "20231114"}},
+        ]
+        fake_cl.getRecordings.return_value = [
+            {"0": {"startTime": str(st), "endTime": str(st + 30)}},
+            {"1": {"startTime": str(st + 32), "endTime": str(st + 60)}},
+        ]
+        fake_pytapo = Mock(Tapo=Mock(return_value=fake_cl))
+        with patch.dict("sys.modules", {"pytapo": fake_pytapo}):
+            cov = await self.client.get(
+                "/coverage",
+                params={
+                    "start": datetime.fromtimestamp(st - 60, tz=timezone.utc).isoformat(),
+                    "end": datetime.fromtimestamp(st + 120, tz=timezone.utc).isoformat(),
+                },
+                auth=self.auth,
+            )
+            self.assertEqual(cov.status, 200)
+            items = (await cov.json())["items"]
+            self.assertEqual(len(items), 1)
+            self.assertEqual(
+                int(datetime.fromisoformat(items[0]["end"]).timestamp()) - int(datetime.fromisoformat(items[0]["start"]).timestamp()),
+                60,
+            )
+            fake_cl.getRecordings.assert_called_once_with("20231114")
+
 
 if __name__ == "__main__":
     unittest.main()

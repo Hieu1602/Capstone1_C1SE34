@@ -49,7 +49,8 @@ interface AlertState {
   fetchNotifications: () => Promise<Incident[] | null>;
   setIncidents: (incidents: Incident[]) => void;
   addIncident: (incident: Incident) => void;
-  acknowledgeIncident: (incidentId: string, note?: string, user?: string) => void;
+  /** localOnly: chỉ cập nhật RAM (dùng khi nhận INCIDENT_RESOLVED từ server) – không gọi lại API để tránh vòng lặp */
+  acknowledgeIncident: (incidentId: string, note?: string, user?: string, localOnly?: boolean) => void;
   reopenIncident: (incidentId: string, note?: string) => void;
   acknowledgeAll: () => Promise<void>;
   setAlarmSnooze: (snooze: Partial<AlarmSnoozeInfo>) => void;
@@ -65,6 +66,10 @@ const DEFAULT_SNOOZE: AlarmSnoozeInfo = {
   mode: 'VIBRATE',
   syncAll: true,
 };
+
+/** Cảnh báo khẩn cấp: chỉ tắt bằng thao tác "Đã xử lý" rõ ràng, không bằng "đã đọc" */
+export const isUrgentIncident = (inc?: { alert_level?: string | null } | null) =>
+  inc?.alert_level === 'HIGH' || inc?.alert_level === 'CRITICAL';
 
 export const useAlertStore = create<AlertState>()((set, get) => ({
   incidents: [],
@@ -120,7 +125,7 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
       };
     }),
 
-  acknowledgeIncident: async (incidentId: string, note?: string, user: string = 'Demo User') => {
+  acknowledgeIncident: async (incidentId: string, note?: string, user: string = 'Demo User', localOnly = false) => {
     // 0. Tắt ngay lập tức chuông báo động và rung điện thoại khi bấm Đã xử lý (0ms)
     try {
       const { notificationService } = require('../services/notificationService');
@@ -153,6 +158,7 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
     });
 
     // 2. Đồng bộ ngầm xuống backend
+    if (localOnly) return;
     try {
       await incidentsApi.acknowledge(incidentId, note);
     } catch (e) {
@@ -167,10 +173,13 @@ export const useAlertStore = create<AlertState>()((set, get) => ({
       notificationService.stopEmergencyAlarm();
     } catch {}
 
-    // 1. Optimistic Update tức thời trong RAM (0ms) — giữ nguyên lời mời chờ xác nhận
+    // 1. Optimistic Update tức thời trong RAM (0ms) — giữ nguyên lời mời chờ xác nhận.
+    // Bác sĩ: giống backend, "đánh dấu tất cả" không đụng tới cảnh báo khẩn cấp HIGH/CRITICAL
+    const { useAuthStore } = require('./useAuthStore');
+    const isDoctor = useAuthStore.getState().userRole === 'doctor' || useAuthStore.getState().role === 'doctor';
     set((state) => ({
       incidents: state.incidents.map((inc) =>
-        inc.alert_type === 'HOUSE_INVITE_PENDING'
+        inc.alert_type === 'HOUSE_INVITE_PENDING' || (isDoctor && isUrgentIncident(inc))
           ? inc
           : {
               ...inc,

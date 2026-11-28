@@ -180,6 +180,21 @@ class AppointmentResponse(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     created_appointments: Optional[List["AppointmentResponse"]] = None
+    # Thao tác gần nhất (ai, lúc nào) – chỉ có trong API danh sách
+    last_event: Optional["AppointmentEventOut"] = None
+
+
+class AppointmentEventOut(BaseModel):
+    """Một dòng lịch sử thao tác lịch khám."""
+    id: str
+    appointment_id: str
+    action: str
+    actor_id: Optional[str] = None
+    actor_name: Optional[str] = None
+    actor_role: Optional[str] = None
+    changes: Optional[dict] = None
+    note: Optional[str] = None
+    created_at: Optional[datetime] = None
 
 
 AppointmentResponse.model_rebuild()

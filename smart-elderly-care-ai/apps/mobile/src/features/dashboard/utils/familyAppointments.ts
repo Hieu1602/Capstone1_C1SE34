@@ -127,6 +127,14 @@ export function isFamilyRequestedAppointment(apt: FamilyAppointmentLike): boolea
 
 export function canFamilyManageAppointment(apt: FamilyAppointmentLike): boolean {
   if (apt.status !== 'UPCOMING' && apt.status !== 'CONFIRMED') return false;
+  const notes = apt.clinical_notes || '';
+  if (
+    apt.status === 'CONFIRMED' ||
+    notes.includes('[ĐÃ XÁC NHẬN ĐÓN TIẾP]') ||
+    notes.includes('[BS dời lịch]')
+  ) {
+    return true;
+  }
   if (apt.created_by) {
     return !apt.doctor_id || String(apt.created_by) !== String(apt.doctor_id);
   }
@@ -177,5 +185,6 @@ export function stripAppointmentSystemTags(text?: string | null): string {
   return (text || '')
     .replace(/\[ĐÃ XÁC NHẬN ĐÓN TIẾP\]/g, '')
     .replace(/\[Yêu cầu lịch khám\]/g, '')
+    .replace(/\[BS dời lịch\]/g, '')
     .trim();
 }

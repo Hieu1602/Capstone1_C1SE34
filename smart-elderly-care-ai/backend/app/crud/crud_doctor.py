@@ -45,30 +45,61 @@ def _is_smartband_fresh(band_device: Any, ts_val: Any, now_utc: datetime) -> tup
     return diff_sec <= SMARTBAND_STALE_SECONDS, dt
 
 
-def _merge_device_vitals(cached_vs: Optional[Dict[str, Any]], latest_vs: Any) -> tuple[Any, Any, Any, Optional[str], Any, Optional[str]]:
-    """Kết hợp sinh hiệu từ Redis cache và bản ghi VitalSign mới nhất trong DB."""
-    hr = cached_vs.get("heart_rate") if cached_vs else None
-    spo2 = cached_vs.get("spo2") if cached_vs else None
-    temp = (cached_vs.get("skin_temp_max") or cached_vs.get("temperature")) if cached_vs else None
-    bp_str: Optional[str] = None
-    if cached_vs and cached_vs.get("bp_systolic") is not None and cached_vs.get("bp_diastolic") is not None:
-        bp_str = f"{cached_vs['bp_systolic']}/{cached_vs['bp_diastolic']} mmHg"
-    ts_candidate = (cached_vs.get("time") or cached_vs.get("cached_at_iso")) if cached_vs else None
-    last_updated_str: Optional[str] = (ts_candidate or "Vừa xong (Trực tuyến)") if cached_vs else None
+def _extract_cache_utc_dt(cached_vs: Optional[Dict[str, Any]]) -> Optional[datetime]:
+    if not cached_vs:
+        return None
+    if cached_vs.get("time"):
+        return _parse_utc_dt(cached_vs.get("time"))
+    if cached_vs.get("cached_at") is not None:
+        try:
+            return datetime.fromtimestamp(float(cached_vs["cached_at"]), tz=timezone.utc)
+        except Exception:
+            pass
+    return _parse_utc_dt(cached_vs.get("cached_at_iso"))
 
-    if latest_vs:
-        if hr is None:
-            hr = latest_vs.heart_rate
-        if spo2 is None:
-            spo2 = latest_vs.spo2
-        if temp is None:
-            temp = latest_vs.skin_temp_max
-        if bp_str is None and latest_vs.bp_systolic is not None and latest_vs.bp_diastolic is not None:
-            bp_str = f"{latest_vs.bp_systolic}/{latest_vs.bp_diastolic} mmHg"
-        if not ts_candidate and latest_vs.time:
-            ts_candidate = latest_vs.time
-        if not last_updated_str and latest_vs.time:
-            last_updated_str = latest_vs.time.isoformat()
+
+def _merge_device_vitals(cached_vs: Optional[Dict[str, Any]], latest_vs: Any) -> tuple[Any, Any, Any, Optional[str], Any, Optional[str]]:
+    """Kết hợp sinh hiệu từ Redis cache và bản ghi VitalSign mới nhất trong DB (ưu tiên nguồn mới hơn)."""
+    cache_dt = _extract_cache_utc_dt(cached_vs)
+    db_dt = _parse_utc_dt(getattr(latest_vs, "time", None)) if latest_vs else None
+    prefer_db = bool(latest_vs and (not cached_vs or (db_dt and (not cache_dt or db_dt >= cache_dt))))
+
+    c_hr = cached_vs.get("heart_rate") if cached_vs else None
+    c_spo2 = cached_vs.get("spo2") if cached_vs else None
+    c_temp = (cached_vs.get("skin_temp_max") or cached_vs.get("temperature")) if cached_vs else None
+    c_bp = (
+        f"{cached_vs['bp_systolic']}/{cached_vs['bp_diastolic']} mmHg"
+        if cached_vs and cached_vs.get("bp_systolic") is not None and cached_vs.get("bp_diastolic") is not None
+        else None
+    )
+
+    d_hr = latest_vs.heart_rate if latest_vs else None
+    d_spo2 = latest_vs.spo2 if latest_vs else None
+    d_temp = latest_vs.skin_temp_max if latest_vs else None
+    d_bp = (
+        f"{latest_vs.bp_systolic}/{latest_vs.bp_diastolic} mmHg"
+        if latest_vs and latest_vs.bp_systolic is not None and latest_vs.bp_diastolic is not None
+        else None
+    )
+
+    if prefer_db:
+        hr = d_hr if d_hr is not None else c_hr
+        spo2 = d_spo2 if d_spo2 is not None else c_spo2
+        temp = d_temp if d_temp is not None else c_temp
+        bp_str = d_bp if d_bp is not None else c_bp
+        ts_candidate = db_dt or cache_dt
+        last_updated_str = db_dt.isoformat() if db_dt else (cached_vs.get("time") or cached_vs.get("cached_at_iso") if cached_vs else None)
+    else:
+        hr = c_hr if c_hr is not None else d_hr
+        spo2 = c_spo2 if c_spo2 is not None else d_spo2
+        temp = c_temp if c_temp is not None else d_temp
+        bp_str = c_bp if c_bp is not None else d_bp
+        ts_candidate = cache_dt or db_dt
+        last_updated_str = (
+            (cache_dt.isoformat() if cache_dt else None)
+            or (db_dt.isoformat() if db_dt else None)
+            or ("Vừa xong (Trực tuyến)" if cached_vs else None)
+        )
 
     return hr, spo2, temp, bp_str, ts_candidate, last_updated_str
 
@@ -190,12 +221,26 @@ class CRUDDoctor:
         if cached_cards_data is not None:
             cached_cards: List[DoctorPatientCard] = []
             for item in cached_cards_data:
-                # Cập nhật nhanh sinh hiệu thời gian thực từ Redis RAM nếu có bản tin mới
+                if not item.get("is_online"):
+                    item["heart_rate"] = None
+                    item["spo2"] = None
+                    item["skin_temp_max"] = None
+                    item["blood_pressure"] = None
+                    cached_cards.append(DoctorPatientCard(**item))
+                    continue
+
+                # Cập nhật nhanh sinh hiệu thời gian thực từ Redis RAM nếu thiết bị đang trực tuyến
                 dev_id = item.get("device_id")
                 if dev_id:
                     try:
                         latest_vs = await redis_service.get_latest_vitals(str(dev_id))
-                        if latest_vs:
+                        if latest_vs and latest_vs.get("bracelet_connected") is False:
+                            item["is_online"] = False
+                            item["heart_rate"] = None
+                            item["spo2"] = None
+                            item["skin_temp_max"] = None
+                            item["blood_pressure"] = None
+                        elif latest_vs:
                             if latest_vs.get("heart_rate"):
                                 item["heart_rate"] = latest_vs["heart_rate"]
                             if latest_vs.get("spo2"):
@@ -205,14 +250,13 @@ class CRUDDoctor:
                                 item["skin_temp_max"] = temp_val
                             if latest_vs.get("bp_systolic") is not None and latest_vs.get("bp_diastolic") is not None:
                                 item["blood_pressure"] = f"{latest_vs['bp_systolic']}/{latest_vs['bp_diastolic']} mmHg"
-                            if item.get("is_online"):
-                                item["last_updated"] = "Vừa xong (Trực tuyến)"
-                                hr_val = item.get("heart_rate")
-                                spo2_val = item.get("spo2")
-                                if (spo2_val is not None and spo2_val < 90) or (hr_val is not None and (hr_val > 120 or hr_val < 50)):
-                                    item["health_status"] = "DANGER"
-                                elif (spo2_val is not None and spo2_val < 95) or (hr_val is not None and (hr_val > 100 or hr_val < 55)):
-                                    item["health_status"] = "WARNING"
+                            item["last_updated"] = "Vừa xong (Trực tuyến)"
+                            hr_val = item.get("heart_rate")
+                            spo2_val = item.get("spo2")
+                            if (spo2_val is not None and spo2_val < 90) or (hr_val is not None and (hr_val > 120 or hr_val < 50)):
+                                item["health_status"] = "DANGER"
+                            elif (spo2_val is not None and spo2_val < 95) or (hr_val is not None and (hr_val > 100 or hr_val < 55)):
+                                item["health_status"] = "WARNING"
                     except Exception:
                         pass
                 cached_cards.append(DoctorPatientCard(**item))
@@ -361,8 +405,10 @@ class CRUDDoctor:
                 is_smartband_online = bool(band_device.is_online and is_fresh and cache_connected_ok)
 
                 if not is_smartband_online:
-                    # shortcut: giữ lại vitals lịch sử để hiển thị (không phải realtime),
-                    # frontend phân biệt qua is_online=False
+                    hr = None
+                    spo2 = None
+                    temp = None
+                    bp_str = None
                     if latest_dt:
                         last_updated_str = latest_dt.isoformat()
 
@@ -401,6 +447,7 @@ class CRUDDoctor:
                     avatar_url=ep.avatar_url,
                     has_face_enrolled=bool(ep.face_embedding),
                     device_id=band_device.device_id if band_device else "",
+                    device_name=band_device.name if band_device else None,
                     is_online=is_smartband_online,
                     battery_level=getattr(band_device, 'battery_level', 92) if (band_device and is_smartband_online) else None,
                     heart_rate=hr,
@@ -483,6 +530,8 @@ class CRUDDoctor:
         health_status = "NORMAL"
         last_updated_str = None
 
+        live_steps = None
+        live_activity = None
         is_smartband_online = False
         now_utc = datetime.now(timezone.utc)
         if band_device:
@@ -495,15 +544,13 @@ class CRUDDoctor:
             except Exception:
                 pass
 
-            latest_vs = None
-            if not cached_vs or cached_vs.get("heart_rate") is None or cached_vs.get("spo2") is None:
-                vs_res = await db.execute(
-                    select(VitalSign)
-                    .where(VitalSign.device_id == band_device.id)
-                    .order_by(desc(VitalSign.time))
-                    .limit(1)
-                )
-                latest_vs = vs_res.scalar_one_or_none()
+            vs_res = await db.execute(
+                select(VitalSign)
+                .where(VitalSign.device_id == band_device.id)
+                .order_by(desc(VitalSign.time))
+                .limit(1)
+            )
+            latest_vs = vs_res.scalar_one_or_none()
 
             hr, spo2, temp, bp_str, ts_candidate, last_updated_str = _merge_device_vitals(cached_vs, latest_vs)
 
@@ -514,10 +561,16 @@ class CRUDDoctor:
             is_smartband_online = band_device.is_online and is_fresh and cache_connected_ok
 
             if not is_smartband_online:
-                # shortcut: giữ lại vitals lịch sử để hiển thị (không phải realtime),
-                # frontend phân biệt qua is_online=False
+                hr = None
+                spo2 = None
+                temp = None
+                bp_str = None
                 if latest_dt:
                     last_updated_str = latest_dt.isoformat()
+
+        if is_smartband_online and band_device and cached_vs:
+            live_steps = cached_vs.get("steps")
+            live_activity = cached_vs.get("activity_state") or cached_vs.get("activity")
 
         if is_smartband_online:
             if (spo2 is not None and spo2 < 90) or (hr is not None and (hr > 120 or hr < 50)):
@@ -594,6 +647,7 @@ class CRUDDoctor:
             avatar_url=med_record.avatar_url or (elderly.avatar_url if elderly else None),
             has_face_enrolled=bool(elderly.face_embedding if elderly else med_record.has_face_enrolled),
             device_id=band_device.device_id if band_device else "",
+            device_name=band_device.name if band_device else None,
             is_online=is_smartband_online,
             battery_level=band_device.battery_level if (band_device and is_smartband_online) else None,
             heart_rate=hr,
@@ -602,6 +656,8 @@ class CRUDDoctor:
             blood_pressure=bp_str,
             health_status=health_status,
             last_updated=last_updated_str or "Chưa có dữ liệu",
+            steps=live_steps,
+            activity_state=live_activity,
             conditions=resolved_conditions,
             drug_allergies=resolved_drug_allergies,
             food_allergies=resolved_food_allergies,
@@ -760,6 +816,7 @@ class CRUDDoctor:
                     title="💊 Đơn thuốc & Lịch uống thuốc mới",
                     body=notif_msg,
                     data={
+                        "incident_id": str(new_incident.id) if new_incident else "",
                         "type": "PRESCRIPTION_CREATED",
                         "alert_type": "PRESCRIPTION_CREATED",
                         "patient_id": str(patient_uuid),
@@ -1387,129 +1444,139 @@ class CRUDDoctor:
     async def update_thresholds(
         self, db: AsyncSession, elderly_id: str, thresholds_in: ThresholdsUpdate, doctor_name: Optional[str] = "Bác sĩ phụ trách"
     ) -> Dict[str, Any]:
-        """Cập nhật cấu hình ngưỡng y tế khuyến nghị cho thiết bị của bệnh nhân."""
-        if elderly_id not in _CLINICAL_STORE:
-            _CLINICAL_STORE[elderly_id] = _init_clinical_data(elderly_id)
-        clinical = _CLINICAL_STORE[elderly_id]
+        """Cập nhật cấu hình ngưỡng y tế khuyến nghị cho thiết bị của bệnh nhân.
 
-        if thresholds_in.hr_threshold_low is not None:
-            clinical["hr_threshold_low"] = thresholds_in.hr_threshold_low
-        if thresholds_in.hr_threshold_high is not None:
-            clinical["hr_threshold_high"] = thresholds_in.hr_threshold_high
-        if thresholds_in.spo2_threshold_low is not None:
-            clinical["spo2_threshold_low"] = thresholds_in.spo2_threshold_low
+        Thứ tự bắt buộc: ghi DeviceConfig -> commit() -> refresh() -> đọc lại ngưỡng từ DB
+        -> dựng nội dung thông báo / payload WebSocket. Không dùng giá trị cũ trong bộ nhớ.
+        """
+        from fastapi import HTTPException, status as http_status
+        from app.services.vital_thresholds import (
+            apply_thresholds,
+            format_thresholds_summary,
+            serialize_thresholds,
+            validate_threshold_pairs,
+        )
 
+        updates = thresholds_in.model_dump(exclude_unset=True, exclude_none=True)
+        if not updates:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail="Không có ngưỡng sinh hiệu nào được gửi lên để cập nhật.",
+            )
+
+        # Không "lấy đại" bệnh nhân / thiết bị khác: sai ID -> 404, tránh ghi đè nhầm ngưỡng sang người khác
         elderly = None
         try:
-            val_uuid = UUID(elderly_id)
             res = await db.execute(
                 select(ElderlyProfile)
                 .options(selectinload(ElderlyProfile.devices), selectinload(ElderlyProfile.house))
-                .where(ElderlyProfile.id == val_uuid)
+                .where(ElderlyProfile.id == UUID(elderly_id))
             )
             elderly = res.scalar_one_or_none()
         except (ValueError, TypeError):
             pass
-
         if not elderly:
-            res = await db.execute(
-                select(ElderlyProfile)
-                .options(selectinload(ElderlyProfile.devices), selectinload(ElderlyProfile.house))
-                .limit(1)
+            raise HTTPException(
+                status_code=http_status.HTTP_404_NOT_FOUND,
+                detail=f"Không tìm thấy bệnh nhân với ID '{elderly_id}'.",
             )
-            elderly = res.scalar_one_or_none()
 
+        # Cùng thứ tự với get_patient_detail: vòng đeo của cụ -> thiết bị của cụ -> thiết bị trong nhà của cụ
         device_id = None
-        if elderly and elderly.devices:
-            for d in elderly.devices:
-                if d.device_type == "SMARTBAND":
-                    device_id = d.id
-                    break
-            if not device_id and elderly.devices:
-                device_id = elderly.devices[0].id
-
-        if not device_id and elderly and elderly.house_id:
-            dev_stmt = select(Device.id).where(Device.house_id == elderly.house_id).limit(1)
-            dev_res = await db.execute(dev_stmt)
+        if elderly.devices:
+            band = next((d for d in elderly.devices if d.device_type == "SMARTBAND"), None)
+            device_id = (band or elderly.devices[0]).id
+        if not device_id and elderly.house_id:
+            dev_res = await db.execute(select(Device.id).where(Device.house_id == elderly.house_id).limit(1))
             device_id = dev_res.scalar_one_or_none()
-
         if not device_id:
-            any_dev = await db.execute(select(Device.id).limit(1))
-            device_id = any_dev.scalar_one_or_none()
-
-        if device_id:
-            cfg_res = await db.execute(select(DeviceConfig).where(DeviceConfig.device_id == device_id))
-            d_cfg = cfg_res.scalar_one_or_none()
-            if not d_cfg:
-                d_cfg = DeviceConfig(device_id=device_id)
-                db.add(d_cfg)
-            if thresholds_in.hr_threshold_low is not None:
-                d_cfg.hr_threshold_low = thresholds_in.hr_threshold_low
-            if thresholds_in.hr_threshold_high is not None:
-                d_cfg.hr_threshold_high = thresholds_in.hr_threshold_high
-            if thresholds_in.spo2_threshold_low is not None:
-                d_cfg.spo2_threshold_low = thresholds_in.spo2_threshold_low
-            d_cfg.is_custom_thresholds = True
-            d_cfg.configured_by_role = "DOCTOR"
-            await db.commit()
-
-        patient_name = elderly.full_name if elderly else "bệnh nhân"
-        hr_l = thresholds_in.hr_threshold_low or clinical.get("hr_threshold_low", 50)
-        hr_h = thresholds_in.hr_threshold_high or clinical.get("hr_threshold_high", 120)
-        spo2_l = thresholds_in.spo2_threshold_low or clinical.get("spo2_threshold_low", 90)
-
-        notif_msg = f"🩺 {doctor_name} đã điều chỉnh ngưỡng cảnh báo sinh hiệu cho cụ {patient_name} (Nhịp tim: {hr_l} - {hr_h} bpm, SpO2 Min: {spo2_l}%)."
-
-        if device_id:
-            from app.models.incident import Incident
-            new_incident = Incident(
-                device_id=device_id,
-                alert_type="DEVICE_CONFIG_UPDATED",
-                alert_level="LOW",
-                message=notif_msg,
-                is_acknowledged=False,
-                notes=f"PATIENT:{elderly.id if elderly else elderly_id}|DOCTOR_THRESHOLD_UPDATE",
+            raise HTTPException(
+                status_code=http_status.HTTP_404_NOT_FOUND,
+                detail=f"Bệnh nhân {elderly.full_name} chưa được gán thiết bị nào để áp dụng ngưỡng.",
             )
-            db.add(new_incident)
-            await db.commit()
-            await db.refresh(new_incident)
 
-            try:
-                from app.services.redis import redis_service
-                await redis_service.invalidate_incidents_cache()
-                await redis_service.invalidate_doctor_patients()
-            except Exception:
-                pass
+        cfg_res = await db.execute(select(DeviceConfig).where(DeviceConfig.device_id == device_id))
+        d_cfg = cfg_res.scalar_one_or_none()
+        if not d_cfg:
+            d_cfg = DeviceConfig(device_id=device_id)
+            db.add(d_cfg)
+        apply_thresholds(d_cfg, updates)
 
-            try:
-                import json
-                from app.api.websockets.vitals_ws import alert_clients
-                ws_payload = json.dumps({
-                    "type": "ALERT_NEW",
+        # Kiểm tra cặp min/max trên giá trị SAU khi gộp (cập nhật một phần vẫn phải hợp lệ)
+        err = validate_threshold_pairs(serialize_thresholds(d_cfg))
+        if err:
+            await db.rollback()
+            raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=err)
+
+        d_cfg.is_custom_thresholds = True
+        d_cfg.configured_by_role = "DOCTOR"
+        await db.commit()
+        await db.refresh(d_cfg)
+        # Nguồn dữ liệu duy nhất: giá trị vừa được lưu trong PostgreSQL
+        current_thresholds = serialize_thresholds(d_cfg)
+
+        # Đồng bộ bộ nhớ lâm sàng theo đúng giá trị đã lưu
+        for key in {elderly_id, str(elderly.id)}:
+            if key not in _CLINICAL_STORE:
+                _CLINICAL_STORE[key] = _init_clinical_data(key)
+            _CLINICAL_STORE[key].update(current_thresholds)
+
+        notif_msg = (
+            f"🩺 {doctor_name} đã điều chỉnh ngưỡng cảnh báo sinh hiệu cho cụ {elderly.full_name} "
+            f"({format_thresholds_summary(current_thresholds)})."
+        )
+
+        from app.models.incident import Incident
+        new_incident = Incident(
+            device_id=device_id,
+            alert_type="DEVICE_CONFIG_UPDATED",
+            alert_level="LOW",
+            message=notif_msg,
+            is_acknowledged=False,
+            notes=f"PATIENT:{elderly.id}|DOCTOR_THRESHOLD_UPDATE",
+        )
+        db.add(new_incident)
+        await db.commit()
+        await db.refresh(new_incident)
+
+        try:
+            from app.services.redis import redis_service
+            await redis_service.invalidate_incidents_cache()
+            await redis_service.invalidate_doctor_patients()
+        except Exception:
+            pass
+
+        try:
+            from app.api.websockets.vitals_ws import alert_clients
+            ws_payload = json.dumps({
+                "type": "ALERT_NEW",
+                "alert_type": "DEVICE_CONFIG_UPDATED",
+                "data": {
+                    "id": str(new_incident.id),
                     "alert_type": "DEVICE_CONFIG_UPDATED",
-                    "data": {
-                        "id": str(new_incident.id),
-                        "alert_type": "DEVICE_CONFIG_UPDATED",
-                        "alert_level": "LOW",
-                        "message": new_incident.message,
-                        "patient_id": str(elderly.id if elderly else elderly_id),
-                        "created_at": new_incident.created_at.isoformat() if new_incident.created_at else None,
-                        "thresholds": thresholds_in.model_dump(exclude_unset=True),
-                    }
-                }, ensure_ascii=False)
-                for client_ws in list(alert_clients):
-                    try:
-                        await client_ws.send_text(ws_payload)
-                    except Exception:
-                        if client_ws in alert_clients:
-                            alert_clients.remove(client_ws)
-            except Exception:
-                pass
+                    "alert_level": "LOW",
+                    "message": new_incident.message,
+                    "patient_id": str(elderly.id),
+                    "created_at": new_incident.created_at.isoformat() if new_incident.created_at else None,
+                    "device_id": str(device_id),
+                    "thresholds": current_thresholds,
+                    "updated_fields": sorted(updates.keys()),
+                }
+            }, ensure_ascii=False)
+            for client_ws in list(alert_clients):
+                try:
+                    await client_ws.send_text(ws_payload)
+                except Exception:
+                    if client_ws in alert_clients:
+                        alert_clients.remove(client_ws)
+        except Exception:
+            pass
 
         return {
             "success": True,
             "message": "Đã cập nhật ngưỡng an toàn y tế thành công và đồng bộ xuống Hub.",
-            "thresholds": thresholds_in.model_dump(exclude_unset=True),
+            "device_id": str(device_id),
+            "thresholds": current_thresholds,
         }
 
 

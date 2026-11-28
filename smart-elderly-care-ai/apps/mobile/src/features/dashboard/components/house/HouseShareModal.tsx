@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   Modal,
   TouchableOpacity,
@@ -9,23 +8,25 @@ import {
   Platform,
   NativeModules,
 } from 'react-native';
+import { LocalizedText as Text } from '../../../../i18n/LocalizedComponents';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { Colors } from '../../../../theme/colors';
+import apiClient from '../../../../services/api';
 
 /**
- * Thuật toán tạo mã mời xoay vòng 30 phút đồng bộ với Backend (CARE-XXXX).
- * Sử dụng FNV-1a 32-bit băm từ householdId và 30-minute epoch window.
+ * Thuật toán tạo mã mời 10 phút đồng bộ với Backend (CARE-XXXX).
+ * Sử dụng FNV-1a 32-bit băm từ householdId và 10-minute epoch window.
  */
-export function generateHouseInviteCode30m(householdId?: string | number | null): {
+export function generateHouseInviteCode10m(householdId?: string | number | null): {
   code: string;
   remainingMinutes: number;
   remainingSeconds: number;
 } {
   const cleanId = String(householdId || 'default').toLowerCase().replace(/-/g, '');
   const nowTs = Math.floor(Date.now() / 1000);
-  const windowIndex = Math.floor(nowTs / 1800);
+  const windowIndex = Math.floor(nowTs / 600);
   let val = 2166136261;
   const key = `${cleanId}:${windowIndex}`;
   for (let i = 0; i < key.length; i++) {
@@ -33,10 +34,12 @@ export function generateHouseInviteCode30m(householdId?: string | number | null)
   }
   const hex = val.toString(16).toUpperCase().padStart(8, '0');
   const code = `CARE-${hex.slice(-4)}`;
-  const remainingSeconds = 1800 - (nowTs % 1800);
+  const remainingSeconds = 600 - (nowTs % 600);
   const remainingMinutes = Math.max(1, Math.ceil(remainingSeconds / 60));
   return { code, remainingMinutes, remainingSeconds };
 }
+
+export const generateHouseInviteCode30m = generateHouseInviteCode10m;
 
 interface HouseShareModalProps {
   visible: boolean;
@@ -69,23 +72,41 @@ export const HouseShareModal: React.FC<HouseShareModalProps> = ({
   colors: { bgCard, borderCol, textTitle, textSub },
 }) => {
   const insets = useSafeAreaInsets();
-  const [inviteState, setInviteState] = useState(() => generateHouseInviteCode30m(householdId));
+  const [inviteCode, setInviteCode] = useState(() => generateHouseInviteCode10m(householdId).code);
+  const [remainingMinutes, setRemainingMinutes] = useState(10);
 
   useEffect(() => {
-    const update = () => {
-      setInviteState(generateHouseInviteCode30m(householdId));
-    };
-    update();
-    const timer = setInterval(update, 5000);
-    return () => clearInterval(timer);
-  }, [householdId]);
+    if (!visible) return;
 
-  const inviteCode = inviteState.code;
-  const remainingMinutes = inviteState.remainingMinutes;
+    let isMounted = true;
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    setInviteCode(generateHouseInviteCode10m(householdId).code);
+    setRemainingMinutes(10);
+
+    // Gọi API cấp mã hiệu lực 10 phút tính từ thời điểm bấm mở modal
+    apiClient
+      .get(`/houses/${householdId || 'current'}/invite-code`)
+      .then((res: any) => {
+        if (isMounted && res?.data?.code) {
+          setInviteCode(String(res.data.code));
+        }
+      })
+      .catch(() => {});
+
+    const timer = setInterval(() => {
+      const remSec = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+      setRemainingMinutes(Math.max(1, Math.ceil(remSec / 60)));
+    }, 5000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
+  }, [visible, householdId]);
 
   const inviteMsg = `Chào bạn! Bạn nhận được lời mời tham gia "${houseName || 'Nhà của tôi'}" với vai trò ${
     selectedInviteRole === 'ADMIN' ? 'Quản trị viên' : 'Thành viên'
-  }. Mã mời: ${inviteCode} (hiệu lực trong 30 phút). Tải app Smart Elderly Care AI để kết nối!`;
+  }. Mã mời: ${inviteCode} (hiệu lực trong 10 phút). Tải app Smart Elderly Care AI để kết nối!`;
 
   const copyToClipboard = async (text: string, successMessage: string) => {
     try {
@@ -244,7 +265,7 @@ export const HouseShareModal: React.FC<HouseShareModalProps> = ({
                 </TouchableOpacity>
               </View>
               <Text style={styles.inviteCodeExpireText}>
-                ⏱️ Mã có hiệu lực trong 30 phút (còn {remainingMinutes} phút)
+                ⏱️ Mã có hiệu lực trong 10 phút (còn {remainingMinutes} phút)
               </Text>
             </View>
           </View>
@@ -267,7 +288,7 @@ export const HouseShareModal: React.FC<HouseShareModalProps> = ({
             <TouchableOpacity
               style={styles.shareChannelItem}
               onPress={() => {
-                const msg = `Mời bạn tham gia căn nhà "${houseName || 'Nhà của tôi'}" trên Smart Elderly Care AI. Mã mời: ${inviteCode} (hiệu lực trong 30 phút). Tải ứng dụng tại: https://smartcare.vn/app`;
+                const msg = `Mời bạn tham gia căn nhà "${houseName || 'Nhà của tôi'}" trên Smart Elderly Care AI. Mã mời: ${inviteCode} (hiệu lực trong 10 phút). Tải ứng dụng tại: https://smartcare.vn/app`;
                 Linking.openURL(`sms:?body=${encodeURIComponent(msg)}`).catch(() => {
                   copyToClipboard(msg, 'Đã sao chép nội dung tin nhắn!');
                 });

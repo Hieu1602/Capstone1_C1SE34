@@ -85,3 +85,22 @@
 }
 
 
+
+/* In hồ sơ bệnh nhân: chỉ in phiếu #patient-print-root, ẩn toàn bộ giao diện ứng dụng */
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm 14mm 16mm;
+  }
+  body:has(#patient-print-root) > *:not(#patient-print-root) {
+    display: none !important;
+  }
+  body:has(#patient-print-root) {
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  #patient-print-root {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

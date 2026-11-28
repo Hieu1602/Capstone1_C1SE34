@@ -8,7 +8,8 @@ import { DoctorSidebar } from './DoctorSidebar';
 import { AdminMarqueeBanner } from './AdminMarqueeBanner';
 import { doctorWebSocket } from '../../services/websocket';
 import { useDoctorDataStore } from '../../store/useDoctorDataStore';
-import { formatAppointmentWsNotification } from '../../utils/appointmentHelpers';
+import { useDoctorAuthStore } from '../../store/useDoctorAuthStore';
+import { appointmentDeepLink, formatAppointmentWsNotification } from '../../utils/appointmentHelpers';
 import {
   isBrowserNotificationSupported,
   getBrowserNotificationPermission,
@@ -54,6 +55,9 @@ export const DoctorLayout: React.FC = () => {
 
     // Tải trước dữ liệu toàn cục song song để các tab có dữ liệu ngay (0ms)
     useDoctorDataStore.getState().fetchAllData();
+    const pollTimer = setInterval(() => {
+      useDoctorDataStore.getState().fetchPatients(true);
+    }, 15000);
 
     const unsubscribe = doctorWebSocket.subscribe((event) => {
       if (!event) return;
@@ -68,7 +72,7 @@ export const DoctorLayout: React.FC = () => {
             title,
             body,
             tag: event.incident_id || alertType,
-            url: '/appointments',
+            url: appointmentDeepLink(event.appointment_id || event.data?.appointment_id),
             requireInteraction: false,
           });
           setAppointmentToast({
@@ -79,6 +83,46 @@ export const DoctorLayout: React.FC = () => {
           if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
           toastTimerRef.current = setTimeout(() => setAppointmentToast(null), 6000);
         }
+        return;
+      }
+
+      const evtType = String(event.type || '').toLowerCase();
+      if (evtType === 'user_profile_updated') {
+        const curUser = useDoctorAuthStore.getState().user;
+        if (curUser && String(event.user_id) === String(curUser.id)) {
+          useDoctorAuthStore.getState().updateUser({
+            avatar_url: event.avatar_url ?? null,
+            ...(event.full_name ? { full_name: event.full_name } : {}),
+          });
+          window.dispatchEvent(new Event('doctor-profile-updated'));
+        }
+        return;
+      }
+
+      if (evtType === 'vital_update' || evtType === 'vitals_update') {
+        const liveHr = event.heart_rate != null ? Number(event.heart_rate) : undefined;
+        const liveSpo2 = event.spo2 != null ? Number(event.spo2) : undefined;
+        const liveTemp = event.skin_temp_max != null ? Number(event.skin_temp_max) : undefined;
+        const store = useDoctorDataStore.getState();
+        const pid = event.patient_id || event.elderly_id;
+        store.setPatients(
+          store.patients.map((p) => {
+            const matched =
+              (pid && String(p.id) === String(pid)) ||
+              (event.device_id && p.device_id === event.device_id) ||
+              (event.device_uuid && p.device_id === event.device_uuid);
+            return matched
+              ? {
+                  ...p,
+                  is_online: true,
+                  heart_rate: liveHr !== undefined && liveHr > 0 ? liveHr : p.heart_rate,
+                  spo2: liveSpo2 !== undefined && liveSpo2 > 0 ? liveSpo2 : p.spo2,
+                  skin_temp_max: liveTemp !== undefined && liveTemp > 0 ? liveTemp : p.skin_temp_max,
+                  last_updated: 'Vừa xong (Trực tuyến)',
+                }
+              : p;
+          })
+        );
         return;
       }
 
@@ -112,6 +156,7 @@ export const DoctorLayout: React.FC = () => {
     });
 
     return () => {
+      clearInterval(pollTimer);
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
       unsubscribe();
       doctorWebSocket.disconnect();

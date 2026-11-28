@@ -2,8 +2,6 @@ import React from 'react';
 import {
   Droplet,
   Activity,
-  HeartPulse,
-  Thermometer,
   AlertTriangle,
   CheckCircle2,
   ShieldAlert,
@@ -20,8 +18,6 @@ interface PatientDrawerOverviewTabProps {
   patientDetail: DoctorPatientDetail;
   activeBloodType: string;
   activeBmi: string;
-  activeBp: string;
-  activeSkinTemp: string;
   onOpenRecordModal: () => void;
 }
 
@@ -95,8 +91,6 @@ export const PatientDrawerOverviewTab: React.FC<PatientDrawerOverviewTabProps> =
   patientDetail,
   activeBloodType,
   activeBmi,
-  activeBp,
-  activeSkinTemp,
   onOpenRecordModal,
 }) => {
   const vitalTiles: VitalTileConfig[] = [
@@ -121,28 +115,6 @@ export const PatientDrawerOverviewTab: React.FC<PatientDrawerOverviewTabProps> =
       cardClass:
         'from-teal-50/40 to-slate-50/70 dark:from-teal-950/20 hover:border-teal-200 dark:hover:border-teal-900/50',
       iconWrapClass: 'bg-teal-100/80 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400',
-    },
-    {
-      id: 'blood-pressure',
-      icon: HeartPulse,
-      category: 'Huyết động',
-      label: 'Huyết áp chuẩn',
-      value: activeBp,
-      statusText: 'mmHg (Mục tiêu)',
-      cardClass:
-        'from-blue-50/40 to-slate-50/70 dark:from-blue-950/20 hover:border-blue-200 dark:hover:border-blue-900/50',
-      iconWrapClass: 'bg-blue-100/80 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400',
-    },
-    {
-      id: 'skin-temp',
-      icon: Thermometer,
-      category: 'Cảm biến',
-      label: 'Nhiệt độ da',
-      value: activeSkinTemp,
-      statusText: 'Ổn định (36.2 - 37.2°C)',
-      cardClass:
-        'from-cyan-50/40 to-slate-50/70 dark:from-cyan-950/20 hover:border-cyan-200 dark:hover:border-cyan-900/50',
-      iconWrapClass: 'bg-cyan-100/80 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400',
     },
   ];
 
@@ -180,7 +152,7 @@ export const PatientDrawerOverviewTab: React.FC<PatientDrawerOverviewTabProps> =
       </div>
 
       {/* Bento-Grid Vitals & Anthropometrics (4-Column Cards) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         {vitalTiles.map((tile) => {
           const Icon = tile.icon;
           return (

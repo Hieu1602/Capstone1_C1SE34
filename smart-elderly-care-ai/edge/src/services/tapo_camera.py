@@ -3,11 +3,14 @@ import asyncio
 from collections import deque
 from datetime import datetime, timezone
 import hmac
+import json
 import logging
 import os
 from pathlib import Path
 import re
+import signal
 import subprocess
+import threading
 import uuid
 import time
 from urllib.parse import urlparse
@@ -19,33 +22,511 @@ from src.drivers.camera import CameraDriver
 from src.drivers.tapo import TapoControl, rtsp_url
 
 LOG = logging.getLogger(__name__)
-PAGE = """<!doctype html><html lang="vi"><meta charset="utf-8">
-<title>Tapo C200C</title><style>body{font:18px system-ui;max-width:960px;margin:24px auto;background:#152331;color:#fff}img{width:100%}button,a{margin:8px;padding:10px}a{color:#8de}</style>
-<h1>Tapo C200C</h1><img src="/live.mjpg" onerror="setTimeout(()=>this.src='/live.mjpg?t='+Date.now(),3000)" alt="Camera đang kết nối">
-<p><a href="/snapshot.jpg" target="_blank">Chụp ảnh JPEG</a></p>
-<div style="margin:12px 0;padding:10px;background:#243447;border-radius:6px">
-<span id="fall-badge" style="font-weight:bold;color:#4caf50">Nhận diện té ngã: ĐANG BẬT</span>
-<button onclick="toggleFall()" id="btn-fall">Bật/Tắt AI té ngã</button>
-<label style="margin-left:12px;cursor:pointer"><input type="checkbox" id="chk-overlay" onchange="toggleOverlay(this.checked)"> Hiển thị khung xương AI</label>
-<span id="fall-alert" style="color:#ff5252;margin-left:12px;display:none;font-weight:bold">⚠️ CẢNH BÁO TÉ NGÃ VỪA XẢY RA!</span>
+PAGE = """<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Smart Elderly Care — Tapo Camera Console</title>
+<style>
+  :root{
+    --bg:#fffaf5;--panel:#ffffff;--panel2:#fff7ed;--border:#fed7aa;
+    --text:#1e293b;--muted:#64748b;--primary:#ea580c;--primary-h:#c2410c;
+    --ok:#16a34a;--warn:#d97706;--danger:#dc2626;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.45;padding:18px}
+  .wrap{max-width:1240px;margin:0 auto}
+  header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;padding:14px 18px;background:var(--panel);border:1px solid var(--border);border-radius:14px;box-shadow:0 2px 10px rgba(234,88,12,.06)}
+  .brand{display:flex;align-items:center;gap:12px}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px rgba(22,163,74,.5)}
+  .dot.off{background:var(--danger);box-shadow:0 0 8px rgba(220,38,38,.5)}
+  h1{font-size:18px;font-weight:700;color:#0f172a}
+  .sub{font-size:12px;color:var(--muted)}
+  .alert-bar{display:none;align-items:center;gap:10px;padding:10px 14px;margin-bottom:14px;background:#fef2f2;border:1px solid var(--danger);border-radius:10px;color:#b91c1c;font-weight:600;font-size:14px}
+  .alert-bar.show{display:flex}
+  .grid{display:grid;grid-template-columns:1.65fr 1fr;gap:16px}
+  @media(max-width:960px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:0 2px 10px rgba(15,23,42,.04)}
+  .card-title{font-size:14px;font-weight:700;color:#0f172a;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .video-box{position:relative;background:#0f172a;border-radius:12px;overflow:hidden;border:1px solid var(--border);aspect-ratio:16/9}
+  .video-box img{width:100%;height:100%;object-fit:contain;display:block}
+  .live-pill{position:absolute;top:10px;left:10px;background:rgba(15,23,42,.72);color:#fff;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:6px;border:1px solid rgba(255,255,255,.2)}
+  .live-pill i{width:7px;height:7px;border-radius:50%;background:#ef4444;display:inline-block}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  button,.btn{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:8px 13px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;transition:.15s}
+  button:hover,.btn:hover{border-color:var(--primary);background:var(--panel2);color:var(--primary)}
+  button.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+  button.primary:hover{background:var(--primary-h);color:#fff}
+  button.danger{background:#fef2f2;border-color:#fecaca;color:#dc2626}
+  button.active{background:#ffedd5;border-color:var(--primary);color:var(--primary-h)}
+  .col{display:flex;flex-direction:column;gap:14px}
+  .ptz-wrap{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+  .dpad{display:grid;grid-template-columns:repeat(3,46px);grid-template-rows:repeat(3,42px);gap:6px}
+  .dpad button{justify-content:center;padding:0;font-size:16px}
+  .dpad .center{background:var(--panel2);border-style:dashed;color:var(--primary);font-size:11px;cursor:default}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;margin-bottom:8px}
+  .row:last-child{margin-bottom:0}
+  .row-info{display:flex;flex-direction:column;gap:2px}
+  .row-title{font-size:13px;font-weight:600;color:#0f172a}
+  .row-sub{font-size:11.5px;color:var(--muted)}
+  .seg{display:inline-flex;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:2px;gap:2px}
+  .seg button{border:none;background:transparent;padding:5px 10px;font-size:12px;border-radius:6px;color:var(--muted)}
+  .seg button.active{background:var(--primary);color:#fff}
+  .switch{position:relative;width:42px;height:24px;flex-shrink:0}
+  .switch input{opacity:0;width:0;height:0}
+  .slider{position:absolute;inset:0;background:#cbd5e1;border-radius:999px;cursor:pointer;transition:.2s}
+  .slider:before{content:"";position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+  .switch input:checked+.slider{background:var(--primary)}
+  .switch input:checked+.slider:before{transform:translateX(18px)}
+  .rec-list{max-height:230px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+  .rec-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;font-size:12.5px}
+  .rec-item a{color:var(--primary-h);font-weight:600;text-decoration:none;word-break:break-all}
+  .toast{font-size:12px;color:var(--muted);margin-top:8px;min-height:18px;word-break:break-word;display:flex;align-items:center;gap:8px}
+  .spin{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:sp .7s linear infinite;display:none;flex-shrink:0}
+  .spin.show{display:inline-block}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .busy{opacity:.6;pointer-events:none}
+  .pill{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--panel2);border:1px solid var(--border);color:var(--primary-h);font-weight:600}
+  .pill.ok{color:#15803d;border-color:#bbf7d0;background:#f0fdf4}
+  .modal{position:fixed;inset:0;background:rgba(15,23,42,.65);display:none;align-items:center;justify-content:center;padding:20px;z-index:50}
+  .modal.open{display:flex}
+  .modal-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;max-width:780px;width:100%;padding:14px}
+  .modal-card video,.modal-card img{width:100%;max-height:70vh;border-radius:10px;background:#000}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div id="conn-dot" class="dot"></div>
+      <div>
+        <h1 id="cam-title">Tapo Camera Console</h1>
+        <div class="sub" id="cam-sub">Đang kết nối trạng thái camera...</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button onclick="discoverLAN()">Dò camera LAN</button>
+      <button onclick="loadAll()">Làm mới</button>
+    </div>
+  </header>
+
+  <div id="fall-alert" class="alert-bar">⚠️ CẢNH BÁO TÉ NGÃ VỪA ĐƯỢC PHÁT HIỆN!</div>
+  <div id="audio-alert" class="alert-bar" style="border-color:var(--warn);background:#fffbeb;color:#b45309">📢 PHÁT HIỆN ÂM THANH BẤT THƯỜNG: <span id="audio-alert-txt"></span></div>
+
+  <div class="grid">
+    <div class="col">
+      <div class="card">
+        <div class="card-title">
+          <span>Luồng trực tiếp (Live MJPEG)</span>
+          <span class="pill ok" id="stream-badge">25 FPS</span>
+        </div>
+        <div class="video-box" id="video-box">
+          <img id="live-img" src="/live.mjpg" onerror="setTimeout(()=>reloadStream(),3000)" alt="Camera đang kết nối">
+          <div class="live-pill"><i></i> LIVE</div>
+        </div>
+        <div class="toolbar">
+          <a class="btn" href="/snapshot.jpg" target="_blank">📸 Chụp ảnh JPEG</a>
+          <button class="primary" onclick="record30s()">⏺ Ghi 30 giây MP4</button>
+          <button id="btn-overlay" onclick="toggleOverlay()">🦴 Khung xương AI</button>
+          <button onclick="toggleFS()">⛶ Toàn màn hình</button>
+        </div>
+        <div class="toast"><span id="spinner" class="spin"></span><span id="status">Sẵn sàng.</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span>Bản ghi & Bằng chứng cục bộ</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="pill" id="rec-count">0 tệp</span>
+            <button class="danger" style="padding:4px 10px;font-size:12px" onclick="clearAllFiles()">Xóa tất cả</button>
+          </div>
+        </div>
+        <div class="rec-list" id="files"><div class="sub">Đang tải...</div></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card">
+        <div class="card-title">
+          <span>Điều khiển góc quay (PTZ)</span>
+          <div class="seg">
+            <button id="step-10" class="active" onclick="setStep(10)">Bước nhỏ</button>
+            <button id="step-25" onclick="setStep(25)">Bước lớn</button>
+          </div>
+        </div>
+        <div class="ptz-wrap">
+          <div class="dpad">
+            <div></div><button onclick="movePTZ(0,1)" title="Lên">▲</button><div></div>
+            <button onclick="movePTZ(-1,0)" title="Trái">◀</button><button class="center" disabled>PTZ</button><button onclick="movePTZ(1,0)" title="Phải">▶</button>
+            <div></div><button onclick="movePTZ(0,-1)" title="Xuống">▼</button><div></div>
+          </div>
+          <div style="flex:1;min-width:170px">
+            <div class="row" style="margin-bottom:8px">
+              <div class="row-info"><span class="row-title">Chế độ ngày / đêm</span><span class="row-sub">Hồng ngoại (IR)</span></div>
+            </div>
+            <div class="seg" style="width:100%;display:flex">
+              <button id="vm-auto" style="flex:1" onclick="setVideoMode('auto')">Auto</button>
+              <button id="vm-day" style="flex:1" onclick="setVideoMode('day')">Ngày</button>
+              <button id="vm-night" style="flex:1" onclick="setVideoMode('night')">Đêm</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span>Đàm thoại & Loa camera</span>
+          <span class="pill" id="intercom-badge">Đang tắt</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+          <button id="btn-listen" onclick="startIntercom('listen')">🎧 Nghe loa</button>
+          <button id="btn-talk" class="primary" onclick="startIntercom('talk')">🎙️ Đàm thoại 2 chiều</button>
+          <button id="btn-stop-ic" class="danger" onclick="stopIntercom()" style="display:none">🔇 Tắt</button>
+        </div>
+        <div class="row">
+          <div class="row-info">
+            <span class="row-title">Test âm thanh loa</span>
+            <span class="row-sub">Âm lượng: <strong id="vol-label">80%</strong></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="range" id="spk-vol" min="10" max="100" step="5" value="80" oninput="$('vol-label').textContent=this.value+'%'" style="width:90px;accent-color:var(--primary)">
+            <button onclick="testSpeaker(this)">🔊 Test loa</button>
+          </div>
+        </div>
+        <audio id="remote-audio" autoplay playsinline style="display:none"></audio>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><span>AI & Cài đặt Camera</span></div>
+
+        <div class="row">
+          <div class="row-info">
+            <span class="row-title">Nhận diện té ngã (YOLO-Pose)</span>
+            <span class="row-sub" id="fall-sub">Đang kiểm tra...</span>
+          </div>
+          <label class="switch"><input type="checkbox" id="sw-fall" onchange="toggleFall(this.checked)"><span class="slider"></span></label>
+        </div>
+
+        <div class="row">
+          <div class="row-info">
+            <span class="row-title">Phát hiện âm thanh (YAMNet)</span>
+            <span class="row-sub" id="audio-sub">Đang kiểm tra...</span>
+          </div>
+          <label class="switch"><input type="checkbox" id="sw-audio" onchange="toggleAudio(this.checked)"><span class="slider"></span></label>
+        </div>
+
+        <div class="row">
+          <div class="row-info">
+            <span class="row-title">Chất lượng luồng phát</span>
+            <span class="row-sub">Độ phân giải Live MJPEG</span>
+          </div>
+          <div class="seg">
+            <button id="q-auto" class="active" onclick="setQuality('auto')">Auto</button>
+            <button id="q-720p" onclick="setQuality('720p')">720p</button>
+            <button id="q-1080p" onclick="setQuality('1080p')">1080p</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="row-info">
+            <span class="row-title">Tốc độ khung hình (FPS)</span>
+            <span class="row-sub">Luồng xem & Tần suất AI</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <select id="stream-fps" onchange="setStreamFps(this.value)" title="FPS luồng xem" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:4px 7px;font-size:12px">
+              <option value="15">Xem: 15 FPS</option>
+              <option value="20">Xem: 20 FPS</option>
+              <option value="25" selected>Xem: 25 FPS</option>
+            </select>
+            <select id="ai-fps" onchange="setAiFps(this.value)" title="FPS AI té ngã" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:4px 7px;font-size:12px">
+              <option value="2">AI: 2 FPS</option>
+              <option value="5">AI: 5 FPS</option>
+              <option value="10">AI: 10 FPS</option>
+              <option value="15">AI: 15 FPS</option>
+              <option value="25">AI: 25 FPS</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="row-info">
+            <span class="row-title">Chế độ riêng tư (Che ống kính)</span>
+            <span class="row-sub">Tạm ẩn hình ảnh & tắt luồng</span>
+          </div>
+          <label class="switch"><input type="checkbox" id="sw-privacy" onchange="togglePrivacy(this.checked)"><span class="slider"></span></label>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
-<button onclick='post("/ptz",{x:-10,y:0})'>Trái</button>
-<button onclick='post("/ptz",{x:10,y:0})'>Phải</button>
-<button onclick='post("/ptz",{x:0,y:10})'>Lên</button>
-<button onclick='post("/ptz",{x:0,y:-10})'>Xuống</button>
-<button onclick='post("/motion",{enabled:true,sensitivity:"normal"})'>Bật phát hiện chuyển động</button>
-<button onclick='post("/motion",{enabled:false})'>Tắt phát hiện chuyển động</button>
-<button onclick='record()'>Ghi 30 giây MP4</button>
-<p id="status"></p><div id="files"></div>
+
+<div class="modal" id="preview-modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal-card">
+    <div class="card-title"><span id="modal-title">Xem trước</span><button onclick="closeModal()">Đóng</button></div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
 <script>
-async function post(path,body){let r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});let d=await r.json();document.getElementById("status").textContent=JSON.stringify(d);return d;}
-async function record(){await post("/recordings",{seconds:30});}
-async function refresh(){try{let r=await fetch("/recordings");if(!r.ok)return;let d=await r.json();document.getElementById("files").replaceChildren(...d.files.map(f=>{let a=document.createElement("a");a.href="/recordings/"+f;a.textContent=f;return a;}));}catch(e){}}
-async function toggleFall(){let s=await (await fetch("/fall-detection")).json();await post("/fall-detection",{enabled:!s.enabled});checkFall();}
-function toggleOverlay(c){let img=document.querySelector("img");let u=new URL(img.src,window.location.origin);if(c){u.searchParams.set("overlay","1");}else{u.searchParams.delete("overlay");}u.searchParams.set("t",Date.now());img.src=u.pathname+u.search;}
-async function checkFall(){try{let s=await (await fetch("/fall-detection")).json();document.getElementById("fall-badge").textContent="Nhận diện té ngã: "+(s.enabled?"ĐANG BẬT":"ĐÃ TẮT");document.getElementById("fall-badge").style.color=s.enabled?"#4caf50":"#888";document.getElementById("fall-alert").style.display=s.detected?"inline":"none";}catch(e){}}
-setInterval(checkFall,3000);checkFall();setInterval(refresh,3000);refresh();
-</script></html>"""
+let ptzStep = 10, overlayOn = false, streamQuality = "auto", streamFps = 25;
+const $ = id => document.getElementById(id);
+function setToast(msg, loading=false){
+  $("status").textContent = msg;
+  $("spinner").classList.toggle("show", Boolean(loading));
+}
+async function api(path, opts){
+  const r = await fetch(path, opts);
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function post(path, body, label="Đang áp dụng cấu hình..."){
+  const active = document.activeElement;
+  if(active && active.tagName==="BUTTON" || active?.tagName==="SELECT" || active?.tagName==="INPUT") active.classList.add("busy");
+  setToast(label, true);
+  try{
+    const d = await api(path, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+    setToast("Đã áp dụng: " + JSON.stringify(d), false);
+    return d;
+  }catch(e){
+    setToast("Lỗi: " + e.message, false);
+  }finally{
+    if(active) active.classList.remove("busy");
+  }
+}
+function setStep(s){
+  ptzStep = s;
+  $("step-10").classList.toggle("active", s===10);
+  $("step-25").classList.toggle("active", s===25);
+}
+function movePTZ(dx, dy){ post("/ptz", {x: dx*ptzStep, y: dy*ptzStep}); }
+function reloadStream(label){
+  const u = new URL("/live.mjpg", window.location.origin);
+  if(overlayOn) u.searchParams.set("overlay", "1");
+  u.searchParams.set("quality", streamQuality);
+  u.searchParams.set("fps", String(streamFps));
+  u.searchParams.set("t", Date.now());
+  if(label) setToast(label, true);
+  const img = $("live-img");
+  img.onload = () => { if(label) setToast("Đã áp dụng: " + streamQuality.toUpperCase() + " • " + streamFps + " FPS", false); };
+  img.src = u.pathname + u.search;
+  $("stream-badge").textContent = streamFps + " FPS • " + streamQuality.toUpperCase();
+}
+function setQuality(q){
+  streamQuality = q;
+  ["auto","720p","1080p"].forEach(x => $("q-"+x).classList.toggle("active", x===q));
+  reloadStream("Đang chuyển chất lượng " + q.toUpperCase() + "...");
+}
+function setStreamFps(v){
+  streamFps = Number(v) || 25;
+  reloadStream("Đang chuyển sang " + streamFps + " FPS...");
+}
+async function setAiFps(v){
+  const fps = Number(v) || 5;
+  await post("/stream-settings", {ai_fps: fps});
+}
+function toggleOverlay(){
+  overlayOn = !overlayOn;
+  $("btn-overlay").classList.toggle("active", overlayOn);
+  reloadStream();
+}
+function toggleFS(){
+  const el = $("video-box");
+  if(!document.fullscreenElement) el.requestFullscreen?.(); else document.exitFullscreen?.();
+}
+async function record30s(){
+  setToast("Đang gửi lệnh ghi 30 giây MP4...");
+  await post("/recordings", {seconds: 30});
+  setTimeout(refreshRecordings, 1500);
+}
+async function toggleFall(enabled){ await post("/fall-detection", {enabled}); checkAI(); }
+async function toggleAudio(enabled){ await post("/audio-detection", {enabled}); checkAI(); }
+async function togglePrivacy(enabled){ await post("/privacy", {enabled}); }
+async function setVideoMode(mode){
+  await post("/video-mode", {mode});
+  ["auto","day","night"].forEach(m => $("vm-"+m).classList.toggle("active", m===mode));
+}
+async function discoverLAN(){
+  setToast("Đang dò camera RTSP trong mạng LAN...", true);
+  try{
+    const d = await api("/discover");
+    setToast("Kết quả dò LAN: " + JSON.stringify(d.found || d), false);
+  }catch(e){ setToast("Lỗi dò LAN: " + e.message, false); }
+}
+async function checkStatus(){
+  try{
+    const s = await api("/status");
+    const online = Boolean(s.connected ?? s.ok ?? true);
+    $("conn-dot").classList.toggle("off", !online);
+    $("cam-sub").textContent = (s.source ? "Nguồn: " + s.source + " • " : "") + (online ? "Trực tuyến" : "Mất kết nối");
+  }catch(e){
+    $("conn-dot").classList.add("off");
+    $("cam-sub").textContent = "Không đọc được trạng thái";
+  }
+}
+async function checkAI(){
+  try{
+    const f = await api("/fall-detection");
+    $("sw-fall").checked = Boolean(f.enabled);
+    $("fall-sub").textContent = (f.enabled ? "Đang bật" : "Đã tắt") + " • Đã phát hiện: " + (f.fall_count || 0) + " lần";
+    $("fall-alert").classList.toggle("show", Boolean(f.detected));
+  }catch(e){}
+  try{
+    const a = await api("/audio-detection");
+    $("sw-audio").checked = Boolean(a.enabled);
+    const cls = a.last_class ? `Gần nhất: ${a.last_class}` : (a.enabled ? "Đang lắng nghe" : "Đã tắt");
+    $("audio-sub").textContent = cls + " (" + (a.event_count || 0) + " sự kiện)";
+    $("audio-alert").classList.toggle("show", Boolean(a.detected));
+    if(a.last_class) $("audio-alert-txt").textContent = a.last_class;
+  }catch(e){}
+}
+async function loadTapoSettings(){
+  try{
+    const ss = await api("/stream-settings");
+    if(ss.ai_fps){
+      const el = $("ai-fps");
+      if(![...el.options].some(o => Number(o.value)===Number(ss.ai_fps))){
+        el.add(new Option("AI: " + ss.ai_fps + " FPS", String(ss.ai_fps)));
+      }
+      el.value = String(ss.ai_fps);
+    }
+  }catch(e){}
+  try{
+    const vm = await api("/video-mode");
+    ["auto","day","night"].forEach(m => $("vm-"+m).classList.toggle("active", m===vm.mode));
+  }catch(e){}
+  try{
+    const p = await api("/privacy");
+    const en = p?.result?.enabled ?? p?.enabled;
+    $("sw-privacy").checked = en === true || en === "on";
+  }catch(e){}
+}
+async function refreshRecordings(){
+  try{
+    const d = await api("/recordings");
+    const files = d.files || [];
+    $("rec-count").textContent = files.length + " tệp";
+    const box = $("files");
+    if(!files.length){ box.innerHTML = '<div class="sub">Chưa có bản ghi cục bộ.</div>'; return; }
+    box.replaceChildren(...files.map(f => {
+      const row = document.createElement("div"); row.className = "rec-item";
+      const a = document.createElement("a"); a.href = "/recordings/" + f; a.textContent = f; a.target = "_blank";
+      const actions = document.createElement("div"); actions.style.cssText = "display:flex;gap:6px;flex-shrink:0";
+      const btn = document.createElement("button"); btn.textContent = "Xem"; btn.style.padding = "4px 10px";
+      btn.onclick = () => openPreview(f);
+      const del = document.createElement("button"); del.textContent = "Xóa"; del.className = "danger"; del.style.padding = "4px 10px";
+      del.onclick = () => deleteFile(f, del);
+      actions.append(btn, del);
+      row.append(a, actions);
+      return row;
+    }));
+  }catch(e){}
+}
+async function deleteFile(f, btn){
+  if(!confirm("Xóa tệp " + f + "?")) return;
+  if(btn) btn.classList.add("busy");
+  setToast("Đang xóa " + f + "...", true);
+  try{
+    await api("/recordings/" + encodeURIComponent(f), {method:"DELETE"});
+    setToast("Đã xóa: " + f, false);
+    refreshRecordings();
+  }catch(e){
+    setToast("Lỗi xóa tệp: " + e.message, false);
+  }finally{
+    if(btn) btn.classList.remove("busy");
+  }
+}
+async function clearAllFiles(){
+  if(!confirm("Xóa toàn bộ bản ghi & bằng chứng cục bộ?")) return;
+  setToast("Đang xóa toàn bộ bản ghi...", true);
+  try{
+    const d = await api("/recordings", {method:"DELETE"});
+    setToast("Đã xóa " + (d.deleted_count || 0) + " tệp.", false);
+    refreshRecordings();
+  }catch(e){
+    setToast("Lỗi xóa: " + e.message, false);
+  }
+}
+function openPreview(f){
+  $("modal-title").textContent = f;
+  const url = "/recordings/" + f;
+  $("modal-body").innerHTML = f.endsWith(".jpg")
+    ? `<img src="${url}">`
+    : `<video src="${url}" controls autoplay playsinline></video>`;
+  $("preview-modal").classList.add("open");
+}
+function closeModal(){ $("preview-modal").classList.remove("open"); $("modal-body").innerHTML = ""; }
+let icPc = null, icStream = null;
+async function startIntercom(mode){
+  stopIntercom(true);
+  setToast(mode==="talk" ? "Đang kết nối đàm thoại 2 chiều..." : "Đang kết nối nghe âm thanh...", true);
+  try{
+    const pc = new RTCPeerConnection({iceServers:[]});
+    icPc = pc;
+    pc.ontrack = ev => {
+      const a = $("remote-audio");
+      a.srcObject = ev.streams[0] || new MediaStream([ev.track]);
+      a.muted = false;
+      a.play?.().catch(()=>{});
+    };
+    if(mode==="talk"){
+      icStream = await navigator.mediaDevices.getUserMedia({audio:true});
+      icStream.getTracks().forEach(t => pc.addTrack(t, icStream));
+    }else{
+      pc.addTransceiver("audio", {direction:"recvonly"});
+    }
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    await new Promise(res => {
+      if(pc.iceGatheringState==="complete") return res();
+      const t = setTimeout(res, 1500);
+      pc.onicegatheringstatechange = () => { if(pc.iceGatheringState==="complete"){ clearTimeout(t); res(); } };
+    });
+    const srcParam = mode==="talk" ? "tapo_intercom" : "tapo_listen";
+    const r = await fetch("/api/webrtc?src=" + srcParam, {
+      method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({type:"offer", sdp: pc.localDescription.sdp})
+    });
+    if(!r.ok) throw new Error(await r.text());
+    const ans = await r.json();
+    await pc.setRemoteDescription(ans);
+    $("intercom-badge").textContent = mode==="talk" ? "Đang nói (2 chiều)" : "Đang nghe";
+    $("intercom-badge").classList.add("ok");
+    $("btn-stop-ic").style.display = "inline-flex";
+    setToast(mode==="talk" ? "Đã bật đàm thoại 2 chiều." : "Đang nghe âm thanh từ camera.", false);
+  }catch(e){
+    stopIntercom(true);
+    setToast("Lỗi đàm thoại: " + e.message, false);
+  }
+}
+function stopIntercom(silent=false){
+  if(icStream){ icStream.getTracks().forEach(t => t.stop()); icStream = null; }
+  if(icPc){ icPc.close(); icPc = null; }
+  $("remote-audio").srcObject = null;
+  $("intercom-badge").textContent = "Đang tắt";
+  $("intercom-badge").classList.remove("ok");
+  $("btn-stop-ic").style.display = "none";
+  if(!silent) setToast("Đã tắt đàm thoại.", false);
+}
+async function testSpeaker(btn){
+  const vol = Number($("spk-vol").value) || 80;
+  if(btn) btn.classList.add("busy");
+  setToast("Đang phát âm thanh test ra loa camera (" + vol + "%)...", true);
+  try{
+    const d = await api("/speaker/test", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({volume: vol})});
+    setToast("Đã phát âm thanh test ra loa (" + (d.volume ?? vol) + "%).", false);
+  }catch(e){
+    setToast("Lỗi test loa: " + e.message, false);
+  }finally{
+    if(btn) btn.classList.remove("busy");
+  }
+}
+function loadAll(){ checkStatus(); checkAI(); loadTapoSettings(); refreshRecordings(); }
+loadAll();
+setInterval(checkAI, 3000);
+setInterval(refreshRecordings, 5000);
+</script>
+</body>
+</html>"""
 
 
 class Recorder:
@@ -67,6 +548,8 @@ class Recorder:
         self.error = None
         # Tên bản ghi đang xử lý; chỉ tệp hoàn tất mới được liệt kê.
         self.active = None
+        self.process = None
+        self.stopping = False
         self.cleanup_task = None
 
     def cleanup_old_recordings(self, retention_hours: float | None = None, max_bytes: int | None = None) -> int:
@@ -173,16 +656,20 @@ class Recorder:
             return
         temporary = self.directory / (name + ".part")
         process = None
+        self.stopping = False
         try:
             process = await asyncio.create_subprocess_exec(
-                "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
+                "ffmpeg", "-hide_banner", "-loglevel", "error",
                 "-rtsp_transport", "tcp", "-timeout", "5000000", "-i", target_url,
                 "-t", str(seconds), "-map", "0:v:0", "-an", "-c:v", "copy",
                 "-movflags", "+faststart", "-f", "mp4", "-y", str(temporary),
+                stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
             )
+            self.process = process
             code = await asyncio.wait_for(process.wait(), seconds + 20)
-            if code or not temporary.exists() or temporary.stat().st_size == 0:
+            ok = (code == 0 or self.stopping) and temporary.exists() and temporary.stat().st_size > 0
+            if not ok:
                 raise RuntimeError("record failed")
             temporary.replace(self.directory / name)
         except asyncio.CancelledError:
@@ -195,8 +682,37 @@ class Recorder:
             if process and process.returncode is None:
                 process.kill()
                 await process.wait()
+            self.process = None
+            self.stopping = False
             temporary.unlink(missing_ok=True)
             self.active = None
+
+    async def stop(self) -> str | None:
+        """Dừng bản ghi đang chạy (gửi 'q' qua stdin để FFmpeg hoàn tất file MP4) và trả tên tệp."""
+        if not self.task or self.task.done():
+            return None
+        name = self.active
+        self.stopping = True
+        if self.process and self.process.returncode is None:
+            if self.process.stdin:
+                try:
+                    self.process.stdin.write(b"q\n")
+                    await self.process.stdin.drain()
+                    self.process.stdin.close()
+                except Exception:
+                    pass
+            else:
+                try:
+                    self.process.send_signal(signal.SIGINT)
+                except ProcessLookupError:
+                    pass
+        try:
+            await asyncio.wait_for(self.task, timeout=15)
+        except asyncio.TimeoutError:
+            if self.process and self.process.returncode is None:
+                self.process.kill()
+                await self.process.wait()
+        return name if name and (self.directory / name).is_file() else None
 
     async def close(self):
         """Hủy và chờ tác vụ ghi và dọn dẹp hiện tại khi đóng dịch vụ.
@@ -597,6 +1113,11 @@ class CameraFallDetector:
                 payload["patient_name"] = patient_name
             self.mqtt.publish_alert(payload)
             LOG.info("Đã gửi cảnh báo té ngã MQTT kèm video & Face Re-ID: %s (Người: %s)", clip_name, patient_name or "Chưa rõ")
+            if getattr(self, "on_fall_alert", None):
+                try:
+                    self.on_fall_alert()
+                except Exception as cb_err:
+                    LOG.warning("Không kích hoạt được còi camera khi té ngã: %s", cb_err)
         except Exception as e:
             LOG.error("Lỗi gửi MQTT cảnh báo té ngã: %s", e)
 
@@ -813,6 +1334,83 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
     recorder = recorder or Recorder(rec_url, Path("/recordings"))
     fall_detector = fall_detector or CameraFallDetector(camera, recorder)
     fall_detector.get_active_driver_fn = get_active_driver
+    alarm_state = {"enabled": False, "task": None, "volume": 80}
+
+    async def _synthesize_siren_mp3() -> bytes:
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+            "-f", "lavfi", "-i", "sine=frequency=960:duration=0.4",
+            "-f", "lavfi", "-i", "sine=frequency=720:duration=0.4",
+            "-filter_complex", "[0:a][1:a][0:a][1:a][0:a][1:a]concat=n=6:v=0:a=1",
+            "-f", "mp3", "pipe:1",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        audio_bytes, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+        return audio_bytes if proc.returncode == 0 else b""
+
+    async def _siren_speaker_loop():
+        try:
+            siren_bytes = await _synthesize_siren_mp3()
+            if not siren_bytes:
+                return
+            for _ in range(6):
+                if not alarm_state["enabled"]:
+                    break
+                await _dispatch_speaker_audio(
+                    siren_bytes,
+                    dst="tapo_intercom",
+                    volume=alarm_state["volume"],
+                )
+                await asyncio.sleep(2.6)
+        except asyncio.CancelledError:
+            pass
+        except Exception as err:
+            LOG.warning("[Alarm] Lỗi phát còi qua loa camera: %s", err)
+
+    async def _stop_camera_siren_async(src: str | None = None):
+        t = alarm_state.get("task")
+        if t and not t.done():
+            t.cancel()
+            await asyncio.gather(t, return_exceptions=True)
+            alarm_state["task"] = None
+        try:
+            await asyncio.to_thread(get_tapo_control(src).call, "stopManualAlarm")
+        except Exception:
+            pass
+
+    async def _play_camera_siren_async(src: str | None = None):
+        if not alarm_state["enabled"]:
+            return
+        t = alarm_state.get("task")
+        if t and not t.done():
+            t.cancel()
+            await asyncio.gather(t, return_exceptions=True)
+            alarm_state["task"] = None
+
+        target_ctrl = get_tapo_control(src)
+        try:
+            await asyncio.to_thread(target_ctrl.call, "startManualAlarm")
+            return
+        except Exception as tapo_err:
+            LOG.info("[Alarm] Tapo hardware alarm fallback sang loa camera: %s", tapo_err)
+
+        alarm_state["task"] = asyncio.create_task(_siren_speaker_loop())
+
+    main_loop: asyncio.AbstractEventLoop | None = None
+
+    def _trigger_siren_on_fall():
+        LOG.info("[Alarm] Nhận sự kiện té ngã (enabled=%s, loop_running=%s)", alarm_state["enabled"], bool(main_loop and main_loop.is_running()))
+        if not alarm_state["enabled"]:
+            return
+        try:
+            if main_loop and main_loop.is_running():
+                asyncio.run_coroutine_threadsafe(_play_camera_siren_async(), main_loop)
+                LOG.info("[Alarm] Đã kích hoạt còi báo động do phát hiện té ngã!")
+        except Exception as err:
+            LOG.warning("[Alarm] Không bật được còi khi phát hiện té ngã: %s", err)
+
+    fall_detector.on_fall_alert = _trigger_siren_on_fall
     audio_detector = CameraAudioDetector(camera, fall_detector)
 
     @web.middleware
@@ -970,6 +1568,11 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         preset = request.query.get("quality", "auto")
         if preset not in ("1080p", "720p", "auto"):
             raise ValueError("invalid video quality")
+        try:
+            target_fps = max(1, min(25, int(request.query.get("fps", "25"))))
+        except ValueError:
+            target_fps = 25
+        frame_interval = 1.0 / target_fps
         height = 1080 if preset == "1080p" else 720
         encoding_quality = 85 if preset == "1080p" else (75 if preset == "720p" else 65)
         frame = await asyncio.to_thread(jpeg, cam, height, encoding_quality, overlay)
@@ -993,8 +1596,8 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
                         height, encoding_quality = 720, 65
                 frame = await asyncio.to_thread(jpeg, cam, height, encoding_quality, overlay)
                 elapsed = time.monotonic() - started
-                if elapsed < 0.04:
-                    await asyncio.sleep(0.04 - elapsed)
+                if elapsed < frame_interval:
+                    await asyncio.sleep(frame_interval - elapsed)
         except (ConnectionError, asyncio.TimeoutError, web.HTTPServiceUnavailable):
             return response
 
@@ -1043,6 +1646,27 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
             raise ValueError("enabled must be boolean")
         return await command(request, "setPrivacyMode", data["enabled"])
 
+    async def alarm(request):
+        """Bật/tắt chế độ tự động hú còi khi phát hiện té ngã hoặc cập nhật âm lượng còi."""
+        if request.method == "GET":
+            return web.json_response({"enabled": alarm_state["enabled"], "volume": alarm_state["volume"]})
+        data = await body(request)
+        if "volume" in data and data["volume"] is not None:
+            try:
+                alarm_state["volume"] = max(0, min(100, int(data["volume"])))
+            except (TypeError, ValueError):
+                raise ValueError("volume must be 0..100") from None
+        if "enabled" not in data:
+            return web.json_response({"enabled": alarm_state["enabled"], "volume": alarm_state["volume"]})
+        enabled = data.get("enabled")
+        if type(enabled) is not bool:
+            raise ValueError("enabled must be boolean")
+        alarm_state["enabled"] = enabled
+        src = request.query.get("src") if hasattr(request, "query") else None
+        if not enabled:
+            await _stop_camera_siren_async(src)
+        return web.json_response({"enabled": alarm_state["enabled"], "volume": alarm_state["volume"]})
+
     async def video_mode(request):
         """Đọc/ghi Day/Night bằng pytapo; off là ngày, on là hồng ngoại ban đêm."""
         mapping = {"day": "off", "night": "on", "auto": "auto"}
@@ -1061,37 +1685,54 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         except Exception:
             return web.json_response({"mode": "auto"})
 
+    _sd_client_lock = threading.Lock()
+    _sd_dl_lock = threading.Lock()
+    _sd_client_state = {"key": None, "client": None, "time_corr": None}
+    _sd_list_cache = {"at": 0.0, "data": None}
+    _sd_recs_cache: dict[str, tuple[float, list]] = {}
+    _sd_active_until = 0.0
+    _sd_prefetch_inflight: set[str] = set()
+
     async def sync_sd_recordings(client=None):
-        """Tự động đồng bộ các đoạn video từ thẻ nhớ SD của camera về thư mục /recordings/."""
-        if not client:
+        """Đồng bộ nhẹ các đoạn video gần nhất từ thẻ nhớ SD khi không có phiên xem lại đang hoạt động."""
+        if not client or time.monotonic() < _sd_active_until:
+            return
+        if not _sd_dl_lock.acquire(blocking=False):
             return
         try:
-            await asyncio.to_thread(client.getUserID)
-            time_corr = await asyncio.to_thread(client.getTimeCorrection)
-            recs_list = await asyncio.to_thread(client.getRecordingsList)
-            if not recs_list:
-                return
-            today = list(recs_list[-1].values())[0]["date"]
-            day_recs = await asyncio.to_thread(client.getRecordings, today)
-            for r in day_recs:
-                val = list(r.values())[0]
-                st, et = int(val["startTime"]), int(val["endTime"])
-                dur = et - st
-                if dur <= 0:
-                    continue
-                dt_str = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime(st))
-                fn = f"SD_{dt_str}_{dur}s.mp4"
-                fp = recorder.directory / fn
-                if fp.is_file() and fp.stat().st_size > 1024:
-                    continue
-                if time.time() - et < 30:
-                    continue
+            def _sync_one():
+                client.getUserID()
+                time_corr = client.getTimeCorrection()
+                recs_list = client.getRecordingsList()
+                if not recs_list:
+                    return
+                today = list(recs_list[-1].values())[0]["date"]
+                day_recs = client.getRecordings(today)
                 from pytapo.media_stream.downloader import Downloader
-                dl = Downloader(client, st, et, time_corr, outputDirectory=str(recorder.directory) + "/", fileName=fn, output="mp4")
-                async for _ in dl.download():
-                    pass
+                for r in reversed(day_recs):
+                    if time.monotonic() < _sd_active_until:
+                        return
+                    val = list(r.values())[0]
+                    st, et = int(val["startTime"]), int(val["endTime"])
+                    dur = et - st
+                    if dur <= 0 or dur > 300 or time.time() - et < 30:
+                        continue
+                    dt_str = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime(st))
+                    fn = f"SD_{dt_str}_{dur}s.mp4"
+                    fp = recorder.directory / fn
+                    if fp.is_file() and fp.stat().st_size > 1024:
+                        continue
+                    dl = Downloader(client, st, et, time_corr, outputDirectory=str(recorder.directory) + "/", fileName=fn, output="mp4")
+                    async def _run():
+                        async for _ in dl.download():
+                            pass
+                    asyncio.run(_run())
+                    break  # Chỉ tải 1 đoạn mới nhất mỗi chu kỳ để không chiếm băng thông SD
+            await asyncio.to_thread(_sync_one)
         except Exception as err:
             LOG.debug("SD sync notice: %s", err)
+        finally:
+            _sd_dl_lock.release()
 
     async def recordings(request):
         """Liệt kê MP4 hoàn tất hoặc bắt đầu bản ghi mới.
@@ -1129,6 +1770,11 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         )
         return web.json_response({"active": recorder.active, "error": recorder.error, "files": files})
 
+    async def stop_recording(request):
+        """Dừng bản ghi đang chạy và trả tên file MP4 đã hoàn tất."""
+        name = await recorder.stop()
+        return web.json_response({"file": name, "status": "stopped", "error": recorder.error})
+
     async def download(request):
         """Chỉ phục vụ tên MP4 đúng định dạng trong thư mục bản ghi.
 
@@ -1147,12 +1793,84 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         headers = {"Content-Disposition": f'inline; filename="{name}"', "Accept-Ranges": "bytes"}
         return web.FileResponse(path, headers=headers)
 
-    def get_sd_client():
+    async def delete_recording(request):
+        """Xóa một tệp bản ghi hoặc ảnh/video bằng chứng cục bộ."""
+        name = request.match_info["name"]
+        if not re.fullmatch(r"[a-zA-Z0-9_\-\. ]+\.(mp4|jpg)", name) or ".." in name:
+            raise web.HTTPNotFound()
+        if name == recorder.active:
+            raise web.HTTPConflict(text="Không thể xóa bản ghi đang quay")
+        path = recorder.directory / name
+        if not path.is_file():
+            raise web.HTTPNotFound()
+        path.unlink()
+        return web.json_response({"deleted": name})
+
+    async def clear_recordings(request):
+        """Xóa toàn bộ bản ghi và bằng chứng cục bộ (trừ tệp đang quay)."""
+        deleted = 0
+        for p in list(recorder.directory.iterdir()):
+            if p.is_file() and p.suffix in (".mp4", ".jpg") and p.name != recorder.active:
+                try:
+                    p.unlink()
+                    deleted += 1
+                except OSError:
+                    pass
+        return web.json_response({"deleted_count": deleted})
+
+    def get_sd_client(refresh=False):
         pwd = os.environ.get("TAPO_CONTROL_PASSWORD") or os.environ.get("TAPO_PASSWORD", "")
         user = os.environ.get("TAPO_CONTROL_USERNAME") or os.environ.get("TAPO_USERNAME", "")
         host = os.environ.get("TAPO_HOST", "")
-        from pytapo import Tapo
-        return Tapo(host, user, pwd, cloudPassword=pwd)
+        key = (host, user, pwd)
+        with _sd_client_lock:
+            if not refresh and _sd_client_state["client"] is not None and _sd_client_state["key"] == key:
+                return _sd_client_state["client"]
+            from pytapo import Tapo
+            cl = Tapo(host, user, pwd, cloudPassword=pwd)
+            _sd_client_state["key"] = key
+            _sd_client_state["client"] = cl
+            _sd_client_state["time_corr"] = None
+            return cl
+
+    def _get_time_corr(cl):
+        with _sd_client_lock:
+            if _sd_client_state["time_corr"] is not None and _sd_client_state["client"] is cl:
+                return _sd_client_state["time_corr"]
+        tc = cl.getTimeCorrection()
+        with _sd_client_lock:
+            if _sd_client_state["client"] is cl:
+                _sd_client_state["time_corr"] = tc
+        return tc
+
+    def _get_recordings_list_cached(cl, force=False):
+        now = time.monotonic()
+        if not force and _sd_list_cache["data"] is not None and now - _sd_list_cache["at"] < 30.0:
+            return _sd_list_cache["data"]
+        rl = cl.getRecordingsList()
+        _sd_list_cache["data"] = rl
+        _sd_list_cache["at"] = now
+        return rl
+
+    def _get_day_recordings_cached(cl, day_str: str):
+        now = time.monotonic()
+        today_str = time.strftime("%Y%m%d")
+        ttl = 20.0 if day_str == today_str else 600.0
+        cached = _sd_recs_cache.get(day_str)
+        if cached and now - cached[0] < ttl:
+            return cached[1]
+        recs = cl.getRecordings(day_str)
+        _sd_recs_cache[day_str] = (now, recs)
+        return recs
+
+    def _date_in_range(day_str: str, start_ts: int, end_ts: int) -> bool:
+        try:
+            day_dt = datetime.strptime(day_str, "%Y%m%d").replace(tzinfo=timezone.utc)
+            day_start = int(day_dt.timestamp())
+            # Biên +-1 ngày để bao phủ mọi lệch múi giờ UTC vs local.
+            return (day_start + 2 * 86400) >= start_ts and (day_start - 86400) <= end_ts
+        except Exception:
+            return True
 
     async def get_coverage(request):
         """Trả về danh sách dải thời gian ghi hình từ thẻ nhớ SD của camera."""
@@ -1172,64 +1890,134 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
                 pass
 
         def _fetch():
-            try:
-                cl = get_sd_client()
-                rl = cl.getRecordingsList()
-                available_dates = [list(x.values())[0]["date"] for x in rl] if rl else []
-                items = []
-                for d in available_dates:
-                    try:
-                        recs = cl.getRecordings(d)
-                        for r in recs:
-                            val = list(r.values())[0]
-                            st, et = int(val["startTime"]), int(val["endTime"])
-                            if et <= st:
-                                continue
-                            if et > start_ts and st < end_ts:
-                                st_iso = datetime.fromtimestamp(st, tz=timezone.utc).isoformat()
-                                et_iso = datetime.fromtimestamp(et, tz=timezone.utc).isoformat()
-                                items.append({"start": st_iso, "end": et_iso})
-                    except Exception:
+            for attempt in range(2):
+                try:
+                    cl = get_sd_client(refresh=(attempt > 0))
+                    rl = _get_recordings_list_cached(cl, force=(attempt > 0))
+                    available_dates = [list(x.values())[0]["date"] for x in rl] if rl else []
+                    filtered_dates = [d for d in available_dates if _date_in_range(d, start_ts, end_ts)]
+                    raw_ranges = []
+                    for d in filtered_dates:
+                        try:
+                            recs = _get_day_recordings_cached(cl, d)
+                            for r in recs:
+                                val = list(r.values())[0]
+                                st, et = int(val["startTime"]), int(val["endTime"])
+                                if et <= st:
+                                    continue
+                                if et > start_ts and st < end_ts:
+                                    raw_ranges.append((max(st, start_ts), min(et, end_ts)))
+                        except Exception:
+                            continue
+                    raw_ranges.sort()
+                    merged = []
+                    for bs, be in raw_ranges:
+                        if merged and bs <= merged[-1][1] + 3:
+                            merged[-1] = (merged[-1][0], max(merged[-1][1], be))
+                        else:
+                            merged.append((bs, be))
+                    return [
+                        {
+                            "start": datetime.fromtimestamp(bs, tz=timezone.utc).isoformat(),
+                            "end": datetime.fromtimestamp(be, tz=timezone.utc).isoformat(),
+                        }
+                        for bs, be in merged
+                    ]
+                except Exception as exc:
+                    if attempt == 0:
                         continue
-                return items
-            except Exception as exc:
-                LOG.warning("Lỗi đọc thẻ nhớ SD trong worker: %s", exc)
-                return []
+                    LOG.warning("Lỗi đọc thẻ nhớ SD trong worker: %s", exc)
+                    return []
 
         items = await asyncio.to_thread(_fetch)
         return web.json_response({"items": items})
 
     def find_local_recording(target_ts):
-        """Tìm file MP4 đã tải sẵn trên đĩa bao phủ target_ts để phát ngay không cần tải lại."""
+        """Tìm file MP4 chunk đã tải sẵn (faststart) bao phủ target_ts để phát ngay."""
         candidates = []
         for p in recorder.directory.glob("*.mp4"):
             name = p.name
-            m1 = re.match(r"^SD_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_(\d+)s\.mp4$", name)
-            if m1:
-                try:
-                    st = int(datetime.strptime(m1.group(1), "%Y-%m-%d_%H-%M-%S").replace(tzinfo=timezone.utc).timestamp())
-                    dur = int(m1.group(2))
-                    if st <= target_ts <= st + dur and p.stat().st_size > 1024:
-                        candidates.append((dur, st, dur, name))
-                except Exception:
-                    pass
             m2 = re.match(r"^SD_c_(\d+)_(\d+)s\.mp4$", name)
             if m2:
                 try:
                     st = int(m2.group(1))
                     dur = int(m2.group(2))
-                    if st <= target_ts <= st + dur and p.stat().st_size > 1024:
-                        candidates.append((dur, st, dur, name))
+                    if st <= target_ts < st + dur and p.stat().st_size > 1024:
+                        candidates.append((0, dur, st, dur, name))
+                except Exception:
+                    pass
+                continue
+            m1 = re.match(r"^SD_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_(\d+)s\.mp4$", name)
+            if m1:
+                try:
+                    dur = int(m1.group(2))
+                    # Bỏ qua file đồng bộ lớn (>120s) chưa có faststart để tránh nghẽn tua.
+                    if dur > 120:
+                        continue
+                    st = int(datetime.strptime(m1.group(1), "%Y-%m-%d_%H-%M-%S").timestamp())
+                    if st <= target_ts < st + dur and p.stat().st_size > 1024:
+                        candidates.append((1, dur, st, dur, name))
                 except Exception:
                     pass
         if candidates:
-            candidates.sort(key=lambda x: x[0], reverse=True)
-            _, st, dur, name = candidates[0]
+            candidates.sort(key=lambda x: (x[0], x[1]))
+            _, _, st, dur, name = candidates[0]
             return st, dur, name
         return None
 
+    def _download_sd_chunk_sync(chunk_st: int, chunk_et: int, file_name: str, refresh_client: bool = False):
+        file_path = recorder.directory / file_name
+        with _sd_dl_lock:
+            if file_path.is_file() and file_path.stat().st_size >= 1024:
+                return True
+            cl = get_sd_client(refresh=refresh_client)
+            tc = _get_time_corr(cl)
+            from pytapo.media_stream.downloader import Downloader
+            raw_name = f".raw_{uuid.uuid4().hex}_{file_name}"
+            raw_path = recorder.directory / raw_name
+            fast_path = recorder.directory / f".fast_{uuid.uuid4().hex}_{file_name}"
+            try:
+                dl = Downloader(cl, chunk_st, chunk_et, tc, outputDirectory=str(recorder.directory) + "/", fileName=raw_name, output="mp4")
+                async def _run():
+                    async for _ in dl.download():
+                        pass
+                asyncio.run(_run())
+                if not raw_path.is_file() or raw_path.stat().st_size < 1024:
+                    return False
+                res = subprocess.run(
+                    ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(raw_path), "-c", "copy", "-movflags", "+faststart", str(fast_path)],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=25, check=False,
+                )
+                if res.returncode == 0 and fast_path.is_file() and fast_path.stat().st_size >= 1024:
+                    fast_path.replace(file_path)
+                else:
+                    raw_path.replace(file_path)
+                return file_path.is_file() and file_path.stat().st_size >= 1024
+            finally:
+                raw_path.unlink(missing_ok=True)
+                fast_path.unlink(missing_ok=True)
+
+    async def _prefetch_sd_chunk(chunk_st: int, chunk_et: int):
+        dur = chunk_et - chunk_st
+        if dur <= 0:
+            return
+        file_name = f"SD_c_{chunk_st}_{dur}s.mp4"
+        file_path = recorder.directory / file_name
+        if file_path.is_file() and file_path.stat().st_size >= 1024:
+            return
+        if file_name in _sd_prefetch_inflight:
+            return
+        _sd_prefetch_inflight.add(file_name)
+        try:
+            await asyncio.to_thread(_download_sd_chunk_sync, chunk_st, chunk_et, file_name)
+        except Exception:
+            pass
+        finally:
+            _sd_prefetch_inflight.discard(file_name)
+
     async def get_archive_session(request):
         """Tìm và chuẩn bị đoạn video từ thẻ nhớ SD cho dải thời gian yêu cầu."""
+        nonlocal _sd_active_until
         start_str = request.query.get("start")
         if not start_str:
             raise web.HTTPBadRequest(text="Thiếu tham số start")
@@ -1238,7 +2026,9 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         except Exception:
             raise web.HTTPBadRequest(text="Định dạng start không hợp lệ")
 
-        # 1. Ưu tiên kiểm tra các file MP4 đã có sẵn trên đĩa bao phủ target_ts để phát ngay lập tức (0ms độ trễ)
+        _sd_active_until = time.monotonic() + 60.0
+
+        # 1. Ưu tiên file MP4 đã có sẵn trên đĩa bao phủ target_ts (0ms độ trễ)
         local_match = find_local_recording(target_ts)
         if local_match:
             loc_st, loc_dur, loc_name = local_match
@@ -1249,61 +2039,85 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
             })
 
         def _prepare_session():
-            cl = get_sd_client()
-            rl = cl.getRecordingsList()
-            available_dates = [list(x.values())[0]["date"] for x in rl] if rl else []
-            matched = None
-            closest = None
-            for d in reversed(available_dates):
+            for attempt in range(2):
                 try:
-                    recs = cl.getRecordings(d)
-                    for r in recs:
-                        val = list(r.values())[0]
-                        st, et = int(val["startTime"]), int(val["endTime"])
-                        if st <= target_ts <= et:
-                            matched = (st, et)
-                            break
-                        if closest is None or abs(st - target_ts) < abs(closest[0] - target_ts):
-                            closest = (st, et)
-                    if matched:
-                        break
+                    cl = get_sd_client(refresh=(attempt > 0))
+                    rl = _get_recordings_list_cached(cl, force=(attempt > 0))
+                    available_dates = [list(x.values())[0]["date"] for x in rl] if rl else []
+                    # Ưu tiên quét các ngày quanh target_ts trước để tránh RPC thừa.
+                    near_dates = [d for d in available_dates if _date_in_range(d, target_ts - 3600, target_ts + 3600)]
+                    scan_order = list(reversed(near_dates)) + [d for d in reversed(available_dates) if d not in near_dates]
+                    matched = None
+                    closest = None
+                    for d in scan_order:
+                        try:
+                            recs = _get_day_recordings_cached(cl, d)
+                            for r in recs:
+                                val = list(r.values())[0]
+                                st, et = int(val["startTime"]), int(val["endTime"])
+                                if et <= st:
+                                    continue
+                                if st <= target_ts < et:
+                                    matched = (st, et)
+                                    break
+                                if closest is None or abs(st - target_ts) < abs(closest[0] - target_ts):
+                                    closest = (st, et)
+                            if matched:
+                                break
+                        except Exception:
+                            continue
+                    return matched or closest
                 except Exception:
-                    continue
-            return cl, (matched or closest)
+                    if attempt == 0:
+                        continue
+                    return None
 
-        cl, matched = await asyncio.to_thread(_prepare_session)
+        matched = await asyncio.to_thread(_prepare_session)
         if not matched:
             raise web.HTTPNotFound(text="Không có bản ghi tại thời điểm này")
 
         st, et = matched
-        # Cắt thành chunk 300s (5 phút) để xem liên tục, tua nhanh không cần tải lại từng phút
-        chunk_size = 300
-        chunk_st = max(st, (target_ts // chunk_size) * chunk_size)
+        # Thẻ nhớ Tapo cần ~60s mới flush đoạn đang quay; lùi mốc an toàn 65s để luôn tải được ngay.
+        chunk_size = 60
+        safe_now = int(time.time()) - 65
+        effective_ts = min(target_ts, safe_now) if et > safe_now >= st else target_ts
+        chunk_st = max(st, (effective_ts // chunk_size) * chunk_size)
         chunk_et = min(et, chunk_st + chunk_size)
+        if et > safe_now and chunk_et > safe_now:
+            chunk_et = max(st, safe_now)
+            if chunk_et - chunk_st < 15 and chunk_st - chunk_size >= st:
+                chunk_st = chunk_st - chunk_size
+                chunk_et = chunk_st + chunk_size
         if chunk_et <= chunk_st:
-            chunk_st = max(st, et - chunk_size)
-            chunk_et = et
+            chunk_st = max(st, min(et, safe_now) - chunk_size)
+            chunk_et = min(et, chunk_st + chunk_size)
         dur = chunk_et - chunk_st
         file_name = f"SD_c_{chunk_st}_{dur}s.mp4"
         file_path = recorder.directory / file_name
 
         if not file_path.is_file() or file_path.stat().st_size < 1024:
-            def _download_chunk():
-                tc = cl.getTimeCorrection()
-                from pytapo.media_stream.downloader import Downloader
-                dl = Downloader(cl, chunk_st, chunk_et, tc, outputDirectory=str(recorder.directory) + "/", fileName=file_name, output="mp4")
-                async def _run():
-                    async for _ in dl.download():
-                        pass
-                asyncio.run(_run())
-                tmp_fast = recorder.directory / f"fast_{file_name}"
-                if file_path.is_file() and file_path.stat().st_size >= 1024:
-                    rc = os.system(f'ffmpeg -y -i "{file_path}" -c copy -movflags +faststart "{tmp_fast}" >{os.devnull} 2>&1')
-                    if rc == 0 and tmp_fast.is_file() and tmp_fast.stat().st_size >= 1024:
-                        tmp_fast.replace(file_path)
-                    elif tmp_fast.is_file():
-                        tmp_fast.unlink()
-            await asyncio.to_thread(_download_chunk)
+            ok = await asyncio.to_thread(_download_sd_chunk_sync, chunk_st, chunk_et, file_name)
+            if not ok:
+                ok = await asyncio.to_thread(_download_sd_chunk_sync, chunk_st, chunk_et, file_name, True)
+            # Nếu đoạn mới nhất vừa quay chưa flush trên thẻ SD, lùi lại 1 chunk hoàn chỉnh trước đó.
+            if not ok and chunk_st - chunk_size >= st:
+                prev_st = chunk_st - chunk_size
+                prev_et = chunk_st
+                prev_dur = prev_et - prev_st
+                prev_name = f"SD_c_{prev_st}_{prev_dur}s.mp4"
+                prev_path = recorder.directory / prev_name
+                if (prev_path.is_file() and prev_path.stat().st_size >= 1024) or await asyncio.to_thread(
+                    _download_sd_chunk_sync, prev_st, prev_et, prev_name
+                ):
+                    chunk_st, chunk_et, dur, file_name, file_path = prev_st, prev_et, prev_dur, prev_name, prev_path
+                    ok = True
+            if not ok:
+                raise web.HTTPServiceUnavailable(text="Không thể tải đoạn video từ thẻ nhớ camera")
+
+        if chunk_et < et:
+            next_et = min(et, chunk_et + chunk_size)
+            if next_et > chunk_et:
+                asyncio.create_task(_prefetch_sd_chunk(chunk_et, next_et))
 
         st_iso = datetime.fromtimestamp(chunk_st, tz=timezone.utc).isoformat()
         return web.json_response({
@@ -1311,6 +2125,18 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
             "started_at": st_iso,
             "duration": dur,
         })
+
+    async def stream_settings(request):
+        """Đọc hoặc cập nhật cấu hình FPS suy luận AI té ngã."""
+        if request.method == "GET":
+            return web.json_response({"ai_fps": int(fall_detector.inference_fps)})
+        data = await body(request)
+        ai_fps = data.get("ai_fps")
+        if ai_fps is not None:
+            fps_val = max(1.0, min(25.0, float(ai_fps)))
+            fall_detector.inference_fps = fps_val
+            fall_detector.inference_interval = 1.0 / fps_val
+        return web.json_response({"ai_fps": int(fall_detector.inference_fps)})
 
     async def get_fall(request):
         """Đọc tình trạng nhận diện té ngã AI."""
@@ -1423,29 +2249,11 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
             raise web.HTTPNotFound(text="Audio clip không tồn tại hoặc đã hết hạn")
         return web.Response(body=entry[1], content_type="audio/mpeg")
 
-    async def speaker_play(request):
-        """Nhận audio base64 (MP3) và phát qua loa camera thông qua go2rtc (tapo-audio)."""
-        import base64
+    async def _dispatch_speaker_audio(audio_bytes: bytes, dst: str = "tapo_intercom", tapo_src: str | None = None, volume: int = 100):
+        """Phát MP3 bytes ra loa camera qua go2rtc (tapo-audio)."""
         import uuid
         import aiohttp
 
-        payload = await request.json()
-        audio_b64 = payload.get("audio_b64")
-        if not isinstance(audio_b64, str) or not audio_b64:
-            raise web.HTTPBadRequest(text="Thiếu audio_b64")
-        try:
-            audio_bytes = base64.b64decode(audio_b64, validate=True)
-        except Exception:
-            raise web.HTTPBadRequest(text="audio_b64 không hợp lệ") from None
-        if len(audio_bytes) > 5 * 1024 * 1024:
-            raise web.HTTPBadRequest(text="Audio quá lớn (tối đa 5MB)")
-
-        dst = str(payload.get("dst") or "tapo_intercom").strip()
-        tapo_src = payload.get("tapo_src")
-        try:
-            volume = max(0, min(100, int(payload.get("volume", 100))))
-        except (TypeError, ValueError):
-            volume = 100
         if volume == 0:
             return web.json_response({"ok": True, "skipped": True, "dst": dst, "volume": 0})
 
@@ -1494,7 +2302,6 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
                 await _post_go2rtc(dst)
             except Exception as first_err:
                 LOG.warning("[Speaker] %s lỗi (%s); tự động đồng bộ IP camera mới...", dst, first_err)
-                # Lấy IP đang sống từ camera driver hoặc quét LAN tự động
                 live_host = None
                 try:
                     src_val = getattr(camera, "source", None)
@@ -1531,42 +2338,109 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
                 else:
                     raise
 
-        return web.json_response({"ok": True, "dst": dst, "clip_id": clip_id, "bytes": len(audio_bytes)})
+        return web.json_response({"ok": True, "dst": dst, "clip_id": clip_id, "bytes": len(audio_bytes), "volume": volume})
+
+    async def speaker_play(request):
+        """Nhận audio base64 (MP3) và phát qua loa camera thông qua go2rtc (tapo-audio)."""
+        import base64
+
+        payload = await request.json()
+        audio_b64 = payload.get("audio_b64")
+        if not isinstance(audio_b64, str) or not audio_b64:
+            raise web.HTTPBadRequest(text="Thiếu audio_b64")
+        try:
+            audio_bytes = base64.b64decode(audio_b64, validate=True)
+        except Exception:
+            raise web.HTTPBadRequest(text="audio_b64 không hợp lệ") from None
+        if len(audio_bytes) > 5 * 1024 * 1024:
+            raise web.HTTPBadRequest(text="Audio quá lớn (tối đa 5MB)")
+
+        dst = str(payload.get("dst") or "tapo_intercom").strip()
+        tapo_src = payload.get("tapo_src")
+        try:
+            volume = max(0, min(100, int(payload.get("volume", 100))))
+        except (TypeError, ValueError):
+            volume = 100
+        return await _dispatch_speaker_audio(audio_bytes, dst=dst, tapo_src=tapo_src, volume=volume)
+
+    async def speaker_test(request):
+        """Tạo âm chuông MP3 bằng ffmpeg và phát thử ra loa camera."""
+        try:
+            payload = await request.json()
+        except Exception:
+            payload = {}
+        try:
+            volume = max(10, min(100, int(payload.get("volume", 80))))
+        except (TypeError, ValueError):
+            volume = 80
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+            "-f", "lavfi", "-i", "sine=frequency=880:duration=0.3",
+            "-f", "lavfi", "-i", "sine=frequency=1175:duration=0.4",
+            "-filter_complex", "[0:a][1:a]concat=n=2:v=0:a=1",
+            "-f", "mp3", "pipe:1",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        audio_bytes, err_bytes = await asyncio.wait_for(proc.communicate(), timeout=10)
+        if proc.returncode != 0 or not audio_bytes:
+            raise web.HTTPInternalServerError(text=f"Không tạo được âm thanh test: {err_bytes.decode(errors='ignore')[:120]}")
+        return await _dispatch_speaker_audio(audio_bytes, dst="tapo_intercom", volume=volume)
 
     async def proxy_audio(request):
         """Chuyển tiếp yêu cầu signaling WebRTC/streams tới dịch vụ go2rtc (tapo-audio:1984)."""
         target_url = f"http://tapo-audio:1984{request.rel_url}"
         try:
             import aiohttp
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=12)) as session:
                 data = await request.read() if request.can_read_body else None
-                req_headers = {k: v for k, v in request.headers.items() if k.lower() not in ("host", "authorization")}
-                async with session.request(
-                    request.method,
-                    target_url,
-                    headers=req_headers,
-                    data=data,
-                    timeout=aiohttp.ClientTimeout(total=30),
-                ) as resp:
-                    resp_body = await resp.read()
-                    return web.Response(
-                        body=resp_body,
-                        status=resp.status,
-                        content_type=resp.content_type,
-                    )
+                req_headers = {k: v for k, v in request.headers.items() if k.lower() in ("content-type", "accept")}
+
+                if request.path == "/api/webrtc" and request.query.get("src") == "tapo_listen":
+                    src_val = getattr(camera, "source", None)
+                    if isinstance(src_val, str) and src_val.startswith("rtsp://"):
+                        listen_url = src_val.replace("/stream1", "/stream2")
+                        await session.put("http://tapo-audio:1984/api/streams", params={"name": "tapo_listen", "src": listen_url})
+
+                async def _send():
+                    async with session.request(request.method, target_url, headers=req_headers, data=data) as resp:
+                        return resp.status, resp.content_type, await resp.read()
+
+                try:
+                    status, ctype, resp_body = await _send()
+                except Exception:
+                    status, ctype, resp_body = 504, "text/plain", b""
+
+                # Nếu go2rtc bị treo session tapo:// cũ, tự làm mới stream tapo_intercom và thử lại 1 lần
+                if status >= 500 and request.path == "/api/webrtc":
+                    src_name = request.query.get("src") or "tapo_intercom"
+                    live_host = None
+                    try:
+                        src_val = getattr(camera, "source", None)
+                        if isinstance(src_val, str) and "://" in src_val:
+                            live_host = urlparse(src_val).hostname
+                    except Exception:
+                        pass
+                    cpwd = os.getenv("TAPO_CONTROL_PASSWORD") or os.getenv("TAPO_CLOUD_PASSWORD") or os.getenv("TAPO_PASSWORD", "")
+                    if live_host and cpwd:
+                        import hashlib
+                        ph = hashlib.sha256(cpwd.encode("utf-8")).hexdigest().upper()
+                        await session.put("http://tapo-audio:1984/api/streams", params={"name": src_name, "src": f"tapo://admin:{ph}@{live_host}"})
+                        status, ctype, resp_body = await _send()
+
+                if status == 504:
+                    raise TimeoutError("go2rtc WebRTC timeout")
+                return web.Response(body=resp_body, status=status, content_type=ctype)
         except Exception as e:
             LOG.warning("Lỗi chuyển tiếp tới tapo-audio: %s (%s)", type(e).__name__, e)
+            if isinstance(e, TimeoutError):
+                raise web.HTTPBadGateway(text="Camera Tapo đóng/treo kênh đàm thoại 2 chiều (tapo://); hãy thử 'Nghe loa' qua RTSP.") from None
             raise web.HTTPServiceUnavailable(text="Dịch vụ âm thanh go2rtc chưa sẵn sàng") from None
 
     async def lifecycle(app):
-        """Gắn vòng đời driver, recorder và AI fall detector với ứng dụng.
-
-        Args:
-            app: Ứng dụng đang bắt đầu hoặc kết thúc lifecycle.
-
-        Returns:
-            Async generator. Tác động: mở camera khi chạy, đóng recorder/driver khi dừng.
-        """
+        """Gắn vòng đời driver, recorder và AI fall detector với ứng dụng."""
+        nonlocal main_loop
+        main_loop = asyncio.get_running_loop()
         if camera.source != 0 or os.getenv("CAMERA_SOURCE") or os.getenv("TAPO_HOST") or os.getenv("TAPO_USERNAME"):
             camera.start()
         fall_detector.start()
@@ -1590,15 +2464,18 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         web.get("/info", info), web.post("/ptz", ptz),
         web.get("/motion", motion), web.post("/motion", motion),
         web.get("/privacy", privacy), web.post("/privacy", privacy),
+        web.get("/alarm", alarm), web.post("/alarm", alarm),
         web.get("/video-mode", video_mode), web.post("/video-mode", video_mode),
-        web.get("/recordings", recordings), web.post("/recordings", recordings),
-        web.get("/recordings/{name}", download),
+        web.get("/recordings", recordings), web.post("/recordings", recordings), web.post("/recordings/stop", stop_recording), web.delete("/recordings", clear_recordings),
+        web.get("/recordings/{name}", download), web.delete("/recordings/{name}", delete_recording),
         web.get("/coverage", get_coverage),
         web.get("/archive/session", get_archive_session),
         web.get("/fall-detection", get_fall), web.post("/fall-detection", set_fall),
+        web.get("/stream-settings", stream_settings), web.post("/stream-settings", stream_settings),
         web.get("/audio-detection", get_audio), web.post("/audio-detection", set_audio),
         web.get("/discover", discover), web.post("/probe", probe),
         web.post("/speaker/play", speaker_play),
+        web.post("/speaker/test", speaker_test),
         web.get("/speaker/clip/{clip_id}.mp3", speaker_clip),
         web.route("*", "/api/webrtc", proxy_audio),
         web.route("*", "/api/streams", proxy_audio),

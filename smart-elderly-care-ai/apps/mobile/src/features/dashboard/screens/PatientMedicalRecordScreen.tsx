@@ -370,6 +370,8 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
 
   const handleAddCondition = async () => {
     if (!condDraft.name.trim()) return Alert.alert('Lỗi', 'Vui lòng nhập tên bệnh lý hoặc tiền sử bệnh.');
+    const targetPatientId = patientRecord?.id || activePatientId;
+    if (!targetPatientId) return Alert.alert('Lỗi', 'Chưa xác định được hồ sơ bệnh nhân.');
     const next = [
       ...conditions,
       {
@@ -381,14 +383,16 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
     ];
     setCondDraft({ name: '', note: '', severity: 'warning' });
     setAddConditionModalVisible(false);
-    await updatePatientRecord(1, { conditions: next });
+    await updatePatientRecord(targetPatientId, { conditions: next });
     Alert.alert('Thành công', 'Đã thêm tiền sử bệnh lý vào hồ sơ.');
   };
 
   const handleDeleteCondition = (id: string, name: string) => {
+    const targetPatientId = patientRecord?.id || activePatientId;
+    if (!targetPatientId) return Alert.alert('Lỗi', 'Chưa xác định được hồ sơ bệnh nhân.');
     Alert.alert('Xóa bệnh lý', `Bạn có chắc muốn xóa "${name}" khỏi hồ sơ bệnh án?`, [
       { text: 'Hủy', style: 'cancel' },
-      { text: 'Xóa', style: 'destructive', onPress: async () => { await updatePatientRecord(1, { conditions: conditions.filter(c => c.id !== id) }); } },
+      { text: 'Xóa', style: 'destructive', onPress: async () => { await updatePatientRecord(targetPatientId, { conditions: conditions.filter(c => c.id !== id) }); } },
     ]);
   };
 
@@ -398,8 +402,10 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
   };
 
   const handleSaveAllergies = async () => {
+    const targetPatientId = patientRecord?.id || activePatientId;
+    if (!targetPatientId) return Alert.alert('Lỗi', 'Chưa xác định được hồ sơ bệnh nhân.');
     setIsEditingAllergies(false);
-    await updatePatientRecord(1, { drug_allergies: allergyDraft.drug.trim(), food_allergies: allergyDraft.food.trim(), dietary_notes: allergyDraft.diet.trim() });
+    await updatePatientRecord(targetPatientId, { drug_allergies: allergyDraft.drug.trim(), food_allergies: allergyDraft.food.trim(), dietary_notes: allergyDraft.diet.trim() });
   };
 
   const handleCallDoctor = async () => {
@@ -1265,7 +1271,8 @@ export default function PatientMedicalRecordScreen({ navigation, route }: any) {
         patientName={patientName !== '--' ? patientName : undefined}
         doctorName={doctorName !== 'Chưa chỉ định' ? doctorName : undefined}
         defaultClinicLocation={hospital !== '--' ? hospital : undefined}
-        initialMode="BOOK"
+        initialMode={canEdit ? 'BOOK' : 'LIST'}
+        canManageRecords={canEdit}
         onAppointmentChanged={() => {
           const id = patientRecord?.id || activePatientId;
           if (id) fetchPatientRecord(id, selectedDate);

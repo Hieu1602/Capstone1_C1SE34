@@ -12,6 +12,7 @@ interface Spo2RulerCardProps {
   hasSpO2: boolean;
   spo2Value: number | null;
   spo2PinPercent: number;
+  minSpO2: number;
   onPress: () => void;
 }
 
@@ -29,9 +30,10 @@ export function Spo2RulerCard({
   hasSpO2,
   spo2Value,
   spo2PinPercent,
+  minSpO2,
   onPress,
 }: Spo2RulerCardProps) {
-  const badge = getSpo2BadgeConfig(hasSpO2, spo2Value, isDarkMode);
+  const badge = getSpo2BadgeConfig(hasSpO2, spo2Value, isDarkMode, minSpO2);
 
   return (
     <TouchableOpacity

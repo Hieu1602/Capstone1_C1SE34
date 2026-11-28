@@ -8,6 +8,7 @@ import {
   PrescriptionItem,
   BatchPrescriptionPayload,
   AppointmentItem,
+  AppointmentEvent,
   AnalyticsData,
   DoctorUser,
   Incident,
@@ -35,6 +36,14 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
   config.headers['x-client-platform'] = 'DOCTOR_WEB';
+  // Để trình duyệt tự gắn boundary cho FormData thay vì giữ application/json mặc định (Axios 1.x AxiosHeaders)
+  if (config.data instanceof FormData && config.headers) {
+    if (typeof (config.headers as any).delete === 'function') {
+      (config.headers as any).delete('Content-Type');
+    } else {
+      delete config.headers['Content-Type'];
+    }
+  }
   return config;
 });
 
@@ -93,6 +102,12 @@ export const authApi = {
   },
   updateMe: async (data: any) => {
     const res = await api.patch('/users/me', data);
+    return res.data;
+  },
+  uploadAvatar: async (file: File): Promise<DoctorUser> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await api.post('/users/me/avatar', formData);
     return res.data;
   },
   deleteAvatar: async () => {
@@ -242,6 +257,16 @@ export const doctorApi = {
     return res.data;
   },
 
+  confirmAppointment: async (appointmentId: string): Promise<AppointmentItem> => {
+    const res = await api.post(`/doctor/appointments/${appointmentId}/confirm`);
+    return res.data;
+  },
+
+  getAppointmentHistory: async (appointmentId: string): Promise<AppointmentEvent[]> => {
+    const res = await api.get(`/doctor/appointments/${appointmentId}/history`);
+    return res.data;
+  },
+
   completeAppointment: async (appointmentId: string, clinicalNotes?: string) => {
     const payload = clinicalNotes?.trim() ? { clinical_notes: clinicalNotes.trim() } : undefined;
     const res = await api.post(`/doctor/appointments/${appointmentId}/complete`, payload);
@@ -295,6 +320,18 @@ export const incidentsApi = {
 };
 
 // 5. SYSTEM NOTIFICATIONS API (Đồng bộ thông báo toàn hệ thống từ Web Admin)
+/** Trạng thái "đã đọc" lưu trên server – đồng bộ Doctor Web <-> App bác sĩ, kèm giờ đọc */
+export const notificationReadsApi = {
+  list: async (): Promise<{ key: string; read_at: string }[]> => {
+    const res = await api.get('/notification-reads');
+    return res.data;
+  },
+  set: async (keys: string[], read = true): Promise<{ key: string; read_at: string }[]> => {
+    const res = await api.post('/notification-reads', { keys, read });
+    return res.data;
+  },
+};
+
 export const systemNotificationsApi = {
   getActiveBroadcasts: async (targetAudience: string = 'doctors'): Promise<SystemNotification[]> => {
     try {

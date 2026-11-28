@@ -123,7 +123,7 @@ function localizeString(value: string, translate: (key: string, options?: any) =
   if (alertMatch) {
     const warningLabel = translate('CẢNH BÁO', { defaultValue: 'WARNING' });
     const innerMsg = alertMatch[1].trim();
-    const translatedInner = translate(innerMsg, { defaultValue: innerMsg });
+    const translatedInner = localizeString(innerMsg, translate);
     return value.replace(trimmed, `${warningLabel}: ${translatedInner}`);
   }
 
@@ -205,6 +205,116 @@ function localizeString(value: string, translate: (key: string, options?: any) =
   const pointsCountMatch = normalized.match(/^(\d+)\s+mốc đo ghi nhận$/i);
   if (pointsCountMatch) {
     return value.replace(trimmed, `${pointsCountMatch[1]} recorded reading(s)`);
+  }
+
+  // House & Invite dynamic patterns
+  const membersRoomMatch = normalized.match(/^Thành viên:\s*(\d+)\s*[•·]\s*Quản lý phòng(?:\s*&\s*sơ đồ)?$/i);
+  if (membersRoomMatch) {
+    const suffix = normalized.includes('sơ đồ') ? 'Room & layout management' : 'Room management';
+    return value.replace(trimmed, `Members: ${membersRoomMatch[1]} • ${suffix}`);
+  }
+
+  // Vitals summary card dynamic patterns
+  const vitalsTitleMatch = normalized.match(/^Sinh hiệu\s*[•·]\s*(.+)$/i);
+  if (vitalsTitleMatch) {
+    return value.replace(trimmed, `Vitals • ${vitalsTitleMatch[1]}`);
+  }
+
+  const ageOnlyMatch = normalized.match(/^([•·]\s*)?(\d+)\s+tuổi$/i);
+  if (ageOnlyMatch) {
+    return value.replace(trimmed, `${ageOnlyMatch[1] || ''}${ageOnlyMatch[2]} yrs`);
+  }
+
+  const healthHeaderSubMatch = normalized.match(/^Chỉ số sinh tồn\s*&\s*Bệnh án\s*[•·]\s*(\d+)\s*tuổi$/i);
+  if (healthHeaderSubMatch) {
+    return value.replace(trimmed, `Vitals & Medical Record • ${healthHeaderSubMatch[1]} yrs`);
+  }
+
+  const noDataDayBannerMatch = normalized.match(/^Ngày\s+(\d{1,2}\/\d{1,2}\/\d{4})\s+chưa ghi nhận mốc đo nào trong cơ sở dữ liệu\.?$/i);
+  if (noDataDayBannerMatch) {
+    return value.replace(trimmed, `No measurements recorded in the database for ${noDataDayBannerMatch[1]}.`);
+  }
+
+  const noDataDayParenMatch = normalized.match(/^Chưa có dữ liệu đo cho ngày này\s*\(([^)]+)\)\.?$/i);
+  if (noDataDayParenMatch) {
+    return value.replace(trimmed, `No measurement data for this day (${noDataDayParenMatch[1]}).`);
+  }
+
+  const noRecordsTimelineMatch = normalized.match(
+    /^Không tìm thấy bản ghi nhịp tim\s*&\s*sinh hiệu nào trong cơ sở dữ liệu cho ngày\s+(\d{1,2}\/\d{1,2}\/\d{4})\.\s*Vui lòng chọn ngày khác trên lịch để tua xem\.?$/i,
+  );
+  if (noRecordsTimelineMatch) {
+    return value.replace(
+      trimmed,
+      `No heart rate or vital sign records found in the database for ${noRecordsTimelineMatch[1]}. Please select another date on the calendar.`,
+    );
+  }
+
+  const nowTimeMatch = normalized.match(/^Hiện tại\s+(\d{1,2}:\d{2})$/i);
+  if (nowTimeMatch) {
+    return value.replace(trimmed, `Now ${nowTimeMatch[1]}`);
+  }
+
+  const daysAgoShortMatch = normalized.match(/^(\d+)\s+ngày trước$/i);
+  if (daysAgoShortMatch) {
+    return value.replace(trimmed, `${daysAgoShortMatch[1]} days ago`);
+  }
+
+  const hrFluctuationDateMatch = normalized.match(/^Dao động nhịp tim ngày\s+(\d{1,2}\/\d{1,2}\/\d{4})$/i);
+  if (hrFluctuationDateMatch) {
+    return value.replace(trimmed, `Heart rate fluctuation on ${hrFluctuationDateMatch[1]}`);
+  }
+
+  const camChannelsMatch = normalized.match(/^(.+?)\s*[•·]\s*(\d+)\s+Kênh Camera$/i);
+  if (camChannelsMatch) {
+    return value.replace(trimmed, `${camChannelsMatch[1]} • ${camChannelsMatch[2]} Camera Channels`);
+  }
+
+  const camChannelOnlyMatch = normalized.match(/^(\d+)\s+Kênh Camera$/i);
+  if (camChannelOnlyMatch) {
+    return value.replace(trimmed, `${camChannelOnlyMatch[1]} Camera Channels`);
+  }
+
+  const deviceBulletMatch = normalized.match(/^([•·]\s*)?Đồng hồ thông minh Smartband$/i);
+  if (deviceBulletMatch) {
+    return value.replace(trimmed, `${deviceBulletMatch[1] || ''}Smartband Watch`);
+  }
+
+  const noBandMatch = normalized.match(/^([•·]\s*)?Chưa gán vòng tay$/i);
+  if (noBandMatch) {
+    return value.replace(trimmed, `${noBandMatch[1] || ''}No band assigned`);
+  }
+
+  // Dynamic fall / high HR backend alert messages
+  const fallCamMatch = normalized.match(/^Phát hiện sự cố té ngã khẩn cấp tại (.+?)!$/i);
+  if (fallCamMatch) {
+    return value.replace(trimmed, `Emergency fall detected at ${fallCamMatch[1]}!`);
+  }
+
+  const highHrMatch = normalized.match(/^Nhịp tim đo được từ (.+?) tăng cao \((\d+\s*bpm)\)!?(.*)$/i);
+  if (highHrMatch) {
+    const devLabel = highHrMatch[1].trim() === 'Đồng hồ thông minh Smartband' ? 'Smartband Watch' : highHrMatch[1].trim();
+    return value.replace(trimmed, `High heart rate measured from ${devLabel} (${highHrMatch[2]})!`);
+  }
+
+  const inviteExpireMatch = normalized.match(/^(?:⏱️\s*)?Mã có hiệu lực trong (\d+) phút \(còn (\d+) phút\)$/i);
+  if (inviteExpireMatch) {
+    const prefix = normalized.startsWith('⏱️') ? '⏱️ ' : '';
+    return value.replace(
+      trimmed,
+      `${prefix}Code valid for ${inviteExpireMatch[1]} minutes (${inviteExpireMatch[2]} min left)`,
+    );
+  }
+
+  const shareInviteMsgMatch = normalized.match(
+    /^Chào bạn!\s*Bạn nhận được lời mời tham gia "(.*?)" với vai trò (Quản trị viên|Thành viên)\.\s*Mã mời:\s*([A-Z0-9-]+)\s*\(hiệu lực trong (\d+) phút\)\.\s*Tải app Smart Elderly Care AI để kết nối!$/i,
+  );
+  if (shareInviteMsgMatch) {
+    const roleEn = shareInviteMsgMatch[2].toLowerCase().includes('quản trị') ? 'Admin' : 'Member';
+    return value.replace(
+      trimmed,
+      `Hello! You have been invited to join "${shareInviteMsgMatch[1]}" as ${roleEn}. Invite code: ${shareInviteMsgMatch[3]} (valid for ${shareInviteMsgMatch[4]} minutes). Download the Smart Elderly Care AI app to connect!`,
+    );
   }
 
   const historyCountMatch = normalized.match(/^Tiền sử bệnh nền\s*\((.+)\)$/i);

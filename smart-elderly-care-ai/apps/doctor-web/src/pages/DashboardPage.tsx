@@ -8,6 +8,8 @@ import { useDoctorDataStore } from '../store/useDoctorDataStore';
 import { householdApi, authApi } from '../services/api';
 import { doctorWebSocket } from '../services/websocket';
 import { removeVietnameseTones } from '../utils/text';
+import { filterIncidentsByPatient } from '../utils/incidentFilter';
+import { computeAlertStats, useAlertChartPeriod } from '../utils/alertStats';
 import { isAppointmentOverdue, isUpcomingAppointmentStatus } from '../utils/appointmentHelpers';
 import { DoctorPatientCard, AppointmentItem, HouseInvite } from '../types';
 import { HouseInviteCard } from '../components/dashboard/HouseInviteCard';
@@ -16,125 +18,10 @@ import { DoctorHeroBanner } from '../components/dashboard/DoctorHeroBanner';
 import { DoctorKpiCards } from '../components/dashboard/DoctorKpiCards';
 import { DoctorMiniCalendar, MiniCalendarCell } from '../components/dashboard/DoctorMiniCalendar';
 import { DayAppointmentsModal } from '../components/dashboard/DayAppointmentsModal';
-import { DoctorAlertsAreaChart, AlertDayStat } from '../components/dashboard/DoctorAlertsAreaChart';
+import { DoctorAlertsAreaChart } from '../components/dashboard/DoctorAlertsAreaChart';
 import { DoctorPatientTable } from '../components/dashboard/DoctorPatientTable';
 import { EscalationStatusBanner } from '../components/dashboard/EscalationStatusBanner';
 import { Sparkles } from 'lucide-react';
-
-function getMonday(d: Date): Date {
-  const date = new Date(d);
-  const day = date.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  date.setDate(date.getDate() + diff);
-  date.setHours(0, 0, 0, 0);
-  return date;
-}
-
-function classifyAlertCategory(
-  alertType?: string
-): 'fall' | 'heart_alert' | 'spo2_alert' | 'sos_alert' | null {
-  const type = (alertType || '').toUpperCase();
-  if (!type) return null;
-  if (
-    type.startsWith('APPOINTMENT_') ||
-    type.startsWith('HOUSE_INVITE') ||
-    type.startsWith('PRESCRIPTION_') ||
-    type.startsWith('MEDICAL_RECORD_') ||
-    type.startsWith('DEVICE_') ||
-    type.startsWith('BATTERY_') ||
-    type.startsWith('CHARGER_') ||
-    type === 'DOCTOR_ASSIGNED' ||
-    type === 'INVITATION' ||
-    type === 'BLE_DISCONNECTED' ||
-    type === 'SENSOR_OFFLINE'
-  ) {
-    return null;
-  }
-  if (type.includes('FALL') || type.includes('TE_NGA')) return 'fall';
-  if (type.includes('SOS') || type.includes('EMERGENCY_BUTTON')) return 'sos_alert';
-  if (type.includes('SPO2') || type.includes('OXY') || type.includes('HYPOXIA')) return 'spo2_alert';
-  if (
-    type.includes('HEART') ||
-    type.includes('NHIP_TIM') ||
-    type.includes('_HR_') ||
-    type.startsWith('HR_') ||
-    type.includes('ARRHYTHMIA') ||
-    type.includes('TACHYCARDIA') ||
-    type.includes('BRADYCARDIA') ||
-    type.includes('CARDIO')
-  ) {
-    return 'heart_alert';
-  }
-  return null;
-}
-
-function computeAlertStats(incidents: any[], range: '7D' | '30D', anchorDate: Date): AlertDayStat[] {
-  if (range === '30D') {
-    const y = anchorDate.getFullYear();
-    const m = anchorDate.getMonth();
-    const lastDay = new Date(y, m + 1, 0).getDate();
-
-    const weeks: AlertDayStat[] = [
-      { label: 'Tuần 1', fullLabel: `Tuần 1 (01 - 07/${m + 1})`, fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-      { label: 'Tuần 2', fullLabel: `Tuần 2 (08 - 14/${m + 1})`, fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-      { label: 'Tuần 3', fullLabel: `Tuần 3 (15 - 21/${m + 1})`, fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-      { label: 'Tuần 4', fullLabel: `Tuần 4 (22 - ${lastDay}/${m + 1})`, fall: 0, heart_alert: 0, spo2_alert: 0, sos_alert: 0, total: 0 },
-    ];
-
-    for (const inc of incidents || []) {
-      const d = inc.created_at ? new Date(inc.created_at) : null;
-      if (!d || isNaN(d.getTime())) continue;
-      if (d.getFullYear() === y && d.getMonth() === m) {
-        const category = classifyAlertCategory(inc.alert_type);
-        if (!category) continue;
-        const dayNum = d.getDate();
-        const targetWeek = dayNum <= 7 ? 0 : dayNum <= 14 ? 1 : dayNum <= 21 ? 2 : 3;
-        weeks[targetWeek][category]++;
-        weeks[targetWeek].total++;
-      }
-    }
-
-    return weeks;
-  }
-
-  // 7D: Tuần cụ thể (Thứ Hai -> Chủ Nhật)
-  const monday = getMonday(anchorDate);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  sunday.setHours(23, 59, 59, 999);
-
-  const dayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
-  const fullNames = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ Nhật'];
-  const days: AlertDayStat[] = dayLabels.map((lbl, idx) => {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + idx);
-    const dateFormatted = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-    return {
-      label: lbl,
-      fullLabel: `${fullNames[idx]} (${dateFormatted})`,
-      fall: 0,
-      heart_alert: 0,
-      spo2_alert: 0,
-      sos_alert: 0,
-      total: 0,
-    };
-  });
-
-  for (const inc of incidents || []) {
-    const d = inc.created_at ? new Date(inc.created_at) : null;
-    if (!d || isNaN(d.getTime())) continue;
-    if (d.getTime() >= monday.getTime() && d.getTime() <= sunday.getTime()) {
-      const category = classifyAlertCategory(inc.alert_type);
-      if (!category) continue;
-      const dayOfWeek = d.getDay(); // 0 is CN, 1 is T2
-      const dayIdx = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-      days[dayIdx][category]++;
-      days[dayIdx].total++;
-    }
-  }
-
-  return days;
-}
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -153,72 +40,19 @@ export const DashboardPage: React.FC = () => {
     setInvites,
   } = useDoctorDataStore();
 
-  const [chartRange, setChartRange] = useState<'7D' | '30D'>('7D');
-  const [chartAnchorDate, setChartAnchorDate] = useState<Date>(() => new Date());
-
-  const now = new Date();
-  const currentMonday = getMonday(now);
-  const selectedMonday = getMonday(chartAnchorDate);
-  const selectedSunday = new Date(selectedMonday);
-  selectedSunday.setDate(selectedMonday.getDate() + 6);
-
-  const isCurrentWeek = selectedMonday.getTime() >= currentMonday.getTime();
-  const isCurrentMonth =
-    chartAnchorDate.getFullYear() === now.getFullYear() &&
-    chartAnchorDate.getMonth() >= now.getMonth();
-
-  const periodLabel = useMemo(() => {
-    if (chartRange === '7D') {
-      const startStr = `${String(selectedMonday.getDate()).padStart(2, '0')}/${String(selectedMonday.getMonth() + 1).padStart(2, '0')}`;
-      const endStr = `${String(selectedSunday.getDate()).padStart(2, '0')}/${String(selectedSunday.getMonth() + 1).padStart(2, '0')}`;
-      return `${startStr} - ${endStr}`;
-    }
-    return `Tháng ${chartAnchorDate.getMonth() + 1}/${chartAnchorDate.getFullYear()}`;
-  }, [chartRange, selectedMonday, selectedSunday, chartAnchorDate]);
-
-  const isNextDisabled = chartRange === '7D' ? isCurrentWeek : isCurrentMonth;
-  const isCurrentPeriod = chartRange === '7D' ? isCurrentWeek : isCurrentMonth;
-
-  const handlePrevChart = () => {
-    setChartAnchorDate((prev) => {
-      const d = new Date(prev);
-      if (chartRange === '7D') {
-        d.setDate(d.getDate() - 7);
-      } else {
-        d.setMonth(d.getMonth() - 1);
-      }
-      return d;
-    });
-  };
-
-  const handleNextChart = () => {
-    if (isNextDisabled) return;
-    setChartAnchorDate((prev) => {
-      const d = new Date(prev);
-      if (chartRange === '7D') {
-        d.setDate(d.getDate() + 7);
-      } else {
-        d.setMonth(d.getMonth() + 1);
-      }
-      return d;
-    });
-  };
-
-  const handleResetCurrentChart = () => {
-    setChartAnchorDate(new Date());
-  };
-
-  const handleMonthSelect = (mStr: string) => {
-    const [y, m] = mStr.split('-').map(Number);
-    const nowDate = new Date();
-    if (y === nowDate.getFullYear() && m - 1 === nowDate.getMonth()) {
-      setChartAnchorDate(nowDate);
-    } else {
-      setChartAnchorDate(new Date(y, m - 1, 1));
-    }
-  };
-
-  const selectedMonthStr = `${chartAnchorDate.getFullYear()}-${String(chartAnchorDate.getMonth() + 1).padStart(2, '0')}`;
+  const {
+    chartRange,
+    setChartRange,
+    chartAnchorDate,
+    periodLabel,
+    handlePrevChart,
+    handleNextChart,
+    isNextDisabled,
+    handleResetCurrentChart,
+    isCurrentPeriod,
+    selectedMonthStr,
+    handleMonthSelect,
+  } = useAlertChartPeriod();
 
   const nextAppointment = useMemo(() => {
     const nowMs = Date.now() - 15 * 60_000;
@@ -228,13 +62,20 @@ export const DashboardPage: React.FC = () => {
     return upcomingList[0] || null;
   }, [appointments]);
 
+  // Lọc biểu đồ cảnh báo theo bệnh nhân ('' = tất cả)
+  const [chartPatientId, setChartPatientId] = useState('');
+  const chartPatientOptions = useMemo(
+    () => patients.map((p) => ({ id: p.id, name: p.name })).sort((a, b) => a.name.localeCompare(b.name, 'vi')),
+    [patients],
+  );
   const alertStats = useMemo(() => {
-    return computeAlertStats(clinicalIncidents, chartRange, chartAnchorDate);
-  }, [clinicalIncidents, chartRange, chartAnchorDate]);
+    const patient = chartPatientId ? patients.find((p) => p.id === chartPatientId) : null;
+    return computeAlertStats(filterIncidentsByPatient(clinicalIncidents, patient), chartRange, chartAnchorDate);
+  }, [clinicalIncidents, chartRange, chartAnchorDate, chartPatientId, patients]);
 
   // Table search & filter
   const [tableSearch, setTableSearch] = useState('');
-  const [tableFilter, setTableFilter] = useState<'ALL' | 'ALERT' | 'STABLE'>('ALL');
+  const [tableFilter, setTableFilter] = useState<'ALL' | 'ALERT' | 'STABLE' | 'OFFLINE'>('ALL');
 
   // Mini Calendar month state & selected date (Local YYYY-MM-DD)
   const [selectedDate, setSelectedDate] = useState<string>(() => {
@@ -292,8 +133,13 @@ export const DashboardPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    setDoctorAvatar(getDoctorAvatarUri(user?.avatar_url));
+  }, [user?.avatar_url]);
+
+  useEffect(() => {
     const handleProfileUpdate = () => {
-      setDoctorAvatar(getDoctorAvatarUri(user?.avatar_url));
+      const latestUser = useDoctorAuthStore.getState().user;
+      setDoctorAvatar(getDoctorAvatarUri(latestUser?.avatar_url));
     };
     window.addEventListener('doctor-profile-updated', handleProfileUpdate);
     window.addEventListener('storage', handleProfileUpdate);
@@ -301,7 +147,7 @@ export const DashboardPage: React.FC = () => {
       window.removeEventListener('doctor-profile-updated', handleProfileUpdate);
       window.removeEventListener('storage', handleProfileUpdate);
     };
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     // Tải trước / revalidate dữ liệu trong nền không chặn UI
@@ -309,36 +155,40 @@ export const DashboardPage: React.FC = () => {
 
     // Lắng nghe WebSocket thông qua kết nối toàn cục sẵn có từ Root Layout
     const unsub = doctorWebSocket.subscribe((data) => {
+      const evtType = String(data?.type || '').toLowerCase();
       if (
         data?.type === 'ALERT_NEW' ||
         data?.type === 'INITIAL_ALERTS' ||
         data?.type === 'DEVICE_STATUS' ||
         data?.type === 'INCIDENT_RESOLVED' ||
         data?.type === 'INCIDENT_ESCALATED' ||
-        data?.type === 'vitals_update' ||
         data?.alert_type
       ) {
         fetchAllData(true);
       }
 
       // Cập nhật sinh hiệu bệnh nhân thay đổi thời gian thực tức thì khi có bản tin
-      if (data?.type === 'VITALS_UPDATE' || data?.heart_rate || data?.spo2) {
+      if (evtType === 'vital_update' || evtType === 'vitals_update' || data?.heart_rate || data?.spo2) {
         const liveHr = data.heart_rate ? Number(data.heart_rate) : undefined;
         const liveSpo2 = data.spo2 ? Number(data.spo2) : undefined;
-        const hasTarget = Boolean(data?.patient_id || data?.device_id);
-        if ((liveHr || liveSpo2) && hasTarget) {
+        const liveTemp = data.skin_temp_max ? Number(data.skin_temp_max) : undefined;
+        const pid = data?.patient_id || data?.elderly_id;
+        const hasTarget = Boolean(pid || data?.device_id || data?.device_uuid);
+        if ((liveHr || liveSpo2 || liveTemp) && hasTarget) {
           const curPatients = useDoctorDataStore.getState().patients;
           setPatients(
             curPatients.map((p) => {
               const matched =
-                (data?.patient_id && String(p.id) === String(data.patient_id)) ||
-                (data?.device_id && p.device_id === data.device_id);
+                (pid && String(p.id) === String(pid)) ||
+                (data?.device_id && p.device_id === data.device_id) ||
+                (data?.device_uuid && p.device_id === data.device_uuid);
               return matched
                 ? {
                     ...p,
                     is_online: true,
                     heart_rate: liveHr ?? p.heart_rate,
                     spo2: liveSpo2 ?? p.spo2,
+                    skin_temp_max: liveTemp ?? p.skin_temp_max,
                     last_updated: 'Vừa xong (Trực tuyến)',
                   }
                 : p;
@@ -452,7 +302,8 @@ export const DashboardPage: React.FC = () => {
       }
       const isAlert = p.health_status === 'WARNING' || p.health_status === 'DANGER';
       if (tableFilter === 'ALERT') return matchSearch && isAlert;
-      if (tableFilter === 'STABLE') return matchSearch && !isAlert;
+      if (tableFilter === 'STABLE') return matchSearch && !isAlert && Boolean(p.is_online);
+      if (tableFilter === 'OFFLINE') return matchSearch && !isAlert && !p.is_online;
       return matchSearch;
     });
   }, [patients, tableSearch, tableFilter]);
@@ -535,6 +386,9 @@ export const DashboardPage: React.FC = () => {
             isCurrentPeriod={isCurrentPeriod}
             selectedMonthStr={selectedMonthStr}
             onMonthSelect={handleMonthSelect}
+            patientOptions={chartPatientOptions}
+            selectedPatientId={chartPatientId}
+            onPatientChange={setChartPatientId}
           />
         </div>
 

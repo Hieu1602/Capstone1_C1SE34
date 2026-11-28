@@ -179,6 +179,9 @@ export const devicesApi = {
   deleteDevice: (idOrDeviceId: string) =>
     api.delete<{ message: string }>(`/devices/${idOrDeviceId}`),
 
+  getDeviceConfig: (idOrDeviceId: string) =>
+    api.get<DeviceConfigBackend>(`/devices/${idOrDeviceId}/config`),
+
   updateDeviceConfig: (idOrDeviceId: string, config: Partial<DeviceConfigBackend>) =>
     api.patch<DeviceConfigBackend>(`/devices/${idOrDeviceId}/config`, config),
 

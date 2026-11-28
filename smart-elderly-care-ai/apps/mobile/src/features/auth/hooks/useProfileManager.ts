@@ -12,6 +12,34 @@ import {
   SUPPORT_HOTLINE_NUMBER,
 } from '../../../services/emergency';
 
+export const convertAssetToDataUri = async (
+  asset: ImagePicker.ImagePickerAsset,
+): Promise<string> => {
+  if (asset.base64) {
+    return asset.base64.startsWith('data:')
+      ? asset.base64
+      : `data:image/jpeg;base64,${asset.base64}`;
+  }
+  try {
+    const resp = await fetch(asset.uri);
+    const blob = await resp.blob();
+    return await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          resolve(reader.result);
+        } else {
+          resolve(asset.uri);
+        }
+      };
+      reader.onerror = () => resolve(asset.uri);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return asset.uri;
+  }
+};
+
 export const resolveAvatarUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
   const trimmed = url.trim();
@@ -244,34 +272,6 @@ export function useProfileManager(navigation: any, route: any) {
       confirm_new_password: confPass,
     });
     return true;
-  };
-
-  const convertAssetToDataUri = async (
-    asset: ImagePicker.ImagePickerAsset,
-  ): Promise<string> => {
-    if (asset.base64) {
-      return asset.base64.startsWith('data:')
-        ? asset.base64
-        : `data:image/jpeg;base64,${asset.base64}`;
-    }
-    try {
-      const resp = await fetch(asset.uri);
-      const blob = await resp.blob();
-      return await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          if (typeof reader.result === 'string') {
-            resolve(reader.result);
-          } else {
-            resolve(asset.uri);
-          }
-        };
-        reader.onerror = () => resolve(asset.uri);
-        reader.readAsDataURL(blob);
-      });
-    } catch {
-      return asset.uri;
-    }
   };
 
   const handleSaveAvatar = async (asset: ImagePicker.ImagePickerAsset) => {

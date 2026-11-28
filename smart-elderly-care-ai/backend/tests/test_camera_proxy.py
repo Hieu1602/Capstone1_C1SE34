@@ -149,6 +149,31 @@ class CameraProxyTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result.content, b'jpeg-test')
             self.assertEqual(result.headers['cache-control'], 'no-store')
 
+    async def test_recording_head_and_range_headers_are_forwarded(self):
+        response = await self.http.post('/camera/ticket', json={'resource': 'recordings/clip.mp4'})
+        def upstream(request):
+            self.assertEqual(request.url.path, '/recordings/clip.mp4')
+            if request.headers.get('range') == 'bytes=0-3':
+                return httpx.Response(206, content=b'0123', headers={
+                    'content-type': 'video/mp4',
+                    'content-range': 'bytes 0-3/10',
+                    'content-length': '4',
+                })
+            return httpx.Response(200, content=b'0123456789', headers={
+                'content-type': 'video/mp4',
+                'content-length': '10',
+            })
+        with patch.object(camera.crud_user, 'get', new=AsyncMock(return_value=self.user)), patch.object(camera, 'access', new=AsyncMock(return_value=(self.device, self.permissions))), patch.object(camera, 'client', side_effect=lambda: httpx.AsyncClient(transport=httpx.MockTransport(upstream), base_url='http://camera')):
+            head_res = await self.http.head(response.json()['path'])
+            self.assertEqual(head_res.status_code, 200)
+            self.assertEqual(head_res.headers['accept-ranges'], 'bytes')
+            self.assertEqual(head_res.headers['content-length'], '10')
+            self.assertEqual(head_res.content, b'')
+            range_res = await self.http.get(response.json()['path'], headers={'Range': 'bytes=0-3'})
+            self.assertEqual(range_res.status_code, 206)
+            self.assertEqual(range_res.headers['content-range'], 'bytes 0-3/10')
+            self.assertEqual(range_res.content, b'0123')
+
     async def test_pairing_code_and_existing_owner(self):
         self.app.dependency_overrides[camera.authenticated] = lambda: self.user
         db = SimpleNamespace(get=AsyncMock(return_value=self.device))

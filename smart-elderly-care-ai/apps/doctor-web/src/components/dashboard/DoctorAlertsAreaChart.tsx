@@ -12,7 +12,7 @@ import {
   CartesianGrid,
   Tooltip,
 } from 'recharts';
-import { ChevronLeft, ChevronRight, Calendar, ChevronDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, ChevronDown, User } from 'lucide-react';
 import { MonthYearPopover } from './MonthYearPopover';
 
 export interface AlertDayStat {
@@ -37,6 +37,12 @@ interface DoctorAlertsAreaChartProps {
   isCurrentPeriod?: boolean;
   selectedMonthStr?: string;
   onMonthSelect?: (monthStr: string) => void;
+  /** Lọc theo bệnh nhân: '' = tất cả bệnh nhân */
+  patientOptions?: { id: string; name: string }[];
+  selectedPatientId?: string;
+  onPatientChange?: (patientId: string) => void;
+  /** Ghi chú nhỏ dưới mô tả (vd: cách tính té ngã khi xem 1 bệnh nhân) */
+  footnote?: string;
 }
 
 type SeriesKey = 'fall' | 'heart' | 'spo2' | 'sos';
@@ -123,6 +129,10 @@ export const DoctorAlertsAreaChart: React.FC<DoctorAlertsAreaChartProps> = ({
   isCurrentPeriod = true,
   selectedMonthStr,
   onMonthSelect,
+  patientOptions = [],
+  selectedPatientId = '',
+  onPatientChange,
+  footnote,
 }) => {
   const [showPickerPopover, setShowPickerPopover] = useState(false);
   const [visibleSeries, setVisibleSeries] = useState<Record<SeriesKey, boolean>>({
@@ -172,6 +182,29 @@ export const DoctorAlertsAreaChart: React.FC<DoctorAlertsAreaChartProps> = ({
           <p className="text-xs text-slate-500 mt-1 leading-relaxed dark:text-slate-400">
             Thống kê Té ngã AI, Nhịp tim bất thường, SpO2 hạ thấp &amp; Nút SOS khẩn cấp theo từng ngày
           </p>
+          {onPatientChange && (
+            <label className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 h-7 text-xs font-semibold text-slate-800 shadow-2xs hover:border-blue-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 transition">
+              <User className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+              <select
+                value={selectedPatientId}
+                onChange={(e) => onPatientChange(e.target.value)}
+                className="bg-transparent outline-none cursor-pointer max-w-[220px] truncate dark:bg-slate-800"
+                aria-label="Lọc theo bệnh nhân"
+              >
+                <option value="">Tất cả bệnh nhân</option>
+                {patientOptions.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {(footnote || selectedPatientId) && (
+            <p className="text-[10px] text-slate-400 mt-1 dark:text-slate-500">
+              {footnote || 'Té ngã AI tính theo camera của nhà bệnh nhân (dùng chung nếu nhà có nhiều người).'}
+            </p>
+          )}
         </div>
 
         {/* Bộ chuyển đổi khoảng thời gian & Điều hướng Tuần/Tháng */}

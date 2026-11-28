@@ -49,6 +49,8 @@ function getVitalState() {
     setConnected:        health.setConnected,
     setSelectedDate:     health.setSelectedDate,
     updateAlgoSettings:  health.updateAlgoSettings,
+    fetchThresholds:     health.fetchThresholds,
+    applyServerThresholds: health.applyServerThresholds,
 
     // --- từ useAlertStore ---
     incidents:           alerts.incidents,
@@ -72,6 +74,7 @@ function getVitalState() {
     setActiveDevice:        devices.setActiveDevice,
     setHouseMode:           devices.setHouseMode,
     updateHouseAddress:     devices.updateHouseAddress,
+    updateHouseInfo:        devices.updateHouseInfo,
     toggleCameraSleep:      devices.toggleCameraSleep,
     toggleCameraAIProtect:  devices.toggleCameraAIProtect,
     setCameraResolution:    devices.setCameraResolution,
@@ -139,6 +142,8 @@ export function useVitalStore() {
     setConnected:        health.setConnected,
     setSelectedDate:     health.setSelectedDate,
     updateAlgoSettings:  health.updateAlgoSettings,
+    fetchThresholds:     health.fetchThresholds,
+    applyServerThresholds: health.applyServerThresholds,
 
     // --- từ useAlertStore ---
     incidents:           alerts.incidents,
@@ -162,6 +167,7 @@ export function useVitalStore() {
     setActiveDevice:        devices.setActiveDevice,
     setHouseMode:           devices.setHouseMode,
     updateHouseAddress:     devices.updateHouseAddress,
+    updateHouseInfo:        devices.updateHouseInfo,
     toggleCameraSleep:      devices.toggleCameraSleep,
     toggleCameraAIProtect:  devices.toggleCameraAIProtect,
     setCameraResolution:    devices.setCameraResolution,

@@ -225,6 +225,7 @@ export default function AppNavigator() {
             <Stack.Screen name="HealthDetail" component={HealthDetailScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
             <Stack.Screen name="AppInfo" component={AppInfoScreen} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
             <Stack.Screen
               name="EmergencySOS"
               component={EmergencySOSScreen}

@@ -69,7 +69,7 @@ export const getCustomServerUrl = async (): Promise<string> => {
       api.defaults.baseURL = saved.trim();
       return saved.trim();
     }
-  } catch {}
+  } catch { }
   return api.defaults.baseURL || BASE_URL;
 };
 
@@ -90,13 +90,42 @@ api.interceptors.request.use(
       if (saved && saved.trim()) {
         config.baseURL = saved.trim();
       }
-    } catch {}
+    } catch { }
 
     const token = useAuthStore.getState().accessToken;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    config.headers['x-client-platform'] = 'MOBILE_APP';
+    config.headers['x-client-platform'] = Platform.OS === 'web' ? 'WEB' : 'MOBILE_APP';
+    if (Platform.OS !== 'web') {
+      try {
+        const pConst = (Platform.constants || {}) as Record<string, any>;
+        const brand = String(pConst.Brand || pConst.Manufacturer || '').trim();
+        const model = String(pConst.Model || Constants.deviceName || '').trim();
+        let phoneName = '';
+        if (Platform.OS === 'ios') {
+          phoneName = String(Constants.deviceName || pConst.systemName || 'iPhone').trim();
+        } else if (model) {
+          const brandCap = brand ? brand.charAt(0).toUpperCase() + brand.slice(1) : '';
+          phoneName =
+            brandCap && !model.toLowerCase().startsWith(brand.toLowerCase())
+              ? `${brandCap} ${model}`
+              : model;
+        } else if (brand) {
+          phoneName = brand.charAt(0).toUpperCase() + brand.slice(1);
+        }
+        if (phoneName) {
+          config.headers['x-device-name'] = encodeURIComponent(phoneName);
+        }
+        const osStr =
+          Platform.OS === 'android'
+            ? `Android ${pConst.Release || Platform.Version || ''}`.trim()
+            : `iOS ${Platform.Version || ''}`.trim();
+        if (osStr) {
+          config.headers['x-device-os'] = encodeURIComponent(osStr);
+        }
+      } catch {}
+    }
     try {
       const language = await AsyncStorage.getItem('smartcare-user-language');
       if (language === 'en' || language === 'vi') {
@@ -146,7 +175,7 @@ export default api;
 
 export const authApi = {
   logout: (userName?: string, role?: string) =>
-    api.post('/auth/logout', { user_name: userName, role }).catch(() => {}),
+    api.post('/auth/logout', { user_name: userName, role }).catch(() => { }),
   checkPhone: (phone: string) => api.post('/auth/check-phone', { phone }),
   requestOtp: (phone: string) => api.post('/auth/request-otp', { phone }),
   verifyOtp: (phone: string, otp_code: string) => api.post('/auth/verify-otp', { phone, otp_code }),
@@ -312,11 +341,23 @@ export const vitalsApi = {
 // 3. Reminders API
 export const remindersApi = {
   getToday: (patientId?: string | number) =>
-    api.get('/reminders/today', { params: patientId ? { patient_id: patientId } : undefined }),
+    api.get('/reminders/today', {
+      params: patientId ? { patient_id: patientId } : undefined,
+      timeout: 25000,
+    }),
   create: (data: any) => api.post('/reminders', data),
-  createPrescription: (data: any) => api.post('/reminders/prescription', data),
-  toggle: (reminderId: string, patientId?: string | number) =>
-    api.put(`/reminders/${reminderId}/toggle`, null, { params: patientId ? { patient_id: patientId } : undefined }),
+  createPrescription: (data: any) => api.post('/reminders/prescription', data, { timeout: 25000 }),
+  deletePrescription: (rxId: string, patientId?: string | number) =>
+    patientId
+      ? api.delete(`/doctor/patients/${patientId}/prescriptions/${rxId}`)
+      : api.delete(`/reminders/prescription/${rxId}`),
+  toggle: (reminderId: string, patientId?: string | number, taken?: boolean) =>
+    api.put(`/reminders/${reminderId}/toggle`, null, {
+      params: {
+        ...(patientId ? { patient_id: patientId } : {}),
+        ...(taken !== undefined ? { taken } : {}),
+      },
+    }),
   delete: (reminderId: string, patientId?: string | number) =>
     api.delete(`/reminders/${reminderId}`, { params: patientId ? { patient_id: patientId } : undefined }),
   createHydration: (data: { time: string; amount: string; note: string; patient_id?: string | number }) =>
@@ -512,8 +553,13 @@ export const doctorApi = {
       `/doctor/appointments/${appointmentId}`,
       data
     ),
-  completeAppointment: (appointmentId: string) =>
-    api.post(`/doctor/appointments/${appointmentId}/complete`),
+  confirmAppointment: (appointmentId: string) =>
+    api.post(`/doctor/appointments/${appointmentId}/confirm`),
+  completeAppointment: (appointmentId: string, clinicalNotes?: string) =>
+    api.post(
+      `/doctor/appointments/${appointmentId}/complete`,
+      clinicalNotes?.trim() ? { clinical_notes: clinicalNotes.trim() } : undefined
+    ),
   cancelAppointment: (appointmentId: string, data: { cancellation_reason: string }) =>
     api.post(`/doctor/appointments/${appointmentId}/cancel`, data),
   deleteAppointment: (appointmentId: string) =>

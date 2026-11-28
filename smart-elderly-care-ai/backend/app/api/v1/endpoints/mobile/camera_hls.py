@@ -26,17 +26,19 @@ from app.models.camera_recording import CameraRecording
 from app.services.storage import video_storage
 
 router = APIRouter()
-media_slots = asyncio.Semaphore(8)
+media_slots = asyncio.Semaphore(12)
 PRIVATE_HEADERS = {"Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer"}
 SEGMENT_HEADERS = {"Cache-Control": "private, max-age=3600", "Referrer-Policy": "no-referrer"}
 
 _segment_cache = OrderedDict()
 _segment_lock = threading.Lock()
-_SEGMENT_CACHE_MAX = 256
+_SEGMENT_CACHE_MAX = 512
+_inflight_segments: dict[tuple, threading.Event] = {}
 
 _session_cache = OrderedDict()
 _session_lock = threading.Lock()
 _SESSION_CACHE_MAX = 32
+_edge_unreachable_until: dict[str, float] = {}
 
 
 async def recordings(db, device_id, start, end):
@@ -82,26 +84,34 @@ async def create_session(start: AwareDatetime, end: AwareDatetime, response: Res
     user, (device, _) = context
 
     # Ưu tiên trích xuất phiên phát lại trực tiếp từ thẻ nhớ MicroSD qua camera upstream
-    try:
-        from app.api.v1.endpoints.mobile.camera import forward_camera
-        res = await forward_camera(context, "/archive/session", params={"start": start.isoformat(), "end": end.isoformat()})
-        if isinstance(res, dict) and "file" in res:
-            file_name = res["file"]
-            started_at = res.get("started_at", start.isoformat())
-            dur = float(res.get("duration", 30))
-            now_sec = int(time.time())
-            expires = ((now_sec + 3600) // 300) * 300
-            token = jwt.encode({"sub": str(user.id), "type": "camera_media", "device": str(device.id),
-                                "resource": f"recordings/{file_name}", "quality": "auto", "overlay": False, "exp": expires},
-                               settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-            return {
-                "path": f"/camera/media/recordings/{file_name}?ticket={token}",
-                "expires_at": expires,
-                "items": [{"id": file_name, "started_at": started_at, "duration": dur}],
-            }
-    except Exception as exc:
-        import logging
-        logging.getLogger(__name__).warning("[HLS Session] Error forward archive session: %s", exc)
+    cam_key = str(device.id)
+    if time.monotonic() >= _edge_unreachable_until.get(cam_key, 0.0):
+        try:
+            from app.api.v1.endpoints.mobile.camera import forward_camera
+            res = await forward_camera(context, "/archive/session", params={"start": start.isoformat(), "end": end.isoformat()})
+            if isinstance(res, dict) and "file" in res:
+                _edge_unreachable_until.pop(cam_key, None)
+                file_name = res["file"]
+                started_at = res.get("started_at", start.isoformat())
+                dur = float(res.get("duration", 30))
+                now_sec = int(time.time())
+                expires = ((now_sec + 3600) // 300) * 300
+                token = jwt.encode({"sub": str(user.id), "type": "camera_media", "device": str(device.id),
+                                    "resource": f"recordings/{file_name}", "quality": "auto", "overlay": False, "exp": expires},
+                                   settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+                return {
+                    "path": f"/camera/media/recordings/{file_name}?ticket={token}",
+                    "expires_at": expires,
+                    "items": [{"id": file_name, "started_at": started_at, "duration": dur}],
+                }
+        except HTTPException as exc:
+            if exc.status_code == 503 and "Không kết nối được" in str(exc.detail):
+                _edge_unreachable_until[cam_key] = time.monotonic() + 15.0
+            import logging
+            logging.getLogger(__name__).warning("[HLS Session] Error forward archive session: %s", exc)
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("[HLS Session] Error forward archive session: %s", exc)
 
     rows = await recordings(db, device.id, start, end)
     if not rows:
@@ -146,35 +156,81 @@ async def manifest(ticket: str, context=Depends(session_context), db: AsyncSessi
 
 def transport_stream(key, expected_size, offset=0):
     cache_key = (key, offset, expected_size)
+    leader = False
+    event = None
     with _segment_lock:
         if cache_key in _segment_cache:
             _segment_cache.move_to_end(cache_key)
             return _segment_cache[cache_key]
-    result = video_storage.client().get_object(Bucket=video_storage.bucket(), Key=key)
-    body = result["Body"]
+        event = _inflight_segments.get(cache_key)
+        if event is None:
+            event = threading.Event()
+            _inflight_segments[cache_key] = event
+            leader = True
+    if not leader:
+        event.wait(timeout=25)
+        with _segment_lock:
+            if cache_key in _segment_cache:
+                _segment_cache.move_to_end(cache_key)
+                return _segment_cache[cache_key]
+
     try:
-        if not 0 < expected_size <= 100 * 1024**2 or result["ContentLength"] != expected_size:
-            raise ValueError("Invalid recording size")
-        data = body.read(expected_size + 1)
-        if len(data) != expected_size:
-            raise ValueError("Incomplete recording")
+        result = video_storage.client().get_object(Bucket=video_storage.bucket(), Key=key)
+        body = result["Body"]
+        try:
+            if not 0 < expected_size <= 100 * 1024**2 or result["ContentLength"] != expected_size:
+                raise ValueError("Invalid recording size")
+            data = body.read(expected_size + 1)
+            if len(data) != expected_size:
+                raise ValueError("Incomplete recording")
+        finally:
+            body.close()
+        # Normalize timestamps to playlist time; independent files otherwise reset PTS.
+        if key.endswith(".ts"):
+            output = subprocess.run([
+                "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
+                "-f", "mpegts", "-i", "pipe:0", "-map", "0:v:0", "-an", "-c:v", "copy",
+                "-bsf:v", "h264_mp4toannexb", "-output_ts_offset", str(offset),
+                "-muxdelay", "0", "-muxpreload", "0", "-f", "mpegts", "pipe:1",
+            ], input=data, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=20).stdout
+        else:
+            with tempfile.TemporaryDirectory(prefix="camera-hls-") as directory:
+                source = Path(directory) / "source.mp4"
+                source.write_bytes(data)
+                output = subprocess.run([
+                    "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
+                    "-protocol_whitelist", "file,pipe", "-i", str(source), "-map", "0:v:0", "-an", "-c:v", "copy",
+                    "-bsf:v", "h264_mp4toannexb", "-output_ts_offset", str(offset),
+                    "-muxdelay", "0", "-muxpreload", "0", "-f", "mpegts", "pipe:1",
+                ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=20).stdout
+        with _segment_lock:
+            _segment_cache[cache_key] = output
+            if len(_segment_cache) > _SEGMENT_CACHE_MAX:
+                _segment_cache.popitem(last=False)
+        return output
     finally:
-        body.close()
-    # Normalize timestamps to playlist time; independent files otherwise reset PTS.
-    with tempfile.TemporaryDirectory(prefix="camera-hls-") as directory:
-        source = Path(directory) / ("source.ts" if key.endswith(".ts") else "source.mp4")
-        source.write_bytes(data)
-        output = subprocess.run([
-            "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
-            "-protocol_whitelist", "file,pipe", "-i", str(source), "-map", "0:v:0", "-an", "-c:v", "copy",
-            "-bsf:v", "h264_mp4toannexb", "-output_ts_offset", str(offset),
-            "-muxdelay", "0", "-muxpreload", "0", "-f", "mpegts", "pipe:1",
-        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=20).stdout
-    with _segment_lock:
-        _segment_cache[cache_key] = output
-        if len(_segment_cache) > _SEGMENT_CACHE_MAX:
-            _segment_cache.popitem(last=False)
-    return output
+        if leader:
+            with _segment_lock:
+                _inflight_segments.pop(cache_key, None)
+                event.set()
+
+
+_transport_stream_impl = transport_stream
+
+
+async def _prefetch_segments(targets: list[tuple[str, int, float]]):
+    for key, size_bytes, off in targets:
+        cache_key = (key, off, size_bytes)
+        with _segment_lock:
+            if cache_key in _segment_cache or cache_key in _inflight_segments:
+                continue
+        if media_slots.locked():
+            return
+        try:
+            async with media_slots:
+                await asyncio.to_thread(transport_stream, key, size_bytes, off)
+        except Exception:
+            return
 
 
 @router.get("/{recording_id}.ts")
@@ -184,15 +240,17 @@ async def segment(recording_id: UUID, context=Depends(session_context), db: Asyn
     if not row or row.device_id != device_id or row.kind != "segment" or not start <= row.started_at < end:
         raise HTTPException(404, "Recording outside playback session")
     fp = claims["fingerprint"]
+    cached_rows = None
     cached = None
     with _session_lock:
         if fp in _session_cache:
-            _, offsets, exp = _session_cache[fp]
+            cached_rows, offsets, exp = _session_cache[fp]
             if time.time() < exp and recording_id in offsets:
                 cached = offsets[recording_id]
                 _session_cache.move_to_end(fp)
     if cached is not None:
         offset = cached
+        session_rows = cached_rows
     else:
         rows = await recordings(db, device_id, start, end)
         if fingerprint(rows) != fp:
@@ -205,6 +263,7 @@ async def segment(recording_id: UUID, context=Depends(session_context), db: Asyn
         if recording_id not in offsets:
             raise HTTPException(404, "Recording outside playback session")
         offset = offsets[recording_id]
+        session_rows = rows
         with _session_lock:
             _session_cache[fp] = (rows, offsets, time.time() + 3600)
             if len(_session_cache) > _SESSION_CACHE_MAX:
@@ -219,4 +278,17 @@ async def segment(recording_id: UUID, context=Depends(session_context), db: Asyn
         raise HTTPException(503, "Recording temporarily unavailable") from None
     except (BotoCoreError, ClientError, OSError, ValueError, subprocess.SubprocessError):
         raise HTTPException(503, "Recording temporarily unavailable") from None
+    if session_rows and transport_stream is _transport_stream_impl:
+        try:
+            idx = next((i for i, r in enumerate(session_rows) if r.id == recording_id), -1)
+            if idx >= 0:
+                upcoming = []
+                next_off = offset + row.duration
+                for nxt in session_rows[idx + 1 : idx + 4]:
+                    upcoming.append((nxt.object_key, nxt.size_bytes, next_off))
+                    next_off += nxt.duration
+                if upcoming:
+                    asyncio.create_task(_prefetch_segments(upcoming))
+        except Exception:
+            pass
     return Response(data, media_type="video/mp2t", headers=SEGMENT_HEADERS)

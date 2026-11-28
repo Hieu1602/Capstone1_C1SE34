@@ -126,7 +126,6 @@ function harness() {
                 {},
             ),
             "./ArchivePlayer": { __esModule: true, default: "player" },
-            "../services/downloadVideo": { __esModule: true, default() {} },
         },
         {
             setTimeout: (fn, delay = 0) => {
@@ -294,4 +293,23 @@ test("zooming adds minute-specific timeline labels", async () => {
         tree = h.render();
     }
     assert.ok(labels().includes("05"));
+});
+
+test("stale progress right after seek does not snap playhead backward", async () => {
+    const h = harness();
+    h.render();
+    let tree = await h.settle();
+    let player = find(tree, "player");
+    player.props.onProgress(25);
+    tree = h.render();
+    find(tree, "Lùi 10 giây").props.onPress();
+    tree = await h.settle();
+    player = find(tree, "player");
+    assert.equal(player.props.startAt, 15);
+    // Simulate stale progress event from old player position right after seek
+    player.props.onProgress(25);
+    tree = h.render();
+    find(tree, "Lùi 10 giây").props.onPress();
+    tree = await h.settle();
+    assert.equal(find(tree, "player").props.startAt, 5);
 });

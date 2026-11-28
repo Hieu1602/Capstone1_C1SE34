@@ -7,9 +7,9 @@ import {
     Pressable,
     StatusBar,
     StyleSheet,
-    Text,
     View,
 } from "react-native";
+import { LocalizedText as Text } from "../../../i18n/LocalizedComponents";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -27,6 +27,7 @@ import CameraVideoOptions from "./CameraVideoOptions";
 import PanTiltControl from "./PanTiltControl";
 import CameraLandscapeView from "./CameraLandscapeView";
 import CameraControlIcon from "./CameraControlIcon";
+import CameraVolumeSlider from "./CameraVolumeSlider";
 
 type Connection = ReturnType<typeof useCameraConnection>;
 interface Props {
@@ -36,6 +37,7 @@ interface Props {
     onQuality: (quality: VideoQuality) => void;
     onSelectCamera: (id: string) => void;
     selectedCameraId?: string;
+    showVolumeControl?: boolean;
 }
 
 /** @param props Nguồn phụ chưa được chọn. @returns Luồng riêng, tự dừng khi ô bị gỡ hoặc màn hình mất focus. */
@@ -62,6 +64,7 @@ export default function CameraViewer({
     onQuality,
     onSelectCamera,
     selectedCameraId,
+    showVolumeControl = false,
 }: Props) {
     const fullscreen = useCameraFullscreen(connection.active);
     const videoMode = useCameraVideoMode(connection);
@@ -467,7 +470,7 @@ export default function CameraViewer({
     const actions = (
         <>
             {tool("camera", "Chụp ảnh", () => {
-                void connection.open("snapshot.jpg");
+                void connection.captureSnapshot();
             })}
             {tool(
                 "videocam",
@@ -567,22 +570,38 @@ export default function CameraViewer({
                         }}
                     >
                         {feeds}
-                        <Animated.View
-                            pointerEvents={toolbarVisible ? "auto" : "none"}
-                            style={[
-                                styles.toolbar,
-                                { opacity: toolbarOpacity },
-                            ]}
-                        >
-                            {gridButton}
-                            {qualityButton}
-                            {modeButton}
-                            {tool(
-                                "expand-outline",
-                                "Phóng to và xoay ngang",
-                                fullscreen.open,
-                            )}
-                        </Animated.View>
+                        {connection.isRecording && (
+                            <View style={styles.recordingBadge}>
+                                <View style={styles.recordingDot} />
+                                <Text style={styles.recordingText}>
+                                    {`Đang quay 00:${String(connection.recordingSeconds).padStart(2, "0")}`}
+                                </Text>
+                            </View>
+                        )}
+                        {!showVolumeControl && (
+                            <Animated.View
+                                pointerEvents={toolbarVisible ? "auto" : "none"}
+                                style={[
+                                    styles.toolbar,
+                                    { opacity: toolbarOpacity },
+                                ]}
+                            >
+                                {gridButton}
+                                {qualityButton}
+                                {modeButton}
+                                {tool(
+                                    "expand-outline",
+                                    "Phóng to và xoay ngang",
+                                    fullscreen.open,
+                                )}
+                            </Animated.View>
+                        )}
+                        {showVolumeControl && (
+                            <CameraVolumeSlider
+                                volume={intercom.speakerVolume}
+                                onChange={intercom.setSpeakerVolume}
+                            />
+                        )}
                     </View>
                 )}
             </View>
@@ -716,5 +735,29 @@ const styles = StyleSheet.create({
         backgroundColor: "rgba(0,0,0,0.75)",
         borderRadius: 20,
         padding: 8,
+    },
+    recordingBadge: {
+        position: "absolute",
+        top: 10,
+        right: 10,
+        zIndex: 15,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        backgroundColor: "rgba(0, 0, 0, 0.65)",
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 12,
+    },
+    recordingDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: "#EF4444",
+    },
+    recordingText: {
+        color: "#FFFFFF",
+        fontSize: 12,
+        fontWeight: "700",
     },
 });

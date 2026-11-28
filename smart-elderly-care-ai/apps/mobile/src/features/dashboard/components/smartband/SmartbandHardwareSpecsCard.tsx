@@ -81,7 +81,7 @@ export const SmartbandHardwareSpecsCard: React.FC<SmartbandHardwareSpecsCardProp
               Cài Đặt Ngưỡng Cảnh Báo AI
             </LocalizedText>
             <LocalizedText style={[styles.algoShortcutSub, isDarkMode && { color: colors.textSecondary }]}>
-              Ngưỡng nhịp tim ({algoSettings.minHeartRate ?? 60}-{algoSettings.maxHeartRate ?? 100} bpm) • SpO₂ (&lt;{algoSettings.minSpO2 ?? 95}%)
+              Ngưỡng nhịp tim ({algoSettings.minHeartRate ?? 50}-{algoSettings.maxHeartRate ?? 120} bpm) • SpO₂ (&lt;{algoSettings.minSpO2 ?? 90}%)
             </LocalizedText>
           </View>
         </View>

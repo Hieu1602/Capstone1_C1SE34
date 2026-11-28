@@ -8,6 +8,7 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { LocalizedAlert } from '../i18n/LocalizedComponents';
 import { notificationService } from './notificationService';
 import { usersApi } from './api';
+import { useHealthStore } from '../store/useHealthStore';
 
 type AlertLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
@@ -145,6 +146,12 @@ class FCMService {
           const level: AlertLevel = ((data?.level || data?.alert_level) as AlertLevel) || 'LOW';
           const title = notification?.title || data?.title || '🔔 Thông báo SmartCare AI';
           const body = notification?.body || data?.body || data?.message || 'Bạn có thông báo mới từ hệ thống SmartCare AI.';
+
+          // 0. Thông báo cập nhật ngưỡng sinh hiệu -> refetch ngưỡng mới nhất để UI đổi ngay
+          const aType = data?.alert_type || data?.type;
+          if (aType === 'DEVICE_CONFIG_UPDATED') {
+            useHealthStore.getState().fetchThresholds().catch(() => {});
+          }
 
           // 1. Luôn bắn thông báo lên thanh thông báo (Notification Drawer) của điện thoại Android
           // (Tự động phân loại: thông báo thường chỉ ting ting, cảnh báo mới kêu còi báo động)

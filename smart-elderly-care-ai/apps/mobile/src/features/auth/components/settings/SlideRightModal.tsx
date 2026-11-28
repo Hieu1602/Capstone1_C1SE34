@@ -3,7 +3,8 @@ import {
   Modal,
   StyleSheet,
   Animated,
-  Dimensions,
+  Easing,
+  useWindowDimensions,
   ViewStyle,
   StyleProp,
   Platform,
@@ -25,32 +26,57 @@ export const SlideRightModal: React.FC<SlideRightModalProps> = ({
   isDarkMode,
   containerStyle,
 }) => {
+  const { width } = useWindowDimensions();
+  const screenWidth = width || 450;
+
   const [rendered, setRendered] = useState(visible);
-  const screenWidth = Dimensions.get("window").width || 450;
+  const renderedRef = useRef(visible);
   const translateX = useRef(new Animated.Value(visible ? 0 : screenWidth)).current;
 
   useEffect(() => {
+    let raf1: number | null = null;
+    let raf2: number | null = null;
+    let cancelled = false;
+
     if (visible) {
-      setRendered(true);
+      translateX.stopAnimation();
       translateX.setValue(screenWidth);
-      const raf = requestAnimationFrame(() => {
-        Animated.timing(translateX, {
-          toValue: 0,
-          duration: 260,
-          useNativeDriver: Platform.OS !== "web",
-        }).start();
+      renderedRef.current = true;
+      setRendered(true);
+
+      // Đợi Modal gắn vào native tree rồi mới chạy animation trượt từ phải sang trái mượt mà
+      raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => {
+          if (cancelled) return;
+          Animated.timing(translateX, {
+            toValue: 0,
+            duration: 250,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: Platform.OS !== "web",
+          }).start();
+        });
       });
-      return () => cancelAnimationFrame(raf);
-    } else if (rendered) {
+    } else if (renderedRef.current) {
+      translateX.stopAnimation();
       Animated.timing(translateX, {
         toValue: screenWidth,
-        duration: 220,
+        duration: 210,
+        easing: Easing.in(Easing.cubic),
         useNativeDriver: Platform.OS !== "web",
-      }).start(() => {
-        setRendered(false);
+      }).start(({ finished }) => {
+        if (finished && !cancelled) {
+          renderedRef.current = false;
+          setRendered(false);
+        }
       });
     }
-  }, [visible, screenWidth, translateX, rendered]);
+
+    return () => {
+      cancelled = true;
+      if (raf1 !== null) cancelAnimationFrame(raf1);
+      if (raf2 !== null) cancelAnimationFrame(raf2);
+    };
+  }, [visible, screenWidth, translateX]);
 
   if (!rendered && !visible) {
     return null;
@@ -59,6 +85,7 @@ export const SlideRightModal: React.FC<SlideRightModalProps> = ({
   return (
     <Modal
       transparent
+      statusBarTranslucent
       visible={rendered}
       animationType="none"
       onRequestClose={onClose}

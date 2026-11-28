@@ -306,7 +306,7 @@ export const HealthTimelineScrubber: React.FC<HealthTimelineScrubberProps> = Rea
                   isFutureBtn && { color: isDarkMode ? '#64748B' : '#94A3B8' },
                 ]}
               >
-                {btn.label} {btn.time}
+                {`${btn.label} ${btn.time}`}
               </Text>
             </TouchableOpacity>
           );

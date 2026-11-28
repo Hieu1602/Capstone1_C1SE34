@@ -14,6 +14,101 @@ if (Platform.OS !== "web" && !isExpoGo) {
     } catch {}
 }
 
+const WEBVIEW_PLAYER_HTML = `<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        video { width: 100%; height: 100%; object-fit: contain; }
+    </style>
+</head>
+<body>
+    <video id="v" playsinline webkit-playsinline muted controls preload="auto"></video>
+    <script>
+        var v = document.getElementById('v');
+        var lastTimeSent = 0;
+        var currentUri = '';
+        var desiredPaused = false;
+        var pendingSeek = null;
+        var lastSeekVersion = -1;
+
+        function safePlay() {
+            if (desiredPaused) return;
+            var p = v.play();
+            if (p && p.catch) {
+                p.catch(function() {
+                    v.muted = true;
+                    v.play().catch(function(){});
+                });
+            }
+        }
+
+        window.__syncPlayer = function(state) {
+            desiredPaused = !!state.paused;
+            var uriChanged = state.uri && currentUri !== state.uri;
+            if (uriChanged) {
+                currentUri = state.uri;
+                pendingSeek = state.startAt > 0 ? state.startAt : null;
+                lastSeekVersion = state.seekVersion;
+                v.src = state.uri;
+                v.load();
+            } else if (state.seekVersion !== lastSeekVersion || Math.abs((v.currentTime || 0) - state.startAt) > 0.5) {
+                lastSeekVersion = state.seekVersion;
+                if (v.readyState >= 1) {
+                    try { v.currentTime = state.startAt; } catch(e) {}
+                    pendingSeek = null;
+                } else {
+                    pendingSeek = state.startAt;
+                }
+            }
+            if (desiredPaused) {
+                v.pause();
+            } else {
+                safePlay();
+            }
+        };
+
+        v.addEventListener('loadedmetadata', function() {
+            if (pendingSeek !== null && Math.abs((v.currentTime || 0) - pendingSeek) > 0.35) {
+                try { v.currentTime = pendingSeek; } catch(e) {}
+            }
+            pendingSeek = null;
+            safePlay();
+        });
+        v.addEventListener('seeked', function() {
+            pendingSeek = null;
+            safePlay();
+        });
+        v.addEventListener('canplay', function() {
+            if (v.paused && !desiredPaused) safePlay();
+        });
+        v.addEventListener('timeupdate', function() {
+            if (v.seeking) return;
+            if (pendingSeek !== null && Math.abs((v.currentTime || 0) - pendingSeek) > 1.5) return;
+            var now = Date.now();
+            if (now - lastTimeSent >= 250) {
+                lastTimeSent = now;
+                if (window.ReactNativeWebView) {
+                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'progress', currentTime: v.currentTime }));
+                }
+            }
+        });
+        v.addEventListener('ended', function() {
+            if (window.ReactNativeWebView) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ended' }));
+            }
+        });
+        v.addEventListener('error', function() {
+            if (window.ReactNativeWebView) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error' }));
+            }
+        });
+    </script>
+</body>
+</html>`;
+
 export interface ArchivePlayerProps {
     uri: string;
     startAt?: number;
@@ -39,17 +134,26 @@ export default function ArchivePlayer({
     const webViewRef = useRef<any>(null);
     const htmlVideoRef = useRef<HTMLVideoElement | null>(null);
     const lastProgressTime = useRef(0);
+    const latestStartAt = useRef(startAt);
+    const latestPaused = useRef(paused);
+    const loadedUri = useRef("");
+    latestStartAt.current = startAt;
+    latestPaused.current = paused;
     const source = useMemo(() => ({ uri, ...(hls ? { type: "m3u8" } : {}) }), [uri, hls]);
 
-    // Chuyển luồng mượt mà khi URL video thay đổi (không unmount component, tránh chớp tắt)
+    const syncWebView = () => {
+        if (!webViewRef.current) return;
+        const payload = JSON.stringify({ uri, startAt, seekVersion, paused });
+        webViewRef.current.injectJavaScript(`window.__syncPlayer && window.__syncPlayer(${payload}); true;`);
+    };
+
+    // Chuyển luồng mượt mà khi URL video thay đổi (không reload WebView/component)
     useEffect(() => {
         if (Platform.OS === "web" && htmlVideoRef.current) {
             const v = htmlVideoRef.current;
             if (v.src !== uri) {
+                loadedUri.current = "";
                 v.src = uri;
-                if (startAt > 0) {
-                    try { v.currentTime = startAt; } catch {}
-                }
                 v.load();
                 if (!paused) {
                     v.play().catch(() => {
@@ -59,28 +163,7 @@ export default function ArchivePlayer({
                 }
             }
         } else if (webViewRef.current) {
-            webViewRef.current.injectJavaScript(`
-                (function() {
-                    var v = document.getElementById('v');
-                    if (v && v.src !== '${uri}') {
-                        v.src = '${uri}';
-                        v.load();
-                        if (${startAt} > 0) {
-                            try { v.currentTime = ${startAt}; } catch(e) {}
-                        }
-                        if (!${paused}) {
-                            var p = v.play();
-                            if (p && p.catch) {
-                                p.catch(function() {
-                                    v.muted = true;
-                                    v.play().catch(function(){});
-                                });
-                            }
-                        }
-                    }
-                })();
-                true;
-            `);
+            syncWebView();
         }
     }, [uri]);
 
@@ -88,7 +171,7 @@ export default function ArchivePlayer({
     useEffect(() => {
         if (Platform.OS === "web" && htmlVideoRef.current) {
             const v = htmlVideoRef.current;
-            if (Math.abs(v.currentTime - startAt) > 0.5) {
+            if (v.readyState >= 1 && loadedUri.current === uri && Math.abs(v.currentTime - startAt) > 0.35) {
                 try { v.currentTime = startAt; } catch {}
             }
             if (!paused) {
@@ -98,27 +181,8 @@ export default function ArchivePlayer({
                 });
             }
         } else if (webViewRef.current) {
-            webViewRef.current.injectJavaScript(`
-                (function() {
-                    var v = document.getElementById('v');
-                    if (v) {
-                        if (Math.abs(v.currentTime - ${startAt}) > 0.5) {
-                            try { v.currentTime = ${startAt}; } catch(e) {}
-                        }
-                        if (!${paused}) {
-                            var p = v.play();
-                            if (p && p.catch) {
-                                p.catch(function() {
-                                    v.muted = true;
-                                    v.play().catch(function(){});
-                                });
-                            }
-                        }
-                    }
-                })();
-                true;
-            `);
-        } else if (player.current) {
+            syncWebView();
+        } else if (player.current && loadedUri.current === uri) {
             player.current?.seek?.(startAt);
         }
     }, [startAt, seekVersion]);
@@ -136,25 +200,7 @@ export default function ArchivePlayer({
                 });
             }
         } else if (webViewRef.current) {
-            if (paused) {
-                webViewRef.current.injectJavaScript("document.getElementById('v')?.pause(); true;");
-            } else {
-                webViewRef.current.injectJavaScript(`
-                    (function() {
-                        var v = document.getElementById('v');
-                        if (v) {
-                            var p = v.play();
-                            if (p && p.catch) {
-                                p.catch(function() {
-                                    v.muted = true;
-                                    v.play().catch(function(){});
-                                });
-                            }
-                        }
-                    })();
-                    true;
-                `);
-            }
+            syncWebView();
         }
     }, [paused]);
 
@@ -168,13 +214,16 @@ export default function ArchivePlayer({
                     src={uri}
                     controls
                     playsInline
+                    preload="auto"
                     autoPlay={!paused}
                     style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000" } as any}
                     onLoadedMetadata={(e: any) => {
-                        if (startAt > 0) {
-                            try { e.target.currentTime = startAt; } catch {}
+                        loadedUri.current = uri;
+                        const target = latestStartAt.current;
+                        if (target > 0 && Math.abs(e.target.currentTime - target) > 0.35) {
+                            try { e.target.currentTime = target; } catch {}
                         }
-                        if (!paused) {
+                        if (!latestPaused.current) {
                             e.target.play().catch(() => {
                                 e.target.muted = true;
                                 e.target.play().catch(() => {});
@@ -182,7 +231,7 @@ export default function ArchivePlayer({
                         }
                     }}
                     onSeeked={(e: any) => {
-                        if (!paused) {
+                        if (!latestPaused.current) {
                             e.target.play().catch(() => {
                                 e.target.muted = true;
                                 e.target.play().catch(() => {});
@@ -190,7 +239,7 @@ export default function ArchivePlayer({
                         }
                     }}
                     onCanPlay={(e: any) => {
-                        if (!paused && e.target.paused) {
+                        if (!latestPaused.current && e.target.paused) {
                             e.target.play().catch(() => {
                                 e.target.muted = true;
                                 e.target.play().catch(() => {});
@@ -199,7 +248,7 @@ export default function ArchivePlayer({
                     }}
                     onTimeUpdate={(e: any) => {
                         const now = Date.now();
-                        if (now - lastProgressTime.current >= 200) {
+                        if (now - lastProgressTime.current >= 250) {
                             lastProgressTime.current = now;
                             onProgress?.(e.target.currentTime);
                         }
@@ -217,76 +266,8 @@ export default function ArchivePlayer({
                 <WebView
                     ref={webViewRef}
                     originWhitelist={['*']}
-                    source={{
-                        html: `
-                            <!DOCTYPE html>
-                            <html>
-                                <head>
-                                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-                                    <style>
-                                        * { margin: 0; padding: 0; box-sizing: border-box; }
-                                        body { background: #000; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-                                        video { width: 100%; height: 100%; object-fit: contain; }
-                                    </style>
-                                </head>
-                                <body>
-                                    <video id="v" src="${uri}" autoplay playsinline webkit-playsinline muted controls></video>
-                                    <script>
-                                        const v = document.getElementById('v');
-                                        var lastTimeSent = 0;
-                                        function safePlay() {
-                                            if (!${paused}) {
-                                                var p = v.play();
-                                                if (p && p.catch) {
-                                                    p.catch(function() {
-                                                        v.muted = true;
-                                                        v.play().catch(function(){});
-                                                    });
-                                                }
-                                            }
-                                        }
-                                        function initSeek() {
-                                            if (${startAt} > 0 && Math.abs(v.currentTime - ${startAt}) > 0.5) {
-                                                try { v.currentTime = ${startAt}; } catch(e) {}
-                                            }
-                                            safePlay();
-                                        }
-                                        v.addEventListener('loadedmetadata', initSeek);
-                                        v.addEventListener('seeked', function() {
-                                            safePlay();
-                                        });
-                                        v.addEventListener('canplay', function() {
-                                            if (v.paused && !${paused}) {
-                                                safePlay();
-                                            }
-                                        });
-                                        if (v.readyState >= 1) {
-                                            initSeek();
-                                        }
-                                        v.addEventListener('timeupdate', () => {
-                                            var now = Date.now();
-                                            if (now - lastTimeSent >= 200) {
-                                                lastTimeSent = now;
-                                                if (window.ReactNativeWebView) {
-                                                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'progress', currentTime: v.currentTime }));
-                                                }
-                                            }
-                                        });
-                                        v.addEventListener('ended', () => {
-                                            if (window.ReactNativeWebView) {
-                                                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ended' }));
-                                            }
-                                        });
-                                        v.addEventListener('error', () => {
-                                            if (window.ReactNativeWebView) {
-                                                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error' }));
-                                            }
-                                        });
-                                    </script>
-                                </body>
-                            </html>
-                        `
-                    }}
+                    source={{ html: WEBVIEW_PLAYER_HTML }}
+                    onLoadEnd={syncWebView}
                     onMessage={(event) => {
                         try {
                             const data = JSON.parse(event.nativeEvent.data);
@@ -312,12 +293,26 @@ export default function ArchivePlayer({
             paused={paused}
             resizeMode="contain"
             automaticallyWaitsToMinimizeStalling
-            bufferConfig={{ minBufferMs: 5000, maxBufferMs: 30000, bufferForPlaybackMs: 1000, bufferForPlaybackAfterRebufferMs: 2000 }}
+            bufferConfig={{ minBufferMs: 1500, maxBufferMs: 15000, bufferForPlaybackMs: 250, bufferForPlaybackAfterRebufferMs: 500 }}
             onEnd={onEnd}
             onError={onError}
-            onLoadStart={() => { lastProgressTime.current = 0; }}
-            onLoad={() => { player.current?.seek?.(startAt); }}
-            onProgress={({ currentTime }: any) => onProgress?.(currentTime)}
+            onLoadStart={() => {
+                lastProgressTime.current = 0;
+                loadedUri.current = "";
+            }}
+            onLoad={() => {
+                loadedUri.current = uri;
+                if (latestStartAt.current > 0) {
+                    player.current?.seek?.(latestStartAt.current);
+                }
+            }}
+            onProgress={({ currentTime }: any) => {
+                const now = Date.now();
+                if (now - lastProgressTime.current >= 250) {
+                    lastProgressTime.current = now;
+                    onProgress?.(currentTime);
+                }
+            }}
             style={{ width: "100%", aspectRatio: 16 / 9, backgroundColor: "black" }}
         />
     );

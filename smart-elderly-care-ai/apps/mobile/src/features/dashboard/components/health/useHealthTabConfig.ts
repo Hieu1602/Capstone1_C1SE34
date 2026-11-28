@@ -63,6 +63,8 @@ interface ComputeTabConfigParams {
   dailyAvgHR: string;
   chartDataForDay: any[];
   dailySteps?: number | null;
+  /** Ngưỡng cảnh báo hiện hành lấy từ server (Bác sĩ / Chủ nhà thiết lập) */
+  thresholds?: { maxHeartRate?: number; minHeartRate?: number; minSpO2?: number };
 }
 
 export function computeHealthTabConfig({
@@ -76,7 +78,11 @@ export function computeHealthTabConfig({
   dailyAvgHR,
   chartDataForDay,
   dailySteps,
+  thresholds,
 }: ComputeTabConfigParams): HealthTabConfigResult {
+  const hrMax = thresholds?.maxHeartRate ?? 120;
+  const hrMin = thresholds?.minHeartRate ?? 50;
+  const spo2Min = thresholds?.minSpO2 ?? 90;
   switch (selectedRange) {
     case 'WEEK': {
       const hasRangeData = weekData.chart.length > 0;
@@ -94,7 +100,7 @@ export function computeHealthTabConfig({
           status: weekData.avgHR !== '--' ? 'Chuẩn' : 'Chưa có dữ liệu',
           statusColor: weekData.avgHR !== '--' ? '#15803D' : '#64748B',
           statusBg: weekData.avgHR !== '--' ? '#DCFCE7' : '#F1F5F9',
-          range: hasRangeData ? 'Ngưỡng theo dõi: 60 - 95 bpm' : 'Chưa ghi nhận',
+          range: hasRangeData ? `Ngưỡng cảnh báo: ${hrMin} - ${hrMax} bpm` : 'Chưa ghi nhận',
           icon: 'heart' as keyof typeof Ionicons.glyphMap,
           iconColor: '#EF4444',
           iconBg: '#FEE2E2',
@@ -106,7 +112,7 @@ export function computeHealthTabConfig({
           status: weekData.avgSpO2 !== '--' ? 'Lý tưởng' : 'Chưa có dữ liệu',
           statusColor: weekData.avgSpO2 !== '--' ? '#15803D' : '#64748B',
           statusBg: weekData.avgSpO2 !== '--' ? '#DCFCE7' : '#F1F5F9',
-          range: hasRangeData ? 'Chuẩn y tế: ≥ 95%' : 'Chưa ghi nhận',
+          range: hasRangeData ? `Ngưỡng cảnh báo: ≥ ${spo2Min}%` : 'Chưa ghi nhận',
           icon: 'water' as keyof typeof Ionicons.glyphMap,
           iconColor: '#0284C7',
           iconBg: '#E0F2FE',
@@ -160,7 +166,7 @@ export function computeHealthTabConfig({
           status: weekData.avgHR !== '--' ? 'Ổn định' : 'Chưa có dữ liệu',
           statusColor: weekData.avgHR !== '--' ? '#15803D' : '#64748B',
           statusBg: weekData.avgHR !== '--' ? '#DCFCE7' : '#F1F5F9',
-          range: hasRangeData ? 'Ngưỡng theo dõi 60 - 95 bpm' : 'Chưa ghi nhận',
+          range: hasRangeData ? `Ngưỡng cảnh báo: ${hrMin} - ${hrMax} bpm` : 'Chưa ghi nhận',
           icon: 'heart' as keyof typeof Ionicons.glyphMap,
           iconColor: '#EF4444',
           iconBg: '#FEE2E2',
@@ -172,7 +178,7 @@ export function computeHealthTabConfig({
           status: weekData.avgSpO2 !== '--' ? 'Chuẩn' : 'Chưa có dữ liệu',
           statusColor: weekData.avgSpO2 !== '--' ? '#15803D' : '#64748B',
           statusBg: weekData.avgSpO2 !== '--' ? '#DCFCE7' : '#F1F5F9',
-          range: hasRangeData ? 'Mục tiêu y tế: ≥ 95%' : 'Chưa ghi nhận',
+          range: hasRangeData ? `Ngưỡng cảnh báo: ≥ ${spo2Min}%` : 'Chưa ghi nhận',
           icon: 'water' as keyof typeof Ionicons.glyphMap,
           iconColor: '#0284C7',
           iconBg: '#E0F2FE',
@@ -289,14 +295,14 @@ export function computeHealthTabConfig({
 
         // 1. Phân tích nhịp tim real-time
         if (numHR !== null) {
-          if (numHR >= 120) {
+          if (numHR >= hrMax) {
             bannerTitle = `Cảnh báo: Nhịp tim tăng cao (${numHR} bpm)!`;
-            bannerSubtitle = `Mốc ${vitalHM}: Vượt ngưỡng an toàn 120 bpm (Nguy cơ nhịp tim nhanh).`;
+            bannerSubtitle = `Mốc ${vitalHM}: Vượt ngưỡng cảnh báo ${hrMax} bpm (Nguy cơ nhịp tim nhanh).`;
             bannerIcon = 'warning';
             bannerAlert = true;
-            adviceLines.push(`• CẢNH BÁO NHỊP TIM: Nhịp tim lúc ${vitalHM} tăng rất cao (${numHR} bpm), vượt xa ngưỡng an toàn tiêu chuẩn (60 - 100 bpm).`);
+            adviceLines.push(`• CẢNH BÁO NHỊP TIM: Nhịp tim lúc ${vitalHM} tăng rất cao (${numHR} bpm), vượt ngưỡng cảnh báo đã thiết lập (${hrMin} - ${hrMax} bpm).`);
             adviceLines.push(`• HƯỚNG XỬ TRÍ: Nhắc cụ ngồi hoặc nằm nghỉ ngơi ngay tại chỗ, ngừng hoàn toàn đi lại/vận động mạnh, nới lỏng cổ áo và hít thở sâu, đều đặn.`);
-            adviceLines.push(`• Uống từng ngụm nước ấm nhỏ. Nếu nhịp tim tiếp tục duy trì trên 120 bpm kéo dài quá 15 phút hoặc cụ có dấu hiệu tức ngực, khó thở, hãy nhấn "Gọi bác sĩ" ngay lập tức.`);
+            adviceLines.push(`• Uống từng ngụm nước ấm nhỏ. Nếu nhịp tim tiếp tục duy trì trên ${hrMax} bpm kéo dài quá 15 phút hoặc cụ có dấu hiệu tức ngực, khó thở, hãy nhấn "Gọi bác sĩ" ngay lập tức.`);
           } else if (numHR >= 100) {
             bannerTitle = `Chú ý: Nhịp tim hơi nhanh (${numHR} bpm)`;
             bannerSubtitle = `Mốc ${vitalHM}: Cao hơn mức bình thường của người cao tuổi.`;
@@ -305,12 +311,12 @@ export function computeHealthTabConfig({
             adviceLines.push(`• ĐÁNH GIÁ NHỊP TIM: Nhịp tim ghi nhận ${numHR} bpm tại thời điểm ${vitalHM}, đang cao hơn ngưỡng chuẩn sinh lý (60 - 95 bpm).`);
             adviceLines.push(`• Nhắc cụ ngồi nghỉ ngơi thư giãn ở không gian thoáng mát, tránh đi lại hay làm việc nhà, giữ tâm lý thoải mái.`);
             adviceLines.push(`• Tiếp tục theo dõi nhịp tim trên ứng dụng sau 10-15 phút để đảm bảo chỉ số hạ dần về mức bình thường.`);
-          } else if (numHR < 50) {
+          } else if (numHR < hrMin) {
             bannerTitle = `Cảnh báo: Nhịp tim tụt quá thấp (${numHR} bpm)!`;
-            bannerSubtitle = `Mốc ${vitalHM}: Dưới 50 bpm. Nguy cơ nhịp tim chậm nguy hiểm.`;
+            bannerSubtitle = `Mốc ${vitalHM}: Dưới ${hrMin} bpm. Nguy cơ nhịp tim chậm nguy hiểm.`;
             bannerIcon = 'warning';
             bannerAlert = true;
-            adviceLines.push(`• CẢNH BÁO NGUY HIỂM: Nhịp tim của cụ chỉ đạt ${numHR} bpm lúc ${vitalHM}, dưới ngưỡng an toàn tối thiểu (50 bpm).`);
+            adviceLines.push(`• CẢNH BÁO NGUY HIỂM: Nhịp tim của cụ chỉ đạt ${numHR} bpm lúc ${vitalHM}, dưới ngưỡng cảnh báo tối thiểu (${hrMin} bpm).`);
             adviceLines.push(`• Hãy kiểm tra ngay xem cụ có bị hoa mắt, chóng mặt, mệt lả hay lạnh đầu chi không.`);
             adviceLines.push(`• Cho cụ nằm nghỉ với tư thế nâng cao chân nhẹ nhàng, giữ ấm cơ thể và liên hệ ngay bác sĩ điều trị.`);
           } else if (numHR < 60) {
@@ -326,9 +332,9 @@ export function computeHealthTabConfig({
 
         // 2. Phân tích nồng độ oxy SpO2 real-time
         if (numSpO2 !== null) {
-          if (numSpO2 < 90) {
+          if (numSpO2 < spo2Min) {
             bannerTitle = `Nguy cấp: Nồng độ Oxy SpO₂ tụt sâu (${numSpO2}%)!`;
-            bannerSubtitle = `Mốc ${vitalHM}: Thiếu oxy máu nặng (dưới 90%).`;
+            bannerSubtitle = `Mốc ${vitalHM}: Thiếu oxy máu nặng (dưới ${spo2Min}%).`;
             bannerIcon = 'warning';
             bannerAlert = true;
             adviceLines.push(`• NGUY CẤP: Nồng độ SpO₂ tụt xuống mức ${numSpO2}%, cơ thể cụ đang thiếu oxy nghiêm trọng!`);
@@ -370,10 +376,10 @@ export function computeHealthTabConfig({
           label: 'Nhịp tim',
           value: hrVal,
           unit: hrVal !== '--' ? 'bpm' : '',
-          status: !closestVital || hrVal === '--' ? (isFutureTime ? 'Chưa tới' : 'Chưa có dữ liệu') : Number(hrVal) >= 120 ? 'Nguy hiểm' : Number(hrVal) > 100 ? 'Cao' : Number(hrVal) < 60 ? 'Thấp' : 'Bình thường',
-          statusColor: !closestVital || hrVal === '--' ? '#64748B' : Number(hrVal) > 100 ? Colors.danger : '#15803D',
-          statusBg: !closestVital || hrVal === '--' ? '#F1F5F9' : Number(hrVal) > 100 ? '#FEE2E2' : '#DCFCE7',
-          range: hasData ? 'Ngưỡng an toàn: 60 - 95 bpm' : 'Chưa ghi nhận',
+          status: !closestVital || hrVal === '--' ? (isFutureTime ? 'Chưa tới' : 'Chưa có dữ liệu') : Number(hrVal) >= hrMax || Number(hrVal) < hrMin ? 'Nguy hiểm' : Number(hrVal) > 100 ? 'Cao' : Number(hrVal) < 60 ? 'Thấp' : 'Bình thường',
+          statusColor: !closestVital || hrVal === '--' ? '#64748B' : Number(hrVal) >= hrMax || Number(hrVal) < hrMin ? Colors.danger : Number(hrVal) > 100 || Number(hrVal) < 60 ? '#D97706' : '#15803D',
+          statusBg: !closestVital || hrVal === '--' ? '#F1F5F9' : Number(hrVal) >= hrMax || Number(hrVal) < hrMin ? '#FEE2E2' : Number(hrVal) > 100 || Number(hrVal) < 60 ? '#FEF3C7' : '#DCFCE7',
+          range: hasData ? `Ngưỡng cảnh báo: ${hrMin} - ${hrMax} bpm` : 'Chưa ghi nhận',
           icon: 'heart' as keyof typeof Ionicons.glyphMap,
           iconColor: '#EF4444',
           iconBg: '#FEE2E2',
@@ -382,10 +388,10 @@ export function computeHealthTabConfig({
           label: 'Nồng độ Oxy (SpO₂)',
           value: spo2Val,
           unit: spo2Val !== '--' ? '%' : '',
-          status: !closestVital || spo2Val === '--' ? (isFutureTime ? 'Chưa tới' : 'Chưa có dữ liệu') : Number(spo2Val) < 90 ? 'Nguy cấp' : Number(spo2Val) < 95 ? 'Cần theo dõi' : 'Bình thường / An toàn',
-          statusColor: !closestVital || spo2Val === '--' ? '#64748B' : Number(spo2Val) < 95 ? '#D97706' : '#15803D',
-          statusBg: !closestVital || spo2Val === '--' ? '#F1F5F9' : Number(spo2Val) < 95 ? '#FEF3C7' : '#DCFCE7',
-          range: hasData ? 'Ngưỡng an toàn: ≥ 95%' : 'Chưa ghi nhận',
+          status: !closestVital || spo2Val === '--' ? (isFutureTime ? 'Chưa tới' : 'Chưa có dữ liệu') : Number(spo2Val) < spo2Min ? 'Nguy cấp' : Number(spo2Val) < 95 ? 'Cần theo dõi' : 'Bình thường / An toàn',
+          statusColor: !closestVital || spo2Val === '--' ? '#64748B' : Number(spo2Val) < spo2Min ? Colors.danger : Number(spo2Val) < 95 ? '#D97706' : '#15803D',
+          statusBg: !closestVital || spo2Val === '--' ? '#F1F5F9' : Number(spo2Val) < spo2Min ? '#FEE2E2' : Number(spo2Val) < 95 ? '#FEF3C7' : '#DCFCE7',
+          range: hasData ? `Ngưỡng cảnh báo: ≥ ${spo2Min}%` : 'Chưa ghi nhận',
           icon: 'water' as keyof typeof Ionicons.glyphMap,
           iconColor: '#0284C7',
           iconBg: '#E0F2FE',

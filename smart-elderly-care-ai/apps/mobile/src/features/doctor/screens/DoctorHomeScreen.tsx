@@ -36,6 +36,11 @@ import {
 } from '../components/types';
 import { AppointmentDetailModal } from '../components';
 import NotificationsBottomSheet from '../components/NotificationsBottomSheet';
+import {
+  loadReadState,
+  subscribeReadState,
+  syncReadsFromServer,
+} from '../components/notifications/notificationReadSync';
 import { buildUnifiedNotifications } from '../components/notifications/notificationHelpers';
 import {
   withTimeout,
@@ -138,16 +143,16 @@ export default function DoctorHomeScreen() {
     return () => clearInterval(interval);
   }, []);
 
+  // Đọc ở Doctor Web / thiết bị khác -> tính lại chấm "chưa đọc"
+  const [readVersion, setReadVersion] = useState(0);
+  useEffect(() => subscribeReadState(() => setReadVersion((v) => v + 1)), []);
   useEffect(() => {
-    AsyncStorage.getItem('@doctor_read_notification_ids')
-      .then((raw) => {
-        let readSet = new Set<string>();
-        if (raw) {
-          try {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) readSet = new Set(parsed);
-          } catch {}
-        }
+    syncReadsFromServer(userId);
+  }, [userId]);
+
+  useEffect(() => {
+    loadReadState(userId)
+      .then(({ ids: readSet }) => {
         const warnPats = patients.filter((p) => p.health_status === 'WARNING' || p.health_status === 'DANGER');
         const list = buildUnifiedNotifications({
           incidents,
@@ -160,7 +165,7 @@ export default function DoctorHomeScreen() {
         setHasUnreadNotifs(list.some((i) => !i.isRead));
       })
       .catch(() => {});
-  }, [incidents, patients, appointments, upcomingAppointments, userId]);
+  }, [incidents, patients, appointments, upcomingAppointments, userId, readVersion]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -252,12 +257,46 @@ export default function DoctorHomeScreen() {
     alertsWS.connect();
     const unsub = alertsWS.subscribe((event: any) => {
       const evtType = String(event?.type || '');
+      const evtLower = evtType.toLowerCase();
       const alertType = String(event?.alert_type || '');
+
+      if (evtLower === 'vital_update' || evtLower === 'vitals_update') {
+        const pid = event?.patient_id || event?.elderly_id;
+        const devId = event?.device_id;
+        const devUuid = event?.device_uuid;
+        const curPatients = useDoctorPatientsStore.getState().patients;
+        if (curPatients.length > 0 && (pid || devId || devUuid)) {
+          const liveHr = event?.heart_rate != null ? Number(event.heart_rate) : undefined;
+          const liveSpo2 = event?.spo2 != null ? Number(event.spo2) : undefined;
+          const liveTemp = event?.skin_temp_max != null ? Number(event.skin_temp_max) : undefined;
+          useDoctorPatientsStore.getState().setPatients(
+            curPatients.map((p) => {
+              const matched =
+                (pid && String(p.id) === String(pid)) ||
+                (devId && p.device_id === devId) ||
+                (devUuid && p.device_id === devUuid);
+              const nowIso = new Date().toISOString();
+              return matched
+                ? {
+                    ...p,
+                    is_online: true,
+                    last_updated: nowIso,
+                    heart_rate: liveHr !== undefined && liveHr > 0 ? liveHr : p.heart_rate,
+                    spo2: liveSpo2 !== undefined && liveSpo2 > 0 ? liveSpo2 : p.spo2,
+                    skin_temp_max: liveTemp !== undefined && liveTemp > 0 ? liveTemp : p.skin_temp_max,
+                  }
+                : p;
+            })
+          );
+          setNowMs(Date.now());
+        }
+        return;
+      }
+
       if (
         evtType === 'ALERT_NEW' ||
         evtType === 'INCIDENT_RESOLVED' ||
         evtType === 'INCIDENT_ESCALATED' ||
-        evtType === 'vitals_update' ||
         evtType === 'TELEMETRY_UPDATE' ||
         evtType === 'DEVICE_STATUS' ||
         evtType.startsWith('APPOINTMENT_') ||
@@ -274,6 +313,11 @@ export default function DoctorHomeScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchData();
+      const timer = setInterval(() => {
+        setNowMs(Date.now());
+        fetchData();
+      }, 15000);
+      return () => clearInterval(timer);
     }, [fetchData])
   );
 

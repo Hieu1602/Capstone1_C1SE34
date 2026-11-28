@@ -16,7 +16,7 @@ Covers:
 from datetime import datetime, timedelta, timezone
 import gc
 from types import SimpleNamespace
-from typing import Optional
+from typing import Any, Optional, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 import uuid
 import warnings
@@ -513,7 +513,7 @@ async def test_rescheduled_appointment_confirm_and_incident_ack_sync():
         patch("app.services.notification.appointment_notify._invalidate_incidents_cache_safe", AsyncMock()),
         patch("app.services.notification.appointment_notify.broadcast_alert_ws", AsyncMock(side_effect=lambda p: ws_msgs.append(p))),
     ):
-        await notify_doctor_appointment_confirmed(db, str(apt_id), ack_user=fam_user)
+        await notify_doctor_appointment_confirmed(db, str(apt_id), ack_user=cast(Any, fam_user))
 
     assert resched_inc.is_acknowledged is True
     assert resched_inc.acknowledged_by == fam_user.id
@@ -866,11 +866,11 @@ async def test_acknowledge_all_skips_house_invite_and_doctor_ack_skips_family_co
         bg = SimpleNamespace(add_task=lambda *a, **kw: None)
         res = await acknowledge_incident(
             incident_id=inc_id,
-            background_tasks=bg,
+            background_tasks=cast(Any, bg),
             ack=None,
             note=None,
             db=db,
-            current_user=doc_user,
+            current_user=cast(Any, doc_user),
         )
     assert res.id == inc_id
     mock_confirm.assert_not_awaited()
@@ -908,7 +908,7 @@ async def test_incident_list_hydrates_elderly_id_and_ack_preserves_patient_tag()
     ]
     rows = await crud_incident.list(list_db, current_user_id=doc_id)
     assert len(rows) == 1
-    assert rows[0].elderly_id == pat_id
+    assert getattr(rows[0], "elderly_id", None) == pat_id
 
     ack_db = AsyncMock()
     with patch.object(crud_incident, "get", AsyncMock(return_value=inc)):
@@ -971,3 +971,209 @@ async def test_incident_list_doctor_analytics_keeps_high_alerts_and_excludes_sch
     select_sql = str(analytics_db.execute.call_args_list[-1].args[0].compile(compile_kwargs={"literal_binds": True}))
     assert "APPOINTMENT_SCHEDULED" in select_sql
     assert "PRESCRIPTION_CREATED" in select_sql
+
+
+@pytest.mark.asyncio
+async def test_doctor_confirm_and_family_member_rbac():
+    doc_id = uuid.uuid4()
+    owner_id = uuid.uuid4()
+    viewer_member_id = uuid.uuid4()
+    caregiver_member_id = uuid.uuid4()
+    pat_id = uuid.uuid4()
+    house_id = uuid.uuid4()
+    apt_id = uuid.uuid4()
+
+    app = FastAPI()
+    app.include_router(api_router, prefix="/api/v1")
+
+    doc_user = SimpleNamespace(id=doc_id, role="doctor", full_name="BS. Nam", is_active=True)
+    viewer_user = SimpleNamespace(id=viewer_member_id, role="member", full_name="Con Thứ", is_active=True)
+    caregiver_user = SimpleNamespace(id=caregiver_member_id, role="member", full_name="Người Chăm", is_active=True)
+
+    eld = SimpleNamespace(id=pat_id, house_id=house_id, full_name="Cụ Thọ")
+    house = SimpleNamespace(id=house_id, owner_id=owner_id)
+    fam_apt = _make_apt(
+        apt_id=apt_id,
+        doctor_id=doc_id,
+        patient_id=pat_id,
+        house_id=house_id,
+        created_by=caregiver_member_id,
+        status="UPCOMING",
+    )
+    confirmed_apt = _make_apt(
+        apt_id=apt_id,
+        doctor_id=doc_id,
+        patient_id=pat_id,
+        house_id=house_id,
+        created_by=caregiver_member_id,
+        status="CONFIRMED",
+    )
+
+    mock_db = AsyncMock()
+    mock_db.add = MagicMock()
+    mock_db.execute.return_value = MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[]))))
+    state = {"user": doc_user}
+    app.dependency_overrides[get_db] = lambda: mock_db
+    app.dependency_overrides[get_current_user_optional] = lambda: state["user"]
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        # 1. Doctor confirm family-requested appointment -> 200 & CONFIRMED
+        mock_db.get.return_value = house
+        with (
+            patch.object(crud_appointment, "get_by_id", AsyncMock(return_value=fam_apt)),
+            patch.object(crud_appointment, "confirm_appointment", AsyncMock(return_value=confirmed_apt)),
+            patch("app.api.v1.endpoints.mobile.doctor._resolve_patient_info", AsyncMock(return_value=("Cụ Thọ", house_id))),
+            patch("app.api.v1.endpoints.mobile.doctor._resolve_device_id", AsyncMock(return_value=None)),
+            patch("app.api.v1.endpoints.mobile.doctor.broadcast_alert_ws", AsyncMock()) as m_ws,
+            patch("app.api.v1.endpoints.mobile.doctor.send_appointment_fcm", AsyncMock()) as m_fcm,
+        ):
+            r_conf = await client.post(f"/api/v1/doctor/appointments/{apt_id}/confirm")
+            assert r_conf.status_code == 200
+            assert r_conf.json()["status"] == "CONFIRMED"
+            assert m_ws.await_args_list[0].args[0]["type"] == "APPOINTMENT_CONFIRMED"
+            assert m_ws.await_args_list[0].args[0]["confirmed_by_role"] == "doctor"
+            assert m_fcm.await_args is not None
+            assert m_fcm.await_args.kwargs["target_house_id"] == house_id
+
+        # 2. View-only member (can_manage_records=False) can read busy-slots (200), blocked on POST/PUT/cancel/confirm (403)
+        state["user"] = viewer_user
+        viewer_membership = SimpleNamespace(
+            status="ACTIVE", role_in_house="MEMBER", permissions="VIEW", can_view_health=True, can_manage_records=False
+        )
+        mock_db.get.side_effect = [eld, house, eld, house, house, house]
+        with (
+            patch.object(crud_house.crud_house, "get_member_by_user", AsyncMock(return_value=viewer_membership)),
+            patch.object(crud_appointment, "get_by_id", AsyncMock(return_value=fam_apt)),
+        ):
+            # Read busy slots -> 200 (after _resolve_assigned_doctor)
+            with patch(
+                "app.api.v1.endpoints.mobile.patients._resolve_assigned_doctor",
+                AsyncMock(return_value=(None, None)),
+            ):
+                r_read = await client.get(f"/api/v1/patients/{pat_id}/appointments/busy-slots")
+                assert r_read.status_code == 200
+
+            # Book appointment -> 403
+            future_iso = (datetime.now(timezone.utc) + timedelta(days=2)).isoformat()
+            r_post = await client.post(
+                f"/api/v1/patients/{pat_id}/appointments",
+                json={"patient_id": str(pat_id), "scheduled_at": future_iso, "visit_type": "HOME_VISIT"},
+            )
+            assert r_post.status_code == 403
+
+            # Cancel & confirm -> 403
+            r_cancel = await client.post(f"/api/v1/patients/{pat_id}/appointments/{apt_id}/cancel", json={"cancellation_reason": "Bận"})
+            assert r_cancel.status_code == 403
+            r_fam_conf = await client.post(f"/api/v1/patients/{pat_id}/appointments/{apt_id}/confirm")
+            assert r_fam_conf.status_code == 403
+
+        # 3. Caregiver member (can_manage_records=True) is allowed to book (201)
+        state["user"] = caregiver_user
+        caregiver_membership = SimpleNamespace(
+            status="ACTIVE", role_in_house="CAREGIVER", permissions="EDIT", can_view_health=True, can_manage_records=True
+        )
+        mock_db.get.side_effect = [eld, house]
+        with (
+            patch.object(crud_house.crud_house, "get_member_by_user", AsyncMock(return_value=caregiver_membership)),
+            patch("app.api.v1.endpoints.mobile.patients._resolve_assigned_doctor", AsyncMock(return_value=(doc_id, "BS. Nam"))),
+            patch.object(crud_appointment, "create_appointment_series", AsyncMock(return_value=(fam_apt, 1, 2))),
+            patch("app.services.notification.appointment_notify.broadcast_alert_ws", AsyncMock()),
+            patch("app.services.notification.appointment_notify.send_appointment_fcm", AsyncMock()),
+        ):
+            r_ok = await client.post(
+                f"/api/v1/patients/{pat_id}/appointments",
+                json={"patient_id": str(pat_id), "scheduled_at": future_iso, "visit_type": "HOME_VISIT"},
+            )
+            assert r_ok.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_doctor_reschedule_resets_confirmation_for_family_reconfirm():
+    doc_id = uuid.uuid4()
+    fam_id = uuid.uuid4()
+    pat_id = uuid.uuid4()
+    house_id = uuid.uuid4()
+    apt_id = uuid.uuid4()
+    new_time = datetime.now(timezone.utc) + timedelta(days=3)
+
+    apt = _make_apt(
+        apt_id=apt_id,
+        doctor_id=doc_id,
+        patient_id=pat_id,
+        house_id=house_id,
+        created_by=fam_id,
+        status="CONFIRMED",
+        clinical_notes="[ĐÃ XÁC NHẬN ĐÓN TIẾP] [Yêu cầu lịch khám] Đau đầu",
+    )
+    apt.instructions = "[ĐÃ XÁC NHẬN ĐÓN TIẾP] Chuẩn bị sổ khám"
+
+    mock_db = AsyncMock()
+    mock_db.execute.return_value = MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[]))))
+
+    with (
+        patch.object(crud_appointment, "get_by_id", AsyncMock(return_value=apt)),
+        patch.object(crud_appointment, "check_conflict", AsyncMock(return_value=False)),
+        patch.object(crud_appointment, "_create_reminders_for_appointment", AsyncMock(return_value=2)),
+    ):
+        updated = await crud_appointment.update_appointment(
+            mock_db,
+            apt_id,
+            AppointmentUpdate(scheduled_at=new_time),
+            reset_confirmation=True,
+            new_created_by=doc_id,
+            doctor_rescheduled=True,
+        )
+
+    assert updated is not None
+    assert updated.status == "UPCOMING"
+    assert updated.created_by == doc_id
+    assert updated.clinical_notes == "[BS dời lịch] Đau đầu"
+    assert updated.instructions == "Chuẩn bị sổ khám"
+
+    # Both-confirmed (or doctor-rescheduled) appointment allows family PUT reschedule & flips ownership back to family for doctor re-confirm
+    app = FastAPI()
+    app.include_router(api_router, prefix="/api/v1")
+    fam_user = SimpleNamespace(id=fam_id, role="owner", full_name="Con Cả", is_active=True)
+    house = SimpleNamespace(id=house_id, owner_id=fam_id)
+    confirmed_doc_apt = _make_apt(
+        apt_id=apt_id,
+        doctor_id=doc_id,
+        patient_id=pat_id,
+        house_id=house_id,
+        created_by=doc_id,
+        status="CONFIRMED",
+        clinical_notes="[ĐÃ XÁC NHẬN ĐÓN TIẾP] Khám định kỳ",
+    )
+    reopened_apt = _make_apt(
+        apt_id=apt_id,
+        doctor_id=doc_id,
+        patient_id=pat_id,
+        house_id=house_id,
+        created_by=fam_id,
+        status="UPCOMING",
+        scheduled_at=new_time + timedelta(days=1),
+        clinical_notes="Xin dời sang ngày mai",
+    )
+    api_db = AsyncMock()
+    api_db.get.return_value = house
+    api_db.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+    app.dependency_overrides[get_db] = lambda: api_db
+    app.dependency_overrides[get_current_user_optional] = lambda: fam_user
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        with (
+            patch.object(crud_appointment, "get_by_id", AsyncMock(return_value=confirmed_doc_apt)),
+            patch.object(crud_appointment, "update_appointment", AsyncMock(return_value=reopened_apt)) as m_upd,
+            patch("app.services.notification.appointment_notify.broadcast_alert_ws", AsyncMock()),
+            patch("app.services.notification.appointment_notify.send_appointment_fcm", AsyncMock()),
+        ):
+            r_re = await client.put(
+                f"/api/v1/patients/{pat_id}/appointments/{apt_id}",
+                json={"scheduled_at": (new_time + timedelta(days=1)).isoformat(), "clinical_notes": "Xin dời sang ngày mai"},
+            )
+            assert r_re.status_code == 200
+            assert m_upd.await_args is not None
+            assert m_upd.await_args.kwargs["reset_confirmation"] is True
+            assert m_upd.await_args.kwargs["new_created_by"] == fam_id
+            assert r_re.json()["status"] == "UPCOMING"
+            assert r_re.json()["created_by"] == str(fam_id)
+

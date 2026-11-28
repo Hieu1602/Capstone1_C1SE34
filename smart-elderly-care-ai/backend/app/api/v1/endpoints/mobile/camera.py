@@ -13,7 +13,7 @@ from uuid import UUID
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
 from jose import JWTError, jwt
@@ -662,6 +662,22 @@ async def set_motion(body: Toggle, _=Depends(operator)):
     return await forward_camera(_, "/motion", body.model_dump())
 
 
+@router.get("/alarm")
+async def get_alarm(_=Depends(viewer)):
+    """Đọc trạng thái còi báo động trên camera."""
+    return await forward_camera(_, "/alarm")
+
+
+@router.post("/alarm")
+async def set_alarm(body: Toggle, context=Depends(operator)):
+    """Bật/tắt còi báo động trên camera kèm mức âm lượng đã cấu hình."""
+    _, (device, _) = context
+    cfg = getattr(device, "config", None)
+    extra = (cfg.extra_settings or {}) if cfg else {}
+    vol = int(extra.get("speaker_volume", 80))
+    return await forward_camera(context, "/alarm", {**body.model_dump(), "volume": vol})
+
+
 @router.get("/recordings")
 async def recordings(_=Depends(viewer)):
     """Đọc danh sách MP4 và trạng thái ghi hiện tại.
@@ -687,6 +703,12 @@ async def record(body: Recording, _=Depends(operator)):
         JSON bản ghi. Tác động: khởi động ghi hình ở dịch vụ camera.
     """
     return await forward_camera(_, "/recordings", body.model_dump())
+
+
+@router.post("/recordings/stop")
+async def stop_record(_=Depends(operator)):
+    """Dừng bản ghi đang chạy và hoàn tất tệp MP4."""
+    return await forward_camera(_, "/recordings/stop", {})
 
 
 class FallDetectionConfig(BaseModel):
@@ -963,7 +985,7 @@ async def ticket(body: MediaRequest, context=Depends(viewer)):
     return {"path": f"/camera/media/{body.resource}?ticket={token}{suffix}", "expires_in": 300}
 
 
-@router.get("/media/{resource:path}")
+@router.api_route("/media/{resource:path}", methods=["GET", "HEAD"])
 async def media(resource: str, request: Request, ticket: str = Query(...), db: AsyncSession = Depends(get_db), quality: Literal["1080p", "720p", "auto"] = "auto", overlay: str = Query(default="0")):
     """Xác minh ticket và kiểm tra lại quyền trước khi truyền media.
 
@@ -1021,7 +1043,7 @@ async def media(resource: str, request: Request, ticket: str = Query(...), db: A
             Async iterator byte. Tác động: luôn đóng response/client khi kết thúc.
         """
         try:
-            async for chunk in response.aiter_bytes():
+            async for chunk in response.aiter_bytes(chunk_size=65536):
                 if resource == "live.mjpg" and time.time() >= expires:
                     break
                 yield chunk
@@ -1040,7 +1062,12 @@ async def media(resource: str, request: Request, ticket: str = Query(...), db: A
             headers["Content-Length"] = response.headers["content-length"]
     else:
         headers["Cache-Control"] = "no-store"
-    return StreamingResponse(chunks(), status_code=response.status_code, media_type=response.headers.get("content-type", "application/octet-stream"), headers=headers)
+    media_type = response.headers.get("content-type", "application/octet-stream")
+    if request.method == "HEAD":
+        await response.aclose()
+        await upstream.aclose()
+        return Response(status_code=response.status_code, media_type=media_type, headers=headers)
+    return StreamingResponse(chunks(), status_code=response.status_code, media_type=media_type, headers=headers)
 
 
 class SpeakReminderRequest(BaseModel):
@@ -1082,6 +1109,10 @@ async def set_speaker_volume(
     else:
         cfg.extra_settings = {**(cfg.extra_settings or {}), "speaker_volume": body.volume}
     await db.commit()
+    try:
+        await forward_camera(context, "/alarm", {"volume": body.volume})
+    except Exception:
+        pass
     return {"volume": body.volume}
 
 

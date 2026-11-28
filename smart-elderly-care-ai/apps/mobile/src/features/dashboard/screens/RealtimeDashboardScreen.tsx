@@ -14,7 +14,7 @@ import { LocalizedText } from '../../../i18n/LocalizedComponents';
 
 
 export default function RealtimeDashboardScreen() {
-  const { currentVitals, setVitals, activeDevice, isConnected, setConnected } =
+  const { currentVitals, setVitals, activeDevice, isConnected, setConnected, algoSettings } =
     useVitalStore();
   const [refreshing, setRefreshing] = React.useState(false);
 
@@ -51,8 +51,8 @@ export default function RealtimeDashboardScreen() {
   }, []);
 
   const getAlertColor = (hr: number | null, spo2: number | null): string => {
-    if (spo2 !== null && spo2 < 90) return '#EF4444';
-    if (hr !== null && (hr > 120 || hr < 50)) return '#F97316';
+    if (spo2 !== null && spo2 < algoSettings.minSpO2) return '#EF4444';
+    if (hr !== null && (hr > algoSettings.maxHeartRate || hr < algoSettings.minHeartRate)) return '#F97316';
     return '#22C55E';
   };
 

@@ -14,6 +14,7 @@ export interface NotificationPayload {
 
 class NotificationService {
   private isInitialized = false;
+  private notifiedIncidentIds: Set<string> = new Set();
   private webAudioCtx: any = null;
   private webAlarmTimer: any = null;
   private webVibTimer: any = null;
@@ -329,11 +330,45 @@ class NotificationService {
     });
   }
 
+  private async _tryClaimIncident(incidentId: string): Promise<boolean> {
+    const cleanId = incidentId.trim();
+    if (!cleanId) return true;
+    if (this.notifiedIncidentIds.has(cleanId)) {
+      return false;
+    }
+    this.notifiedIncidentIds.add(cleanId);
+    if (this.notifiedIncidentIds.size > 200) {
+      const oldest = this.notifiedIncidentIds.values().next().value;
+      if (oldest !== undefined) {
+        this.notifiedIncidentIds.delete(oldest);
+      }
+    }
+    if (Platform.OS === 'android' && NativeNotificationModule?.tryClaimIncidentNotification) {
+      try {
+        const claimed = await NativeNotificationModule.tryClaimIncidentNotification(cleanId);
+        if (!claimed) {
+          return false;
+        }
+      } catch (err) {
+        console.warn('[NotificationService] tryClaimIncidentNotification failed:', err);
+      }
+    }
+    return true;
+  }
+
   /**
    * Bắn thông báo đẩy lên thanh thông báo hệ thống của điện thoại (Notification Tray / Status Bar)
    */
   async triggerEmergencyNotification(payload: NotificationPayload): Promise<void> {
     const { title, body, data } = payload;
+    const incidentId = String(data?.incident_id || data?.id || '').trim();
+    if (incidentId) {
+      const canNotify = await this._tryClaimIncident(incidentId);
+      if (!canNotify) {
+        console.log('[NotificationService] Bỏ qua thông báo trùng lặp cho incident:', incidentId);
+        return;
+      }
+    }
     const isCritical = this.isCriticalAlert(payload);
 
     if (Platform.OS !== 'web') {

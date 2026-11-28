@@ -90,31 +90,46 @@ export const isAppointmentOverdue = (
 };
 
 export const isAppointmentFamilyConfirmed = (apt?: {
+  status?: string | null;
   clinical_notes?: string | null;
   instructions?: string | null;
 } | null): boolean => {
   if (!apt) return false;
   return (
+    apt.status === 'CONFIRMED' ||
     (apt.clinical_notes || '').includes('[ĐÃ XÁC NHẬN ĐÓN TIẾP]') ||
     (apt.instructions || '').includes('[ĐÃ XÁC NHẬN ĐÓN TIẾP]')
   );
 };
 
+export const stripDoctorAppointmentTags = (text?: string | null): string =>
+  (text || '')
+    .replace(/\[ĐÃ XÁC NHẬN ĐÓN TIẾP\]\s*/g, '')
+    .replace(/\[Yêu cầu lịch khám\]\s*/gi, '')
+    .replace(/\[BS dời lịch\]\s*/g, '')
+    .trim();
+
 export const getCleanAppointmentTitle = (apt?: {
   exam_type?: string | null;
   visit_type?: string | null;
   clinical_notes?: string | null;
+  doctor_id?: string | null;
+  created_by?: string | null;
 } | null): string => {
   if (!apt) return 'Khám sức khỏe';
-  if (apt.exam_type && apt.exam_type !== 'HOME_VISIT' && apt.exam_type !== 'CLINIC') {
+  if (apt.exam_type && apt.exam_type !== 'HOME_VISIT' && apt.exam_type !== 'CLINIC' && apt.exam_type !== 'TELEHEALTH') {
     return apt.exam_type;
   }
-  const cleanNotes = (apt.clinical_notes || '')
-    .replace(/\[ĐÃ XÁC NHẬN ĐÓN TIẾP\]/g, '')
-    .trim();
-  if (cleanNotes) return cleanNotes;
+  const isFamilyReq = Boolean(apt.created_by && apt.doctor_id && String(apt.created_by) !== String(apt.doctor_id));
+  if (!isFamilyReq) {
+    const cleanNotes = stripDoctorAppointmentTags(apt.clinical_notes);
+    if (cleanNotes) return cleanNotes;
+  }
   if (apt.visit_type === 'CLINIC' || apt.exam_type === 'CLINIC') {
     return 'Khám tại phòng khám SECA';
+  }
+  if (apt.visit_type === 'TELEHEALTH' || apt.exam_type === 'TELEHEALTH') {
+    return 'Tư vấn từ xa (Telehealth)';
   }
   return 'Khám bệnh tại nhà';
 };

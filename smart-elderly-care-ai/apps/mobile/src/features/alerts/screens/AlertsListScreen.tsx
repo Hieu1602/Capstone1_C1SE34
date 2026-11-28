@@ -32,7 +32,6 @@ import { MedicationAlertCard } from '../components/MedicationAlertCard';
 import { IncidentAlertCard } from '../components/IncidentAlertCard';
 import { HouseActionModal, HouseModalMode } from '../components/HouseActionModal';
 import { AlertsEmptyState } from '../components/AlertsEmptyState';
-import { handleHeaderBack } from '../../../navigation/navigationHelpers';
 import { notificationService } from '../../../services/notificationService';
 
 type FilterType = 'ALL' | 'CRITICAL' | 'VITAL' | 'MEDICATION' | 'APPOINTMENT';
@@ -95,19 +94,22 @@ export default function AlertsListScreen({ navigation, route }: any) {
     isFetchingRef.current = true;
     if (isInitial && incidents.length === 0) setLoading(true);
     try {
-      await Promise.allSettled([
+      const tasks: Array<Promise<any>> = [
         fetchNotifications(),
         fetchReminders(),
-        fetchPatientsList?.(),
-        fetchMyPermissions?.(),
-        fetchHouseFromBackend?.(),
-        fetchDevicesFromBackend?.(),
-      ]);
+      ];
+      if (isInitial) {
+        if (fetchPatientsList) tasks.push(fetchPatientsList());
+        if (fetchMyPermissions) tasks.push(fetchMyPermissions());
+        if (fetchHouseFromBackend) tasks.push(fetchHouseFromBackend());
+        if (fetchDevicesFromBackend) tasks.push(fetchDevicesFromBackend());
+      }
+      await Promise.allSettled(tasks);
     } finally {
       isFetchingRef.current = false;
       setLoading(false);
     }
-  }, [fetchNotifications, fetchReminders, fetchMyPermissions, fetchHouseFromBackend, fetchDevicesFromBackend, incidents.length]);
+  }, [fetchNotifications, fetchReminders, fetchPatientsList, fetchMyPermissions, fetchHouseFromBackend, fetchDevicesFromBackend, incidents.length]);
 
   useEffect(() => {
     loadData(true);
@@ -190,11 +192,16 @@ export default function AlertsListScreen({ navigation, route }: any) {
   const handleConfirmMedication = async (med: ReminderItem) => {
     const d = new Date();
     const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    await markMedicationTaken(med.id, true, timeStr);
-    Alert.alert(
-      'Xác nhận thành công',
-      `Đã ghi nhận người cao tuổi đã uống thuốc "${med.name}" lúc ${timeStr}. Trạng thái đã được đồng bộ toàn hệ thống.`
-    );
+    const targetPatientId = activePatientId || patientsList?.[0]?.id || patientsList?.[0]?.elderly_id || undefined;
+    try {
+      await markMedicationTaken(med.id, true, timeStr, targetPatientId);
+      Alert.alert(
+        'Xác nhận thành công',
+        `Đã ghi nhận người cao tuổi đã uống thuốc "${med.name}" lúc ${timeStr}. Trạng thái đã được đồng bộ toàn hệ thống.`
+      );
+    } catch {
+      Alert.alert('Lỗi', 'Không thể đồng bộ trạng thái đã uống lên máy chủ. Vui lòng thử lại.');
+    }
   };
 
   const handleSnoozeMedication = (med: ReminderItem) => {
@@ -479,17 +486,6 @@ export default function AlertsListScreen({ navigation, route }: any) {
       {/* 1. Header */}
       <View style={[styles.topHeader, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <View style={styles.headerLeftRow}>
-          <TouchableOpacity
-            style={[styles.backBtn, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => handleHeaderBack(navigation, route, 'Home', false)}
-            activeOpacity={0.7}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityLabel="Quay lại"
-            accessibilityRole="button"
-          >
-            <Ionicons name="chevron-back" size={22} color={isDarkMode ? colors.textPrimary : Colors.textPrimary} />
-          </TouchableOpacity>
-
           <View style={styles.headerTitleCol}>
             <Text style={[styles.headerTitle, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>
               Thông Báo &amp; Sự Kiện

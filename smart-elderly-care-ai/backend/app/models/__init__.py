@@ -18,6 +18,7 @@ from app.models.user_terminal import UserTerminal, UserLoginHistory
 from app.models.support_ticket import SupportTicket
 from app.models.appointment import Appointment, AppointmentReminder
 from app.models.prescription import Prescription
+from app.models.activity_log import AppointmentEvent, NotificationRead
 
 __all__ = [
     "User",
@@ -38,6 +39,8 @@ __all__ = [
     "UserTerminal",
     "UserLoginHistory",
     "SupportTicket",
+    "AppointmentEvent",
+    "NotificationRead",
     "Appointment",
     "AppointmentReminder",
     "Prescription",

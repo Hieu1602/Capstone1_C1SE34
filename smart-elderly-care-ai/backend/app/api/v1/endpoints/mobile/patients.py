@@ -16,6 +16,7 @@ from app.crud.crud_elderly import crud_elderly
 from app.crud.crud_house import crud_house
 from app.crud.crud_vital import crud_vital
 from app.models.user import User
+from app.services import appointment_history
 from app.schemas.patient import (
     ElderlyProfileCreate,
     PatientMedicalRecordOut,
@@ -337,7 +338,8 @@ async def update_patient_medical_record(
             detail="Không tìm thấy hồ sơ người cao tuổi yêu cầu.",
         )
 
-    record_id = str(getattr(res_record, "id", None) or patient_id)
+    raw_record_id = getattr(res_record, "id", None)
+    record_id = f"{raw_record_id}" if raw_record_id is not None else patient_id
 
     # Đồng bộ bộ nhớ đệm lâm sàng bác sĩ nếu có
     try:
@@ -567,19 +569,39 @@ async def _ensure_house_access(
     db: AsyncSession,
     current_user: Optional[User],
     house_id: Optional[uuid.UUID],
+    require_manage: bool = False,
 ) -> None:
     if not current_user or current_user.role in ("admin", "doctor") or not house_id:
         return
     from app.models.house import House
 
     house = await db.get(House, house_id)
-    if house and house.owner_id != current_user.id:
+    owner_id = getattr(house, "owner_id", None) if house else None
+    if house and owner_id is not None and owner_id != current_user.id:
         member = await crud_house.get_member_by_user(db, house.id, current_user.id)
         if not member or getattr(member, "status", "ACTIVE") != "ACTIVE":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Bạn không có quyền truy cập lịch khám của hộ gia đình này.",
             )
+        if not require_manage and getattr(member, "can_view_health", True) is False:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bạn không có quyền xem thông tin sức khỏe của hộ gia đình này.",
+            )
+        if require_manage:
+            role_in_house = getattr(member, "role_in_house", None)
+            perms = getattr(member, "permissions", None)
+            can_manage = (
+                getattr(member, "can_manage_records", False)
+                or role_in_house in ("OWNER", "CAREGIVER", "DOCTOR")
+                or perms in ("ADMIN", "EDIT", "OPERATOR")
+            )
+            if not can_manage:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Bạn cần quyền quản lý hồ sơ (Owner/Caregiver) để đặt, sửa hoặc xác nhận lịch khám.",
+                )
 
 
 async def _resolve_assigned_doctor(
@@ -645,10 +667,16 @@ async def _load_family_owned_appointment(
     if not existing or existing.patient_id != patient_uuid:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy lịch khám yêu cầu.")
 
-    await _ensure_house_access(db, current_user, existing.house_id)
+    await _ensure_house_access(db, current_user, existing.house_id, require_manage=True)
 
+    notes_str = existing.clinical_notes or ""
+    is_confirmed_or_negotiating = (
+        existing.status == "CONFIRMED"
+        or "[ĐÃ XÁC NHẬN ĐÓN TIẾP]" in notes_str
+        or "[BS dời lịch]" in notes_str
+    )
     is_family_created = existing.created_by is not None and existing.created_by != existing.doctor_id
-    if not is_family_created:
+    if not is_family_created and not is_confirmed_or_negotiating:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Chỉ có thể hủy hoặc dời lịch khám do gia đình tự đặt.",
@@ -757,14 +785,42 @@ async def get_patient_appointments(
     )
 
     patient_name = (profile.full_name if (profile and profile.full_name) else "Bệnh nhân người cao tuổi")
-    return [
-        build_appointment_response(
-            r,
-            patient_name=patient_name,
-            doctor_name=r.doctor.full_name if r.doctor else "Bác sĩ gia đình",
-        )
-        for r in records
-    ]
+    return await appointment_history.attach_last_events(
+        db,
+        [
+            build_appointment_response(
+                r,
+                patient_name=patient_name,
+                doctor_name=r.doctor.full_name if r.doctor else "Bác sĩ gia đình",
+            )
+            for r in records
+        ],
+    )
+
+
+@router.get(
+    "/{patient_id}/appointments/{appointment_id}/history",
+    response_model=List[Any],
+    summary="Lịch sử thao tác của một lịch khám (Người nhà)",
+)
+async def get_patient_appointment_history(
+    patient_id: str,
+    appointment_id: str,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.crud.crud_appointment import crud_appointment
+
+    try:
+        patient_uuid = uuid.UUID(patient_id)
+        apt_uuid = uuid.UUID(appointment_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="ID không hợp lệ.")
+    existing = await crud_appointment.get_by_id(db, apt_uuid)
+    if not existing or existing.patient_id != patient_uuid:
+        raise HTTPException(status_code=404, detail="Không tìm thấy lịch khám yêu cầu.")
+    await _ensure_house_access(db, current_user, existing.house_id)
+    return await appointment_history.list_events(db, apt_uuid)
 
 
 @router.post(
@@ -804,7 +860,7 @@ async def request_patient_appointment(
     if not target_profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy hồ sơ người cao tuổi.")
 
-    await _ensure_house_access(db, current_user, target_profile.house_id)
+    await _ensure_house_access(db, current_user, target_profile.house_id, require_manage=True)
 
     appointment_in.patient_id = str(target_profile.id)
     appointment_in.patient_name = target_profile.full_name
@@ -823,6 +879,7 @@ async def request_patient_appointment(
         )
     except ValueError as e:
         raise _map_patient_apt_error(e)
+    await appointment_history.record(db, root_apt, "REQUESTED", current_user)
 
     # 2. Tạo Incident & bắn WebSocket/FCM thông báo cho Bác sĩ & các thành viên
     try:
@@ -869,6 +926,7 @@ async def request_patient_appointment(
                     "appointment_id": str(root_apt.id),
                     "patient_id": str(target_profile.id),
                     "doctor_id": str(doctor_id) if doctor_id else None,
+                    "created_by": str(created_by) if created_by else None,
                     "scheduled_at": root_apt.scheduled_at.isoformat(),
                     "message": msg,
                     "notes": f"PATIENT:{target_profile.id}|APPOINTMENT_REQUESTED|APT:{root_apt.id}",
@@ -924,17 +982,29 @@ async def update_patient_appointment(
         send_appointment_fcm,
     )
 
-    _, apt_uuid, _ = await _load_family_owned_appointment(db, patient_id, appointment_id, current_user)
+    _, apt_uuid, existing_apt = await _load_family_owned_appointment(db, patient_id, appointment_id, current_user)
+    before = appointment_history.snapshot(existing_apt)
+
+    schedule_changed = (
+        appointment_in.scheduled_at is not None
+        or appointment_in.visit_type is not None
+        or appointment_in.location is not None
+    )
 
     try:
         updated = await crud_appointment.update_appointment(
-            db=db, appointment_id=apt_uuid, obj_in=appointment_in
+            db=db,
+            appointment_id=apt_uuid,
+            obj_in=appointment_in,
+            reset_confirmation=schedule_changed,
+            new_created_by=(current_user.id if (schedule_changed and current_user) else None),
         )
     except ValueError as e:
         raise _map_patient_apt_error(e)
 
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy lịch khám yêu cầu.")
+    await appointment_history.record(db, updated, "UPDATED", current_user, before=before)
 
     patient_names = await get_patient_names_map(db, [updated.patient_id])
     patient_name = patient_names.get(updated.patient_id, "Bệnh nhân người cao tuổi")
@@ -987,6 +1057,7 @@ async def update_patient_appointment(
                     "appointment_id": str(updated.id),
                     "patient_id": str(updated.patient_id),
                     "doctor_id": str(updated.doctor_id) if updated.doctor_id else None,
+                    "created_by": str(current_user.id) if current_user else None,
                     "scheduled_at": updated.scheduled_at.isoformat() if updated.scheduled_at else None,
                     "message": notify_msg,
                     "notes": notes_str,
@@ -1042,7 +1113,7 @@ async def cancel_patient_appointment(
     )
 
     _, apt_uuid, _ = await _load_family_owned_appointment(db, patient_id, appointment_id, current_user)
-    reason = cancel_in.cancellation_reason if cancel_in else "Gia đình hủy yêu cầu lịch khám"
+    reason = (cancel_in.cancellation_reason if cancel_in else None) or "Gia đình hủy yêu cầu lịch khám"
 
     try:
         cancelled = await crud_appointment.cancel_appointment(
@@ -1053,6 +1124,7 @@ async def cancel_patient_appointment(
 
     if not cancelled:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy lịch khám yêu cầu.")
+    await appointment_history.record(db, cancelled, "CANCELLED", current_user, note=reason)
 
     patient_names = await get_patient_names_map(db, [cancelled.patient_id])
     patient_name = patient_names.get(cancelled.patient_id, "Bệnh nhân người cao tuổi")
@@ -1160,7 +1232,7 @@ async def _execute_confirm_appointment(
     if patient_uuid is not None and existing.patient_id != patient_uuid:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy lịch khám của bệnh nhân này.")
 
-    await _ensure_house_access(db, current_user, existing.house_id)
+    await _ensure_house_access(db, current_user, existing.house_id, require_manage=True)
 
     if existing.status != AppointmentStatusEnum.UPCOMING.value:
         raise HTTPException(
@@ -1179,6 +1251,7 @@ async def _execute_confirm_appointment(
 
     if not apt:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy lịch khám yêu cầu.")
+    await appointment_history.record(db, apt, "CONFIRMED", current_user)
 
     logger.info(
         "[FAMILY APPOINTMENT CONFIRMED] Người thân đã xác nhận lịch hẹn %s của Bác sĩ %s vào %s.",

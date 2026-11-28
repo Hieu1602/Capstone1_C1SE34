@@ -69,6 +69,7 @@ function harness(t, options = {}) {
     let microphoneRequests = 0;
     let exchanged = 0;
     let muted = false;
+    let playbackVolume = 1;
     let playbackClosed = 0;
     const peer = new EventTarget();
     Object.assign(peer, {
@@ -102,6 +103,9 @@ function harness(t, options = {}) {
             mutePlayback: (value) => {
                 muted = value;
             },
+            setPlaybackVolume: (value) => {
+                playbackVolume = value;
+            },
             closePlayback: () => {
                 playbackClosed++;
             },
@@ -130,6 +134,9 @@ function harness(t, options = {}) {
         },
         get muted() {
             return muted;
+        },
+        get playbackVolume() {
+            return playbackVolume;
         },
         get playbackClosed() {
             return playbackClosed;
@@ -203,6 +210,31 @@ test("listen mode never opens the microphone and speaker toggle affects remote t
     assert.equal(h.muted, true);
     h.session.setSpeakerEnabled(true);
     assert.equal(remote.enabled, true);
+});
+
+test("speaker volume clamps to 0..1 and updates remote tracks and playback", async (t) => {
+    const h = harness(t, { mode: "listen" });
+    h.session.setSpeakerVolume(0.45);
+    await h.session.start();
+    let trackVol = null;
+    const remote = {
+        enabled: true,
+        stop() {},
+        _setVolume(v) {
+            trackVol = v;
+        },
+    };
+    const event = new Event("track");
+    event.track = remote;
+    h.peer.dispatchEvent(event);
+    assert.equal(trackVol, 0.45);
+    assert.equal(h.playbackVolume, 0.45);
+    h.session.setSpeakerVolume(1.5);
+    assert.equal(trackVol, 1);
+    assert.equal(h.playbackVolume, 1);
+    h.session.setSpeakerVolume(-0.2);
+    assert.equal(trackVol, 0);
+    assert.equal(h.playbackVolume, 0);
 });
 
 test("permission denial reports an error without creating a signaling request", async (t) => {

@@ -5,11 +5,12 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { useVitalStore, Incident } from '../store/useVitalStore';
+import { useHealthStore } from '../store/useHealthStore';
 import { useAuthStore } from '../store/useAuthStore';
-import { useAlertStore } from '../store/useAlertStore';
 import { useEscalationStore } from '../store/useEscalationStore';
 import { notificationService } from './notificationService';
 import { dialEmergencyNumber, EMERGENCY_TEST_PHONE } from './emergency';
+import { handleReadsWsMessage } from '../features/doctor/components/notifications/notificationReadSync';
 
 const _autoDialedIncidentIds = new Set<string>();
 
@@ -142,7 +143,33 @@ class AlertsWebSocket {
   }
 
   private _handleStoreUpdate(event: WebSocketAlertEvent) {
+    if (event.type === 'USER_PROFILE_UPDATED') {
+      const auth = useAuthStore.getState();
+      const curId = auth.userId || auth.user_id;
+      if (curId && String(event.user_id) === String(curId)) {
+        auth.setProfile({
+          avatar_url: event.avatar_url ?? null,
+          ...(event.full_name ? { full_name: event.full_name } : {}),
+        });
+        auth.setAvatar(event.avatar_url || '');
+      }
+      return;
+    }
+
     const store = useVitalStore.getState();
+
+    // Bác sĩ vừa đọc thông báo trên thiết bị khác (Doctor Web) -> cập nhật "đã đọc" + giờ đọc
+    if (
+      handleReadsWsMessage(event, useAuthStore.getState().userId || useAuthStore.getState().user_id)
+    ) {
+      return;
+    }
+
+    // Một client khác (web/app) vừa "đánh dấu tất cả" -> tải lại danh sách từ server
+    if (event.type === 'INCIDENTS_ACKNOWLEDGED') {
+      store.fetchNotifications?.().catch(() => {});
+      return;
+    }
 
     // 0. Lịch khám mới từ Bác sĩ hoặc Yêu cầu lịch khám từ Gia đình
     if (
@@ -152,6 +179,11 @@ class AlertsWebSocket {
       event.type === 'APPOINTMENT_REQUESTED'
     ) {
       const incData = event.data || {};
+      const currentUserId = useAuthStore.getState().userId || useAuthStore.getState().user_id;
+      const creatorId = event.created_by ?? incData.created_by;
+      if (creatorId && currentUserId && String(creatorId) === String(currentUserId)) {
+        return;
+      }
       const isRequestedByFamily =
         event.alert_type === 'APPOINTMENT_REQUESTED' ||
         event.type === 'APPOINTMENT_REQUESTED' ||
@@ -212,8 +244,37 @@ class AlertsWebSocket {
       }
 
       // 2. Phía Bác sĩ: Thêm thông báo mới xác nhận từ Người nhà & Bắn Notification
+      const confirmedByRole = incData.confirmed_by_role || event.confirmed_by_role;
+      const targetHouseId = incData.house_id || event.house_id;
       const isTargetForThisDoctor = (targetUserId && currentUserId && String(targetUserId) === String(currentUserId)) || isDoctor;
-      if (isTargetForThisDoctor && event.type !== 'INCIDENT_RESOLVED') {
+      if (confirmedByRole === 'doctor' && !isDoctor && event.type !== 'INCIDENT_RESOLVED') {
+        const sameHouse = !targetHouseId || !store.house?.id || String(store.house.id) === String(targetHouseId);
+        if (sameHouse) {
+          const newFamilyInc: Incident = {
+            id: incData.id || `inc-fam-conf-${Date.now()}`,
+            device_id: incData.device_id || targetHouseId || 'system',
+            alert_type: 'APPOINTMENT_CONFIRMED',
+            alert_level: 'LOW',
+            message: incData.message || '✅ Bác sĩ đã xác nhận lịch khám của gia đình.',
+            video_clip_url: null,
+            thumbnail_url: null,
+            is_acknowledged: false,
+            created_at: incData.created_at || new Date().toISOString(),
+            note: aptId || null,
+            notes: incData.notes || `APPOINTMENT_CONFIRMED|APT:${aptId || ''}`,
+          };
+          store.addIncident(newFamilyInc);
+          notificationService.triggerEmergencyNotification({
+            title: '✅ BÁC SĨ ĐÃ XÁC NHẬN LỊCH KHÁM',
+            body: newFamilyInc.message,
+            data: {
+              incident_id: newFamilyInc.id,
+              alert_type: 'APPOINTMENT_CONFIRMED',
+              appointment_id: aptId,
+            },
+          });
+        }
+      } else if (isTargetForThisDoctor && event.type !== 'INCIDENT_RESOLVED') {
         const newDocIncident: Incident = {
           id: incData.id || `inc-doc-apt-${Date.now()}`,
           device_id: incData.device_id || 'system',
@@ -316,7 +377,7 @@ class AlertsWebSocket {
       if (alertType === 'HOUSE_MEMBER_REMOVED') {
         try {
           useVitalStore.getState().fetchHouseFromBackend?.();
-        } catch {}
+        } catch { }
       }
 
       const newIncident: Incident = {
@@ -333,8 +394,8 @@ class AlertsWebSocket {
       };
 
       store.addIncident(newIncident);
-      useAuthStore.getState().fetchMyPermissions?.().catch(() => {});
-      useVitalStore.getState().syncAllWithBackend?.().catch(() => {});
+      useAuthStore.getState().fetchMyPermissions?.().catch(() => { });
+      useVitalStore.getState().syncAllWithBackend?.().catch(() => { });
 
       notificationService.triggerEmergencyNotification({
         title: alertType === 'HOUSE_INVITE_PENDING' ? '🏠 LỜI MỜI THAM GIA NHÀ' : '🏠 THÀNH VIÊN GIA ĐÌNH',
@@ -347,34 +408,44 @@ class AlertsWebSocket {
       return;
     }
 
-    // 0.2b. Lịch khám đổi giờ / hoàn tất / xóa -> Bắn lên thanh thông báo Android với tiếng ting ting nhẹ nhàng (không hú còi báo động)
+    // 0.2b. Lịch khám đổi giờ / hoàn tất / xóa / nhắc lịch -> Bắn lên thanh thông báo Android với tiếng ting ting nhẹ nhàng (không hú còi báo động)
     if (
-      ['APPOINTMENT_RESCHEDULED', 'APPOINTMENT_COMPLETED', 'APPOINTMENT_DELETED'].includes(
+      ['APPOINTMENT_RESCHEDULED', 'APPOINTMENT_COMPLETED', 'APPOINTMENT_DELETED', 'APPOINTMENT_REMINDER'].includes(
         String(event.alert_type || event.type || '')
       )
     ) {
       const aType = String(event.alert_type || event.type || '');
       const incData = event.data || {};
+      const currentUserId = useAuthStore.getState().userId || useAuthStore.getState().user_id;
+      const creatorId = event.created_by ?? incData.created_by;
+      if (creatorId && currentUserId && String(creatorId) === String(currentUserId)) {
+        return;
+      }
       const aptId = event.appointment_id || incData.appointment_id;
       const msg =
         incData.message ||
         (aType === 'APPOINTMENT_RESCHEDULED'
           ? '🗓️ Lịch khám của người cao tuổi vừa được Bác sĩ dời sang khung giờ mới.'
           : aType === 'APPOINTMENT_COMPLETED'
-          ? '✅ Buổi khám bệnh cho người cao tuổi đã hoàn tất.'
-          : '🗓️ Một lịch khám đã được xóa khỏi hệ thống.');
+            ? '✅ Buổi khám bệnh cho người cao tuổi đã hoàn tất.'
+            : aType === 'APPOINTMENT_REMINDER'
+              ? '⏰ Sắp đến giờ khám bệnh theo lịch hẹn. Gia đình vui lòng chuẩn bị sẵn sàng.'
+              : '🗓️ Một lịch khám đã được xóa khỏi hệ thống.');
       const title =
-        aType === 'APPOINTMENT_RESCHEDULED'
+        incData.title ||
+        (aType === 'APPOINTMENT_RESCHEDULED'
           ? '🗓️ LỊCH KHÁM ĐÃ ĐƯỢC DỜI'
           : aType === 'APPOINTMENT_COMPLETED'
-          ? '✅ ĐÃ HOÀN TẤT BUỔI KHÁM'
-          : '🗓️ LỊCH KHÁM ĐÃ ĐƯỢC XÓA';
+            ? '✅ ĐÃ HOÀN TẤT BUỔI KHÁM'
+            : aType === 'APPOINTMENT_REMINDER'
+              ? '⏰ NHẮC NHỞ LỊCH KHÁM SẮP TỚI'
+              : '🗓️ LỊCH KHÁM ĐÃ ĐƯỢC XÓA');
 
-      if (aType === 'APPOINTMENT_RESCHEDULED') {
+      if (aType === 'APPOINTMENT_RESCHEDULED' || aType === 'APPOINTMENT_REMINDER') {
         const reschedIncident: Incident = {
-          id: incData.id || `inc-resched-${Date.now()}`,
+          id: incData.id || `inc-${aType.toLowerCase()}-${Date.now()}`,
           device_id: incData.device_id || 'system',
-          alert_type: 'APPOINTMENT_RESCHEDULED',
+          alert_type: aType,
           alert_level: 'LOW',
           message: msg,
           video_clip_url: null,
@@ -390,6 +461,7 @@ class AlertsWebSocket {
         title,
         body: msg,
         data: {
+          incident_id: incData.id,
           alert_type: aType,
           appointment_id: aptId,
           patient_id: event.patient_id || incData.patient_id,
@@ -398,9 +470,9 @@ class AlertsWebSocket {
       return;
     }
 
-    // 0.5. Đơn thuốc mới / Cập nhật đơn thuốc / Nhắc uống thuốc -> Bắn lên thanh thông báo Android (ting ting)
+    // 0.5. Đơn thuốc mới / Cập nhật đơn thuốc / Nhắc uống thuốc / Nhắc uống nước -> Bắn lên thanh thông báo Android (ting ting)
     if (
-      ['PRESCRIPTION_CREATED', 'PRESCRIPTION_UPDATED', 'PRESCRIPTION_DELETED', 'MEDICATION_REMINDER'].includes(
+      ['PRESCRIPTION_CREATED', 'PRESCRIPTION_UPDATED', 'PRESCRIPTION_DELETED', 'MEDICATION_REMINDER', 'HYDRATION_REMINDER'].includes(
         String(event.alert_type || event.type || '')
       )
     ) {
@@ -419,13 +491,15 @@ class AlertsWebSocket {
         notes: incData.patient_id ? `PATIENT:${incData.patient_id}` : null,
       };
       store.addIncident(newIncident);
-      store.fetchReminders?.(incData.patient_id).catch(() => {});
+      store.fetchReminders?.(incData.patient_id).catch(() => { });
 
       notificationService.triggerEmergencyNotification({
         title:
           aType === 'MEDICATION_REMINDER'
             ? '💊 ĐẾN GIỜ UỐNG THUỐC'
-            : '💊 ĐƠN THUỐC & LỊCH UỐNG THUỐC MỚI',
+            : aType === 'HYDRATION_REMINDER'
+              ? '💧 ĐẾN GIỜ UỐNG NƯỚC'
+              : '💊 ĐƠN THUỐC & LỊCH UỐNG THUỐC MỚI',
         body: newIncident.message,
         data: {
           incident_id: newIncident.id,
@@ -452,6 +526,9 @@ class AlertsWebSocket {
         notes: incData.patient_id ? `PATIENT:${incData.patient_id}` : null,
       };
       store.addIncident(newIncident);
+
+      // Refetch theo thiết bị đang xem (không áp payload: WS broadcast cho mọi nhà, có thể là của cụ khác)
+      useHealthStore.getState().fetchThresholds().catch(() => {});
 
       notificationService.triggerEmergencyNotification({
         title: '⚙️ CẬP NHẬT NGƯỠNG SINH HIỆU',
@@ -669,7 +746,8 @@ class AlertsWebSocket {
         store.acknowledgeIncident(
           incId,
           event.data?.note || 'Đã kiểm tra an toàn',
-          handlerName
+          handlerName,
+          true
         );
       }
       // Kiểm tra lại nếu không còn sự cố Critical chưa xử lý nào thì tắt còi & tắt cờ té ngã

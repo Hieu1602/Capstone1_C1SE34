@@ -34,7 +34,7 @@ export const AppointmentsPage: React.FC = () => {
     fetchAllData,
   } = useDoctorDataStore();
 
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [statusFilter, setStatusFilter] = useState<'UPCOMING' | 'COMPLETED' | 'CANCELLED' | 'ALL'>('UPCOMING');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -48,6 +48,52 @@ export const AppointmentsPage: React.FC = () => {
     if (dateParam) setSelectedDateStr(dateParam);
   }, [searchParams]);
 
+  // Mở từ thông báo (/appointments?apt=<id>): chọn đúng tab + ngày, cuộn tới và làm nổi bật lịch đó
+  const focusAptId = searchParams.get('apt');
+  const [highlightAptId, setHighlightAptId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!focusAptId) return;
+    const target = appointments.find((a) => a.id === focusAptId);
+    if (!target) {
+      // Đợi dữ liệu tải xong mới kết luận lịch không còn (đã bị xóa)
+      if (isLoadingAppointments || isRevalidating) return;
+      showToast('Lịch khám này không còn tồn tại (có thể đã bị xóa).');
+    } else {
+      setStatusFilter(
+        isUpcomingAppointmentStatus(target.status)
+          ? 'UPCOMING'
+          : target.status === 'COMPLETED' || target.status === 'CANCELLED'
+            ? target.status
+            : 'ALL',
+      );
+      setSearchQuery('');
+      const dt = new Date(target.scheduled_at);
+      setSelectedDateStr(isNaN(dt.getTime()) ? null : toLocalIsoDate(dt));
+      setHighlightAptId(target.id);
+    }
+    // Xóa tham số để bấm lại cùng thông báo vẫn hoạt động và không khóa bộ lọc
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('apt');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [focusAptId, appointments, isLoadingAppointments, isRevalidating, setSearchParams]);
+
+  useEffect(() => {
+    if (!highlightAptId) return;
+    const scrollTimer = setTimeout(() => {
+      document.getElementById(`apt-${highlightAptId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 120);
+    const clearTimer = setTimeout(() => setHighlightAptId(null), 4000);
+    return () => {
+      clearTimeout(scrollTimer);
+      clearTimeout(clearTimer);
+    };
+  }, [highlightAptId]);
+
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3000);
@@ -56,6 +102,22 @@ export const AppointmentsPage: React.FC = () => {
   useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
+
+  const handleConfirmAppointment = async (apt: AppointmentItem) => {
+    try {
+      const updated = await doctorApi.confirmAppointment(apt.id);
+      const store = useDoctorDataStore.getState();
+      store.setAppointments(
+        store.appointments.map((a) =>
+          a.id === apt.id ? { ...a, ...updated, status: 'CONFIRMED', patient_name: apt.patient_name || updated?.patient_name } : a
+        )
+      );
+      showToast(`Đã xác nhận lịch khám cho bệnh nhân ${apt.patient_name || ''}`);
+      fetchAllData(true);
+    } catch {
+      showToast('Không thể xác nhận lịch khám lúc này.');
+    }
+  };
 
   const handleComplete = async (apt: AppointmentItem) => {
     try {
@@ -305,7 +367,9 @@ export const AppointmentsPage: React.FC = () => {
               <AppointmentCard
                 key={apt.id}
                 apt={apt}
+                highlighted={apt.id === highlightAptId}
                 onBroadcastReminder={handleBroadcastReminder}
+                onConfirm={handleConfirmAppointment}
                 onReschedule={handleReschedule}
                 onCancel={setCancellingApt}
                 onComplete={handleComplete}

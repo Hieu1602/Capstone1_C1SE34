@@ -4,7 +4,8 @@
  * Hệ thống Smart Elderly Care AI – Tích hợp Lọc dữ liệu theo ngày & Tua dòng thời gian (Interactive Timeline)
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   StyleSheet,
@@ -53,6 +54,8 @@ export default function HealthDetailScreen({ navigation, route }: any) {
     setActivePatientId,
     iotDevices,
     syncAllWithBackend,
+    algoSettings,
+    fetchThresholds,
   } = useVitalStore();
 
   const initialPatientId =
@@ -160,6 +163,14 @@ export default function HealthDetailScreen({ navigation, route }: any) {
   }, [iotDevices, selectedPatientId, currentPatient, patientDisplayName, patientsList]);
 
   const effectiveDevId = assignedBand ? (assignedBand.deviceId || assignedBand.id || 'BLE_BAND_001') : null;
+
+  // Luôn lấy ngưỡng cảnh báo mới nhất từ server mỗi khi màn hình được mở / focus lại
+  const thresholdDevId = assignedBand ? (assignedBand.id || assignedBand.deviceId) : null;
+  useFocusEffect(
+    useCallback(() => {
+      if (thresholdDevId) fetchThresholds(thresholdDevId);
+    }, [thresholdDevId, fetchThresholds])
+  );
 
   const { permissions, userRole, role } = useAuthStore();
   const isOwnerOrAdmin =
@@ -584,8 +595,10 @@ export default function HealthDetailScreen({ navigation, route }: any) {
       dailyAvgHR,
       chartDataForDay,
       dailySteps,
+      thresholds: algoSettings,
     });
   }, [
+    algoSettings,
     selectedRange,
     weekData,
     isFallDetected,
@@ -851,6 +864,8 @@ export default function HealthDetailScreen({ navigation, route }: any) {
           scrubberMinutes={scrubberMinutes}
           isDarkMode={isDarkMode}
           colors={colors}
+          hrMin={algoSettings.minHeartRate}
+          hrMax={algoSettings.maxHeartRate}
         />
 
         {/* 8. Link tới Hồ sơ Bệnh án Điện Tử */}

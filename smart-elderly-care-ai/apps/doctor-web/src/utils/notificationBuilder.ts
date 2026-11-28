@@ -3,7 +3,7 @@
 
 import { UnifiedNotification } from '../components/clinical/NotificationDetailModal';
 import { cleanNotificationText } from './notificationSync';
-import { isAppointmentOverdue } from './appointmentHelpers';
+import { appointmentDeepLink, extractAppointmentId, isAppointmentOverdue } from './appointmentHelpers';
 import type { Incident, AppointmentItem, DoctorPatientCard, SystemNotification } from '../types';
 
 export type TabType = 'ALL' | 'UNREAD' | 'ADMIN' | 'ALERTS' | 'APPOINTMENTS' | 'OTHERS';
@@ -163,7 +163,7 @@ export function getDateGroup(str?: string) {
 export function isNotificationReadInSet(n: Pick<UnifiedNotification, 'id' | 'rawIncidentId'>, readSet: Set<string>): boolean {
   return Boolean(
     readSet.has(n.id) ||
-      (n.rawIncidentId && (readSet.has(n.rawIncidentId) || readSet.has(`inc_${n.rawIncidentId}`)))
+    (n.rawIncidentId && (readSet.has(n.rawIncidentId) || readSet.has(`inc_${n.rawIncidentId}`)))
   );
 }
 
@@ -174,11 +174,11 @@ export function applyAcknowledgeToItem<T extends UnifiedNotification>(item: T, d
     badgeLabel: 'Đã xử lý',
     rawIncident: item.rawIncident
       ? {
-          ...item.rawIncident,
-          is_acknowledged: true,
-          acknowledged_by_name: doctorName,
-          acknowledged_at: new Date().toISOString(),
-        }
+        ...item.rawIncident,
+        is_acknowledged: true,
+        acknowledged_by_name: doctorName,
+        acknowledged_at: new Date().toISOString(),
+      }
       : undefined,
   };
 }
@@ -214,7 +214,7 @@ export function buildNotificationItems(
       lower.includes('lời mời bạn tham gia') ||
       lower.includes('xác nhận vào nhà');
     const isAppointment =
-      ['APPOINTMENT_CONFIRMED', 'APPOINTMENT_SCHEDULED', 'APPOINTMENT_CANCELLED'].includes(inc.alert_type || '') ||
+      Boolean(inc.alert_type?.startsWith('APPOINTMENT_')) ||
       lower.includes('lịch khám') ||
       lower.includes('lịch hẹn');
     const isAssignment = lower.includes('bệnh nhân mới') || lower.includes('phụ trách');
@@ -257,7 +257,7 @@ export function buildNotificationItems(
         : isConfirm
           ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
           : 'text-sky-700 bg-sky-50 border-sky-200';
-      target = '/appointments';
+      target = appointmentDeepLink(extractAppointmentId(inc.notes));
     } else if (isAssignment) {
       label = 'Bệnh nhân';
       color = 'text-emerald-700 bg-emerald-50 border-emerald-200';
@@ -380,7 +380,7 @@ export function buildNotificationItems(
                 : 'text-sky-700 bg-sky-50 border-sky-200',
         badgeBg: isDone ? 'bg-emerald-50' : isCancel ? 'bg-rose-50' : isOverdue ? 'bg-orange-50' : isConfirmed ? 'bg-teal-50' : 'bg-sky-50',
         isRead: readSet.has(`apt_${apt.id}`),
-        targetUrl: '/appointments',
+        targetUrl: appointmentDeepLink(apt.id),
         patientName: apt.patient_name,
         patientAddress: apt.location,
       });

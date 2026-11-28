@@ -5,10 +5,11 @@
 // 3. AppointmentCard: Thẻ hiển thị lịch hẹn theo dòng thời gian (Vertical Timeline - Ảnh 4)
 
 import React, { useMemo, useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, Image, Modal } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Image, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
 import { AppointmentItem, getPatientAvatarUrl } from './types';
+import { AppointmentHistoryLine } from './AppointmentHistoryLine';
 import {
   toLocalYMD,
   isTodayLocal,
@@ -16,6 +17,7 @@ import {
   getLocalToday,
   getCleanAppointmentTitle,
   isAppointmentFamilyConfirmed,
+  stripDoctorAppointmentTags,
 } from '../utils/dateUtils';
 
 // =============================================================
@@ -44,12 +46,12 @@ export const AppointmentStatsSummary: React.FC<AppointmentStatsSummaryProps> = (
   const stats = [
     { key: 'total', icon: 'calendar', color: '#2563EB', bg: '#EFF6FF', border: '#3B82F633', label: 'Tổng lịch', count: totalCount },
     { key: 'upcoming', icon: 'time', color: '#D97706', bg: '#FFFBEB', border: '#F59E0B33', label: 'Sắp tới', count: upcomingCount },
-    { key: 'completed', icon: 'checkmark-done', color: '#059669', bg: '#ECFDF5', border: '#10B98133', label: 'Đã khám', count: completedCount },
+    { key: 'completed', icon: 'checkmark-circle', color: '#059669', bg: '#ECFDF5', border: '#10B98133', label: 'Đã khám', count: completedCount },
     { key: 'cancelled', icon: 'close-circle', color: '#DC2626', bg: '#FEF2F2', border: '#EF444433', label: 'Đã hủy', count: cancelledCount },
   ];
 
   return (
-    <View>
+    <View style={styles.statsSummaryWrap}>
       <View style={styles.summaryGrid}>
         {stats.map((s) => (
           <TouchableOpacity
@@ -78,19 +80,20 @@ export const AppointmentStatsSummary: React.FC<AppointmentStatsSummaryProps> = (
             <View style={[styles.statIconBox, { backgroundColor: s.bg }]}>
               <Ionicons name={s.icon as any} size={15} color={s.color} />
             </View>
-            <LocalizedText style={[styles.statNumber, { color: s.color }]}>{s.count}</LocalizedText>
-            <LocalizedText style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+            <LocalizedText style={[styles.statNumber, { color: s.color }]} numberOfLines={1}>
+              {s.count}
+            </LocalizedText>
+            <LocalizedText
+              style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}
+              numberOfLines={1}
+            >
               {s.label}
             </LocalizedText>
           </TouchableOpacity>
         ))}
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterRow}
-      >
+      <View style={styles.filterRow}>
         {[
           { key: 'ALL' as const, label: `Tất cả (${totalCount})` },
           { key: 'UPCOMING' as const, label: `Sắp tới (${upcomingCount})` },
@@ -103,14 +106,16 @@ export const AppointmentStatsSummary: React.FC<AppointmentStatsSummaryProps> = (
             <TouchableOpacity
               key={tab.key}
               onPress={() => onFilterChange(tab.key)}
+              activeOpacity={0.8}
               style={[
                 styles.filterChip,
                 active
-                  ? { backgroundColor: activeBg, shadowColor: activeBg, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 3 }
+                  ? { backgroundColor: activeBg }
                   : { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' },
               ]}
             >
               <LocalizedText
+                numberOfLines={1}
                 style={[
                   styles.filterChipText,
                   active
@@ -123,7 +128,7 @@ export const AppointmentStatsSummary: React.FC<AppointmentStatsSummaryProps> = (
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </View>
     </View>
   );
 };
@@ -243,7 +248,7 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
   return (
     <View style={styles.weekStripWrapper}>
       <View style={[styles.weekStripHeader, { flexWrap: 'wrap', gap: 6 }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1, minWidth: 0 }}>
           <TouchableOpacity
             onPress={() => {
               setCalendarViewDate(selectedDate ? new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1) : new Date());
@@ -261,24 +266,25 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
           >
             <Ionicons name="calendar-outline" size={16} color="#2563EB" />
           </TouchableOpacity>
-          <View>
-            <LocalizedText style={[styles.weekStripTitle, { color: colors.textPrimary }]}>
+          <View style={{ flexShrink: 1, minWidth: 0 }}>
+            <LocalizedText style={[styles.weekStripTitle, { color: colors.textPrimary }]} numberOfLines={1}>
               {weekOffset === 0 ? 'Lịch tuần này' : weekOffset < 0 ? `Tuần trước (${Math.abs(weekOffset)})` : `Tuần sau (+${weekOffset})`}
             </LocalizedText>
-            <LocalizedText style={{ fontSize: 10.5, color: isDarkMode ? '#94A3B8' : '#64748B', fontWeight: '600' }}>
+            <LocalizedText style={{ fontSize: 11, color: isDarkMode ? '#94A3B8' : '#64748B', fontWeight: '600' }} numberOfLines={1}>
               {weekRangeLabel}
             </LocalizedText>
           </View>
         </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           <TouchableOpacity
             onPress={() => setWeekOffset((w) => w - 1)}
             style={{
               flexDirection: 'row',
               alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 34,
               paddingHorizontal: 7,
-              paddingVertical: 5,
               borderRadius: 8,
               borderWidth: 1,
               borderColor: isDarkMode ? '#334155' : '#E2E8F0',
@@ -295,8 +301,9 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
               onSelectDate(null);
             }}
             style={{
+              justifyContent: 'center',
+              minHeight: 34,
               paddingHorizontal: 8,
-              paddingVertical: 5,
               borderRadius: 8,
               backgroundColor: weekOffset === 0 && !selectedDate ? '#2563EB' : (isDarkMode ? '#1E293B' : '#EFF6FF'),
               borderWidth: 1,
@@ -313,8 +320,9 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
             style={{
               flexDirection: 'row',
               alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 34,
               paddingHorizontal: 7,
-              paddingVertical: 5,
               borderRadius: 8,
               borderWidth: 1,
               borderColor: isDarkMode ? '#334155' : '#E2E8F0',
@@ -328,10 +336,26 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
       </View>
 
       {selectedDate && (
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 6 }}>
-          <TouchableOpacity onPress={() => onSelectDate(null)} hitSlop={8}>
-            <LocalizedText style={{ fontSize: 11.5, fontWeight: '700', color: '#2563EB' }}>
-              Đang lọc ngày {String(selectedDate.getDate()).padStart(2, '0')}/{String(selectedDate.getMonth() + 1).padStart(2, '0')} • Xem tất cả
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 8,
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: isDarkMode ? '#1E3A8A' : '#DBEAFE',
+            backgroundColor: isDarkMode ? '#0F172A' : '#EFF6FF',
+          }}
+        >
+          <LocalizedText style={{ fontSize: 11.5, fontWeight: '600', color: isDarkMode ? '#93C5FD' : '#1E40AF' }}>
+            Đang lọc ngày {String(selectedDate.getDate()).padStart(2, '0')}/{String(selectedDate.getMonth() + 1).padStart(2, '0')}
+          </LocalizedText>
+          <TouchableOpacity onPress={() => onSelectDate(null)} hitSlop={{ top: 8, bottom: 8, left: 10, right: 10 }}>
+            <LocalizedText style={{ fontSize: 11.5, fontWeight: '700', color: isDarkMode ? '#60A5FA' : '#2563EB' }}>
+              Xem tất cả
             </LocalizedText>
           </TouchableOpacity>
         </View>
@@ -424,11 +448,7 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
         </TouchableOpacity>
       </Modal>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.weekDaysRow}
-      >
+      <View style={styles.weekDaysRow}>
         {weekDays.map((item) => {
           const isSelected = selectedDate ? isSameLocalDay(item.date, selectedDate) : false;
           const dots = getDotsForDate(item.date);
@@ -492,7 +512,7 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </View>
     </View>
   );
 };
@@ -507,6 +527,7 @@ export interface AppointmentCardProps {
   isCurrentOrNext?: boolean;
   isOverdue?: boolean;
   onViewPatient: (patientId: string) => void;
+  onConfirm?: (aptId: string) => void;
   onMarkCompleted: (aptId: string) => void;
   onEdit: (apt: AppointmentItem) => void;
   onCancel?: (apt: AppointmentItem) => void;
@@ -522,6 +543,7 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
   isCurrentOrNext = false,
   isOverdue = false,
   onViewPatient,
+  onConfirm,
   onMarkCompleted,
   onEdit,
   onCancel,
@@ -532,11 +554,12 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
   const isUpcoming = apt.status === 'UPCOMING' || apt.status === 'CONFIRMED';
   const isCompleted = apt.status === 'COMPLETED';
   const isCancelled = apt.status === 'CANCELLED';
+  const isFamilyRequested = Boolean(apt.created_by && apt.doctor_id && String(apt.created_by) !== String(apt.doctor_id));
   const isFamilyConfirmed = isAppointmentFamilyConfirmed(apt);
 
-  const cleanInstructions = (apt.instructions || '')
-    .replace(/\[ĐÃ XÁC NHẬN ĐÓN TIẾP\]/g, '')
-    .trim();
+  const cleanInstructions = stripDoctorAppointmentTags(
+    apt.instructions || (isFamilyRequested ? apt.clinical_notes : '')
+  );
   const initial = (apt.patient_name || 'B').trim().split(/\s+/).slice(-1)[0][0]?.toUpperCase() || 'B';
   const isHomeVisit = apt.visit_type === 'HOME_VISIT' || apt.exam_type === 'HOME_VISIT';
 
@@ -595,7 +618,7 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
       </View>
 
       {/* THẺ CA KHÁM BÊN PHẢI TRỤC (Ảnh 4) */}
-      <View style={{ flex: 1, paddingBottom: 16 }}>
+      <View style={{ flex: 1, minWidth: 0, paddingBottom: 16 }}>
         {isCurrentOrNext && (
           <View style={styles.nowIndicatorRow}>
             <View style={styles.nowBadge}>
@@ -618,7 +641,7 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
           <View style={styles.cardTopRow}>
             <View style={styles.examTypeHeader}>
               <Ionicons
-                name={isHomeVisit ? 'home' : 'business'}
+                name={isHomeVisit ? 'home' : apt.visit_type === 'TELEHEALTH' ? 'videocam' : 'business'}
                 size={14}
                 color="#2563EB"
                 style={{ marginRight: 5 }}
@@ -628,7 +651,7 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
               </LocalizedText>
             </View>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
               {recurrenceLabel && (
                 <View style={styles.recurrencePill}>
                   <Ionicons name="repeat" size={10} color="#7C3AED" style={{ marginRight: 2 }} />
@@ -642,10 +665,22 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
                   {
                     backgroundColor: isUpcoming
                       ? isOverdue
-                        ? '#FFF7ED'
+                        ? isDarkMode
+                          ? '#7C2D1266'
+                          : '#FFF7ED'
+                        : apt.status === 'CONFIRMED'
+                        ? isDarkMode
+                          ? '#064E3B66'
+                          : '#D1FAE5'
+                        : isDarkMode
+                        ? '#78350F55'
                         : '#FEF3C7'
                       : isCompleted
-                      ? '#D1FAE5'
+                      ? isDarkMode
+                        ? '#064E3B66'
+                        : '#D1FAE5'
+                      : isDarkMode
+                      ? '#7F1D1D55'
                       : '#FEE2E2',
                   },
                 ]}
@@ -656,15 +691,35 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
                     {
                       color: isUpcoming
                         ? isOverdue
-                          ? '#C2410C'
+                          ? isDarkMode
+                            ? '#FDBA74'
+                            : '#C2410C'
+                          : apt.status === 'CONFIRMED'
+                          ? isDarkMode
+                            ? '#34D399'
+                            : '#059669'
+                          : isDarkMode
+                          ? '#FBBF24'
                           : '#D97706'
                         : isCompleted
-                        ? '#059669'
+                        ? isDarkMode
+                          ? '#34D399'
+                          : '#059669'
+                        : isDarkMode
+                        ? '#FCA5A5'
                         : '#DC2626',
                     },
                   ]}
                 >
-                  {isUpcoming ? (isOverdue ? 'QUÁ GIỜ' : 'SẮP TỚI') : isCompleted ? 'ĐÃ KHÁM XONG' : 'ĐÃ HỦY'}
+                  {isUpcoming
+                    ? isOverdue
+                      ? 'QUÁ GIỜ'
+                      : apt.status === 'CONFIRMED'
+                      ? 'ĐÃ XÁC NHẬN'
+                      : 'SẮP TỚI'
+                    : isCompleted
+                    ? 'ĐÃ KHÁM XONG'
+                    : 'ĐÃ HỦY'}
                 </LocalizedText>
               </View>
             </View>
@@ -686,7 +741,7 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
                 <LocalizedText style={styles.patientAvatarText}>{initial}</LocalizedText>
               )}
             </View>
-            <View style={{ flex: 1, marginLeft: 10 }}>
+            <View style={{ flex: 1, minWidth: 0, marginLeft: 10 }}>
               <LocalizedText style={[styles.patientName, { color: colors.textPrimary }]}>
                 {apt.patient_name}
               </LocalizedText>
@@ -724,100 +779,142 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
             </View>
           ) : null}
 
+          <AppointmentHistoryLine
+            appointmentId={apt.id}
+            lastEvent={apt.last_event}
+            createdAt={apt.created_at}
+            isDarkMode={isDarkMode}
+          />
+
           {isUpcoming && (
             <View style={styles.metaBadgesRow}>
               <View
                 style={[
                   styles.familyBadge,
                   isFamilyConfirmed
-                    ? { backgroundColor: '#ECFDF5', borderColor: '#10B98155' }
-                    : { backgroundColor: '#FEF3C7', borderColor: '#F59E0B66' },
+                    ? {
+                        backgroundColor: isDarkMode ? '#064E3B66' : '#ECFDF5',
+                        borderColor: isDarkMode ? '#10B98166' : '#10B98155',
+                      }
+                    : {
+                        backgroundColor: isDarkMode ? '#78350F55' : '#FEF3C7',
+                        borderColor: isDarkMode ? '#F59E0B66' : '#F59E0B66',
+                      },
                 ]}
               >
                 <Ionicons
                   name={isFamilyConfirmed ? 'checkmark-circle' : 'hourglass-outline'}
                   size={12}
-                  color={isFamilyConfirmed ? '#059669' : '#D97706'}
+                  color={isFamilyConfirmed ? (isDarkMode ? '#34D399' : '#059669') : (isDarkMode ? '#FBBF24' : '#D97706')}
                   style={{ marginRight: 4 }}
                 />
                 <LocalizedText
                   style={[
                     styles.familyBadgeText,
-                    { color: isFamilyConfirmed ? '#059669' : '#B45309' },
+                    { color: isFamilyConfirmed ? (isDarkMode ? '#6EE7B7' : '#047857') : (isDarkMode ? '#FDE68A' : '#92400E') },
                   ]}
                 >
-                  {isFamilyConfirmed ? 'Gia đình đã xác nhận đón tiếp' : 'Chờ gia đình xác nhận'}
+                  {isFamilyConfirmed
+                    ? isFamilyRequested
+                      ? 'Bác sĩ đã xác nhận lịch'
+                      : 'Gia đình đã xác nhận đón tiếp'
+                    : isFamilyRequested
+                      ? 'Gia đình yêu cầu — Chờ BS xác nhận'
+                      : 'Chờ gia đình xác nhận'}
                 </LocalizedText>
               </View>
             </View>
           )}
 
-          <View style={[styles.actionRow, { borderTopColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
-            <TouchableOpacity
-              style={[
-                styles.btnViewPatient,
-                { backgroundColor: isDarkMode ? '#1E293B' : '#EFF6FF', borderColor: isDarkMode ? '#334155' : '#BFDBFE' },
-              ]}
-              onPress={() => onViewPatient(apt.patient_id)}
-              activeOpacity={0.75}
-            >
-              <Ionicons name="document-text" size={14} color="#2563EB" style={{ marginRight: 4 }} />
-              <LocalizedText style={styles.btnViewPatientText} numberOfLines={1}>
-                Hồ sơ
-              </LocalizedText>
-            </TouchableOpacity>
+          <View style={[styles.actionGroup, { borderTopColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
+            {isUpcoming && isFamilyRequested && apt.status === 'UPCOMING' && onConfirm && (
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={[styles.btnComplete, { backgroundColor: '#0284C7', shadowColor: '#0284C7' }]}
+                  onPress={() => onConfirm(apt.id)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="checkmark-done" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+                  <LocalizedText style={styles.btnCompleteText} numberOfLines={1}>
+                    Xác nhận
+                  </LocalizedText>
+                </TouchableOpacity>
+              </View>
+            )}
 
-            {isUpcoming && (
+            <View style={styles.actionRow}>
               <TouchableOpacity
-                style={styles.btnComplete}
-                onPress={() => onMarkCompleted(apt.id)}
-                activeOpacity={0.85}
+                style={[
+                  styles.btnViewPatient,
+                  { backgroundColor: isDarkMode ? '#1E293B' : '#EFF6FF', borderColor: isDarkMode ? '#334155' : '#BFDBFE' },
+                ]}
+                onPress={() => onViewPatient(apt.patient_id)}
+                activeOpacity={0.75}
               >
-                <Ionicons name="checkmark-circle" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
-                <LocalizedText style={styles.btnCompleteText} numberOfLines={1}>
-                  Đã khám
+                <Ionicons name="document-text" size={14} color="#2563EB" style={{ marginRight: 4 }} />
+                <LocalizedText style={styles.btnViewPatientText} numberOfLines={1}>
+                  Hồ sơ
                 </LocalizedText>
               </TouchableOpacity>
-            )}
+
+              {isUpcoming && (
+                <TouchableOpacity
+                  style={styles.btnComplete}
+                  onPress={() => onMarkCompleted(apt.id)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="checkmark-circle" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+                  <LocalizedText style={styles.btnCompleteText} numberOfLines={1}>
+                    Đã khám
+                  </LocalizedText>
+                </TouchableOpacity>
+              )}
+
+              {!isUpcoming && (
+                <TouchableOpacity
+                  style={[
+                    styles.btnDelete,
+                    { backgroundColor: isDarkMode ? '#450A0A55' : '#FEE2E2', borderColor: isDarkMode ? '#7F1D1D55' : '#FECACA' },
+                  ]}
+                  onPress={() => onDelete(apt.id, apt.exam_type || 'Khám bệnh')}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                >
+                  <Ionicons name="trash-outline" size={15} color="#DC2626" />
+                </TouchableOpacity>
+              )}
+            </View>
 
             {isUpcoming && (
-              <TouchableOpacity
-                style={[
-                  styles.btnEdit,
-                  { backgroundColor: isDarkMode ? '#334155' : '#F1F5F9', borderColor: isDarkMode ? '#475569' : '#E2E8F0' },
-                ]}
-                onPress={() => onEdit(apt)}
-                activeOpacity={0.7}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              >
-                <Ionicons name="pencil" size={15} color={isDarkMode ? '#CBD5E1' : '#475569'} />
-              </TouchableOpacity>
-            )}
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.btnSecondaryAction,
+                    { backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF', borderColor: isDarkMode ? '#475569' : '#CBD5E1' },
+                  ]}
+                  onPress={() => onEdit(apt)}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="calendar-outline" size={14} color={isDarkMode ? '#E2E8F0' : '#334155'} style={{ marginRight: 5 }} />
+                  <LocalizedText style={[styles.btnSecondaryText, { color: isDarkMode ? '#E2E8F0' : '#334155' }]} numberOfLines={1}>
+                    Dời lịch
+                  </LocalizedText>
+                </TouchableOpacity>
 
-            {isUpcoming ? (
-              <TouchableOpacity
-                style={[
-                  styles.btnDelete,
-                  { backgroundColor: isDarkMode ? '#450A0A55' : '#FEE2E2', borderColor: isDarkMode ? '#7F1D1D55' : '#FECACA' },
-                ]}
-                onPress={() => (onCancel ? onCancel(apt) : onDelete(apt.id, apt.exam_type || 'Khám bệnh'))}
-                activeOpacity={0.7}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              >
-                <Ionicons name="close-circle-outline" size={17} color="#DC2626" />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={[
-                  styles.btnDelete,
-                  { backgroundColor: isDarkMode ? '#450A0A55' : '#FEE2E2', borderColor: isDarkMode ? '#7F1D1D55' : '#FECACA' },
-                ]}
-                onPress={() => onDelete(apt.id, apt.exam_type || 'Khám bệnh')}
-                activeOpacity={0.7}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              >
-                <Ionicons name="trash-outline" size={15} color="#DC2626" />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.btnSecondaryAction,
+                    { backgroundColor: isDarkMode ? '#450A0A44' : '#FFFFFF', borderColor: isDarkMode ? '#7F1D1D' : '#FECACA' },
+                  ]}
+                  onPress={() => (onCancel ? onCancel(apt) : onDelete(apt.id, apt.exam_type || 'Khám bệnh'))}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="close-circle-outline" size={15} color="#DC2626" style={{ marginRight: 5 }} />
+                  <LocalizedText style={[styles.btnSecondaryText, { color: isDarkMode ? '#FCA5A5' : '#DC2626' }]} numberOfLines={1}>
+                    Hủy lịch
+                  </LocalizedText>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         </View>
@@ -827,49 +924,62 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
 };
 
 const styles = StyleSheet.create({
+  statsSummaryWrap: {
+    width: '100%',
+    minWidth: 0,
+  },
   summaryGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    gap: 8,
+    width: '100%',
+    minWidth: 0,
+    marginBottom: 10,
+    gap: 6,
   },
   summaryCard: {
     flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
     alignItems: 'center',
     paddingVertical: 10,
-    borderRadius: 16,
+    paddingHorizontal: 4,
+    borderRadius: 14,
     borderWidth: 1.5,
   },
   statIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 4,
   },
-  statNumber: { fontSize: 18, fontWeight: '800' },
-  statLabel: { fontSize: 11, fontWeight: '600', marginTop: 2 },
+  statNumber: { fontSize: 17, fontWeight: '800' },
+  statLabel: { fontSize: 10.5, fontWeight: '600', marginTop: 2 },
   filterRow: {
     flexDirection: 'row',
-    gap: 8,
-    paddingRight: 16,
-    paddingVertical: 2,
-    marginBottom: 8,
+    flexWrap: 'wrap',
+    width: '100%',
+    minWidth: 0,
+    gap: 6,
+    marginBottom: 10,
   },
   filterChip: {
-    paddingHorizontal: 15,
-    height: 36,
-    borderRadius: 18,
+    flexGrow: 1,
+    paddingHorizontal: 8,
+    minHeight: 38,
+    paddingVertical: 6,
+    borderRadius: 19,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  filterChipText: { fontSize: 12.5 },
+  filterChipText: { fontSize: 12 },
 
   // Week Calendar Strip Styles
   weekStripWrapper: {
+    width: '100%',
+    minWidth: 0,
     marginTop: 4,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   weekStripHeader: {
     flexDirection: 'row',
@@ -883,13 +993,18 @@ const styles = StyleSheet.create({
   },
   weekDaysRow: {
     flexDirection: 'row',
-    gap: 8,
-    paddingRight: 16,
+    width: '100%',
+    minWidth: 0,
+    gap: 5,
   },
   dayCard: {
-    width: 46,
-    paddingVertical: 9,
-    borderRadius: 18,
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
+    minHeight: 60,
+    paddingVertical: 8,
+    paddingHorizontal: 2,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -897,11 +1012,6 @@ const styles = StyleSheet.create({
   dayCardSelected: {
     backgroundColor: '#2563EB',
     borderColor: '#2563EB',
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 4,
   },
   dayLabelText: {
     fontSize: 10.5,
@@ -927,9 +1037,12 @@ const styles = StyleSheet.create({
   // Timeline Layout Styles
   timelineRow: {
     flexDirection: 'row',
+    width: '100%',
+    minWidth: 0,
   },
   timelineAxisCol: {
-    width: 58,
+    width: 54,
+    flexShrink: 0,
     alignItems: 'center',
     paddingTop: 4,
   },
@@ -1060,57 +1173,68 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 9,
-    height: 26,
+    paddingVertical: 4,
+    minHeight: 26,
     borderRadius: 8,
     borderWidth: 1,
   },
   familyBadgeText: { fontSize: 11, fontWeight: '700' },
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  actionGroup: {
     paddingTop: 10,
     marginTop: 2,
     borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 6,
+    gap: 8,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   btnViewPatient: {
     flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 38,
-    paddingHorizontal: 8,
-    borderRadius: 12,
+    minHeight: 44,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
     borderWidth: 1,
   },
   btnViewPatientText: { fontSize: 12.5, color: '#2563EB', fontWeight: '700' },
   btnComplete: {
-    flex: 1.15,
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 38,
-    paddingHorizontal: 8,
-    borderRadius: 12,
+    minHeight: 44,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
     backgroundColor: '#059669',
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 2,
   },
   btnCompleteText: { color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' },
-  btnEdit: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+  btnSecondaryAction: {
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
+    minHeight: 44,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
     borderWidth: 1,
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
   },
+  btnSecondaryText: { fontSize: 12.5, fontWeight: '700' },
   btnDelete: {
-    width: 38,
-    height: 38,
+    width: 44,
+    minHeight: 44,
     borderRadius: 12,
     borderWidth: 1,
     justifyContent: 'center',

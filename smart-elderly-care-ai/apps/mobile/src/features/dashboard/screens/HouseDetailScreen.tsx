@@ -37,13 +37,14 @@ import {
 } from '../components/house';
 
 export default function HouseDetailScreen({ navigation, route }: any) {
-  const { house, updateHouseAddress, fetchHouseFromBackend } = useVitalStore();
+  const { house, updateHouseAddress, updateHouseInfo, fetchHouseFromBackend } = useVitalStore();
   const { full_name, userName, phone_number, userPhone, household_id, role, userRole, permissions, userId, user_id } = useAuthStore();
   const { isDarkMode } = useTheme();
   const currentUserId = userId || user_id;
 
-  // State chỉnh sửa địa chỉ
+  // State chỉnh sửa tên nhà & địa chỉ
   const [isEditAddressModalVisible, setIsEditAddressModalVisible] = useState(false);
+  const [editHouseNameInput, setEditHouseNameInput] = useState('');
   const [editAddressInput, setEditAddressInput] = useState('');
   const [isSavingAddress, setIsSavingAddress] = useState(false);
 
@@ -122,12 +123,17 @@ export default function HouseDetailScreen({ navigation, route }: any) {
   const executeSaveAddress = async () => {
     try {
       setIsSavingAddress(true);
-      const clean = editAddressInput.trim();
-      updateHouseAddress(clean);
+      const cleanName = editHouseNameInput.trim() || 'Nhà của tôi';
+      const cleanAddress = editAddressInput.trim();
+      if (updateHouseInfo) {
+        updateHouseInfo({ name: cleanName, address: cleanAddress });
+      } else {
+        updateHouseAddress(cleanAddress);
+      }
       setIsEditAddressModalVisible(false);
-      triggerToast('Đã cập nhật địa chỉ căn nhà thành công!');
+      triggerToast('Đã cập nhật tên và địa chỉ căn nhà thành công!');
     } catch {
-      triggerToast('Không thể lưu địa chỉ. Vui lòng thử lại.', 'error');
+      triggerToast('Không thể lưu thông tin nhà. Vui lòng thử lại.', 'error');
     } finally {
       setIsSavingAddress(false);
     }
@@ -135,21 +141,23 @@ export default function HouseDetailScreen({ navigation, route }: any) {
 
   const handleSaveAddress = () => {
     Alert.alert(
-      'Xác nhận lưu địa chỉ',
-      'Bạn có chắc chắn muốn cập nhật địa chỉ căn nhà không?',
+      'Xác nhận lưu thông tin',
+      'Bạn có chắc chắn muốn cập nhật tên và địa chỉ căn nhà không?',
       [
         { text: 'Hủy', style: 'cancel' },
-        { text: 'Lưu địa chỉ', onPress: executeSaveAddress },
+        { text: 'Lưu lại', onPress: executeSaveAddress },
       ]
     );
   };
 
   const handleCloseAddressModal = () => {
-    const isDirty = editAddressInput.trim() !== (house?.address || '').trim();
+    const isDirty =
+      editAddressInput.trim() !== (house?.address || '').trim() ||
+      editHouseNameInput.trim() !== (house?.name || 'Nhà của tôi').trim();
     if (isDirty) {
       Alert.alert(
         'Thay đổi chưa lưu',
-        'Địa chỉ đã được chỉnh sửa. Bạn có muốn lưu thay đổi trước khi thoát không?',
+        'Thông tin căn nhà đã được chỉnh sửa. Bạn có muốn lưu thay đổi trước khi thoát không?',
         [
           { text: 'Tiếp tục sửa', style: 'cancel' },
           {
@@ -157,7 +165,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
             style: 'destructive',
             onPress: () => setIsEditAddressModalVisible(false),
           },
-          { text: 'Lưu địa chỉ', onPress: executeSaveAddress },
+          { text: 'Lưu lại', onPress: executeSaveAddress },
         ]
       );
     } else {
@@ -382,7 +390,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
         title: 'Mời thành viên gia đình',
         message: `Chào bạn, bạn nhận được lời mời tham gia căn nhà "${
           house?.name || 'Nhà của tôi'
-        }" với vai trò ${roleName} trên ứng dụng Smart Elderly Care AI để cùng chăm sóc và bảo vệ người thân. Mã mời: ${code} (hiệu lực trong 30 phút). Vui lòng tải ứng dụng và đăng nhập bằng số điện thoại của bạn.`,
+        }" với vai trò ${roleName} trên ứng dụng Smart Elderly Care AI để cùng chăm sóc và bảo vệ người thân. Mã mời: ${code} (hiệu lực trong 10 phút). Vui lòng tải ứng dụng và đăng nhập bằng số điện thoại của bạn.`,
       });
     } catch {
       Alert.alert('Thông báo', 'Không thể mở trình chia sẻ.');
@@ -491,6 +499,7 @@ export default function HouseDetailScreen({ navigation, route }: any) {
               disabled={!isCurrentUserOwner}
               onPress={() => {
                 if (!isCurrentUserOwner) return;
+                setEditHouseNameInput(house?.name || 'Nhà của tôi');
                 setEditAddressInput(house?.address || '');
                 setIsEditAddressModalVisible(true);
               }}
@@ -579,8 +588,8 @@ export default function HouseDetailScreen({ navigation, route }: any) {
             ))
           )}
 
-          {/* Nút Thêm Thành Viên Mới (Chỉ hiển thị cho Chủ hộ) */}
-          {isCurrentUserOwner && (
+          {/* Nút Thêm Thành Viên Mới (Chỉ hiển thị cho Chủ hộ, ẩn khi đi từ màn hình Mời thành viên) */}
+          {isCurrentUserOwner && route?.params?.from !== 'HouseInvite' && (
             <TouchableOpacity
               style={styles.addMemberRow}
               onPress={() => navigation.navigate('HouseInvite')}
@@ -773,9 +782,11 @@ export default function HouseDetailScreen({ navigation, route }: any) {
         colors={colors}
       />
 
-      {/* Modal 5: Cập nhật địa chỉ nhà thực tế */}
+      {/* Modal 5: Cập nhật tên nhà & địa chỉ thực tế */}
       <HouseEditAddressModal
         visible={isEditAddressModalVisible}
+        houseName={editHouseNameInput}
+        setHouseName={setEditHouseNameInput}
         address={editAddressInput}
         setAddress={setEditAddressInput}
         isSaving={isSavingAddress}

@@ -161,8 +161,11 @@ async def notify_doctor_appointment_confirmed(
 
     # Cập nhật ghi chú xác nhận của gia đình
     confirm_tag = "[ĐÃ XÁC NHẬN ĐÓN TIẾP]"
-    if not apt.clinical_notes or confirm_tag not in apt.clinical_notes:
-        apt.clinical_notes = f"{confirm_tag} {apt.clinical_notes or ''}".strip()
+    cleaned_notes = (apt.clinical_notes or "").replace("[BS dời lịch]", "").strip()
+    if confirm_tag not in cleaned_notes or "[BS dời lịch]" in (apt.clinical_notes or ""):
+        apt.clinical_notes = (
+            cleaned_notes if confirm_tag in cleaned_notes else f"{confirm_tag} {cleaned_notes}".strip()
+        )
         await db.commit()
         await db.refresh(apt)
 

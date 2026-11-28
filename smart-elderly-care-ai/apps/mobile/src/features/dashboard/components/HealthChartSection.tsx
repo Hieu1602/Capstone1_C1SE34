@@ -35,6 +35,9 @@ interface HealthChartSectionProps {
   scrubberMinutes?: number;
   isDarkMode: boolean;
   colors: any;
+  /** Ngưỡng cảnh báo nhịp tim của bệnh nhân – vạch tham chiếu trên biểu đồ */
+  hrMin: number;
+  hrMax: number;
 }
 
 export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(({
@@ -46,6 +49,8 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
   scrubberMinutes,
   isDarkMode,
   colors,
+  hrMin,
+  hrMax,
 }) => {
   const [containerWidth, setContainerWidth] = useState(SCREEN_WIDTH - 64);
   const scrollRef = useRef<any>(null);
@@ -73,13 +78,14 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
   const bottomY = chartHeight - padBottom;
 
   // Tối ưu hóa: Memoize việc tính toán đường cong SVG Bezier để không tính lại khi chỉ tua scrubber
-  const { coords, linePath, areaPath, y60, y100 } = useMemo(() => {
+  const { coords, linePath, areaPath, yLow, yHigh } = useMemo(() => {
     if (!hasData) {
-      return { coords: [], linePath: '', areaPath: '', y60: 0, y100: 0 };
+      return { coords: [], linePath: '', areaPath: '', yLow: 0, yHigh: 0 };
     }
     const hrs = safeChartData.map((p) => p.hr);
-    const minVal = Math.max(30, Math.min(...hrs, 55) - 8);
-    const maxVal = Math.min(180, Math.max(...hrs, 105) + 8);
+    // Trục Y luôn bao gồm cả 2 vạch ngưỡng để vạch cảnh báo luôn hiển thị
+    const minVal = Math.max(30, Math.min(...hrs, hrMin) - 8);
+    const maxVal = Math.min(220, Math.max(...hrs, hrMax) + 8);
     const range = Math.max(20, maxVal - minVal);
 
     const baseCoords = safeChartData.map((point, idx) => {
@@ -114,17 +120,17 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
       aPath = `${lPath} L ${padLeft + usableW} ${bottomY} L ${padLeft} ${bottomY} Z`;
     }
 
-    const _y60 = padTop + (1 - (60 - minVal) / range) * usableH;
-    const _y100 = padTop + (1 - (100 - minVal) / range) * usableH;
+    const _yLow = padTop + (1 - (hrMin - minVal) / range) * usableH;
+    const _yHigh = padTop + (1 - (hrMax - minVal) / range) * usableH;
 
     return {
       coords: baseCoords,
       linePath: lPath,
       areaPath: aPath,
-      y60: _y60,
-      y100: _y100,
+      yLow: _yLow,
+      yHigh: _yHigh,
     };
-  }, [safeChartData, hasData, usableW, usableH, bottomY]);
+  }, [safeChartData, hasData, usableW, usableH, bottomY, hrMin, hrMax]);
 
   // Chỉ highlight duy nhất 1 điểm gần nhất với mốc scrubber thay vì mọi điểm trong +/-45 phút
   const closestIdx = useMemo(() => {
@@ -190,24 +196,24 @@ export const HealthChartSection: React.FC<HealthChartSectionProps> = React.memo(
                 </LinearGradient>
               </Defs>
 
-              {/* Đường tham chiếu ngưỡng chuẩn 60 - 100 bpm */}
-              {y100 >= padTop && y100 <= bottomY && (
+              {/* Vạch ngưỡng cảnh báo nhịp tim của bệnh nhân (khớp dòng "Ngưỡng cảnh báo") */}
+              {yHigh >= padTop && yHigh <= bottomY && (
                 <Line
                   x1={padLeft}
-                  y1={y100}
+                  y1={yHigh}
                   x2={svgWidth - padRight}
-                  y2={y100}
+                  y2={yHigh}
                   stroke={isDarkMode ? '#334155' : '#E2E8F0'}
                   strokeWidth={1}
                   strokeDasharray="4 4"
                 />
               )}
-              {y60 >= padTop && y60 <= bottomY && (
+              {yLow >= padTop && yLow <= bottomY && (
                 <Line
                   x1={padLeft}
-                  y1={y60}
+                  y1={yLow}
                   x2={svgWidth - padRight}
-                  y2={y60}
+                  y2={yLow}
                   stroke={isDarkMode ? '#334155' : '#E2E8F0'}
                   strokeWidth={1}
                   strokeDasharray="4 4"

@@ -237,12 +237,26 @@ async def update_device_config(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Bạn không có quyền sửa đổi cấu hình thiết bị & ngưỡng an toàn. Quyền này thuộc về Người sở hữu.",
                 )
+    from app.services.vital_thresholds import (
+        THRESHOLD_FIELDS,
+        format_thresholds_summary,
+        serialize_thresholds,
+        validate_threshold_pairs,
+    )
+
     res_cfg = await crud_device.update_config(db, device=device, config_in=config_in)
+    current_thresholds = serialize_thresholds(res_cfg)
+    err = validate_threshold_pairs(current_thresholds)
+    if err:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=err)
+    # Commit TRƯỚC khi gửi thông báo, để client refetch ngay sẽ đọc được giá trị mới
+    await db.commit()
+    await db.refresh(res_cfg)
+    current_thresholds = serialize_thresholds(res_cfg)
 
     # Nếu có thay đổi ngưỡng cảnh báo sinh hiệu, đồng bộ và thông báo cho Bác sĩ phụ trách
-    has_threshold_changes = any(
-        v is not None for v in (config_in.hr_threshold_high, config_in.hr_threshold_low, config_in.spo2_threshold_low)
-    )
+    has_threshold_changes = any(getattr(config_in, f, None) is not None for f in THRESHOLD_FIELDS)
     if has_threshold_changes and device.house_id:
         try:
             import json
@@ -261,12 +275,7 @@ async def update_device_config(
             # Đồng bộ bộ nhớ lâm sàng
             for k in (elderly_id_str, "1"):
                 if k and k in _CLINICAL_STORE:
-                    if config_in.hr_threshold_low is not None:
-                        _CLINICAL_STORE[k]["hr_threshold_low"] = config_in.hr_threshold_low
-                    if config_in.hr_threshold_high is not None:
-                        _CLINICAL_STORE[k]["hr_threshold_high"] = config_in.hr_threshold_high
-                    if config_in.spo2_threshold_low is not None:
-                        _CLINICAL_STORE[k]["spo2_threshold_low"] = config_in.spo2_threshold_low
+                    _CLINICAL_STORE[k].update(current_thresholds)
 
             doc_stmt = (
                 select(User)
@@ -279,11 +288,11 @@ async def update_device_config(
             doc_res = await db.execute(doc_stmt)
             doctors = list(doc_res.scalars().all())
 
-            hr_l = config_in.hr_threshold_low or res_cfg.hr_threshold_low
-            hr_h = config_in.hr_threshold_high or res_cfg.hr_threshold_high
-            spo2_l = config_in.spo2_threshold_low or res_cfg.spo2_threshold_low
             updater_name = current_user.full_name or "Chủ nhà"
-            notif_msg = f"⚙️ {updater_name} đã điều chỉnh ngưỡng an toàn sinh hiệu cho cụ {elderly_name}: Tim {hr_l} - {hr_h} bpm, SpO2 Min {spo2_l}%."
+            notif_msg = (
+                f"⚙️ {updater_name} đã điều chỉnh ngưỡng an toàn sinh hiệu cho cụ {elderly_name} "
+                f"({format_thresholds_summary(current_thresholds)})."
+            )
 
             for doc in doctors:
                 if doc.id == current_user.id:
@@ -311,15 +320,16 @@ async def update_device_config(
                         "patient_id": elderly_id_str,
                         "doctor_id": str(doc.id),
                         "created_at": new_incident.created_at.isoformat() if new_incident.created_at else None,
-                        "thresholds": {
-                            "hr_threshold_low": hr_l,
-                            "hr_threshold_high": hr_h,
-                            "spo2_threshold_low": spo2_l,
-                        },
+                        "device_id": str(device.id),
+                        "thresholds": current_thresholds,
                     }
                 }, ensure_ascii=False)
                 for client_ws in list(alert_clients):
-                    await client_ws.send_text(ws_payload)
+                    try:
+                        await client_ws.send_text(ws_payload)
+                    except Exception:
+                        if client_ws in alert_clients:
+                            alert_clients.remove(client_ws)
         except Exception:
             pass
 
