@@ -31,8 +31,15 @@ class AlarmDismissReceiver : BroadcastReceiver() {
         if (action == "com.c1se34.smartelderlycare.ACTION_ACKNOWLEDGE_ALARM" && !incidentId.isNullOrBlank()) {
             thread(name = "AlarmDismiss-Ack-Thread", isDaemon = true) {
                 try {
-                    val serverBaseUrl = "http://16.178.128.42:8000/api/v1"
-                    val url = URL("$serverBaseUrl/incidents/$incidentId/acknowledge")
+                    val prefs = context.getSharedPreferences("smartcare_bg_prefs", Context.MODE_PRIVATE)
+                    val savedUrl = prefs.getString("server_url", null)?.trim()?.removeSuffix("/")
+                    val token = prefs.getString("auth_token", null)
+                    val base = if (!savedUrl.isNullOrBlank()) {
+                        if (savedUrl.endsWith("/api/v1")) savedUrl else "$savedUrl/api/v1"
+                    } else {
+                        "http://16.178.128.42:8000/api/v1"
+                    }
+                    val url = URL("$base/incidents/$incidentId/acknowledge")
                     val conn = (url.openConnection() as HttpURLConnection).apply {
                         requestMethod = "POST"
                         connectTimeout = 3500
@@ -40,6 +47,9 @@ class AlarmDismissReceiver : BroadcastReceiver() {
                         doOutput = true
                         setRequestProperty("Content-Type", "application/json")
                         setRequestProperty("Accept", "application/json")
+                        if (!token.isNullOrBlank()) {
+                            setRequestProperty("Authorization", "Bearer $token")
+                        }
                     }
                     val jsonPayload = """{"note":"Đã xử lý và tắt chuông trực tiếp từ thanh thông báo điện thoại","operator_name":"Người nhà"}"""
                     conn.outputStream.use { os ->

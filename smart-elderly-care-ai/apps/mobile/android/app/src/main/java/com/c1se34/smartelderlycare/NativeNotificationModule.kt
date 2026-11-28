@@ -299,6 +299,20 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                     Manifest.permission.CALL_PHONE
                 ) == PackageManager.PERMISSION_GRANTED
 
+                if (hasCallPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    try {
+                        val telecomManager =
+                            context.getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
+                        if (telecomManager != null) {
+                            telecomManager.placeCall(telUri, android.os.Bundle())
+                            Log.d(TAG, "performEmergencyCall($sanitized) thành công qua TelecomManager.placeCall")
+                            return "CALLED"
+                        }
+                    } catch (te: Exception) {
+                        Log.w(TAG, "TelecomManager.placeCall lỗi, fallback sang startActivity: ${te.message}")
+                    }
+                }
+
                 val intent = Intent(
                     if (hasCallPermission) Intent.ACTION_CALL else Intent.ACTION_DIAL,
                     telUri
@@ -511,12 +525,9 @@ class NativeNotificationModule(private val reactContext: ReactApplicationContext
                 registerActiveNotification(notifId)
             }
 
-            // Intent khi người dùng bấm vào thông báo -> Mở app (chỉ dừng chuông báo động nếu là cảnh báo khẩn cấp)
+            // Intent khi người dùng bấm vào thông báo -> Mở app để xem modal đếm ngược (không tự ý hủy bộ đếm 30s)
             val intent = Intent(reactContext, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                if (isEmergency) {
-                    putExtra("STOP_ALARM", true)
-                }
             }
             val pendingIntent = PendingIntent.getActivity(
                 reactContext,

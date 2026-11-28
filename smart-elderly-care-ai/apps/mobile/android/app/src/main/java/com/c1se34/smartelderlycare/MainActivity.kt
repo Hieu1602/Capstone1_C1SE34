@@ -47,6 +47,7 @@ class MainActivity : ReactActivity() {
   override fun onResume() {
     super.onResume()
     if (intent?.getBooleanExtra("STOP_ALARM", false) == true) {
+      intent?.removeExtra("STOP_ALARM")
       NativeNotificationModule.stopAlarm(this)
     }
   }
@@ -54,7 +55,8 @@ class MainActivity : ReactActivity() {
   override fun onNewIntent(intent: Intent?) {
     super.onNewIntent(intent)
     setIntent(intent)
-    if (intent?.getBooleanExtra("STOP_ALARM", false) == true || intent?.hasExtra("OPEN_INCIDENT_ID") == true) {
+    if (intent?.getBooleanExtra("STOP_ALARM", false) == true) {
+      intent.removeExtra("STOP_ALARM")
       NativeNotificationModule.stopAlarm(this)
     }
   }

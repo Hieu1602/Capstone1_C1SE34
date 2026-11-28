@@ -18,7 +18,8 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useVitalStore } from '../store/useVitalStore';
 import { incidentsApi } from '../services/api';
 import { resolveIncidentMediaUrl } from '../services/camera';
-import { dialEmergencyNumber, EMERGENCY_TEST_PHONE, isDoctorSession, requestEmergencyCallPermission } from '../services/emergency';
+import { dialEmergencyNumber, EMERGENCY_TEST_PHONE, requestEmergencyCallPermission } from '../services/emergency';
+import { notificationService } from '../services/notificationService';
 
 export const CriticalEscalationModal: React.FC = () => {
   const { activeEscalation, autoCallEnabled, markEscalated, clearEscalation } = useEscalationStore();
@@ -81,6 +82,7 @@ export const CriticalEscalationModal: React.FC = () => {
     const isTimeToCall = secondsLeft === 0 || activeEscalation.status === 'ESCALATED';
     if (isTimeToCall && !hasAutoCalled) {
       setHasAutoCalled(true);
+      notificationService.stopEmergencyAlarm();
       if (activeEscalation.status !== 'ESCALATED') {
         markEscalated(activeEscalation.incidentId);
       }
@@ -110,6 +112,7 @@ export const CriticalEscalationModal: React.FC = () => {
 
   const handleCallNow = async () => {
     setHasAutoCalled(true);
+    notificationService.stopEmergencyAlarm();
     markEscalated(activeEscalation.incidentId);
     incidentsApi
       .escalate(activeEscalation.incidentId, 'Người dùng đã nhấn Gọi ngay 115')
@@ -121,6 +124,7 @@ export const CriticalEscalationModal: React.FC = () => {
 
   const handleCancelAndSupport = async () => {
     setIsCancelling(true);
+    notificationService.stopEmergencyAlarm();
     const handlerName = useAuthStore.getState().userName || 'Người nhà';
     try {
       await useAlertStore
