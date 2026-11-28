@@ -41,10 +41,10 @@ const buildOptimisticDetail = (p: any, fallbackId: string): PatientDetail | null
     avatar_url: p.avatar_url,
     house_name: p.house_name,
     house_address: p.house_address,
-    heart_rate: p.heart_rate,
-    spo2: p.spo2,
-    blood_pressure: p.blood_pressure,
-    skin_temp_max: p.skin_temp_max,
+    heart_rate: p.is_online ? p.heart_rate : null,
+    spo2: p.is_online ? p.spo2 : null,
+    blood_pressure: p.is_online ? p.blood_pressure : null,
+    skin_temp_max: p.is_online ? p.skin_temp_max : null,
   };
 };
 

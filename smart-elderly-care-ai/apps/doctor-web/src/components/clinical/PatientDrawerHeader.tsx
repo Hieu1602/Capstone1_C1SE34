@@ -32,6 +32,11 @@ const CLINICAL_STATUS_CONFIG = {
     className:
       'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-900/60',
   },
+  offline: {
+    label: 'Ngoại tuyến',
+    className:
+      'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+  },
 } as const;
 
 const HEADER_ACTION_BTN_CLASS =
@@ -48,9 +53,9 @@ export const PatientDrawerHeader: React.FC<PatientDrawerHeaderProps> = ({
   isSelectedWarning,
   onClose,
 }) => {
-  const statusKey = isSelectedDanger ? 'danger' : isSelectedWarning ? 'warning' : 'stable';
+  const isOnline = Boolean(selectedPatientCard?.is_online ?? patientDetail.is_online);
+  const statusKey = isSelectedDanger ? 'danger' : isSelectedWarning ? 'warning' : isOnline ? 'stable' : 'offline';
   const clinicalStatus = CLINICAL_STATUS_CONFIG[statusKey];
-  const isOnline = Boolean(selectedPatientCard?.is_online);
 
   const handleCallFamily = () => {
     if (activeEmergencyPhone) {
@@ -82,9 +87,8 @@ export const PatientDrawerHeader: React.FC<PatientDrawerHeaderProps> = ({
               )}
             </div>
             <span
-              className={`absolute bottom-0 right-0 h-4 w-4 rounded-full ring-2 ring-white dark:ring-[#131C31] shadow-sm z-10 ${
-                isOnline ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
-              }`}
+              className={`absolute bottom-0 right-0 h-4 w-4 rounded-full ring-2 ring-white dark:ring-[#131C31] shadow-sm z-10 ${isOnline ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                }`}
               title={isOnline ? 'Smartband đang kết nối' : 'Chờ tín hiệu Smartband'}
             />
           </div>
@@ -99,11 +103,10 @@ export const PatientDrawerHeader: React.FC<PatientDrawerHeaderProps> = ({
                 {clinicalStatus.label}
               </span>
               <span
-                className={`hidden sm:inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
-                  isOnline
+                className={`hidden sm:inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border ${isOnline
                     ? 'bg-emerald-50/80 text-emerald-700 border-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60'
                     : 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
-                }`}
+                  }`}
               >
                 <Watch className="h-3 w-3" />
                 <span>{isOnline ? 'Smartband Online' : 'Chờ tín hiệu'}</span>

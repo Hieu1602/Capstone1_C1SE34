@@ -574,3 +574,17 @@ test('T2-F11-05 Doctor Web AppointmentItem type includes TELEHEALTH and duration
   assert.match(code, /AppointmentItem[\s\S]*?TELEHEALTH/);
   assert.match(code, /AppointmentItem[\s\S]*?duration_minutes/);
 });
+
+test('Doctor Web requires is_online for Ổn định status/filter and shows Ngoại tuyến when offline', () => {
+  const pageCode = parseTsAst(p('pages/PatientsPage.tsx')).code;
+  const cardCode = parseTsAst(p('components/clinical/PatientCard.tsx')).code;
+  const headerCode = parseTsAst(p('components/clinical/PatientDrawerHeader.tsx')).code;
+  const tableCode = parseTsAst(p('components/dashboard/DoctorPatientTable.tsx')).code;
+  assert.match(pageCode, /normal\s*=[\s\S]*?p\.is_online/);
+  assert.match(pageCode, /statusFilter === 'NORMAL'[\s\S]*?p\.is_online/);
+  assert.match(cardCode, /patient\.is_online\s*\?\s*'Ổn định'\s*:\s*'Ngoại tuyến'/);
+  assert.match(cardCode, /patient\.is_online && patient\.heart_rate != null/);
+  assert.match(headerCode, /offline:\s*\{[\s\S]*?label:\s*'Ngoại tuyến'/);
+  assert.match(tableCode, /patient\.is_online[\s\S]*?Ổn định[\s\S]*?Ngoại tuyến/);
+  assert.match(tableCode, /patient\.is_online && patient\.heart_rate != null/);
+});

@@ -221,12 +221,26 @@ class CRUDDoctor:
         if cached_cards_data is not None:
             cached_cards: List[DoctorPatientCard] = []
             for item in cached_cards_data:
-                # Cập nhật nhanh sinh hiệu thời gian thực từ Redis RAM nếu có bản tin mới
+                if not item.get("is_online"):
+                    item["heart_rate"] = None
+                    item["spo2"] = None
+                    item["skin_temp_max"] = None
+                    item["blood_pressure"] = None
+                    cached_cards.append(DoctorPatientCard(**item))
+                    continue
+
+                # Cập nhật nhanh sinh hiệu thời gian thực từ Redis RAM nếu thiết bị đang trực tuyến
                 dev_id = item.get("device_id")
                 if dev_id:
                     try:
                         latest_vs = await redis_service.get_latest_vitals(str(dev_id))
-                        if latest_vs:
+                        if latest_vs and latest_vs.get("bracelet_connected") is False:
+                            item["is_online"] = False
+                            item["heart_rate"] = None
+                            item["spo2"] = None
+                            item["skin_temp_max"] = None
+                            item["blood_pressure"] = None
+                        elif latest_vs:
                             if latest_vs.get("heart_rate"):
                                 item["heart_rate"] = latest_vs["heart_rate"]
                             if latest_vs.get("spo2"):
@@ -236,14 +250,13 @@ class CRUDDoctor:
                                 item["skin_temp_max"] = temp_val
                             if latest_vs.get("bp_systolic") is not None and latest_vs.get("bp_diastolic") is not None:
                                 item["blood_pressure"] = f"{latest_vs['bp_systolic']}/{latest_vs['bp_diastolic']} mmHg"
-                            if item.get("is_online"):
-                                item["last_updated"] = "Vừa xong (Trực tuyến)"
-                                hr_val = item.get("heart_rate")
-                                spo2_val = item.get("spo2")
-                                if (spo2_val is not None and spo2_val < 90) or (hr_val is not None and (hr_val > 120 or hr_val < 50)):
-                                    item["health_status"] = "DANGER"
-                                elif (spo2_val is not None and spo2_val < 95) or (hr_val is not None and (hr_val > 100 or hr_val < 55)):
-                                    item["health_status"] = "WARNING"
+                            item["last_updated"] = "Vừa xong (Trực tuyến)"
+                            hr_val = item.get("heart_rate")
+                            spo2_val = item.get("spo2")
+                            if (spo2_val is not None and spo2_val < 90) or (hr_val is not None and (hr_val > 120 or hr_val < 50)):
+                                item["health_status"] = "DANGER"
+                            elif (spo2_val is not None and spo2_val < 95) or (hr_val is not None and (hr_val > 100 or hr_val < 55)):
+                                item["health_status"] = "WARNING"
                     except Exception:
                         pass
                 cached_cards.append(DoctorPatientCard(**item))
@@ -392,8 +405,10 @@ class CRUDDoctor:
                 is_smartband_online = bool(band_device.is_online and is_fresh and cache_connected_ok)
 
                 if not is_smartband_online:
-                    # shortcut: giữ lại vitals lịch sử để hiển thị (không phải realtime),
-                    # frontend phân biệt qua is_online=False
+                    hr = None
+                    spo2 = None
+                    temp = None
+                    bp_str = None
                     if latest_dt:
                         last_updated_str = latest_dt.isoformat()
 
@@ -546,8 +561,10 @@ class CRUDDoctor:
             is_smartband_online = band_device.is_online and is_fresh and cache_connected_ok
 
             if not is_smartband_online:
-                # shortcut: giữ lại vitals lịch sử để hiển thị (không phải realtime),
-                # frontend phân biệt qua is_online=False
+                hr = None
+                spo2 = None
+                temp = None
+                bp_str = None
                 if latest_dt:
                     last_updated_str = latest_dt.isoformat()
 
