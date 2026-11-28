@@ -1257,13 +1257,21 @@ async def get_my_terminals(
             client_location = unquote(client_location).strip()
         except Exception:
             pass
+    raw_dev_name = request.headers.get("x-device-name")
+    decoded_dev_name = None
+    if raw_dev_name:
+        try:
+            from urllib.parse import unquote
+            decoded_dev_name = unquote(raw_dev_name).strip()
+        except Exception:
+            decoded_dev_name = raw_dev_name.strip()
     terminals = await crud_user_terminal.get_terminals_for_user(
         db,
         user=current_user,
         current_ip=client_ip,
         current_user_agent=user_agent,
         custom_location=client_location,
-        custom_device_name=request.headers.get("x-client-platform"),
+        custom_device_name=decoded_dev_name or request.headers.get("x-client-platform"),
     )
 
     return terminals

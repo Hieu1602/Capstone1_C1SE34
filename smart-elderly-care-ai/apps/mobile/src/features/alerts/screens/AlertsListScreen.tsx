@@ -32,7 +32,6 @@ import { MedicationAlertCard } from '../components/MedicationAlertCard';
 import { IncidentAlertCard } from '../components/IncidentAlertCard';
 import { HouseActionModal, HouseModalMode } from '../components/HouseActionModal';
 import { AlertsEmptyState } from '../components/AlertsEmptyState';
-import { handleHeaderBack } from '../../../navigation/navigationHelpers';
 import { notificationService } from '../../../services/notificationService';
 
 type FilterType = 'ALL' | 'CRITICAL' | 'VITAL' | 'MEDICATION' | 'APPOINTMENT';
@@ -487,17 +486,6 @@ export default function AlertsListScreen({ navigation, route }: any) {
       {/* 1. Header */}
       <View style={[styles.topHeader, isDarkMode && { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <View style={styles.headerLeftRow}>
-          <TouchableOpacity
-            style={[styles.backBtn, isDarkMode && { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => handleHeaderBack(navigation, route, 'Home', false)}
-            activeOpacity={0.7}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityLabel="Quay lại"
-            accessibilityRole="button"
-          >
-            <Ionicons name="chevron-back" size={22} color={isDarkMode ? colors.textPrimary : Colors.textPrimary} />
-          </TouchableOpacity>
-
           <View style={styles.headerTitleCol}>
             <Text style={[styles.headerTitle, isDarkMode && { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>
               Thông Báo &amp; Sự Kiện

@@ -24,6 +24,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { authApi } from '../../../services/api';
 import { useTheme } from '../../../store/useThemeStore';
+import { useAuthStore } from '../../../store/useAuthStore';
 import {
   ForgotRequestStep,
   ForgotOtpStep,
@@ -41,9 +42,11 @@ type Feedback = { type: 'success' | 'error' | 'info' | 'complete'; message: stri
 
 export default function ForgotPasswordScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const { accessToken, phone_number, userPhone } = useAuthStore();
+  const isAuthenticated = Boolean(accessToken);
 
   const [step, setStep] = useState<Step>('request');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(() => phone_number || userPhone || '');
   const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -186,9 +189,15 @@ export default function ForgotPasswordScreen({ navigation }: any) {
             <TouchableOpacity
               style={styles.backButton}
               onPress={() => {
+                if (step === 'verify') {
+                  setStep('request');
+                  setOtp('');
+                  setFeedback(null);
+                  return;
+                }
                 if (navigation.canGoBack?.()) {
                   navigation.goBack();
-                } else {
+                } else if (!isAuthenticated) {
                   navigation.navigate('Login');
                 }
               }}
@@ -274,7 +283,11 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                 { backgroundColor: colors.primary },
                 isLoading && { opacity: 0.7 },
               ]}
-              onPress={feedback?.type === 'complete' ? () => navigation.navigate('Login') : primaryAction}
+              onPress={
+                feedback?.type === 'complete'
+                  ? () => (isAuthenticated ? navigation.goBack() : navigation.navigate('Login'))
+                  : primaryAction
+              }
               activeOpacity={0.8}
               disabled={isLoading}
             >
@@ -283,7 +296,9 @@ export default function ForgotPasswordScreen({ navigation }: any) {
               ) : (
                 <Text style={styles.primaryText}>
                   {feedback?.type === 'complete'
-                    ? 'Đăng nhập ngay'
+                    ? isAuthenticated
+                      ? 'Hoàn tất'
+                      : 'Đăng nhập ngay'
                     : step === 'request'
                       ? 'Gửi mã xác minh'
                       : step === 'verify'
@@ -293,10 +308,17 @@ export default function ForgotPasswordScreen({ navigation }: any) {
               )}
             </TouchableOpacity>
 
-            {/* Liên kết quay lại đăng nhập */}
-            <TouchableOpacity style={styles.loginLink} onPress={() => navigation.navigate('Login')}>
+            {/* Liên kết quay lại */}
+            <TouchableOpacity
+              style={styles.loginLink}
+              onPress={() => (isAuthenticated ? navigation.goBack() : navigation.navigate('Login'))}
+            >
               <Text style={[styles.link, { color: colors.primary }]}>
-                {feedback?.type === 'complete' ? 'Đăng nhập bằng mật khẩu mới' : 'Quay lại màn hình đăng nhập'}
+                {isAuthenticated
+                  ? 'Quay lại trang trước'
+                  : feedback?.type === 'complete'
+                    ? 'Đăng nhập bằng mật khẩu mới'
+                    : 'Quay lại màn hình đăng nhập'}
               </Text>
             </TouchableOpacity>
           </View>

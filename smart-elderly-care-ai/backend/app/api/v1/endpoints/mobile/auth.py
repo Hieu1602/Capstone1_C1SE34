@@ -282,19 +282,20 @@ async def complete_password_reset(
     """
     phone = normalize_phone(payload.phone)
 
-    # Xác thực mã OTP
-    try:
-        valid = await run_in_threadpool(verify_otp, phone, payload.otp_code)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Lỗi xác thực mã OTP: {str(exc)}",
-        ) from exc
-    if not valid:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Mã xác minh không chính xác hoặc đã hết hạn.",
-        )
+    # Xác thực mã OTP (cho phép nếu đã xác thực qua /auth/verify-otp ngay trước đó)
+    if not is_recently_verified(phone):
+        try:
+            valid = await run_in_threadpool(verify_otp, phone, payload.otp_code)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Lỗi xác thực mã OTP: {str(exc)}",
+            ) from exc
+        if not valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Mã xác minh không chính xác hoặc đã hết hạn.",
+            )
 
     # Tìm user và cập nhật mật khẩu mới
     user = await crud_user.get_by_phone(db, phone=phone)
@@ -472,6 +473,7 @@ async def _record_login_background(
     user_name: str,
     user_role: str,
     client_platform: Optional[str] = None,
+    device_name: Optional[str] = None,
 ):
     """Ghi nhận terminal, last_login_at và audit log chạy ngầm, không làm nghẽn quá trình đăng nhập."""
     async with AsyncSessionFactory() as session:
@@ -481,7 +483,7 @@ async def _record_login_background(
                 user_id=user_id,
                 ip_address=client_ip,
                 user_agent=user_agent,
-                custom_device_name=client_platform,
+                custom_device_name=device_name or client_platform,
                 custom_location=client_location,
             )
             await session.execute(
@@ -688,6 +690,14 @@ def _build_login_success_token(
 
     # Ghi nhận terminal, last_login_at và audit log chạy ngầm (Non-blocking)
     client_platform = request.headers.get("x-client-platform")
+    raw_dev_name = request.headers.get("x-device-name")
+    decoded_dev_name = None
+    if raw_dev_name:
+        try:
+            from urllib.parse import unquote
+            decoded_dev_name = unquote(raw_dev_name).strip()
+        except Exception:
+            decoded_dev_name = raw_dev_name.strip()
     background_tasks.add_task(
         _record_login_background,
         user_id=user.id,
@@ -697,6 +707,7 @@ def _build_login_success_token(
         user_name=user_name,
         user_role=user_role,
         client_platform=client_platform,
+        device_name=decoded_dev_name,
     )
 
     # Xây dựng UserOut kèm quyền hạn trực tiếp trong response để Frontend nhận diện ngay tức thì
@@ -1120,13 +1131,21 @@ async def get_user_devices(
             client_location = unquote(client_location).strip()
         except Exception:
             pass
+    raw_dev_name = request.headers.get("x-device-name")
+    decoded_dev_name = None
+    if raw_dev_name:
+        try:
+            from urllib.parse import unquote
+            decoded_dev_name = unquote(raw_dev_name).strip()
+        except Exception:
+            decoded_dev_name = raw_dev_name.strip()
     return await crud_user_terminal.get_terminals_for_user(
         db,
         user=current_user,
         current_ip=client_ip,
         current_user_agent=user_agent,
         custom_location=client_location,
-        custom_device_name=request.headers.get("x-client-platform"),
+        custom_device_name=decoded_dev_name or request.headers.get("x-client-platform"),
     )
 
 

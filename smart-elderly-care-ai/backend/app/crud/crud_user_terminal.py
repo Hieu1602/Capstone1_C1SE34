@@ -133,6 +133,18 @@ def parse_device_info(
             "location": location,
         }
 
+    if custom_device_name and custom_device_name.strip() and platform_hint not in ("MOBILE_APP", "DOCTOR_WEB", "WEB"):
+        clean_dev = custom_device_name.strip()
+        is_ios = "iphone" in clean_dev.lower() or "ipad" in clean_dev.lower()
+        return {
+            "device_name": clean_dev,
+            "device_type": "tablet" if "ipad" in clean_dev.lower() else "mobile",
+            "os": "iOS" if is_ios else (os_name if os_name != "Windows 11" else "Android"),
+            "browser": "SECA Mobile App",
+            "ip_address": clean_ip,
+            "location": location,
+        }
+
     if platform_hint == "MOBILE_APP":
         mobile_os = os_name if os_name in ("iOS", "Android 14", "iPadOS") else "iOS / Android"
         return {
@@ -140,16 +152,6 @@ def parse_device_info(
             "device_type": "mobile",
             "os": mobile_os,
             "browser": "SECA Mobile App",
-            "ip_address": clean_ip,
-            "location": location,
-        }
-
-    if custom_device_name and custom_device_name.strip():
-        return {
-            "device_name": custom_device_name.strip(),
-            "device_type": "mobile",
-            "os": "Mobile OS",
-            "browser": "SECA App",
             "ip_address": clean_ip,
             "location": location,
         }

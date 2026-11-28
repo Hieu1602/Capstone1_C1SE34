@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { Colors } from "../../../../theme/colors";
 import { SlideRightModal } from "../settings/SlideRightModal";
+import { ChangePasswordModal } from "./ChangePasswordModal";
 import { usersApi } from "../../../../services/api";
 import { useAuthStore } from "../../../../store/useAuthStore";
 import * as Location from "expo-location";
@@ -43,6 +44,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
     const navigation = useNavigation<any>();
     const { t, i18n } = useTranslation();
     const isEn = i18n.language?.startsWith('en');
+    const [isChangePasswordModalVisible, setIsChangePasswordModalVisible] = useState(false);
 
     const getSecurityQuestionAnswer = (q: string) => {
         if (
@@ -323,7 +325,8 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
         type: "twoFactor" | "devices" | "logins" | "question" | "changePassword" | "deleteAccount",
     ) => {
         if (type === "changePassword") {
-            resetPasswordForm();
+            setIsChangePasswordModalVisible(true);
+            return;
         }
         if (type === "deleteAccount") {
             resetDeleteAccountForm();
@@ -897,413 +900,6 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
                                 >
                                     {getSecurityQuestionAnswer(selectedSecurityQuestion)}
                                 </Text>
-                            </View>
-                        )}
-
-                        {securityDetail === "changePassword" && (
-                            <View
-                                style={[
-                                    styles.changePasswordCard,
-                                    isDarkMode && {
-                                        backgroundColor: "#1E293B",
-                                        borderColor: "#334155",
-                                    },
-                                ]}
-                            >
-                                <View style={styles.changePasswordHeroRow}>
-                                    <View
-                                        style={[
-                                            styles.changePasswordIconBadge,
-                                            isDarkMode && {
-                                                backgroundColor:
-                                                    "rgba(255, 122, 0, 0.16)",
-                                            },
-                                        ]}
-                                    >
-                                        <Ionicons
-                                            name="key-outline"
-                                            size={22}
-                                            color={Colors.primary}
-                                        />
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text
-                                            style={[
-                                                styles.changePasswordCardHeading,
-                                                isDarkMode && { color: "#F8FAFC" },
-                                            ]}
-                                        >
-                                            Bảo mật tài khoản
-                                        </Text>
-                                        <Text
-                                            style={[
-                                                styles.changePasswordIntro,
-                                                isDarkMode && { color: "#94A3B8" },
-                                            ]}
-                                        >
-                                            Tạo mật khẩu mới để bảo vệ tài khoản của bạn.
-                                        </Text>
-                                    </View>
-                                </View>
-
-                                {passwordFeedback && (
-                                    <View
-                                        accessibilityRole="alert"
-                                        style={[
-                                            styles.passwordFeedbackBanner,
-                                            passwordFeedback.type === "success"
-                                                ? isDarkMode
-                                                    ? {
-                                                          backgroundColor: "rgba(16, 185, 129, 0.15)",
-                                                          borderColor: "#065F46",
-                                                      }
-                                                    : {
-                                                          backgroundColor: "#ECFDF5",
-                                                          borderColor: "#A7F3D0",
-                                                      }
-                                                : isDarkMode
-                                                  ? {
-                                                        backgroundColor: "rgba(239, 68, 68, 0.15)",
-                                                        borderColor: "#7F1D1D",
-                                                    }
-                                                  : {
-                                                        backgroundColor: "#FEF2F2",
-                                                        borderColor: "#FECACA",
-                                                    },
-                                        ]}
-                                    >
-                                        <Ionicons
-                                            name={
-                                                passwordFeedback.type === "success"
-                                                    ? "checkmark-circle"
-                                                    : "alert-circle"
-                                            }
-                                            size={20}
-                                            color={
-                                                passwordFeedback.type === "success"
-                                                    ? "#10B981"
-                                                    : "#EF4444"
-                                            }
-                                        />
-                                        <Text
-                                            style={{
-                                                flex: 1,
-                                                fontSize: 13.5,
-                                                fontWeight: "600",
-                                                lineHeight: 19,
-                                                color:
-                                                    passwordFeedback.type === "success"
-                                                        ? isDarkMode
-                                                            ? "#A7F3D0"
-                                                            : "#065F46"
-                                                        : isDarkMode
-                                                          ? "#FCA5A5"
-                                                          : "#B91C1C",
-                                            }}
-                                        >
-                                            {passwordFeedback.message}
-                                        </Text>
-                                    </View>
-                                )}
-
-                                <Text
-                                    style={[
-                                        styles.passwordLabel,
-                                        isDarkMode && { color: "#F8FAFC" },
-                                    ]}
-                                >
-                                    Mật khẩu hiện tại
-                                </Text>
-                                <View
-                                    style={[
-                                        styles.passwordInputWrap,
-                                        isDarkMode && {
-                                            backgroundColor: "#0F172A",
-                                            borderColor: "#334155",
-                                        },
-                                        currentPassword.length > 0 && {
-                                            borderColor: Colors.primary,
-                                        },
-                                    ]}
-                                >
-                                    <Ionicons
-                                        name="lock-closed-outline"
-                                        size={20}
-                                        color={
-                                            currentPassword.length > 0
-                                                ? Colors.primary
-                                                : "#94A3B8"
-                                        }
-                                        style={styles.passwordLeadingIcon}
-                                    />
-                                    <TextInput
-                                        style={[
-                                            styles.passwordInput,
-                                            isDarkMode && { color: "#F8FAFC" },
-                                        ]}
-                                        value={currentPassword}
-                                        onChangeText={setCurrentPassword}
-                                        placeholder="Nhập mật khẩu hiện tại"
-                                        placeholderTextColor="#94A3B8"
-                                        secureTextEntry={!showCurrentPassword}
-                                    />
-                                    <TouchableOpacity
-                                        onPress={() =>
-                                            setShowCurrentPassword(!showCurrentPassword)
-                                        }
-                                        hitSlop={{
-                                            top: 8,
-                                            bottom: 8,
-                                            left: 8,
-                                            right: 8,
-                                        }}
-                                    >
-                                        <Ionicons
-                                            name={
-                                                showCurrentPassword
-                                                    ? "eye-off-outline"
-                                                    : "eye-outline"
-                                            }
-                                            size={21}
-                                            color={isDarkMode ? "#94A3B8" : "#64748B"}
-                                        />
-                                    </TouchableOpacity>
-                                </View>
-
-                                <Text
-                                    style={[
-                                        styles.passwordLabel,
-                                        isDarkMode && { color: "#F8FAFC" },
-                                    ]}
-                                >
-                                    Mật khẩu mới
-                                </Text>
-                                <View
-                                    style={[
-                                        styles.passwordInputWrap,
-                                        isDarkMode && {
-                                            backgroundColor: "#0F172A",
-                                            borderColor: "#334155",
-                                        },
-                                        newPassword.length > 0 && {
-                                            borderColor: Colors.primary,
-                                        },
-                                    ]}
-                                >
-                                    <Ionicons
-                                        name="key-outline"
-                                        size={20}
-                                        color={
-                                            newPassword.length > 0
-                                                ? Colors.primary
-                                                : "#94A3B8"
-                                        }
-                                        style={styles.passwordLeadingIcon}
-                                    />
-                                    <TextInput
-                                        style={[
-                                            styles.passwordInput,
-                                            isDarkMode && { color: "#F8FAFC" },
-                                        ]}
-                                        value={newPassword}
-                                        onChangeText={setNewPassword}
-                                        placeholder="Nhập mật khẩu mới"
-                                        placeholderTextColor="#94A3B8"
-                                        secureTextEntry={!showNewPassword}
-                                    />
-                                    <TouchableOpacity
-                                        onPress={() =>
-                                            setShowNewPassword(!showNewPassword)
-                                        }
-                                        hitSlop={{
-                                            top: 8,
-                                            bottom: 8,
-                                            left: 8,
-                                            right: 8,
-                                        }}
-                                    >
-                                        <Ionicons
-                                            name={
-                                                showNewPassword
-                                                    ? "eye-off-outline"
-                                                    : "eye-outline"
-                                            }
-                                            size={21}
-                                            color={isDarkMode ? "#94A3B8" : "#64748B"}
-                                        />
-                                    </TouchableOpacity>
-                                </View>
-
-                                <View
-                                    style={[
-                                        styles.passwordRequirements,
-                                        isDarkMode && {
-                                            backgroundColor: "#0F172A",
-                                            borderColor: "#334155",
-                                        },
-                                    ]}
-                                >
-                                    <Text
-                                        style={[
-                                            styles.passwordRequirementsTitle,
-                                            isDarkMode && { color: "#F8FAFC" },
-                                        ]}
-                                    >
-                                        Yêu cầu mật khẩu:
-                                    </Text>
-                                    <View style={styles.passwordRequirementRow}>
-                                        <Ionicons
-                                            name={
-                                                newPassword.length >= 8 &&
-                                                newPassword.length <= 16
-                                                    ? "checkmark-circle"
-                                                    : "ellipse-outline"
-                                            }
-                                            size={16}
-                                            color={
-                                                newPassword.length >= 8 &&
-                                                newPassword.length <= 16
-                                                    ? "#10B981"
-                                                    : Colors.primary
-                                            }
-                                        />
-                                        <Text
-                                            style={[
-                                                styles.passwordRequirement,
-                                                isDarkMode && { color: "#94A3B8" },
-                                                newPassword.length >= 8 &&
-                                                    newPassword.length <= 16 && {
-                                                        color: "#10B981",
-                                                        fontWeight: "600",
-                                                    },
-                                            ]}
-                                        >
-                                            Dài 8-16 ký tự
-                                        </Text>
-                                    </View>
-                                    <View style={styles.passwordRequirementRow}>
-                                        <Ionicons
-                                            name={
-                                                /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/.test(
-                                                    newPassword,
-                                                )
-                                                    ? "checkmark-circle"
-                                                    : "ellipse-outline"
-                                            }
-                                            size={16}
-                                            color={
-                                                /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/.test(
-                                                    newPassword,
-                                                )
-                                                    ? "#10B981"
-                                                    : Colors.primary
-                                            }
-                                        />
-                                        <Text
-                                            style={[
-                                                styles.passwordRequirement,
-                                                isDarkMode && { color: "#94A3B8" },
-                                                /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/.test(
-                                                    newPassword,
-                                                ) && {
-                                                    color: "#10B981",
-                                                    fontWeight: "600",
-                                                },
-                                            ]}
-                                        >
-                                            Bao gồm chữ hoa, chữ thường, số và ký hiệu đặc biệt.
-                                        </Text>
-                                    </View>
-                                </View>
-
-                                <Text
-                                    style={[
-                                        styles.passwordLabel,
-                                        isDarkMode && { color: "#F8FAFC" },
-                                    ]}
-                                >
-                                    Nhập lại mật khẩu mới
-                                </Text>
-                                <View
-                                    style={[
-                                        styles.passwordInputWrap,
-                                        isDarkMode && {
-                                            backgroundColor: "#0F172A",
-                                            borderColor: "#334155",
-                                        },
-                                        confirmPassword.length > 0 && {
-                                            borderColor: Colors.primary,
-                                        },
-                                    ]}
-                                >
-                                    <Ionicons
-                                        name="shield-checkmark-outline"
-                                        size={20}
-                                        color={
-                                            confirmPassword.length > 0
-                                                ? Colors.primary
-                                                : "#94A3B8"
-                                        }
-                                        style={styles.passwordLeadingIcon}
-                                    />
-                                    <TextInput
-                                        style={[
-                                            styles.passwordInput,
-                                            isDarkMode && { color: "#F8FAFC" },
-                                        ]}
-                                        value={confirmPassword}
-                                        onChangeText={setConfirmPassword}
-                                        placeholder="Nhập lại mật khẩu mới"
-                                        placeholderTextColor="#94A3B8"
-                                        secureTextEntry={!showConfirmPassword}
-                                    />
-                                    <TouchableOpacity
-                                        onPress={() =>
-                                            setShowConfirmPassword(!showConfirmPassword)
-                                        }
-                                        hitSlop={{
-                                            top: 8,
-                                            bottom: 8,
-                                            left: 8,
-                                            right: 8,
-                                        }}
-                                    >
-                                        <Ionicons
-                                            name={
-                                                showConfirmPassword
-                                                    ? "eye-off-outline"
-                                                    : "eye-outline"
-                                            }
-                                            size={21}
-                                            color={isDarkMode ? "#94A3B8" : "#64748B"}
-                                        />
-                                    </TouchableOpacity>
-                                </View>
-
-                                <TouchableOpacity
-                                    style={[
-                                        styles.changePasswordSubmitButton,
-                                        isChangingPassword && { opacity: 0.7 },
-                                    ]}
-                                    onPress={handleChangePasswordSubmit}
-                                    activeOpacity={0.85}
-                                    disabled={isChangingPassword}
-                                >
-                                    {isChangingPassword ? (
-                                        <ActivityIndicator color="#FFFFFF" />
-                                    ) : (
-                                        <>
-                                            <Ionicons
-                                                name="checkmark-circle-outline"
-                                                size={20}
-                                                color="#FFFFFF"
-                                            />
-                                            <Text style={styles.changePasswordSubmitButtonText}>
-                                                Cập nhật mật khẩu
-                                            </Text>
-                                        </>
-                                    )}
-                                </TouchableOpacity>
                             </View>
                         )}
 
@@ -2588,6 +2184,19 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({
                     </ScrollView>
                 </SafeAreaView>
             )}
+            <ChangePasswordModal
+                visible={isChangePasswordModalVisible}
+                isDarkMode={isDarkMode}
+                onClose={() => setIsChangePasswordModalVisible(false)}
+                onSubmit={async (currentPass, newPass, confirmPass) => {
+                    if (!onSubmitChangePassword) {
+                        throw new Error(
+                            "Chưa kết nối hàm đổi mật khẩu. Vui lòng thử lại sau.",
+                        );
+                    }
+                    return onSubmitChangePassword(currentPass, newPass, confirmPass);
+                }}
+            />
         </SlideRightModal>
     );
 };
