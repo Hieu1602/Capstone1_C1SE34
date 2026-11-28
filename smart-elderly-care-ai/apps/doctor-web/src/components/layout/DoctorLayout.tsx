@@ -9,7 +9,7 @@ import { AdminMarqueeBanner } from './AdminMarqueeBanner';
 import { doctorWebSocket } from '../../services/websocket';
 import { useDoctorDataStore } from '../../store/useDoctorDataStore';
 import { useDoctorAuthStore } from '../../store/useDoctorAuthStore';
-import { formatAppointmentWsNotification } from '../../utils/appointmentHelpers';
+import { appointmentDeepLink, formatAppointmentWsNotification } from '../../utils/appointmentHelpers';
 import {
   isBrowserNotificationSupported,
   getBrowserNotificationPermission,
@@ -72,7 +72,7 @@ export const DoctorLayout: React.FC = () => {
             title,
             body,
             tag: event.incident_id || alertType,
-            url: '/appointments',
+            url: appointmentDeepLink(event.appointment_id || event.data?.appointment_id),
             requireInteraction: false,
           });
           setAppointmentToast({

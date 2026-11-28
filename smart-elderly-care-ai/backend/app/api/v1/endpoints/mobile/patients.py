@@ -16,6 +16,7 @@ from app.crud.crud_elderly import crud_elderly
 from app.crud.crud_house import crud_house
 from app.crud.crud_vital import crud_vital
 from app.models.user import User
+from app.services import appointment_history
 from app.schemas.patient import (
     ElderlyProfileCreate,
     PatientMedicalRecordOut,
@@ -784,14 +785,42 @@ async def get_patient_appointments(
     )
 
     patient_name = (profile.full_name if (profile and profile.full_name) else "Bệnh nhân người cao tuổi")
-    return [
-        build_appointment_response(
-            r,
-            patient_name=patient_name,
-            doctor_name=r.doctor.full_name if r.doctor else "Bác sĩ gia đình",
-        )
-        for r in records
-    ]
+    return await appointment_history.attach_last_events(
+        db,
+        [
+            build_appointment_response(
+                r,
+                patient_name=patient_name,
+                doctor_name=r.doctor.full_name if r.doctor else "Bác sĩ gia đình",
+            )
+            for r in records
+        ],
+    )
+
+
+@router.get(
+    "/{patient_id}/appointments/{appointment_id}/history",
+    response_model=List[Any],
+    summary="Lịch sử thao tác của một lịch khám (Người nhà)",
+)
+async def get_patient_appointment_history(
+    patient_id: str,
+    appointment_id: str,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.crud.crud_appointment import crud_appointment
+
+    try:
+        patient_uuid = uuid.UUID(patient_id)
+        apt_uuid = uuid.UUID(appointment_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="ID không hợp lệ.")
+    existing = await crud_appointment.get_by_id(db, apt_uuid)
+    if not existing or existing.patient_id != patient_uuid:
+        raise HTTPException(status_code=404, detail="Không tìm thấy lịch khám yêu cầu.")
+    await _ensure_house_access(db, current_user, existing.house_id)
+    return await appointment_history.list_events(db, apt_uuid)
 
 
 @router.post(
@@ -850,6 +879,7 @@ async def request_patient_appointment(
         )
     except ValueError as e:
         raise _map_patient_apt_error(e)
+    await appointment_history.record(db, root_apt, "REQUESTED", current_user)
 
     # 2. Tạo Incident & bắn WebSocket/FCM thông báo cho Bác sĩ & các thành viên
     try:
@@ -952,7 +982,8 @@ async def update_patient_appointment(
         send_appointment_fcm,
     )
 
-    _, apt_uuid, _ = await _load_family_owned_appointment(db, patient_id, appointment_id, current_user)
+    _, apt_uuid, existing_apt = await _load_family_owned_appointment(db, patient_id, appointment_id, current_user)
+    before = appointment_history.snapshot(existing_apt)
 
     schedule_changed = (
         appointment_in.scheduled_at is not None
@@ -973,6 +1004,7 @@ async def update_patient_appointment(
 
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy lịch khám yêu cầu.")
+    await appointment_history.record(db, updated, "UPDATED", current_user, before=before)
 
     patient_names = await get_patient_names_map(db, [updated.patient_id])
     patient_name = patient_names.get(updated.patient_id, "Bệnh nhân người cao tuổi")
@@ -1092,6 +1124,7 @@ async def cancel_patient_appointment(
 
     if not cancelled:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy lịch khám yêu cầu.")
+    await appointment_history.record(db, cancelled, "CANCELLED", current_user, note=reason)
 
     patient_names = await get_patient_names_map(db, [cancelled.patient_id])
     patient_name = patient_names.get(cancelled.patient_id, "Bệnh nhân người cao tuổi")
@@ -1218,6 +1251,7 @@ async def _execute_confirm_appointment(
 
     if not apt:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy lịch khám yêu cầu.")
+    await appointment_history.record(db, apt, "CONFIRMED", current_user)
 
     logger.info(
         "[FAMILY APPOINTMENT CONFIRMED] Người thân đã xác nhận lịch hẹn %s của Bác sĩ %s vào %s.",

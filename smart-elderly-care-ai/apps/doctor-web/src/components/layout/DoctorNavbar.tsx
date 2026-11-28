@@ -16,6 +16,8 @@ import {
   toggleReadStatus,
   syncReadToServer,
   NOTIFS_SYNC_EVENT,
+  syncReadsFromServer,
+  handleReadsWsMessage,
   SyncPayload,
 } from '../../utils/notificationSync';
 import { isNotificationReadInSet, applyAcknowledgeToItem } from '../../utils/notificationBuilder';
@@ -128,8 +130,11 @@ export const DoctorNavbar: React.FC = () => {
   // Lắng nghe dữ liệu ban đầu và WebSocket Real-time
   useEffect(() => {
     fetchNotifData();
+    syncReadsFromServer();
     const interval = setInterval(fetchNotifData, 30000);
     const unsubscribe = doctorWebSocket.subscribe((data) => {
+      // Thiết bị khác (App bác sĩ) của chính tài khoản này vừa đọc thông báo
+      if (handleReadsWsMessage(data)) return;
       if (
         data?.type === 'ALERT_NEW' ||
         data?.type === 'INITIAL_ALERTS' ||

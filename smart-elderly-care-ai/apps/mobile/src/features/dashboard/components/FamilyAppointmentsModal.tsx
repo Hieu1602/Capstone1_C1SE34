@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BusySlotItem, patientApi } from '../../../services/api';
+import { AppointmentHistoryLine, AppointmentEventItem } from '../../doctor/components/AppointmentHistoryLine';
 import { LocalizedAlert, LocalizedText } from '../../../i18n/LocalizedComponents';
 import { useTheme } from '../../../store/useThemeStore';
 import { useVitalStore } from '../../../store/useVitalStore';
@@ -56,6 +57,8 @@ interface FamilyAppointmentItem {
   cancellation_reason?: string;
   recurrence_pattern?: string;
   enable_speaker_reminder?: boolean;
+  created_at?: string;
+  last_event?: AppointmentEventItem | null;
 }
 
 function formatAppointmentTime(dateStr?: string): string {
@@ -1021,6 +1024,14 @@ export const FamilyAppointmentsModal: React.FC<FamilyAppointmentsModalProps> = (
                             </LocalizedText>
                           </View>
                         ) : null}
+
+                        <AppointmentHistoryLine
+                          appointmentId={apt.id}
+                          patientId={apt.patient_id}
+                          lastEvent={apt.last_event}
+                          createdAt={apt.created_at}
+                          isDarkMode={isDarkMode}
+                        />
 
                         {/* Hub reminder status (chỉ hiển thị cho lịch sắp tới / đã xác nhận) */}
                         {statusInfo.isUpcoming && (

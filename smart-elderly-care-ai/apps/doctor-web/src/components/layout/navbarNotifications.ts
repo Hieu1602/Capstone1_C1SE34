@@ -12,7 +12,7 @@ import {
   formatNotificationTime,
   parseTitleAndBody,
 } from '../../utils/notificationBuilder';
-import { isAppointmentOverdue } from '../../utils/appointmentHelpers';
+import { appointmentDeepLink, extractAppointmentId, isAppointmentOverdue } from '../../utils/appointmentHelpers';
 
 function toLocalYMD(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -161,7 +161,7 @@ export async function fetchDoctorNavbarNotifications(doctorUserId?: string): Pro
             ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
             : 'text-sky-700 bg-sky-50 border-sky-200';
         badgeBg = isCancelled ? 'bg-rose-50' : isConfirmed ? 'bg-emerald-50' : 'bg-sky-50';
-        targetUrl = '/appointments';
+        targetUrl = appointmentDeepLink(extractAppointmentId(inc.notes));
       } else if (isAssignmentMsg) {
         title = rawMsg || 'Phụ trách bệnh nhân mới';
         badgeLabel = 'Bệnh nhân';
@@ -284,7 +284,7 @@ export async function fetchDoctorNavbarNotifications(doctorUserId?: string): Pro
                 : 'text-sky-700 bg-sky-50 border-sky-200',
         badgeBg: isCompleted ? 'bg-emerald-50' : isCancelled ? 'bg-rose-50' : isOverdue ? 'bg-orange-50' : isConfirmed ? 'bg-teal-50' : 'bg-sky-50',
         isRead: savedReadIds.has(aptId),
-        targetUrl: '/appointments',
+        targetUrl: appointmentDeepLink(apt.id),
         patientName: apt.patient_name,
         patientAddress: apt.location,
       });

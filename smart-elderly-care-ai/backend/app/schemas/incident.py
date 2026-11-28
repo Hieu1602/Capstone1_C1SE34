@@ -13,6 +13,7 @@ class IncidentOut(BaseModel):
     id: uuid.UUID
     device_id: uuid.UUID
     elderly_id: Optional[uuid.UUID] = None
+    house_id: Optional[uuid.UUID] = None
     alert_type: str
     alert_level: str
     message: str

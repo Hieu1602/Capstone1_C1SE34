@@ -3,7 +3,7 @@
 
 import { UnifiedNotification } from '../components/clinical/NotificationDetailModal';
 import { cleanNotificationText } from './notificationSync';
-import { isAppointmentOverdue } from './appointmentHelpers';
+import { appointmentDeepLink, extractAppointmentId, isAppointmentOverdue } from './appointmentHelpers';
 import type { Incident, AppointmentItem, DoctorPatientCard, SystemNotification } from '../types';
 
 export type TabType = 'ALL' | 'UNREAD' | 'ADMIN' | 'ALERTS' | 'APPOINTMENTS' | 'OTHERS';
@@ -257,7 +257,7 @@ export function buildNotificationItems(
         : isConfirm
           ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
           : 'text-sky-700 bg-sky-50 border-sky-200';
-      target = '/appointments';
+      target = appointmentDeepLink(extractAppointmentId(inc.notes));
     } else if (isAssignment) {
       label = 'Bệnh nhân';
       color = 'text-emerald-700 bg-emerald-50 border-emerald-200';
@@ -380,7 +380,7 @@ export function buildNotificationItems(
                 : 'text-sky-700 bg-sky-50 border-sky-200',
         badgeBg: isDone ? 'bg-emerald-50' : isCancel ? 'bg-rose-50' : isOverdue ? 'bg-orange-50' : isConfirmed ? 'bg-teal-50' : 'bg-sky-50',
         isRead: readSet.has(`apt_${apt.id}`),
-        targetUrl: '/appointments',
+        targetUrl: appointmentDeepLink(apt.id),
         patientName: apt.patient_name,
         patientAddress: apt.location,
       });

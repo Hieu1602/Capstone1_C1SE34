@@ -44,6 +44,7 @@ from app.schemas.appointment import (
     AppointmentCancelRequest,
     AppointmentCompleteRequest,
     AppointmentCreate,
+    AppointmentEventOut,
     AppointmentResponse,
     AppointmentStatusEnum,
     AppointmentUpdate,
@@ -52,6 +53,7 @@ from app.schemas.patient import (
     PatientMedicalRecordOut,
     PatientMedicalRecordUpdate,
 )
+from app.services import appointment_history
 from app.services.notification.appointment_notify import (
     broadcast_alert_ws,
     format_vn_dt,
@@ -385,10 +387,30 @@ async def get_doctor_appointments(
     patient_names = await get_patient_names_map(
         db, [r.patient_id for r in records if r.patient_id]
     )
-    return [
-        build_appointment_response(r, patient_name=patient_names.get(r.patient_id, "Bệnh nhân"))
-        for r in records
-    ]
+    return await appointment_history.attach_last_events(
+        db, [build_appointment_response(r, patient_name=patient_names.get(r.patient_id, "Bệnh nhân")) for r in records]
+    )
+
+
+@router.get(
+    "/appointments/{appointment_id}/history",
+    response_model=List[AppointmentEventOut],
+    summary="Lịch sử thao tác của một lịch khám (ai tạo/dời/hủy, lúc nào)",
+)
+async def get_doctor_appointment_history(
+    appointment_id: str,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        apt_uuid = uuid.UUID(appointment_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ID lịch khám không hợp lệ.")
+    existing = await crud_appointment.get_by_id(db, apt_uuid)
+    if not existing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy lịch khám yêu cầu.")
+    _check_doctor_access(current_user, existing)
+    return await appointment_history.list_events(db, apt_uuid)
 
 
 _VISIT_TYPE_LABELS = {
@@ -528,6 +550,7 @@ async def create_doctor_appointment(
         )
     except ValueError as e:
         raise _map_appointment_value_error(e)
+    await appointment_history.record(db, root_apt, "CREATED", current_user)
 
     doctor_name = (
         (root_apt.doctor.full_name if root_apt.doctor else None)
@@ -667,6 +690,7 @@ async def update_doctor_appointment(
         or appointment_in.location is not None
     )
     doc_actor_id = current_user.id if current_user else (existing.doctor_id or DEMO_DOCTOR_ID)
+    before = appointment_history.snapshot(existing)
 
     try:
         updated = await crud_appointment.update_appointment(
@@ -685,6 +709,7 @@ async def update_doctor_appointment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy lịch khám yêu cầu.",
         )
+    await appointment_history.record(db, updated, "UPDATED", current_user, before=before)
 
     patient_name, target_house_id = await _resolve_patient_info(db, updated.patient_id, updated.house_id)
     doctor_name = (
@@ -807,6 +832,7 @@ async def confirm_doctor_appointment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy lịch khám yêu cầu.",
         )
+    await appointment_history.record(db, confirmed, "CONFIRMED", current_user)
 
     patient_name, target_house_id = await _resolve_patient_info(db, confirmed.patient_id, confirmed.house_id)
     doctor_name = (
@@ -950,6 +976,9 @@ async def complete_doctor_appointment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy lịch khám yêu cầu.",
         )
+    await appointment_history.record(
+        db, completed, "COMPLETED", current_user, note=(complete_in.clinical_notes if complete_in else None)
+    )
 
     patient_name, target_house_id = await _resolve_patient_info(db, completed.patient_id, completed.house_id)
     doctor_name = (
@@ -1054,6 +1083,7 @@ async def cancel_doctor_appointment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy lịch khám yêu cầu.",
         )
+    await appointment_history.record(db, cancelled, "CANCELLED", current_user, note=cancel_in.cancellation_reason)
 
     patient_name, target_house_id = await _resolve_patient_info(db, cancelled.patient_id, cancelled.house_id)
     doctor_name = (
@@ -1186,6 +1216,7 @@ async def delete_doctor_appointment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy lịch khám cần xóa.",
         )
+    await appointment_history.record(db, existing, "DELETED", current_user)
 
     await _invalidate_incidents_cache_safe()
 

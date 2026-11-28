@@ -26,6 +26,7 @@ from app.api.v1.endpoints.mobile.houses        import router as mobile_houses_ro
 from app.api.v1.endpoints.mobile.device_groups import router as mobile_device_groups_router
 from app.api.v1.endpoints.mobile.devices       import router as mobile_devices_router
 from app.api.v1.endpoints.mobile.vitals        import router as mobile_vitals_router
+from app.api.v1.endpoints.mobile.notification_reads import router as mobile_notification_reads_router
 from app.api.v1.endpoints.mobile.incidents     import router as mobile_incidents_router
 from app.api.v1.endpoints.mobile.reminders     import router as mobile_reminders_router
 from app.api.v1.endpoints.mobile.patients      import router as mobile_patients_router
@@ -75,6 +76,7 @@ api_router.include_router(mobile_devices_router,       prefix="/devices",       
 api_router.include_router(mobile_vitals_router,        prefix="/vitals",        tags=["[MOBILE APP] Sinh hiệu thời gian thực"])
 api_router.include_router(mobile_incidents_router,     prefix="/incidents",     tags=["[MOBILE APP] Cảnh báo khẩn cấp & Té ngã"])
 api_router.include_router(mobile_incidents_router,     prefix="/notifications", tags=["[MOBILE APP] Cảnh báo (Notifications Alias)"])
+api_router.include_router(mobile_notification_reads_router, prefix="/notification-reads", tags=["[MOBILE APP] Trạng thái đã đọc thông báo"])
 api_router.include_router(mobile_reminders_router,     prefix="/reminders",     tags=["[MOBILE APP] Nhắc nhở uống thuốc"])
 api_router.include_router(mobile_reminders_router,     prefix="/mobile/reminders", tags=["[MOBILE APP] Nhắc nhở uống thuốc (Mobile Alias)"])
 api_router.include_router(mobile_patients_router,      prefix="/patients",      tags=["[MOBILE APP] Hồ sơ bệnh án người cao tuổi"])

@@ -8,6 +8,7 @@ import {
   PrescriptionItem,
   BatchPrescriptionPayload,
   AppointmentItem,
+  AppointmentEvent,
   AnalyticsData,
   DoctorUser,
   Incident,
@@ -261,6 +262,11 @@ export const doctorApi = {
     return res.data;
   },
 
+  getAppointmentHistory: async (appointmentId: string): Promise<AppointmentEvent[]> => {
+    const res = await api.get(`/doctor/appointments/${appointmentId}/history`);
+    return res.data;
+  },
+
   completeAppointment: async (appointmentId: string, clinicalNotes?: string) => {
     const payload = clinicalNotes?.trim() ? { clinical_notes: clinicalNotes.trim() } : undefined;
     const res = await api.post(`/doctor/appointments/${appointmentId}/complete`, payload);
@@ -314,6 +320,18 @@ export const incidentsApi = {
 };
 
 // 5. SYSTEM NOTIFICATIONS API (Đồng bộ thông báo toàn hệ thống từ Web Admin)
+/** Trạng thái "đã đọc" lưu trên server – đồng bộ Doctor Web <-> App bác sĩ, kèm giờ đọc */
+export const notificationReadsApi = {
+  list: async (): Promise<{ key: string; read_at: string }[]> => {
+    const res = await api.get('/notification-reads');
+    return res.data;
+  },
+  set: async (keys: string[], read = true): Promise<{ key: string; read_at: string }[]> => {
+    const res = await api.post('/notification-reads', { keys, read });
+    return res.data;
+  },
+};
+
 export const systemNotificationsApi = {
   getActiveBroadcasts: async (targetAudience: string = 'doctors'): Promise<SystemNotification[]> => {
     try {

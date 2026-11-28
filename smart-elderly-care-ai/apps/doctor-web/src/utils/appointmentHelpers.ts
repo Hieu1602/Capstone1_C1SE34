@@ -202,3 +202,18 @@ export function formatAppointmentWsNotification(event: {
       return { title: '📅 Cập nhật lịch khám', body };
   }
 }
+
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+/** Lấy mã lịch khám từ notes của Incident: "...|APT:<uuid>" hoặc notes chỉ gồm đúng 1 uuid */
+export function extractAppointmentId(notes?: string | null): string | null {
+  if (!notes) return null;
+  const tagged = notes.match(/APT:([0-9a-f-]{36})/i);
+  if (tagged && UUID_RE.test(tagged[1])) return tagged[1];
+  const trimmed = notes.trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed) ? trimmed : null;
+}
+
+/** Link mở trang Lịch khám và tự cuộn tới đúng lịch */
+export const appointmentDeepLink = (appointmentId?: string | null) =>
+  appointmentId ? `/appointments?apt=${encodeURIComponent(appointmentId)}` : '/appointments';

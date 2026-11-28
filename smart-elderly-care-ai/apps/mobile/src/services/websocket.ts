@@ -10,6 +10,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useEscalationStore } from '../store/useEscalationStore';
 import { notificationService } from './notificationService';
 import { dialEmergencyNumber, EMERGENCY_TEST_PHONE } from './emergency';
+import { handleReadsWsMessage } from '../features/doctor/components/notifications/notificationReadSync';
 
 const _autoDialedIncidentIds = new Set<string>();
 
@@ -156,6 +157,13 @@ class AlertsWebSocket {
     }
 
     const store = useVitalStore.getState();
+
+    // Bác sĩ vừa đọc thông báo trên thiết bị khác (Doctor Web) -> cập nhật "đã đọc" + giờ đọc
+    if (
+      handleReadsWsMessage(event, useAuthStore.getState().userId || useAuthStore.getState().user_id)
+    ) {
+      return;
+    }
 
     // Một client khác (web/app) vừa "đánh dấu tất cả" -> tải lại danh sách từ server
     if (event.type === 'INCIDENTS_ACKNOWLEDGED') {

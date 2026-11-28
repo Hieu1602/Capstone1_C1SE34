@@ -35,7 +35,12 @@ import {
   normalizePatientsList,
 } from '../components/types';
 import { AppointmentDetailModal } from '../components';
-import NotificationsBottomSheet, { readIdsStorageKey } from '../components/NotificationsBottomSheet';
+import NotificationsBottomSheet from '../components/NotificationsBottomSheet';
+import {
+  loadReadState,
+  subscribeReadState,
+  syncReadsFromServer,
+} from '../components/notifications/notificationReadSync';
 import { buildUnifiedNotifications } from '../components/notifications/notificationHelpers';
 import {
   withTimeout,
@@ -138,16 +143,16 @@ export default function DoctorHomeScreen() {
     return () => clearInterval(interval);
   }, []);
 
+  // Đọc ở Doctor Web / thiết bị khác -> tính lại chấm "chưa đọc"
+  const [readVersion, setReadVersion] = useState(0);
+  useEffect(() => subscribeReadState(() => setReadVersion((v) => v + 1)), []);
   useEffect(() => {
-    AsyncStorage.getItem(readIdsStorageKey(userId))
-      .then((raw) => {
-        let readSet = new Set<string>();
-        if (raw) {
-          try {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) readSet = new Set(parsed);
-          } catch {}
-        }
+    syncReadsFromServer(userId);
+  }, [userId]);
+
+  useEffect(() => {
+    loadReadState(userId)
+      .then(({ ids: readSet }) => {
         const warnPats = patients.filter((p) => p.health_status === 'WARNING' || p.health_status === 'DANGER');
         const list = buildUnifiedNotifications({
           incidents,
@@ -160,7 +165,7 @@ export default function DoctorHomeScreen() {
         setHasUnreadNotifs(list.some((i) => !i.isRead));
       })
       .catch(() => {});
-  }, [incidents, patients, appointments, upcomingAppointments, userId]);
+  }, [incidents, patients, appointments, upcomingAppointments, userId, readVersion]);
 
   const fetchData = useCallback(async () => {
     try {

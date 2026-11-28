@@ -14,6 +14,7 @@ import {
   Calendar as CalendarIcon,
 } from 'lucide-react';
 import type { AppointmentItem } from '../../types';
+import { AppointmentHistory } from './AppointmentHistory';
 import {
   getAppointmentConfirmationBadge,
   isAppointmentOverdue,
@@ -47,6 +48,8 @@ interface AppointmentCardProps {
   onReschedule: (apt: AppointmentItem) => void;
   onCancel: (apt: AppointmentItem) => void;
   onComplete: (apt: AppointmentItem) => void;
+  /** Làm nổi bật khi mở từ thông báo */
+  highlighted?: boolean;
 }
 
 export const AppointmentCard: React.FC<AppointmentCardProps> = ({
@@ -56,6 +59,7 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
   onReschedule,
   onCancel,
   onComplete,
+  highlighted = false,
 }) => {
   const isClinic = apt.visit_type === 'CLINIC';
   const isTelehealth = apt.visit_type === 'TELEHEALTH';
@@ -86,7 +90,14 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs transition-all hover:border-blue-300 hover:shadow-md dark:border-slate-800/80 dark:bg-[#131C31] dark:hover:border-slate-700">
+    <div
+      id={`apt-${apt.id}`}
+      className={`rounded-2xl border bg-white p-5 shadow-xs transition-all duration-500 hover:border-blue-300 hover:shadow-md dark:bg-[#131C31] dark:hover:border-slate-700 ${
+        highlighted
+          ? 'border-blue-500 ring-4 ring-blue-500/25 dark:border-blue-400'
+          : 'border-slate-200/80 dark:border-slate-800/80'
+      }`}
+    >
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div className="flex items-start space-x-4">
           <div className="flex flex-col items-center justify-center rounded-2xl bg-blue-50/90 border border-blue-100 px-3.5 py-2.5 text-center min-w-[76px] dark:bg-blue-950/40 dark:border-blue-900/50">
@@ -159,6 +170,7 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
                 </div>
               )}
             </div>
+            <AppointmentHistory apt={apt} />
           </div>
         </div>
       </div>

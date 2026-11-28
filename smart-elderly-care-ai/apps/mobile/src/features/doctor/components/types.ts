@@ -1,3 +1,4 @@
+import type { AppointmentEventItem } from './AppointmentHistoryLine';
 import { BASE_URL } from '../../../services/api';
 import { formatGenderVN } from '../../../utils/formatters';
 // types.ts
@@ -136,6 +137,8 @@ export interface AppointmentItem {
   created_by?: string | null;
   created_at?: string;
   updated_at?: string;
+  /** Thao tác gần nhất (ai, lúc nào) */
+  last_event?: AppointmentEventItem | null;
 }
 
 export interface PatientCardData {

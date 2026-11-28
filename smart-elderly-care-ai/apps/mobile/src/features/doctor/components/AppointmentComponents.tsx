@@ -9,6 +9,7 @@ import { View, StyleSheet, TouchableOpacity, ScrollView, Image, Modal } from 're
 import { Ionicons } from '@expo/vector-icons';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
 import { AppointmentItem, getPatientAvatarUrl } from './types';
+import { AppointmentHistoryLine } from './AppointmentHistoryLine';
 import {
   toLocalYMD,
   isTodayLocal,
@@ -759,6 +760,13 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
               </LocalizedText>
             </View>
           ) : null}
+
+          <AppointmentHistoryLine
+            appointmentId={apt.id}
+            lastEvent={apt.last_event}
+            createdAt={apt.created_at}
+            isDarkMode={isDarkMode}
+          />
 
           {isUpcoming && (
             <View style={styles.metaBadgesRow}>

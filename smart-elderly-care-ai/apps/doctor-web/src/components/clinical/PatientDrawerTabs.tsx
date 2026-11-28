@@ -16,6 +16,8 @@ import { PrescriptionItem, AppointmentItem, AnalyticsData } from '../../types';
 import { doctorApi } from '../../services/api';
 import { getAppointmentConfirmationBadge, parseAppointmentNotes } from '../../utils/appointmentHelpers';
 import { VitalsTrendChart, VitalMetricKey } from './VitalsTrendChart';
+import { PatientAlertsChart } from './PatientAlertsChart';
+import { AppointmentHistory } from './AppointmentHistory';
 import {
   VitalFilterState,
   VitalRangeMode,
@@ -602,6 +604,12 @@ export const PatientDrawerVitalsTab: React.FC<PatientDrawerVitalsTabProps> = ({
           endDate={activeFilter.endDate}
         />
       )}
+
+      {patientId && (
+        <div className="mt-6">
+          <PatientAlertsChart patientId={patientId} />
+        </div>
+      )}
     </div>
   );
 };
@@ -795,6 +803,7 @@ export const PatientDrawerAppointmentsTab: React.FC<PatientDrawerAppointmentsTab
                 Lý do hủy: {apt.cancellation_reason}
               </p>
             )}
+            <AppointmentHistory apt={apt} />
           </div>
         );
       })}

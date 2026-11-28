@@ -130,6 +130,31 @@ export interface AppointmentItem {
   created_appointments?: AppointmentItem[] | null;
   created_at?: string;
   updated_at?: string;
+  /** Thao tác gần nhất (ai, lúc nào) – có trong API danh sách */
+  last_event?: AppointmentEvent | null;
+}
+
+export type AppointmentEventAction =
+  | 'CREATED'
+  | 'REQUESTED'
+  | 'RESCHEDULED'
+  | 'UPDATED'
+  | 'CONFIRMED'
+  | 'COMPLETED'
+  | 'CANCELLED'
+  | 'DELETED';
+
+export interface AppointmentEvent {
+  id: string;
+  appointment_id: string;
+  action: AppointmentEventAction | string;
+  actor_id?: string | null;
+  actor_name?: string | null;
+  actor_role?: string | null;
+  /** { field: [giá trị cũ, giá trị mới] } */
+  changes?: Record<string, [unknown, unknown]> | null;
+  note?: string | null;
+  created_at: string;
 }
 
 export interface TrendHourlyItem {
@@ -177,6 +202,9 @@ export interface HouseInvite {
 export interface Incident {
   id: string;
   device_id?: string;
+  /** Bệnh nhân gắn với thiết bị phát cảnh báo (null với thiết bị cấp nhà như camera) */
+  elderly_id?: string | null;
+  house_id?: string | null;
   alert_type: string;
   alert_level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | string;
   message: string;

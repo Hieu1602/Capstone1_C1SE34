@@ -22,6 +22,8 @@ import {
   Shield,
 } from 'lucide-react';
 import type { Incident, SystemNotification } from '../../types';
+import { getReadAt, NOTIFS_SYNC_EVENT } from '../../utils/notificationSync';
+import { formatEventTime } from '../../utils/appointmentHistory';
 
 export interface UnifiedNotification {
   id: string;
@@ -66,6 +68,14 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
   onNavigate,
   onRespondInvite,
 }) => {
+  // Giờ đọc được server trả về sau khi mở -> lắng nghe sự kiện đồng bộ để hiển thị ngay
+  const [, setReadTick] = useState(0);
+  useEffect(() => {
+    const onSync = () => setReadTick((t) => t + 1);
+    window.addEventListener(NOTIFS_SYNC_EVENT, onSync);
+    return () => window.removeEventListener(NOTIFS_SYNC_EVENT, onSync);
+  }, []);
+
   const [processing, setProcessing] = useState(false);
   const [handled, setHandled] = useState(false);
 
@@ -281,6 +291,15 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
                 <Clock className="h-3.5 w-3.5 text-slate-400" />
                 Thời gian: <strong className="text-slate-700 dark:text-slate-300">{notif.timeStr}</strong>
               </span>
+              {(() => {
+                const readAt = getReadAt(notif.id, notif.rawIncidentId);
+                return readAt ? (
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <Check className="h-3.5 w-3.5 text-slate-400" />
+                    Đã đọc lúc <strong className="text-slate-700 dark:text-slate-300">{formatEventTime(readAt)}</strong>
+                  </span>
+                ) : null;
+              })()}
               <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-0.5 text-[10.5px] font-semibold text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800 dark:text-emerald-300">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 Đồng bộ thời gian thực
@@ -433,7 +452,9 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
                 <span className="text-emerald-600 font-semibold flex items-center gap-1">
                   <Check className="h-3.5 w-3.5" />
                   {notif.rawIncident?.acknowledged_by_name
-                    ? `Đã xử lý bởi ${notif.rawIncident.acknowledged_by_name}`
+                    ? `Đã xử lý bởi ${notif.rawIncident.acknowledged_by_name}${
+                        notif.rawIncident.acknowledged_at ? ` lúc ${formatEventTime(notif.rawIncident.acknowledged_at)}` : ''
+                      }`
                     : notif.rawIncident?.acknowledged_by && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(notif.rawIncident.acknowledged_by))
                     ? `Đã xử lý bởi ${notif.rawIncident.acknowledged_by}`
                     : isAppointment

@@ -3,7 +3,13 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, Modal, StyleSheet, TouchableOpacity, FlatList, SafeAreaView, Alert, ScrollView } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  getReadAtFor,
+  loadReadState,
+  persistReadIdsWithServer,
+  subscribeReadState,
+  syncReadsFromServer,
+} from './notifications/notificationReadSync';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../store/useThemeStore';
 import { useAlertStore, isUrgentIncident } from '../../../store/useAlertStore';
@@ -38,9 +44,7 @@ interface Props {
   onRespondHouseInvite?: (incident: Incident, action: 'accept' | 'reject') => Promise<void>;
 }
 
-const STORAGE_KEY = '@doctor_read_notification_ids';
-/** Khóa lưu "đã đọc" theo từng tài khoản – tránh 2 bác sĩ dùng chung máy dùng chung trạng thái */
-export const readIdsStorageKey = (userId?: string | null) => `${STORAGE_KEY}:${userId || 'anonymous'}`;
+export { readIdsStorageKey } from './notifications/notificationReadSync';
 
 export default function NotificationsBottomSheet({
   visible,
@@ -62,6 +66,7 @@ export default function NotificationsBottomSheet({
   const { userId } = useAuthStore();
   const [activeTab, setActiveTab] = useState<TabType>('ALL');
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const [readAt, setReadAt] = useState<Record<string, string>>({});
   const [adminBroadcasts, setAdminBroadcasts] = useState<SystemAnnouncement[]>([]);
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [selectedNotification, setSelectedNotification] = useState<UnifiedNotification | null>(null);
@@ -71,16 +76,12 @@ export default function NotificationsBottomSheet({
       setSelectedNotification(null);
       return;
     }
-    AsyncStorage.getItem(readIdsStorageKey(userId)).then((data) => {
-      if (!data) {
-        setReadIds(new Set());
-        return;
-      }
-      try {
-        const parsed = JSON.parse(data);
-        if (Array.isArray(parsed)) setReadIds(new Set(parsed));
-      } catch {}
+    // Cache cục bộ trước (0ms), sau đó lấy trạng thái chuẩn từ server (đồng bộ với Doctor Web)
+    loadReadState(userId).then((st) => {
+      setReadIds(st.ids);
+      setReadAt(st.readAt);
     });
+    syncReadsFromServer(userId);
     adminBroadcastsApi
       .getActive('doctors')
       .then((res) => {
@@ -89,12 +90,21 @@ export default function NotificationsBottomSheet({
       .catch(() => {});
   }, [visible, userId]);
 
+  // Nhận thay đổi từ server / thiết bị khác (WebSocket NOTIFICATIONS_READ)
+  useEffect(
+    () =>
+      subscribeReadState((st) => {
+        setReadIds(st.ids);
+        setReadAt(st.readAt);
+      }),
+    [],
+  );
+
   const persistReadIds = useCallback(async (newSet: Set<string>) => {
+    const prev = readIds;
     setReadIds(new Set(newSet));
-    try {
-      await AsyncStorage.setItem(readIdsStorageKey(userId), JSON.stringify(Array.from(newSet)));
-    } catch {}
-  }, [userId]);
+    await persistReadIdsWithServer(userId, prev, newSet);
+  }, [userId, readIds]);
 
   const bg = isDarkMode ? '#1E293B' : '#FFFFFF';
   const border = isDarkMode ? '#334155' : '#E2E8F0';
@@ -228,6 +238,7 @@ export default function NotificationsBottomSheet({
         {selectedNotification ? (
           <NotificationDetailView
             item={selectedNotification}
+            readAt={getReadAtFor(readAt, selectedNotification.id, selectedNotification.rawIncidentId)}
             warningPatients={patients.length > 0 ? patients : warningPatients}
             respondingId={respondingId}
             isDarkMode={isDarkMode}

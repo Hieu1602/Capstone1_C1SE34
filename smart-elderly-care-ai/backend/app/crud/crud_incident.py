@@ -40,6 +40,27 @@ class CRUDIncident:
         )
         return result.scalar_one_or_none()
 
+    async def _attach_device_owner(self, db: AsyncSession, incidents: List[Incident]) -> None:
+        """Gắn elderly_id/house_id (lấy từ Device) để Web/App nhận diện đúng bệnh nhân kể cả khi notes bị ghi đè.
+        house_id cần cho thiết bị cấp nhà (camera té ngã) không gắn với 1 bệnh nhân cụ thể."""
+        try:
+            dev_ids = {inc.device_id for inc in incidents if getattr(inc, "device_id", None)}
+            if not dev_ids:
+                return
+            from app.models.device import Device
+
+            dev_rows = await db.execute(
+                select(Device.id, Device.elderly_id, Device.house_id).where(Device.id.in_(list(dev_ids)))
+            )
+            dev_map = {row[0]: (row[1], row[2]) for row in dev_rows.fetchall()}
+            for inc in incidents:
+                elderly_id, house_id = dev_map.get(inc.device_id, (None, None))
+                if not getattr(inc, "elderly_id", None):
+                    setattr(inc, "elderly_id", elderly_id)
+                setattr(inc, "house_id", house_id)
+        except Exception:
+            pass
+
     async def list(
         self,
         db: AsyncSession,
@@ -184,7 +205,9 @@ class CRUDIncident:
                 )
             )
             result = await db.execute(query.offset(offset).limit(limit))
-            return list(result.scalars().all())
+            rows = list(result.scalars().all())
+            await self._attach_device_owner(db, rows)
+            return rows
 
         if is_doctor:
             # 2. Chống tự làm phiền (No Self-Notification khi bác sĩ tự cập nhật)
@@ -266,19 +289,7 @@ class CRUDIncident:
                 grouped_incidents.append(inc)
 
         top_incidents = grouped_incidents[:limit]
-        # Bổ sung elderly_id từ Device để Web/App nhận diện đúng bệnh nhân kể cả khi notes bị ghi đè
-        try:
-            dev_ids = {inc.device_id for inc in top_incidents if getattr(inc, "device_id", None)}
-            if dev_ids:
-                from app.models.device import Device
-
-                dev_rows = await db.execute(select(Device.id, Device.elderly_id).where(Device.id.in_(list(dev_ids))))
-                dev_map = {row[0]: row[1] for row in dev_rows.fetchall() if row[1] is not None}
-                for inc in top_incidents:
-                    if not getattr(inc, "elderly_id", None):
-                        setattr(inc, "elderly_id", dev_map.get(inc.device_id))
-        except Exception:
-            pass
+        await self._attach_device_owner(db, top_incidents)
         return top_incidents
 
     async def create(self, db: AsyncSession, data: dict) -> Incident:

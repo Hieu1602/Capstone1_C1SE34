@@ -6,6 +6,8 @@ import { UnifiedNotification, formatDate, getMedicalRecommendation } from './not
 
 interface NotificationDetailViewProps {
   item: UnifiedNotification;
+  /** Thời điểm bác sĩ đã đọc (ISO), đồng bộ với Doctor Web */
+  readAt?: string;
   warningPatients: PatientCardData[];
   respondingId: string | null;
   isDarkMode: boolean;
@@ -18,8 +20,17 @@ interface NotificationDetailViewProps {
   onRespondInvite: (item: UnifiedNotification, action: 'accept' | 'reject') => void;
 }
 
+const fmtDateTime = (iso?: string | null) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getHours())}:${p(d.getMinutes())} ${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+};
+
 export const NotificationDetailView: React.FC<NotificationDetailViewProps> = ({
   item,
+  readAt,
   warningPatients,
   respondingId,
   isDarkMode,
@@ -95,6 +106,21 @@ export const NotificationDetailView: React.FC<NotificationDetailViewProps> = ({
               <Text style={styles.syncTagText}>Đồng bộ thời gian thực</Text>
             </View>
           </View>
+          {readAt ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
+              <Ionicons name="checkmark-done-outline" size={14} color={textSub} />
+              <Text style={{ fontSize: 11.5, color: textSub }}>Đã đọc lúc {fmtDateTime(readAt)}</Text>
+            </View>
+          ) : null}
+          {item.rawIncident?.is_acknowledged && item.rawIncident?.acknowledged_at ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+              <Ionicons name="shield-checkmark-outline" size={14} color="#059669" />
+              <Text style={{ fontSize: 11.5, color: '#059669' }}>
+                Đã xử lý{item.rawIncident.acknowledged_by_name ? ` bởi ${item.rawIncident.acknowledged_by_name}` : ''} lúc{' '}
+                {fmtDateTime(item.rawIncident.acknowledged_at)}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Thông tin bệnh nhân phụ trách */}

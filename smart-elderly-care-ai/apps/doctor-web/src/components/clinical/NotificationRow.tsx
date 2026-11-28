@@ -14,6 +14,8 @@ import {
   Megaphone,
 } from 'lucide-react';
 import type { NotificationInboxItem } from '../../utils/notificationBuilder';
+import { getReadAt } from '../../utils/notificationSync';
+import { formatEventTime } from '../../utils/appointmentHistory';
 
 interface NotificationRowProps {
   item: NotificationInboxItem;
@@ -106,6 +108,11 @@ export const NotificationRow: React.FC<NotificationRowProps> = ({ item, onSelect
           <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 mt-0.5 leading-relaxed">
             {item.cleanDesc}
           </p>
+          {item.isRead && getReadAt(item.id, item.rawIncidentId) && (
+            <p className="mt-0.5 text-[10.5px] text-slate-400 dark:text-slate-500">
+              Đã đọc lúc {formatEventTime(getReadAt(item.id, item.rawIncidentId))}
+            </p>
+          )}
         </div>
       </div>
 
