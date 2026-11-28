@@ -267,6 +267,14 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
   const hrValue: string | number = currentVitals.heart_rate != null ? currentVitals.heart_rate : '--';
   const spo2Value: string | number = currentVitals.spo2 != null ? currentVitals.spo2 : '--';
   const tempValue: string | number = currentVitals.skin_temp_max != null ? currentVitals.skin_temp_max : '--';
+  const batteryValue: number | null =
+    typeof currentVitals.bracelet_battery === 'number'
+      ? currentVitals.bracelet_battery
+      : typeof device?.battery_level === 'number'
+      ? device.battery_level
+      : null;
+  const stepsValue: number | null = typeof currentVitals.steps === 'number' ? currentVitals.steps : null;
+  const fallDetected = Boolean(currentVitals.fall_detected);
 
   return (
     <SafeAreaView style={[styles.safeArea, isDarkMode && { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
@@ -309,6 +317,7 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
         <SmartbandHeroCard
           pulseAnim={pulseAnim}
           deviceParam={device}
+          batteryValue={batteryValue}
           isSyncing={isSyncing}
           isFinding={isFinding}
           onSyncNow={handleSyncNow}
@@ -323,6 +332,9 @@ export default function SmartbandDetailScreen({ navigation, route }: any) {
           hrValue={hrValue}
           spo2Value={spo2Value}
           tempValue={tempValue}
+          batteryValue={batteryValue}
+          stepsValue={stepsValue}
+          fallDetected={fallDetected}
           hasHR={hasHR}
           hasSpO2={hasSpO2}
           hasTemp={hasTemp}

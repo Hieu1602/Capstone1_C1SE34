@@ -17,8 +17,13 @@ export const HealthSensorStatusCard: React.FC<HealthSensorStatusCardProps> = ({
   isDarkMode = false,
   colors = {},
 }) => {
-  const isDead = batteryDisplay === '0%' || batteryDisplay === '0';
-  const isLow = !isDead && parseInt(batteryDisplay, 10) <= 20;
+  const isUnassigned =
+    !batteryDisplay ||
+    batteryDisplay.includes('Chưa gán') ||
+    batteryDisplay === '--' ||
+    batteryDisplay.toLowerCase().includes('ngoại tuyến');
+  const isDead = !isUnassigned && (batteryDisplay === '0%' || batteryDisplay === '0');
+  const isLow = !isUnassigned && !isDead && parseInt(batteryDisplay, 10) <= 20;
 
   return (
     <View
@@ -35,19 +40,21 @@ export const HealthSensorStatusCard: React.FC<HealthSensorStatusCardProps> = ({
         <View
           style={[
             styles.statusIconBox,
-            isDead
-              ? { backgroundColor: '#FEE2E2' }
-              : isLow
-                ? { backgroundColor: '#FEF3C7' }
-                : isDarkMode
-                  ? { backgroundColor: 'rgba(255, 122, 0, 0.15)' }
-                  : undefined,
+            isUnassigned
+              ? { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' }
+              : isDead
+                ? { backgroundColor: '#FEE2E2' }
+                : isLow
+                  ? { backgroundColor: '#FEF3C7' }
+                  : isDarkMode
+                    ? { backgroundColor: 'rgba(255, 122, 0, 0.15)' }
+                    : undefined,
           ]}
         >
           <Ionicons
             name={isDead ? 'battery-dead' : isLow ? 'battery-half' : 'watch-outline'}
             size={20}
-            color={isDead ? '#DC2626' : isLow ? '#D97706' : Colors.primary}
+            color={isUnassigned ? '#94A3B8' : isDead ? '#DC2626' : isLow ? '#D97706' : Colors.primary}
           />
         </View>
         <View style={{ flex: 1 }}>
@@ -55,13 +62,45 @@ export const HealthSensorStatusCard: React.FC<HealthSensorStatusCardProps> = ({
             Vòng tay thông minh BLE
           </Text>
           <Text style={[styles.statusItemSub, isDarkMode && { color: colors.textSecondary }]}>
-            Pin: {batteryDisplay} • {isDead ? 'Cạn pin ngắt kết nối' : isLow ? 'Sắp hết pin' : 'Kết nối liên tục'}
+            {isUnassigned
+              ? 'Chưa gắn vòng đeo tay cho hồ sơ này'
+              : `Pin: ${batteryDisplay} • ${isDead ? 'Cạn pin ngắt kết nối' : isLow ? 'Sắp hết pin' : 'Kết nối liên tục'}`}
           </Text>
         </View>
-        <View style={isDead ? styles.deadBadge : isLow ? styles.lowBadge : styles.onlineBadge}>
-          <View style={isDead ? styles.deadDot : isLow ? styles.lowDot : styles.onlineDot} />
-          <Text style={isDead ? styles.deadText : isLow ? styles.lowText : styles.onlineText}>
-            {isDead ? 'Hết pin' : isLow ? 'Pin yếu' : 'Đang đo'}
+        <View
+          style={
+            isUnassigned
+              ? [styles.offlineBadge, isDarkMode && { backgroundColor: '#1E293B' }]
+              : isDead
+                ? styles.deadBadge
+                : isLow
+                  ? styles.lowBadge
+                  : styles.onlineBadge
+          }
+        >
+          <View
+            style={
+              isUnassigned
+                ? styles.offlineDot
+                : isDead
+                  ? styles.deadDot
+                  : isLow
+                    ? styles.lowDot
+                    : styles.onlineDot
+            }
+          />
+          <Text
+            style={
+              isUnassigned
+                ? styles.offlineText
+                : isDead
+                  ? styles.deadText
+                  : isLow
+                    ? styles.lowText
+                    : styles.onlineText
+            }
+          >
+            {isUnassigned ? 'Chưa gắn' : isDead ? 'Hết pin' : isLow ? 'Pin yếu' : 'Đang đo'}
           </Text>
         </View>
       </View>
@@ -208,6 +247,26 @@ const styles = StyleSheet.create({
   lowText: {
     fontSize: 11,
     color: '#D97706',
+    fontWeight: '700',
+  },
+  offlineBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  offlineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#94A3B8',
+    marginRight: 4,
+  },
+  offlineText: {
+    fontSize: 11,
+    color: '#64748B',
     fontWeight: '700',
   },
 });
