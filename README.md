@@ -1,241 +1,229 @@
-# 🏥 Smart Elderly Care AI — Hệ Thống Chăm Sóc Người Cao Tuổi Thông Minh
-### Đồ Án Capstone 1 — Nhóm C1SE.34 | Nghiên Cứu Khoa Học (NCKH 2026)
+# 🏥 Smart Elderly Care AI (SECA) — Hệ Thống Chăm Sóc Người Cao Tuổi Thông Minh
+### Đồ Án Capstone 1 — Nhóm C1SE.34 | Đại Học Duy Tân (2026)
 
-> **Hệ thống giám sát, phát hiện té ngã, theo dõi sinh hiệu 24/7 và cảnh báo khẩn cấp thời gian thực cho người cao tuổi ứng dụng AI Edge Computing kết hợp Hạ tầng Đám mây (AWS Cloud & Google Firebase).**
+> **Hệ thống giám sát, phát hiện té ngã, theo dõi sinh hiệu 24/7, quản lý bệnh án/đơn thuốc/lịch khám lâm sàng và cảnh báo khẩn cấp thời gian thực cho người cao tuổi, kết hợp Edge AI Computing với AWS Cloud & Google Firebase.**
 
 ---
 
 <p align="center">
   <img src="https://img.shields.io/badge/Repository-Capstone1__C1SE34-1E88E5?style=for-the-badge&logo=github&logoColor=white" alt="Repo" />
-  <img src="https://img.shields.io/badge/Architecture-AWS%20Cloud-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white" alt="AWS Cloud" />
-  <img src="https://img.shields.io/badge/Database-AWS%20RDS%20PG17-527FFF?style=for-the-badge&logo=amazonrds&logoColor=white" alt="AWS RDS" />
-  <img src="https://img.shields.io/badge/Frontend-Firebase%20Hosting-FFCA28?style=for-the-badge&logo=firebase&logoColor=black" alt="Firebase" />
+  <img src="https://img.shields.io/badge/Architecture-AWS%20%2B%20Firebase-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white" alt="Multi-Cloud" />
+  <img src="https://img.shields.io/badge/Database-AWS%20RDS%20PG18-527FFF?style=for-the-badge&logo=postgresql&logoColor=white" alt="AWS RDS PG18" />
+  <img src="https://img.shields.io/badge/Cache-Redis%207.2-DC382D?style=for-the-badge&logo=redis&logoColor=white" alt="Redis" />
   <img src="https://img.shields.io/badge/Backend-FastAPI%20%26%20Python%203.11-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
-  <img src="https://img.shields.io/badge/Mobile-React%20Native%20Expo-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React Native" />
+  <img src="https://img.shields.io/badge/Web%20Portals-React%2018%20%2B%20Vite-FFCA28?style=for-the-badge&logo=firebase&logoColor=black" alt="Web & Doctor Portals" />
+  <img src="https://img.shields.io/badge/Mobile-React%20Native%20Expo%20~58-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React Native" />
   <img src="https://img.shields.io/badge/Edge%20AI-YOLOv8%20%2B%20Sensor%20Fusion-FF6F00?style=for-the-badge&logo=python&logoColor=white" alt="Edge AI" />
-  <img src="https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" alt="CI/CD" />
 </p>
 
 ---
 
 ## 📌 Mục Lục
-1. [Tính Năng Cốt Lõi (Core Features)](#-tính-năng-cốt-lõi-core-features)
-2. [Kiến Trúc Hạ Tầng Đám Mây (Multi-Cloud Architecture)](#-kiến-trúc-hạ-tầng-đám-mây-multi-cloud-architecture)
-3. [Cấu Trúc Thư Mục Dự Án (Project Structure)](#-cấu-trúc-thư-mục-dự-án-project-structure)
-4. [Tài Liệu Kỹ Thuật (Technical Documentation)](#-tài-liệu-kỹ-thuật-technical-documentation)
-5. [Hướng Dẫn Cài Đặt & Khởi Chạy (Getting Started)](#-hướng-dẫn-cài-đặt--khởi-chạy-getting-started)
-6. [Quy Trình Tự Động Hóa CI/CD (DevOps & Deployment)](#-quy-trình-tự-động-hóa-cicd-devops--deployment)
-7. [Thành Viên Dự Án (Team Members)](#-thành-viên-dự-án-nhóm-c1se34)
+1. [Tính Năng Cốt Lõi](#-tính-năng-cốt-lõi)
+2. [Kiến Trúc Hạ Tầng Đám Mây](#-kiến-trúc-hạ-tầng-đám-mây)
+3. [Cấu Trúc Thư Mục Dự Án](#-cấu-trúc-thư-mục-dự-án)
+4. [Tài Liệu Kỹ Thuật](#-tài-liệu-kỹ-thuật)
+5. [Hướng Dẫn Cài Đặt & Khởi Chạy](#-hướng-dẫn-cài-đặt--khởi-chạy)
+6. [Quy Trình CI/CD](#-quy-trình-cicd)
+7. [Thành Viên Dự Án](#-thành-viên-dự-án-nhóm-c1se34)
 
 ---
 
-## 🌟 Tính Năng Cốt Lõi (Core Features)
+## 🌟 Tính Năng Cốt Lõi
 
-* **👁️ Thị Giác Máy Tính & Phát Hiện Té Ngã Tức Thời (Edge Vision):**
-  * Sử dụng mô hình **YOLOv8-Pose** và thuật toán phân tích động học cột sống & vận tốc rơi hông (`drop_velocity`) để phát hiện ngã ngay trong giai đoạn đang rơi (**0.2s – 0.6s**).
-  * Bộ đệm vòng RAM (**Video Ring Buffer**) tự động trích xuất đoạn **video 5 giây trước sự cố** và 3 ảnh bằng chứng (-3s, -1.5s, 0s) tải trực tiếp lên AWS S3.
-* **⌚ Đa Cảm Biến Hợp Nhất (Sensor Fusion Decision Matrix):**
-  * Thu thập dữ liệu từ Camera AI, Vòng đeo tay BLE (Nhịp tim, SpO₂), Cảm biến nhiệt AMG8833 và Âm thanh khẩn cấp (YAMNet) nhằm loại trừ triệt để báo động giả.
-* **🚨 Cảnh Báo Khẩn Cấp Sinh Tử (Critical Alert Push Notifications):**
-  * Tích hợp **Firebase Cloud Messaging (FCM)** gửi còi hú SOS đến điện thoại người nhà chỉ trong **1-2 giây**, ghi đè chế độ Im Lặng / Không Làm Phiền của thiết bị di động.
-* **🤖 Trợ Lý Y Tế Ảo Google Gemini AI:**
-  * Hỏi đáp y tế thông minh, tóm tắt diễn biến sức khỏe hàng tuần và đưa ra khuyến nghị phòng ngừa rủi ro cho bác sĩ và người thân.
-* **📊 Quản Trị Hệ Thống Tập Trung (Web Admin Portal & Mobile App):**
-  * **Web Admin:** Phân phối toàn cầu qua Firebase Hosting, giám sát sức khỏe, quản lý thiết bị IoT, phân quyền hộ gia đình (`owner`, `caregiver`, `doctor`, `admin`).
-  * **Mobile App:** Ứng dụng di động React Native đa nền tảng (Android/iOS) xem video sự cố, đồ thị sinh hiệu thời gian thực và nhận thông báo SOS.
+- **👁️ Phát Hiện Té Ngã & Ghi Hình Riêng Tư (Edge Vision + VideoArchive):**
+  - YOLOv8-Pose + phân tích động học cột sống & hợp nhất đa cảm biến (Camera RTSP, vòng đeo tay BLE, cảm biến nhiệt AMG8833, âm thanh YAMNet) giúp phát hiện té ngã sớm và giảm báo động giả.
+  - Ghi phân đoạn HLS 2 giây & clip bằng chứng sự cố trực tiếp lên **AWS S3 Private Bucket** (`AES256`), phát lại qua **Presigned GET URL** có kiểm tra quyền `can_view_camera` và hỗ trợ đàm thoại 2 chiều WebRTC qua `go2rtc`.
+- **💓 Giám Sát Sinh Hiệu & Phát Hiện Loạn Nhịp (Vital State Machine):**
+  - Pipeline 4 tầng trên Redis (`secai:lock/state/episodes/cooldown`) kết hợp lưu chuỗi thời gian `vital_signs` giúp phát hiện cơn nhịp tim bất thường tái diễn và cá nhân hóa ngưỡng theo từng người cao tuổi.
+- **🩺 Quản Lý Y Tế 2 Chiều (Bác Sĩ – Gia Đình):**
+  - Hỗ trợ luồng **Lịch khám 2 chiều** (tạo, xác nhận lẫn nhau, dời lịch/hủy kèm lý do, lặp định kỳ), **Đơn thuốc điện tử**, **Phát giọng nói tiếng Việt qua loa camera** nhắc uống thuốc/uống nước/lịch khám và hồ sơ bệnh án phân quyền RBAC.
+- **🚨 Cảnh Báo Khẩn Cấp Thời Gian Thực:**
+  - Kênh **WebSocket (`/ws/alerts`, `/ws/vitals/{device_id}`)** kết hợp **Firebase Cloud Messaging (FCM)** mức ưu tiên cao & tự động nâng cấp sự cố (`EscalationService` sau 45s chưa xử lý).
+- **🤖 Trợ Lý Y Tế AI (RAG + LLM):**
+  - Kết hợp tài liệu y khoa nội bộ (RAG) và Google Gemini (`gemini-3.1-flash-lite` / `gemini-2.5-flash`, fallback OpenAI `gpt-4o-mini`) kèm cảnh báo miễn trừ trách nhiệm y khoa.
+- **🖥️ 3 Ứng Dụng Client Đồng Bộ:**
+  - **Mobile App (`apps/mobile`):** React Native / Expo (~58) cho Gia đình, Người cao tuổi và Bác sĩ.
+  - **Web Admin Portal (`apps/web`):** Quản trị người dùng, RBAC, chính sách bảo mật, audit logs, hạ tầng & thông báo toàn hệ thống (`https://smart-elderly-care-ai-cap1.web.app`).
+  - **Doctor Web Portal (`apps/doctor-web`):** Cổng làm việc chuyên biệt cho bác sĩ gia đình (`https://smart-elderly-care-doctor.web.app`).
 
 ---
 
-## ☁️ Kiến Trúc Hạ Tầng Đám Mây (Cloud Architecture)
-
-Hệ thống áp dụng mô hình điện toán đám mây tối ưu hóa tài nguyên giữa **Amazon Web Services (AWS)** và **Google Firebase**:
+## ☁️ Kiến Trúc Hạ Tầng Đám Mây
 
 ```
                          ┌──────────────────────────────────────────────┐
-                         │            NGƯỜI DÙNG & GIAO DIỆN             │
-                         └───────┬──────────────────────────────┬───────┘
-                                 │                              │
-                HTTPS / CDN      │                              │ Push Notifications (FCM)
-             (Tải Web Dashboard) │                              │ (Còi hú SOS, Báo động ngã)
-                                 ▼                              ▼
-                   ┌───────────────────────────┐  ┌───────────────────────────┐
-                   │      GOOGLE FIREBASE      │  │      GOOGLE FIREBASE      │
-                   │      Firebase Hosting     │  │ Firebase Cloud Messaging  │
-                   │  (https://smart-elderly-  │  │          (FCM)            │
-                   │   care-ai-cap1.web.app)   │  │                           │
-                   └─────────────┬─────────────┘  └─────────────▲─────────────┘
-                                 │                              │
-                                 │ REST API                     │ Gửi thông báo
-                                 │ (http://16.178.128.42:8000)  │ qua Firebase Admin SDK
-                                 ▼                              │
-┌───────────────────────────────────────────────────────────────┴────────────────────────────────┐
-│                                 AMAZON WEB SERVICES (AWS)                                      │
-│                                                                                                │
-│   ┌────────────────────────────────────────────────────────────────────────────────────────┐   │
-│   │  AWS EC2 Cloud Server (Ubuntu — IP: 16.178.128.42)                                     │   │
-│   │  - FastAPI Backend (:8000)                                                             │   │
-│   │  - Redis In-Memory Cache & Pub/Sub (:6379)                                             │   │
-│   │  - EMQX MQTT Broker (:1883 / :8883 / :18083)                                           │   │
-│   └─────────────┬──────────────────────────────┬──────────────────────────────┬────────────┘   │
-│                 │                              │                              │                │
-│                 │ Kết nối PostgreSQL over TLS  │                              ▼                │
-│                 ▼                              │             ┌────────────────────────────────┐│
-│   ┌───────────────────────────┐                │             │AWS S3 (Simple Storage Service) ││
-│   │   AWS RDS PostgreSQL 17   │                │             │Region: ap-southeast-2 Sydney   ││
-│   │   (seca.cdeea4mcuj3h.     │                │             │Bucket: elderly-care-incidents  ││
-│   │    ap-southeast-2.rds)    │                │             │(Video sự cố 5s, Thumbnails)    ││
-│   │   - Users, Houses, Vitals │                │             └────────────────────────────────┘│
-│   └───────────────────────────┘                │                                               │
-└────────────────────────────────────────────────┼──────────────────────────────▲────────────────┘
-                                                 │                              │
-                                                 │ MQTT Telemetry & Alerts      │ Upload Video Clip 5s
-                                                 │ (Port 1883)                  │ (S3 SDK)
-                                   ┌─────────────┴──────────────────────────────┴──────┐
-                                   │        EDGE GATEWAY (Orange Pi / AI Camera)       │
-                                   └───────────────────────────────────────────────────┘
+                         │            NGƯỜI DÙNG & CLIENT               │
+                         └──┬──────────────────┬─────────────────────┬──┘
+                            │                  │                     │
+              HTTPS / CDN   │                  │ HTTPS / CDN         │ FCM Push
+           (Web Admin Portal)                  │ (Doctor Web Portal) │ Notifications
+                            ▼                  ▼                     ▲
+               ┌────────────────────────┐ ┌────────────────────────┐ │
+               │    FIREBASE HOSTING    │ │    FIREBASE HOSTING    │ │ ┌──────────────────┐
+               │ smart-elderly-care-ai- │ │ smart-elderly-care-    │ │ │   FIREBASE FCM   │
+               │ cap1.web.app           │ │ doctor.web.app         │ │ │ (Firebase Admin) │
+               └────────────┬───────────┘ └────────────┬───────────┘ │ └────────▲─────────┘
+                            │                          │             │          │
+                            └──────────┬───────────────┘             │          │
+                                       │ REST (/api/v1) & WS (/ws)   │          │
+                                       ▼                             │          │
+┌────────────────────────────────────────────────────────────────────┴──────────┴──────────┐
+│                              AMAZON WEB SERVICES (AWS)                                   │
+│   ┌───────────────────────────────────────────────────────────────────────────────────┐  │
+│   │ AWS EC2 (16.178.128.42) — Docker Compose                                          │  │
+│   │ • FastAPI Backend (:8000)   • Redis 7.2 (:6379)   • EMQX 5.6.0 (:1883/:8883)      │  │
+│   └───────────┬──────────────────────────┬──────────────────────────────────▲─────────┘  │
+│               │ asyncpg (SSL :5432)      │ Boto3 HEAD & Presigned (300s)    │ MQTT       │
+│               ▼                          ▼                                  │            │
+│   ┌───────────────────────┐  ┌─────────────────────────────────────┐        │            │
+│   │ AWS RDS PG 18.3       │  │ AWS S3 Private Bucket               │        │            │
+│   │ seca.cdeea4mcuj3h...  │  │ elderly-care-incidents-c1se34       │        │            │
+│   │ (22 bảng, 284 cột)    │  │ (HLS 2s, Evidence Clip, Snapshot)   │        │            │
+│   └───────────────────────┘  └──────────────────▲──────────────────┘        │            │
+└─────────────────────────────────────────────────┼───────────────────────────┼────────────┘
+                                                  │ PutObject (AES256)        │
+                                    ┌─────────────┴───────────────────────────┴───────────┐
+                                    │   EDGE GATEWAY & TAPO CAPTURE (Orange Pi / LAN)     │
+                                    └─────────────────────────────────────────────────────┘
 ```
 
-| Dịch vụ Cloud | Thành phần đảm nhiệm | Trách nhiệm chính trong hệ thống |
+| Dịch vụ Cloud | Thành phần đảm nhiệm | Trách nhiệm chính |
 | :--- | :--- | :--- |
-| **AWS EC2** | `FastAPI`, `Redis`, `EMQX` | Máy chủ tính toán trung tâm, xử lý API nghiệp vụ, điều phối dữ liệu thời gian thực và trạm thu phát MQTT. |
-| **AWS RDS** | `Managed PostgreSQL 17` | Nguồn dữ liệu quan hệ duy nhất (Single Source of Truth), quản lý người dùng, hồ sơ người cao tuổi, thiết bị và sinh hiệu. |
-| **AWS S3** | `elderly-care-incidents-c1se34` | Lưu trữ video clip 5 giây trước khi ngã, ảnh trích xuất hiện trường và file âm thanh bằng chứng. |
-| **Firebase** | `Hosting` & `FCM` | Phân phối Web Admin & Doctor Web toàn cầu qua CDN tốc độ cao và chuyển phát thông báo còi hú khẩn cấp đến Mobile App. |
+| **AWS EC2** | `FastAPI`, `Redis`, `EMQX` | Máy chủ trung tâm xử lý REST API, WebSocket, MQTT Broker, cache & scheduler nền. |
+| **AWS RDS** | `Managed PostgreSQL 18.3` | Nguồn dữ liệu quan hệ duy nhất (22 bảng, 284 cột) kết nối bắt buộc SSL (`ssl=require`). |
+| **AWS S3** | `elderly-care-incidents-c1se34` | Bucket riêng tư (`AES256`, Block Public Access) lưu video HLS 2s & bằng chứng sự cố, phát qua Presigned URL. |
+| **Firebase** | `Hosting` & `FCM` | Phân phối **Web Admin** và **Doctor Web** qua CDN toàn cầu; đẩy cảnh báo khẩn cấp SOS/té ngã & nhắc lịch tới Mobile. |
 
 ---
 
-## 📂 Cấu Trúc Thư Mục Dự Án (Project Structure)
+## 📂 Cấu Trúc Thư Mục Dự Án
 
 ```
 Capstone1_C1SE34/
-├── .github/workflows/          # Kịch bản CI/CD GitHub Actions (deploy.yml)
-├── docs/                       # Tài liệu kiến trúc chuyên sâu của đồ án
-│   ├── ARCHITECTURE.md         # Kiến trúc phần mềm (Clean Arch, Layered Arch, FSD)
-│   ├── CLOUD_INFRASTRUCTURE.md # Kiến trúc hạ tầng đám mây Multi-Cloud chi tiết
-│   └── REDIS_ARCHITECTURE.md   # Thiết kế bộ nhớ đệm Cache & Pub/Sub
+├── .github/workflows/deploy.yml   # CI/CD GitHub Actions (Web Admin, Doctor Web, EC2 Backend)
+├── docs/                          # Tài liệu kỹ thuật hệ thống
+│   ├── ARCHITECTURE.md            # Kiến trúc phần mềm & Allocation View (SEI / ISO 42010)
+│   ├── CLOUD_INFRASTRUCTURE.md    # Kiến trúc hạ tầng AWS (EC2/RDS/S3) & Firebase
+│   ├── DATABASE_SCHEMA.md         # Đặc tả đầy đủ 22 bảng & 284 cột PostgreSQL
+│   └── REDIS_ARCHITECTURE.md      # Thiết kế Redis Keyspace, State Machine & API/WS
 ├── smart-elderly-care-ai/
 │   ├── apps/
-│   │   ├── mobile/             # Ứng dụng di động React Native (Expo SDK 57)
-│   │   │   ├── src/features/   # Feature-Sliced Design (auth, dashboard, alerts, doctor...)
-│   │   │   └── src/store/      # Quản lý State tập trung với Zustand
-│   │   └── web/                # Cổng Quản trị Web Admin (React 18, Vite, TailwindCSS)
-│   │       ├── src/pages/      # Các trang Dashboard, Users, Devices, Incidents, Reports...
-│   │       └── src/services/   # Kết nối Axios REST API Backend
-│   ├── backend/                # Máy chủ Backend API (FastAPI, Python 3.11)
-│   │   ├── app/api/v1/         # 13 REST API endpoints chuẩn hóa
-│   │   ├── app/core/           # Cấu hình config, database, security, JWT
-│   │   ├── app/models/         # SQLAlchemy ORM Models (AWS RDS PostgreSQL 17)
-│   │   ├── app/services/       # Business logic (chatbot Gemini, storage S3, mqtt, redis...)
-│   │   ├── Dockerfile          # Containerization cho máy chủ EC2
-│   │   └── requirements.txt    # Danh mục thư viện Python Backend
-│   ├── edge/                   # Module biên IoT Hub (Orange Pi / AI Camera)
-│   │   ├── src/ai/             # YOLOv8-Pose Detector, YAMNet Sound, Face Re-ID
-│   │   ├── src/drivers/        # Adapters cho Camera RTSP, Vòng tay BLE, Cảm biến AMG8833
-│   │   ├── src/fusion/         # Ma trận quyết định chống báo giả & Video Ring Buffer
-│   │   └── requirements.txt    # Thư viện Edge Computing
-│   ├── docker-compose.yml      # Cấu hình Docker Compose cho AWS EC2 (Backend, Redis, EMQX)
-│   └── .env.example            # Bản mẫu cấu hình biến môi trường
-├── start.bat                   # Menu khởi động 1-Click tự động trên Windows
-├── start.ps1                   # PowerShell Automation Script quản trị hệ thống
-├── start.sh                    # Bash Script khởi động trên Linux / macOS
-└── README.md                   # Tài liệu giới thiệu dự án
+│   │   ├── mobile/                # Mobile App (React Native / Expo ~58, FSD + Zustand)
+│   │   ├── web/                   # Web Admin Portal (React 18, Vite :3000, TailwindCSS)
+│   │   └── doctor-web/            # Doctor Web Portal (React 18, Vite :3001, TailwindCSS)
+│   ├── backend/                   # Cloud API (FastAPI, Python 3.11)
+│   │   ├── app/api/v1/endpoints/  # 20 REST modules (15 mobile/ + 5 web_admin/)
+│   │   ├── app/api/websockets/    # /ws/vitals/{device_id} & /ws/alerts
+│   │   ├── app/core/              # config, database, security, audit, i18n, seed_data
+│   │   ├── app/crud/              # Repository layer (Data Access)
+│   │   ├── app/models/            # SQLAlchemy ORM models
+│   │   ├── app/schemas/           # Pydantic schemas
+│   │   ├── app/services/          # Chatbot RAG, MQTT, Redis, S3, FCM/OTP, Schedulers, Vitals SM
+│   │   └── tests/                 # Pytest unit/E2E & Node client contract tests
+│   ├── edge/                      # Edge AI Gateway & Tapo Camera HTTP / VideoArchive
+│   ├── docker-compose.yml         # Backend, Redis, EMQX (+ TimescaleDB PG16 cho local Dev)
+│   ├── docker-compose.camera.yml  # Tapo Camera, go2rtc WebRTC & SSH camera-tunnel
+│   └── .env.example               # Mẫu biến môi trường hệ thống
+├── start.bat                      # Menu khởi động trên Windows
+├── start.ps1                      # Script PowerShell (-Target all|docker|backend|web|doctor|mobile|edge|test|stop)
+├── start.sh                       # Script Bash trên macOS / Linux
+└── README.md
 ```
 
 ---
 
-## 📑 Tài Liệu Kỹ Thuật (Technical Documentation)
+## 📑 Tài Liệu Kỹ Thuật
 
-Các tài liệu thiết kế hệ thống chi tiết được lưu trữ tại thư mục [`docs/`](docs/):
-
-* 📘 [Kiến Trúc Hạ Tầng Đám Mây (CLOUD_INFRASTRUCTURE.md)](docs/CLOUD_INFRASTRUCTURE.md): Chi tiết cấu hình AWS EC2, AWS RDS, AWS S3, Firebase Hosting và Firebase Cloud Messaging.
-* 📗 [Kiến Trúc Phần Mềm Toàn Hệ Thống (ARCHITECTURE.md)](docs/ARCHITECTURE.md): Phân tích nguyên tắc Clean Architecture (Edge), Layered Architecture (Backend) và Feature-Sliced Design (Mobile).
-* 📙 [Kiến Trúc Bộ Nhớ Đệm & Pub/Sub (REDIS_ARCHITECTURE.md)](docs/REDIS_ARCHITECTURE.md): Chiến lược lưu cache, kiểm soát rate limit và trung chuyển gói tin WebSocket thời gian thực.
+- 📘 [Kiến Trúc Phần Mềm & Allocation View (docs/ARCHITECTURE.md)](docs/ARCHITECTURE.md)
+- ☁️ [Kiến Trúc Hạ Tầng Đám Mây (docs/CLOUD_INFRASTRUCTURE.md)](docs/CLOUD_INFRASTRUCTURE.md)
+- 🗄️ [Cấu Trúc Cơ Sở Dữ Liệu PostgreSQL (docs/DATABASE_SCHEMA.md)](docs/DATABASE_SCHEMA.md)
+- ⚡ [Kiến Trúc & Keyspace Redis (docs/REDIS_ARCHITECTURE.md)](docs/REDIS_ARCHITECTURE.md)
 
 ---
 
-## 🚀 Hướng Dẫn Cài Đặt & Khởi Chạy (Getting Started)
+## 🚀 Hướng Dẫn Cài Đặt & Khởi Chạy
 
-### 1. Yêu Cầu Môi Trường (Prerequisites)
-* **Node.js:** Phiên bản `20.x` trở lên & `npm`
-* **Python:** Phiên bản `3.11.x`
-* **Docker:** Docker Engine & Docker Compose V2
+### 1. Yêu Cầu Môi Trường
+- **Node.js:** `20.x` trở lên & `npm`
+- **Python:** `3.11+`
+- **Docker:** Docker Engine & Docker Compose V2
 
-### 2. Thiết Lập Biến Môi Trường (.env)
-Sao chép file cấu hình mẫu và cập nhật các thông số bảo mật:
+### 2. Thiết Lập Biến Môi Trường (`.env`)
 ```bash
 cd smart-elderly-care-ai
 cp .env.example .env
 ```
-*(Cập nhật chuỗi kết nối AWS RDS `DATABASE_URL`, AWS S3 Credentials, Firebase Service Account và Gemini API Key)*.
+*(Điền `DATABASE_URL` / `DOCKER_DATABASE_URL`, `REDIS_PASSWORD`, `SECRET_KEY`, `AWS_*`, `LLM_API_KEY`, và đặt `firebase-service-account.json` / `google-services.json` theo đường dẫn cấu hình; không commit lên Git).*
 
----
+### 3. Khởi Động Nhanh (Windows / Linux / macOS)
 
-### ⚡ Cách 1: Khởi Động Nhanh 1-Click (Khuyên Dùng)
-
-#### Trên Windows:
-Nhấp đúp chuột vào file [`start.bat`](start.bat) hoặc thực thi lệnh sau trong PowerShell:
+#### Windows (PowerShell hoặc `start.bat`):
 ```powershell
+# Khởi động đầy đủ Docker (TimescaleDB/Redis/EMQX), Backend (:8000), Web Admin (:3000), Doctor Web (:3001) & Mobile Web (:8081)
 .\start.ps1 -Target all
-```
-*Script sẽ tự động kiểm tra dependencies, khởi động Docker (Redis, EMQX), chạy Backend FastAPI và bật Web Admin trên trình duyệt.*
 
-#### Trên Linux / macOS:
+# Hoặc chạy từng thành phần / dừng toàn bộ:
+.\start.ps1 -Target backend
+.\start.ps1 -Target web
+.\start.ps1 -Target doctor
+.\start.ps1 -Target mobile
+.\start.ps1 -Target stop
+```
+
+#### macOS / Linux:
 ```bash
 chmod +x start.sh
 ./start.sh
 ```
 
+### 4. Khởi Chạy Thủ Công Từng Thành Phần
+
+- **Hạ tầng Docker & Backend:**
+  ```bash
+  cd smart-elderly-care-ai
+  docker compose up -d backend redis emqx
+  # Hoặc chạy local DB offline: docker compose up -d timescaledb redis emqx
+  ```
+  - Swagger UI: `http://localhost:8000/docs` *(hoặc `/api/docs`)*
+  - EMQX Dashboard: `http://localhost:18083`
+
+- **Web Admin Portal (`apps/web`, port `3000`):**
+  ```bash
+  cd smart-elderly-care-ai/apps/web
+  npm install && npm run dev
+  ```
+
+- **Doctor Web Portal (`apps/doctor-web`, port `3001`):**
+  ```bash
+  cd smart-elderly-care-ai/apps/doctor-web
+  npm install && npm run dev
+  ```
+
+- **Mobile App (`apps/mobile`, Expo `:8081`):**
+  ```bash
+  cd smart-elderly-care-ai/apps/mobile
+  npm install && npx expo start
+  ```
+
+- **Edge AI Gateway (`edge/`):**
+  ```bash
+  cd smart-elderly-care-ai/edge
+  python -m venv .venv
+  source .venv/bin/activate   # Windows: .venv\Scripts\activate
+  pip install -r requirements.txt
+  python src/main.py
+  ```
+
 ---
 
-### 🛠️ Cách 2: Khởi Chạy Thủ Công Từng Dịch Vụ
+## 🔄 Quy Trình CI/CD
 
-#### A. Hạ tầng Docker (Trên Cloud EC2 hoặc Local Dev)
-```bash
-cd smart-elderly-care-ai
-docker compose up -d backend redis emqx
-```
-* **FastAPI Docs:** `http://localhost:8000/docs`
-* **EMQX Dashboard:** `http://localhost:18083` *(admin / public)*
-* **Redis Server:** `localhost:6379`
+Workflow GitHub Actions ([deploy.yml](.github/workflows/deploy.yml)) tự động chạy khi push lên nhánh `main` (hoặc kích hoạt thủ công qua `workflow_dispatch`) với **3 job song song**:
 
-#### B. Cổng Quản Trị Web Admin (React Vite)
-```bash
-cd smart-elderly-care-ai/apps/web
-npm install
-npm run dev
-```
-Truy cập giao diện Web Admin tại: `http://localhost:3000` *(Bản trực tuyến: `https://smart-elderly-care-ai-cap1.web.app`)*.
-
-#### C. Ứng Dụng Di Động Mobile App (React Native Expo)
-```bash
-cd smart-elderly-care-ai/apps/mobile
-npm install
-npx expo start
-```
-*Quét mã QR bằng ứng dụng **Expo Go** trên điện thoại Android/iOS.*
-
-#### D. Edge AI Computing (Orange Pi / AI Camera)
-```bash
-cd smart-elderly-care-ai/edge
-python -m venv .venv
-source .venv/bin/activate  # Trên Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-python src/main.py
-```
-
----
-
-## 🔄 Quy Trình Tự Động Hóa CI/CD (DevOps & Deployment)
-
-Dự án áp dụng quy trình tích hợp và triển khai liên tục (**CI/CD Pipeline**) thông qua GitHub Actions ([deploy.yml](.github/workflows/deploy.yml)):
-
-* **Mỗi khi mã nguồn được merge vào nhánh `main`:**
-  1. 🌐 **Tự động Deploy Web Admin:** GitHub Actions cài đặt dependencies, biên dịch mã nguồn (`npm run build`) và tải bản phát hành mới nhất lên **Firebase Hosting**.
-  2. ☁️ **Tự động Deploy Backend:** Tự động kết nối SSH vào máy chủ **AWS EC2** (`16.178.128.42`), kéo code mới nhất từ Git và thực thi lệnh cập nhật:
-     ```bash
-     docker compose up -d --build backend
-     ```
-  3. 📦 **Dữ liệu & Tệp Đa Phương Tiện:** Tự động liên kết liên tục đến **AWS RDS PostgreSQL** và **AWS S3 Bucket** mà không gây gián đoạn dịch vụ.
+1. **Deploy Web Admin (`apps/web`):** Node 20 -> `npm ci && npm run build` (`VITE_API_URL=http://16.178.128.42:8000/api/v1`) -> Firebase Hosting (`smart-elderly-care-ai-cap1.web.app`).
+2. **Deploy Doctor Web (`apps/doctor-web`):** Node 20 -> `npm ci && npm run build` (`VITE_API_URL`, `VITE_WS_URL`) -> Firebase Hosting (`smart-elderly-care-doctor.web.app`).
+3. **Deploy Backend (`AWS EC2 16.178.128.42`):** SSH đồng bộ nhánh `main`, chạy `sync_ec2_env.py`, và khởi động lại container `backend` qua `docker compose up -d --build backend`.
 
 ---
 
