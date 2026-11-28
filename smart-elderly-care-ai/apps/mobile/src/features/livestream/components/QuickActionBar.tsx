@@ -9,6 +9,7 @@ import ControlActionButton, { ControlAction } from "./ControlActionButton";
 interface Props {
     recording: boolean;
     speakerEnabled: boolean;
+    speakerMuted?: boolean;
     callSelected: boolean;
     onSnapshot: () => void;
     onRecord: () => void;
@@ -34,7 +35,10 @@ export default function QuickActionBar(props: Props) {
         },
         {
             label: "Loa camera",
-            icon: props.speakerEnabled ? "volume-high-outline" : "volume-mute",
+            icon:
+                props.speakerEnabled && !props.speakerMuted
+                    ? "volume-high-outline"
+                    : "volume-mute",
             onPress: props.onSpeakerToggle,
             active: props.speakerEnabled,
         },

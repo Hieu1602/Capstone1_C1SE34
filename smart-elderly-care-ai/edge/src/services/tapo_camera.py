@@ -8,6 +8,7 @@ import logging
 import os
 from pathlib import Path
 import re
+import signal
 import subprocess
 import threading
 import uuid
@@ -547,6 +548,8 @@ class Recorder:
         self.error = None
         # Tên bản ghi đang xử lý; chỉ tệp hoàn tất mới được liệt kê.
         self.active = None
+        self.process = None
+        self.stopping = False
         self.cleanup_task = None
 
     def cleanup_old_recordings(self, retention_hours: float | None = None, max_bytes: int | None = None) -> int:
@@ -653,16 +656,20 @@ class Recorder:
             return
         temporary = self.directory / (name + ".part")
         process = None
+        self.stopping = False
         try:
             process = await asyncio.create_subprocess_exec(
-                "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
+                "ffmpeg", "-hide_banner", "-loglevel", "error",
                 "-rtsp_transport", "tcp", "-timeout", "5000000", "-i", target_url,
                 "-t", str(seconds), "-map", "0:v:0", "-an", "-c:v", "copy",
                 "-movflags", "+faststart", "-f", "mp4", "-y", str(temporary),
+                stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
             )
+            self.process = process
             code = await asyncio.wait_for(process.wait(), seconds + 20)
-            if code or not temporary.exists() or temporary.stat().st_size == 0:
+            ok = (code == 0 or self.stopping) and temporary.exists() and temporary.stat().st_size > 0
+            if not ok:
                 raise RuntimeError("record failed")
             temporary.replace(self.directory / name)
         except asyncio.CancelledError:
@@ -675,8 +682,37 @@ class Recorder:
             if process and process.returncode is None:
                 process.kill()
                 await process.wait()
+            self.process = None
+            self.stopping = False
             temporary.unlink(missing_ok=True)
             self.active = None
+
+    async def stop(self) -> str | None:
+        """Dừng bản ghi đang chạy (gửi 'q' qua stdin để FFmpeg hoàn tất file MP4) và trả tên tệp."""
+        if not self.task or self.task.done():
+            return None
+        name = self.active
+        self.stopping = True
+        if self.process and self.process.returncode is None:
+            if self.process.stdin:
+                try:
+                    self.process.stdin.write(b"q\n")
+                    await self.process.stdin.drain()
+                    self.process.stdin.close()
+                except Exception:
+                    pass
+            else:
+                try:
+                    self.process.send_signal(signal.SIGINT)
+                except ProcessLookupError:
+                    pass
+        try:
+            await asyncio.wait_for(self.task, timeout=15)
+        except asyncio.TimeoutError:
+            if self.process and self.process.returncode is None:
+                self.process.kill()
+                await self.process.wait()
+        return name if name and (self.directory / name).is_file() else None
 
     async def close(self):
         """Hủy và chờ tác vụ ghi và dọn dẹp hiện tại khi đóng dịch vụ.
@@ -1077,6 +1113,11 @@ class CameraFallDetector:
                 payload["patient_name"] = patient_name
             self.mqtt.publish_alert(payload)
             LOG.info("Đã gửi cảnh báo té ngã MQTT kèm video & Face Re-ID: %s (Người: %s)", clip_name, patient_name or "Chưa rõ")
+            if getattr(self, "on_fall_alert", None):
+                try:
+                    self.on_fall_alert()
+                except Exception as cb_err:
+                    LOG.warning("Không kích hoạt được còi camera khi té ngã: %s", cb_err)
         except Exception as e:
             LOG.error("Lỗi gửi MQTT cảnh báo té ngã: %s", e)
 
@@ -1293,6 +1334,83 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
     recorder = recorder or Recorder(rec_url, Path("/recordings"))
     fall_detector = fall_detector or CameraFallDetector(camera, recorder)
     fall_detector.get_active_driver_fn = get_active_driver
+    alarm_state = {"enabled": False, "task": None, "volume": 80}
+
+    async def _synthesize_siren_mp3() -> bytes:
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+            "-f", "lavfi", "-i", "sine=frequency=960:duration=0.4",
+            "-f", "lavfi", "-i", "sine=frequency=720:duration=0.4",
+            "-filter_complex", "[0:a][1:a][0:a][1:a][0:a][1:a]concat=n=6:v=0:a=1",
+            "-f", "mp3", "pipe:1",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        audio_bytes, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+        return audio_bytes if proc.returncode == 0 else b""
+
+    async def _siren_speaker_loop():
+        try:
+            siren_bytes = await _synthesize_siren_mp3()
+            if not siren_bytes:
+                return
+            for _ in range(6):
+                if not alarm_state["enabled"]:
+                    break
+                await _dispatch_speaker_audio(
+                    siren_bytes,
+                    dst="tapo_intercom",
+                    volume=alarm_state["volume"],
+                )
+                await asyncio.sleep(2.6)
+        except asyncio.CancelledError:
+            pass
+        except Exception as err:
+            LOG.warning("[Alarm] Lỗi phát còi qua loa camera: %s", err)
+
+    async def _stop_camera_siren_async(src: str | None = None):
+        t = alarm_state.get("task")
+        if t and not t.done():
+            t.cancel()
+            await asyncio.gather(t, return_exceptions=True)
+            alarm_state["task"] = None
+        try:
+            await asyncio.to_thread(get_tapo_control(src).call, "stopManualAlarm")
+        except Exception:
+            pass
+
+    async def _play_camera_siren_async(src: str | None = None):
+        if not alarm_state["enabled"]:
+            return
+        t = alarm_state.get("task")
+        if t and not t.done():
+            t.cancel()
+            await asyncio.gather(t, return_exceptions=True)
+            alarm_state["task"] = None
+
+        target_ctrl = get_tapo_control(src)
+        try:
+            await asyncio.to_thread(target_ctrl.call, "startManualAlarm")
+            return
+        except Exception as tapo_err:
+            LOG.info("[Alarm] Tapo hardware alarm fallback sang loa camera: %s", tapo_err)
+
+        alarm_state["task"] = asyncio.create_task(_siren_speaker_loop())
+
+    main_loop: asyncio.AbstractEventLoop | None = None
+
+    def _trigger_siren_on_fall():
+        LOG.info("[Alarm] Nhận sự kiện té ngã (enabled=%s, loop_running=%s)", alarm_state["enabled"], bool(main_loop and main_loop.is_running()))
+        if not alarm_state["enabled"]:
+            return
+        try:
+            if main_loop and main_loop.is_running():
+                asyncio.run_coroutine_threadsafe(_play_camera_siren_async(), main_loop)
+                LOG.info("[Alarm] Đã kích hoạt còi báo động do phát hiện té ngã!")
+        except Exception as err:
+            LOG.warning("[Alarm] Không bật được còi khi phát hiện té ngã: %s", err)
+
+    fall_detector.on_fall_alert = _trigger_siren_on_fall
     audio_detector = CameraAudioDetector(camera, fall_detector)
 
     @web.middleware
@@ -1528,6 +1646,27 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
             raise ValueError("enabled must be boolean")
         return await command(request, "setPrivacyMode", data["enabled"])
 
+    async def alarm(request):
+        """Bật/tắt chế độ tự động hú còi khi phát hiện té ngã hoặc cập nhật âm lượng còi."""
+        if request.method == "GET":
+            return web.json_response({"enabled": alarm_state["enabled"], "volume": alarm_state["volume"]})
+        data = await body(request)
+        if "volume" in data and data["volume"] is not None:
+            try:
+                alarm_state["volume"] = max(0, min(100, int(data["volume"])))
+            except (TypeError, ValueError):
+                raise ValueError("volume must be 0..100") from None
+        if "enabled" not in data:
+            return web.json_response({"enabled": alarm_state["enabled"], "volume": alarm_state["volume"]})
+        enabled = data.get("enabled")
+        if type(enabled) is not bool:
+            raise ValueError("enabled must be boolean")
+        alarm_state["enabled"] = enabled
+        src = request.query.get("src") if hasattr(request, "query") else None
+        if not enabled:
+            await _stop_camera_siren_async(src)
+        return web.json_response({"enabled": alarm_state["enabled"], "volume": alarm_state["volume"]})
+
     async def video_mode(request):
         """Đọc/ghi Day/Night bằng pytapo; off là ngày, on là hồng ngoại ban đêm."""
         mapping = {"day": "off", "night": "on", "auto": "auto"}
@@ -1630,6 +1769,11 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
             reverse=True,
         )
         return web.json_response({"active": recorder.active, "error": recorder.error, "files": files})
+
+    async def stop_recording(request):
+        """Dừng bản ghi đang chạy và trả tên file MP4 đã hoàn tất."""
+        name = await recorder.stop()
+        return web.json_response({"file": name, "status": "stopped", "error": recorder.error})
 
     async def download(request):
         """Chỉ phục vụ tên MP4 đúng định dạng trong thư mục bản ghi.
@@ -2294,14 +2438,9 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
             raise web.HTTPServiceUnavailable(text="Dịch vụ âm thanh go2rtc chưa sẵn sàng") from None
 
     async def lifecycle(app):
-        """Gắn vòng đời driver, recorder và AI fall detector với ứng dụng.
-
-        Args:
-            app: Ứng dụng đang bắt đầu hoặc kết thúc lifecycle.
-
-        Returns:
-            Async generator. Tác động: mở camera khi chạy, đóng recorder/driver khi dừng.
-        """
+        """Gắn vòng đời driver, recorder và AI fall detector với ứng dụng."""
+        nonlocal main_loop
+        main_loop = asyncio.get_running_loop()
         if camera.source != 0 or os.getenv("CAMERA_SOURCE") or os.getenv("TAPO_HOST") or os.getenv("TAPO_USERNAME"):
             camera.start()
         fall_detector.start()
@@ -2325,8 +2464,9 @@ def create_app(camera=None, control=None, recorder=None, fall_detector=None) -> 
         web.get("/info", info), web.post("/ptz", ptz),
         web.get("/motion", motion), web.post("/motion", motion),
         web.get("/privacy", privacy), web.post("/privacy", privacy),
+        web.get("/alarm", alarm), web.post("/alarm", alarm),
         web.get("/video-mode", video_mode), web.post("/video-mode", video_mode),
-        web.get("/recordings", recordings), web.post("/recordings", recordings), web.delete("/recordings", clear_recordings),
+        web.get("/recordings", recordings), web.post("/recordings", recordings), web.post("/recordings/stop", stop_recording), web.delete("/recordings", clear_recordings),
         web.get("/recordings/{name}", download), web.delete("/recordings/{name}", delete_recording),
         web.get("/coverage", get_coverage),
         web.get("/archive/session", get_archive_session),

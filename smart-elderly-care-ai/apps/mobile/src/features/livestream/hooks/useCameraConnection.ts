@@ -47,6 +47,8 @@ export function useCameraConnection(
     const [privacy, setPrivacy] = useState<boolean | null>(null);
     // Phát hiện chuyển động của Tapo, độc lập AI; null khi chưa đọc được.
     const [motion, setMotion] = useState<boolean | null>(null);
+    // Trạng thái còi báo động trên camera.
+    const [alarm, setAlarm] = useState<boolean | null>(null);
     // Trạng thái nhận diện té ngã AI (YOLOv8-Pose); null khi chưa đọc được.
     const [fallDetection, setFallDetection] = useState<boolean | null>(null);
     const [fallStats, setFallStats] = useState<FallDetectionStatus | null>(null);
@@ -56,6 +58,8 @@ export function useCameraConnection(
     const [overlay, setOverlay] = useState(false);
     // URL MJPEG có ticket ngắn hạn để img/WebView phát video.
     const [liveUrl, setLiveUrl] = useState("");
+    // Đang tải lần đầu cho vòng kết nối hiện tại.
+    const [loading, setLoading] = useState(true);
     // Lỗi chung ảnh hưởng kết nối video, tách khỏi lỗi thư viện bản ghi.
     const [error, setError] = useState("");
     // Yêu cầu hiện ô nhập mã khi camera chưa được liên kết.
@@ -68,6 +72,16 @@ export function useCameraConnection(
         error: null,
         files: [],
     });
+    const [recordingSeconds, setRecordingSeconds] = useState(0);
+    const [isRecording, setIsRecording] = useState(false);
+    // Ghi nhận phiên quay thủ công 30s đang chờ hoàn tất để tự lưu vào mục Download (manual_clip).
+    const pendingRecordSave = useRef<{
+        startedAt: string;
+        minEndAt: number;
+        maxEndAt: number;
+        activeFile: string | null;
+        prevFiles: string[];
+    } | null>(null);
     // Khóa các thao tác API để tránh gửi lệnh điều khiển chồng nhau.
     const busy = useRef(false);
     // Phân biệt các vòng kết nối; kết quả thuộc vòng cũ không được cập nhật UI.
@@ -86,15 +100,90 @@ export function useCameraConnection(
         return () => subscription.remove();
     }, []);
     useEffect(() => {
+        if (!isRecording) {
+            setRecordingSeconds(0);
+            return;
+        }
+        const interval = setInterval(() => {
+            setRecordingSeconds((s) => s + 1);
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [isRecording]);
+
+    const handleRecordingsUpdate = (next: CameraRecordings) => {
+        setRecordings(next);
+        const pending = pendingRecordSave.current;
+        if (!pending) return;
+        if (next.active) {
+            if (!pending.activeFile) pending.activeFile = next.active;
+            return;
+        }
+        const now = Date.now();
+        if (now < pending.minEndAt) {
+            return;
+        }
+        const targetFile = pending.activeFile
+            ? next.files.includes(pending.activeFile)
+                ? pending.activeFile
+                : undefined
+            : next.files.find(
+                  (f) =>
+                      !pending.prevFiles.includes(f) &&
+                      !/^(sd_|fall_|snap)/i.test(f),
+              );
+        if (!targetFile) {
+            if (now < pending.maxEndAt) {
+                return;
+            }
+            pendingRecordSave.current = null;
+            setIsRecording(false);
+            LocalizedAlert.alert(
+                "Ghi hình",
+                next.error || "Không tìm thấy tệp video vừa quay trên camera.",
+            );
+            return;
+        }
+        pendingRecordSave.current = null;
+        setIsRecording(false);
+        if (cameraApi.saveClip) {
+            void cameraApi
+                .saveClip(
+                    {
+                        file_name: targetFile,
+                        started_at: pending.startedAt,
+                        duration: Math.max(1, Math.round((now - Date.parse(pending.startedAt)) / 1000)),
+                    },
+                    cameraId,
+                )
+                .then(() => {
+                    LocalizedAlert.alert(
+                        "Ghi hình",
+                        "Đã quay xong 30 giây và lưu video vào mục Tải xuống.",
+                    );
+                })
+                .catch(() => {
+                    LocalizedAlert.alert(
+                        "Ghi hình",
+                        "Đã quay xong nhưng chưa lưu được video vào mục Tải xuống.",
+                    );
+                });
+        }
+    };
+    useEffect(() => {
         // Bỏ kết quả cũ khi đổi camera, rời màn hình hoặc kết nối lại.
         const currentGeneration = ++generation.current;
         setLiveUrl("");
+        setLoading(active);
         setStatus(null);
         setPrivacy(null);
         setMotion(null);
+        setAlarm(null);
         setFallDetection(null);
         setFallStats(null);
         setRecordings({ active: null, error: null, files: [] });
+        setRecordingSeconds(0);
+        setIsRecording(false);
+        pendingRecordSave.current = null;
         setNeedsPairing(false);
         setError("");
         if (!active) {
@@ -116,10 +205,21 @@ export function useCameraConnection(
         const poll = async () => {
             let isConnected = false;
             try {
-                // Tải song song setup và status để tiết kiệm thời gian mạng
-                const [setupRes, statusRes] = await Promise.allSettled([
+                const needTicket =
+                    !ticketAt ||
+                    Date.now() - ticketAt > TICKET_RENEW_INTERVAL_MS;
+                // Tải song song setup, status và ticket video để giảm độ trễ mở luồng.
+                const [setupRes, statusRes, mediaRes] = await Promise.allSettled([
                     cameraApi.setup(cameraId),
                     cameraApi.status(cameraId),
+                    needTicket
+                        ? cameraApi.media(
+                              "live.mjpg",
+                              cameraId,
+                              quality,
+                              overlay,
+                          )
+                        : Promise.resolve(""),
                 ]);
                 if (cancelled) return;
 
@@ -148,21 +248,14 @@ export function useCameraConnection(
                 setStatus(data);
                 isConnected = Boolean(data.connected);
 
-                // Ưu tiên cấp và tải URL luồng video ngay lập tức
-                if (
-                    data.connected &&
-                    (!ticketAt ||
-                        Date.now() - ticketAt > TICKET_RENEW_INTERVAL_MS)
-                ) {
-                    const url = await cameraApi.media(
-                        "live.mjpg",
-                        cameraId,
-                        quality,
-                        overlay,
-                    );
-                    if (cancelled) return;
-                    setLiveUrl(url);
-                    ticketAt = Date.now();
+                // Cập nhật URL luồng video ngay khi status xác nhận đã kết nối
+                if (data.connected && needTicket) {
+                    if (mediaRes.status === "fulfilled" && mediaRes.value) {
+                        setLiveUrl(mediaRes.value);
+                        ticketAt = Date.now();
+                    } else if (mediaRes.status === "rejected") {
+                        throw mediaRes.reason;
+                    }
                 } else if (!data.connected) {
                     setLiveUrl("");
                     ticketAt = 0;
@@ -180,7 +273,10 @@ export function useCameraConnection(
                         cameraApi.recordings(cameraId),
                         cameraApi.fallDetection(cameraId),
                         cameraApi.audioDetection(cameraId),
-                    ]).then(([privRes, motRes, recRes, fallRes, audioRes]) => {
+                        cameraApi.alarm
+                            ? cameraApi.alarm(cameraId)
+                            : Promise.resolve(null),
+                    ]).then(([privRes, motRes, recRes, fallRes, audioRes, alarmRes]) => {
                         if (cancelled) return;
                         if (privRes.status === "fulfilled") {
                             setPrivacy(privRes.value.data?.result?.enabled === "on");
@@ -189,7 +285,7 @@ export function useCameraConnection(
                             setMotion(motRes.value.data?.result?.enabled === "on");
                         }
                         if (recRes.status === "fulfilled") {
-                            setRecordings(recRes.value.data);
+                            handleRecordingsUpdate(recRes.value.data);
                         }
                         if (fallRes.status === "fulfilled") {
                             setFallDetection(fallRes.value.data.enabled);
@@ -199,7 +295,17 @@ export function useCameraConnection(
                             setAudioDetection(audioRes.value.data.enabled);
                             setAudioStats(audioRes.value.data);
                         }
+                        if (alarmRes.status === "fulfilled" && alarmRes.value) {
+                            setAlarm(Boolean(alarmRes.value.data?.enabled));
+                        }
                     });
+                } else if (pendingRecordSave.current) {
+                    cameraApi
+                        .recordings(cameraId)
+                        .then((res) => {
+                            if (!cancelled) handleRecordingsUpdate(res.data);
+                        })
+                        .catch(() => {});
                 }
                 setError("");
             } catch (err) {
@@ -213,8 +319,13 @@ export function useCameraConnection(
                 }
             } finally {
                 if (!cancelled) {
-                    // Nếu chưa kết nối (driver đang mở RTSP), retry nhanh sau 1s thay vì bắt người dùng chờ 5s
-                    const delay = isConnected ? POLL_INTERVAL_MS : 1000;
+                    setLoading(false);
+                    // Nếu chưa kết nối hoặc đang quay video, retry nhanh để cập nhật trạng thái kịp thời
+                    const delay = pendingRecordSave.current
+                        ? 2000
+                        : isConnected
+                          ? POLL_INTERVAL_MS
+                          : 1000;
                     timer = setTimeout(poll, delay);
                 }
             }
@@ -357,6 +468,19 @@ export function useCameraConnection(
         }, true);
     }
     /**
+     * Bật hoặc tắt còi báo động trên camera.
+     */
+    async function toggleAlarm() {
+        const operationGeneration = generation.current;
+        const next = !(alarm === true);
+        return run(async () => {
+            const res = await cameraApi.setAlarm(next, cameraId);
+            if (generation.current === operationGeneration) {
+                setAlarm(Boolean(res?.data?.enabled ?? next));
+            }
+        }, true);
+    }
+    /**
      * Bật hoặc tắt tính năng nhận diện té ngã AI (YOLOv8-Pose).
      * Hoạt động độc lập cả khi camera vật lý chưa có luồng hình ảnh.
      */
@@ -416,22 +540,65 @@ export function useCameraConnection(
      * @remarks Tác động: Ghi tệp trên server, tải lại thư viện và hiển thị thông báo; lỗi tải thư viện không phủ nhận lệnh ghi thành công.
      */
     async function record() {
-        if (recordings.active) {
-            LocalizedAlert.alert(
-                "Ghi hình",
-                "Bản ghi hiện tại sẽ tự kết thúc sau 30 giây.",
-            );
-            return false;
-        }
         const operationGeneration = generation.current;
+        if (isRecording || recordings.active) {
+            const pending = pendingRecordSave.current;
+            const elapsed = Math.max(1, recordingSeconds);
+            pendingRecordSave.current = null;
+            setIsRecording(false);
+            return run(async () => {
+                const stopRes = await cameraApi.stopRecord(cameraId);
+                if (generation.current !== operationGeneration) return;
+                const targetFile = stopRes?.data?.file;
+                if (targetFile && cameraApi.saveClip) {
+                    await cameraApi.saveClip(
+                        {
+                            file_name: targetFile,
+                            started_at: pending?.startedAt || new Date().toISOString(),
+                            duration: elapsed,
+                        },
+                        cameraId,
+                    );
+                    if (generation.current === operationGeneration) {
+                        LocalizedAlert.alert(
+                            "Ghi hình",
+                            "Đã dừng quay và lưu video vào mục Tải xuống.",
+                        );
+                    }
+                } else if (generation.current === operationGeneration) {
+                    LocalizedAlert.alert(
+                        "Ghi hình",
+                        "Đã dừng quay nhưng chưa có tệp video để lưu.",
+                    );
+                }
+                try {
+                    const result = await cameraApi.recordings(cameraId);
+                    if (generation.current === operationGeneration)
+                        setRecordings(result.data);
+                } catch {
+                    // Không ghi đè thông báo thành công khi làm mới danh sách phụ thất bại
+                }
+            }, true);
+        }
+        const prevFiles = recordings.files;
         const started = await run(async () => {
-            await cameraApi.record(cameraId);
+            const recordRes = await cameraApi.record(cameraId);
             if (generation.current !== operationGeneration) return;
-            // Lệnh ghi đã thành công dù bước tải lại thư viện có thể thất bại.
+            const now = Date.now();
+            pendingRecordSave.current = {
+                startedAt: new Date(now).toISOString(),
+                minEndAt: now + 300000,
+                maxEndAt: now + 315000,
+                activeFile: recordRes?.data?.file || null,
+                prevFiles,
+            };
+            setRecordingSeconds(0);
+            setIsRecording(true);
             try {
                 const result = await cameraApi.recordings(cameraId);
-                if (generation.current === operationGeneration)
-                    setRecordings(result.data);
+                if (generation.current === operationGeneration) {
+                    handleRecordingsUpdate(result.data);
+                }
             } catch (err) {
                 if (generation.current === operationGeneration)
                     setRecordings((previous) => ({
@@ -440,22 +607,21 @@ export function useCameraConnection(
                     }));
             }
         }, true);
-        if (started)
-            LocalizedAlert.alert(
-                "Ghi hình",
-                "Đã bắt đầu ghi 30 giây trên server.",
-            );
         return started;
     }
     return {
         status,
         privacy,
         motion,
+        alarm,
         liveUrl,
+        loading,
         error,
         active,
         needsPairing,
         recordings,
+        isRecording: isRecording || Boolean(recordings.active),
+        recordingSeconds,
         refresh,
         pair,
         run,
@@ -465,6 +631,7 @@ export function useCameraConnection(
         move,
         togglePrivacy,
         toggleMotion,
+        toggleAlarm,
         fallDetection,
         fallStats,
         toggleFallDetection,

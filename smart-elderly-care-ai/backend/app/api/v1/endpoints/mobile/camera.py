@@ -662,6 +662,22 @@ async def set_motion(body: Toggle, _=Depends(operator)):
     return await forward_camera(_, "/motion", body.model_dump())
 
 
+@router.get("/alarm")
+async def get_alarm(_=Depends(viewer)):
+    """Đọc trạng thái còi báo động trên camera."""
+    return await forward_camera(_, "/alarm")
+
+
+@router.post("/alarm")
+async def set_alarm(body: Toggle, context=Depends(operator)):
+    """Bật/tắt còi báo động trên camera kèm mức âm lượng đã cấu hình."""
+    _, (device, _) = context
+    cfg = getattr(device, "config", None)
+    extra = (cfg.extra_settings or {}) if cfg else {}
+    vol = int(extra.get("speaker_volume", 80))
+    return await forward_camera(context, "/alarm", {**body.model_dump(), "volume": vol})
+
+
 @router.get("/recordings")
 async def recordings(_=Depends(viewer)):
     """Đọc danh sách MP4 và trạng thái ghi hiện tại.
@@ -687,6 +703,12 @@ async def record(body: Recording, _=Depends(operator)):
         JSON bản ghi. Tác động: khởi động ghi hình ở dịch vụ camera.
     """
     return await forward_camera(_, "/recordings", body.model_dump())
+
+
+@router.post("/recordings/stop")
+async def stop_record(_=Depends(operator)):
+    """Dừng bản ghi đang chạy và hoàn tất tệp MP4."""
+    return await forward_camera(_, "/recordings/stop", {})
 
 
 class FallDetectionConfig(BaseModel):
@@ -1087,6 +1109,10 @@ async def set_speaker_volume(
     else:
         cfg.extra_settings = {**(cfg.extra_settings or {}), "speaker_volume": body.volume}
     await db.commit()
+    try:
+        await forward_camera(context, "/alarm", {"volume": body.volume})
+    except Exception:
+        pass
     return {"volume": body.volume}
 
 
