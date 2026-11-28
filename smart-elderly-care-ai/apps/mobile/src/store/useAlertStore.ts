@@ -16,6 +16,10 @@ import { incidentsApi } from '../services/api';
 export interface Incident {
   id: string;
   device_id?: string;
+  elderly_id?: string | null;
+  patient_name?: string | null;
+  heart_rate?: number | null;
+  spo2?: number | null;
   alert_type: string;
   alert_level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   message: string;
@@ -71,7 +75,7 @@ const DEFAULT_SNOOZE: AlarmSnoozeInfo = {
 export const isUrgentIncident = (inc?: { alert_level?: string | null } | null) =>
   inc?.alert_level === 'HIGH' || inc?.alert_level === 'CRITICAL';
 
-export const useAlertStore = create<AlertState>()((set, get) => ({
+export const useAlertStore = create<AlertState>()((set, _get) => ({
   incidents: [],
   alarmSnooze: { ...DEFAULT_SNOOZE },
   sirenActive: false,

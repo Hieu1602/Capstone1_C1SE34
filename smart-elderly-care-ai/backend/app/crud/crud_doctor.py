@@ -226,6 +226,7 @@ class CRUDDoctor:
                     item["spo2"] = None
                     item["skin_temp_max"] = None
                     item["blood_pressure"] = None
+                    item["health_status"] = "NORMAL"
                     cached_cards.append(DoctorPatientCard(**item))
                     continue
 
@@ -240,6 +241,7 @@ class CRUDDoctor:
                             item["spo2"] = None
                             item["skin_temp_max"] = None
                             item["blood_pressure"] = None
+                            item["health_status"] = "NORMAL"
                         elif latest_vs:
                             if latest_vs.get("heart_rate"):
                                 item["heart_rate"] = latest_vs["heart_rate"]
@@ -412,10 +414,11 @@ class CRUDDoctor:
                     if latest_dt:
                         last_updated_str = latest_dt.isoformat()
 
-                # Kiểm tra cảnh báo / sự cố đang xảy ra
-                active_inc = active_incidents_map.get(band_device.id)
-                if active_inc and (active_inc.alert_level == "CRITICAL" or "FALL" in (active_inc.alert_type or "").upper()):
-                    health_status = "DANGER"
+                # Chỉ gắn trạng thái cảnh báo sinh hiệu khi Smartband đang trực tuyến (tránh báo nguy cấp giả khi ngoại tuyến/chưa có dữ liệu)
+                if is_smartband_online:
+                    active_inc = active_incidents_map.get(band_device.id)
+                    if active_inc and (active_inc.alert_level == "CRITICAL" or "FALL" in (active_inc.alert_type or "").upper()):
+                        health_status = "DANGER"
 
             # Đánh giá ngưỡng an toàn y khoa (chỉ đánh giá khi Smartband đang online và có số liệu thực)
             if health_status != "DANGER" and is_smartband_online:
@@ -534,6 +537,7 @@ class CRUDDoctor:
         live_activity = None
         is_smartband_online = False
         now_utc = datetime.now(timezone.utc)
+        cached_vs = None  # init trước if band_device để Pyrefly không báo uninitialized
         if band_device:
             from app.services.redis import redis_service
             cached_vs = None
