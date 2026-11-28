@@ -177,21 +177,12 @@ export function markAsRead(id: string, rawIncidentId?: string): Set<string> {
 export function toggleReadStatus(id: string, rawIncidentId?: string): { nextIds: Set<string>; isRead: boolean } {
   const current = getStoredReadIds();
   const isCurrentlyRead = current.has(id) || (rawIncidentId ? current.has(rawIncidentId) || current.has(`inc_${rawIncidentId}`) : false);
+  const targetIds = [id, ...(rawIncidentId ? [rawIncidentId, `inc_${rawIncidentId}`] : [])];
 
   if (isCurrentlyRead) {
-    // Chuyển sang CHƯA ĐỌC
-    current.delete(id);
-    if (rawIncidentId) {
-      current.delete(rawIncidentId);
-      current.delete(`inc_${rawIncidentId}`);
-    }
+    targetIds.forEach((k) => current.delete(k));
   } else {
-    // Chuyển sang ĐÃ ĐỌC
-    current.add(id);
-    if (rawIncidentId) {
-      current.add(rawIncidentId);
-      current.add(`inc_${rawIncidentId}`);
-    }
+    targetIds.forEach((k) => current.add(k));
   }
 
   broadcastReadIds(current);

@@ -407,7 +407,7 @@ export const patientApi = {
 
 // 5. Notifications & Incidents API
 export const incidentsApi = {
-  list: (deviceId?: string, limit = 20) =>
+  list: (deviceId?: string, limit = 100) =>
     api.get('/notifications', { params: { device_id: deviceId, limit } }),
   get: (id: string) => api.get(`/incidents/${id}`),
   acknowledge: (id: string, notes?: string) =>

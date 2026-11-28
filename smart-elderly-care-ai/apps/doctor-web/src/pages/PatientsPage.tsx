@@ -265,15 +265,13 @@ export const PatientsPage: React.FC = () => {
   const stats = useMemo(() => {
     const total = patients.length;
     const warning = patients.filter(
-      (p) => p.health_status === 'WARNING' || p.health_status === 'DANGER'
+      (p) => Boolean(p.is_online) && (p.health_status === 'WARNING' || p.health_status === 'DANGER')
     ).length;
     const online = patients.filter((p) => p.is_online).length;
     const normal = patients.filter(
       (p) => Boolean(p.is_online) && p.health_status !== 'WARNING' && p.health_status !== 'DANGER'
     ).length;
-    const offline = patients.filter(
-      (p) => !p.is_online && p.health_status !== 'WARNING' && p.health_status !== 'DANGER'
-    ).length;
+    const offline = patients.filter((p) => !p.is_online).length;
     return { total, warning, online, normal, offline };
   }, [patients]);
 
@@ -302,10 +300,10 @@ export const PatientsPage: React.FC = () => {
           (cleanPhoneQ.length > 0 && phone.includes(cleanPhoneQ));
       }
 
-      const isWarn = p.health_status === 'WARNING' || p.health_status === 'DANGER';
+      const isWarn = Boolean(p.is_online) && (p.health_status === 'WARNING' || p.health_status === 'DANGER');
       if (statusFilter === 'NORMAL') return matchesSearch && Boolean(p.is_online) && !isWarn;
       if (statusFilter === 'WARNING') return matchesSearch && isWarn;
-      if (statusFilter === 'OFFLINE') return matchesSearch && !p.is_online && !isWarn;
+      if (statusFilter === 'OFFLINE') return matchesSearch && !p.is_online;
       if (statusFilter === 'ONLINE') return matchesSearch && Boolean(p.is_online);
       return matchesSearch;
     });
@@ -530,8 +528,8 @@ export const PatientsPage: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredPatients.map((patient, idx) => {
-            const isDanger = patient.health_status === 'DANGER';
-            const isWarning = patient.health_status === 'WARNING' || isDanger;
+            const isDanger = Boolean(patient.is_online) && patient.health_status === 'DANGER';
+            const isWarning = Boolean(patient.is_online) && (patient.health_status === 'WARNING' || isDanger);
             const mrCode = `MR-${String(idx + 1).padStart(3, '0')}`;
 
             return (

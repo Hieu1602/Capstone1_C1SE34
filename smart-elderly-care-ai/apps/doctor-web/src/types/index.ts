@@ -207,6 +207,9 @@ export interface Incident {
   /** Bệnh nhân gắn với thiết bị phát cảnh báo (null với thiết bị cấp nhà như camera) */
   elderly_id?: string | null;
   house_id?: string | null;
+  patient_name?: string | null;
+  heart_rate?: number | null;
+  spo2?: number | null;
   alert_type: string;
   alert_level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | string;
   message: string;

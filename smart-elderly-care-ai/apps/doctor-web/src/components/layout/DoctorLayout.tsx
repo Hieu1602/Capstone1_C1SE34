@@ -10,6 +10,7 @@ import { doctorWebSocket } from '../../services/websocket';
 import { useDoctorDataStore } from '../../store/useDoctorDataStore';
 import { useDoctorAuthStore } from '../../store/useDoctorAuthStore';
 import { appointmentDeepLink, formatAppointmentWsNotification } from '../../utils/appointmentHelpers';
+import { handleReadsWsMessage, syncReadsFromServer } from '../../utils/notificationSync';
 import {
   isBrowserNotificationSupported,
   getBrowserNotificationPermission,
@@ -55,6 +56,7 @@ export const DoctorLayout: React.FC = () => {
 
     // Tải trước dữ liệu toàn cục song song để các tab có dữ liệu ngay (0ms)
     useDoctorDataStore.getState().fetchAllData();
+    syncReadsFromServer().catch(() => {});
     const pollTimer = setInterval(() => {
       useDoctorDataStore.getState().fetchPatients(true);
     }, 15000);
@@ -123,6 +125,36 @@ export const DoctorLayout: React.FC = () => {
               : p;
           })
         );
+        return;
+      }
+
+      // Đồng bộ acknowledge từ Mobile → Doctor Web: cập nhật store cục bộ, không cần re-fetch toàn bộ
+      if (event.type === 'INCIDENT_RESOLVED') {
+        const incId = event.incident_id || (event.data as { id?: string } | undefined)?.id;
+        if (incId) {
+          const store = useDoctorDataStore.getState();
+          const ackName = (event.data as { acknowledged_by_name?: string } | undefined)?.acknowledged_by_name;
+          const patchInc = (inc: import('../../types').Incident) =>
+            String(inc.id) === String(incId)
+              ? { ...inc, is_acknowledged: true, acknowledged_by_name: ackName }
+              : inc;
+          store.setIncidents(store.incidents.map(patchInc));
+          // shortcut: clinicalIncidents cũng cần patch; setIncidents chỉ update incidents
+          if (store.clinicalIncidents.some((i) => String(i.id) === String(incId))) {
+            useDoctorDataStore.setState({ clinicalIncidents: store.clinicalIncidents.map(patchInc) });
+          }
+        }
+        return;
+      }
+
+      // Đồng bộ "đọc tất cả" từ Mobile → Doctor Web
+      if (event.type === 'INCIDENTS_ACKNOWLEDGED') {
+        useDoctorDataStore.getState().fetchAllData(true);
+        return;
+      }
+
+      // Đồng bộ trạng thái đã đọc (NOTIFICATIONS_READ) Mobile <-> Doctor Web 0ms
+      if (handleReadsWsMessage(event)) {
         return;
       }
 

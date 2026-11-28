@@ -190,44 +190,31 @@ async def get_incident(
     return incident
 
 
-async def _bg_post_acknowledge(ack_ws_payload: str):
-    """Background task: Phát WebSocket và xóa cache Redis sau khi phản hồi nhanh <200ms."""
+async def _broadcast_alert_payload(ws_payload: str):
+    """Phát WebSocket payload tới tất cả alert_clients."""
     try:
         from app.api.websockets.vitals_ws import alert_clients
         for client_ws in list(alert_clients):
             try:
-                await client_ws.send_text(ack_ws_payload)
+                await client_ws.send_text(ws_payload)
             except Exception:
                 if client_ws in alert_clients:
                     alert_clients.remove(client_ws)
     except Exception as ws_err:
-        logger.warning("[acknowledge_incident] WS broadcast error: %s", ws_err)
+        logger.warning("[incidents] WS broadcast error: %s", ws_err)
 
+
+async def _bg_post_acknowledge(ws_payload: str):
+    """Background task: Xóa cache Redis TRƯỚC khi phát WS để client re-fetch không dính cache cũ."""
     try:
         from app.services.redis import redis_service
         await redis_service.invalidate_incidents_cache()
     except Exception:
         pass
+    await _broadcast_alert_payload(ws_payload)
 
 
-async def _bg_post_reopen(reopen_ws_payload: str):
-    """Background task: Phát WebSocket kích hoạt lại còi & xóa cache Redis."""
-    try:
-        from app.api.websockets.vitals_ws import alert_clients
-        for client_ws in list(alert_clients):
-            try:
-                await client_ws.send_text(reopen_ws_payload)
-            except Exception:
-                if client_ws in alert_clients:
-                    alert_clients.remove(client_ws)
-    except Exception as ws_err:
-        logger.warning("[reopen_incident] WS broadcast error: %s", ws_err)
-
-    try:
-        from app.services.redis import redis_service
-        await redis_service.invalidate_incidents_cache()
-    except Exception:
-        pass
+_bg_post_reopen = _bg_post_acknowledge
 
 
 @router.patch("/{incident_id}/acknowledge", response_model=IncidentOut)

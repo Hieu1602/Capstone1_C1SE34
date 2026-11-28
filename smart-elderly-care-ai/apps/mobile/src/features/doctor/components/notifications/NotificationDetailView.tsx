@@ -2,7 +2,12 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { PatientCardData } from '../types';
-import { UnifiedNotification, formatDate, getMedicalRecommendation } from './notificationHelpers';
+import {
+  UnifiedNotification,
+  formatDate,
+  getMedicalRecommendation,
+  matchPatientForIncident,
+} from './notificationHelpers';
 
 interface NotificationDetailViewProps {
   item: UnifiedNotification;
@@ -43,7 +48,8 @@ export const NotificationDetailView: React.FC<NotificationDetailViewProps> = ({
   onRespondInvite,
 }) => {
   const linkedPatient =
-    warningPatients.find((p) => p.id === item.patientId) ||
+    warningPatients.find((p) => item.patientId && String(p.id) === String(item.patientId)) ||
+    matchPatientForIncident(item.rawIncident, warningPatients, `${item.patientName || ''} ${item.title}`) ||
     (item.rawAppointment
       ? {
           name: item.rawAppointment.patient_name,
@@ -53,6 +59,17 @@ export const NotificationDetailView: React.FC<NotificationDetailViewProps> = ({
           spo2: undefined,
         }
       : undefined);
+
+  const detectedHr =
+    item.heartRate ??
+    item.rawIncident?.heart_rate ??
+    ((linkedPatient as any)?.is_online ? linkedPatient?.heart_rate : undefined);
+  const detectedSpo2 =
+    item.spo2 ??
+    item.rawIncident?.spo2 ??
+    ((linkedPatient as any)?.is_online ? linkedPatient?.spo2 : undefined);
+  const resolvedPatientName =
+    linkedPatient?.name || item.patientName || item.rawAppointment?.patient_name || 'Người cao tuổi';
 
   return (
     <View style={{ flex: 1 }}>
@@ -144,7 +161,7 @@ export const NotificationDetailView: React.FC<NotificationDetailViewProps> = ({
               <View style={styles.infoRow}>
                 <Text style={[styles.infoLabel, { color: textSub }]}>Bệnh nhân:</Text>
                 <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
-                  {linkedPatient?.name || item.rawAppointment?.patient_name || 'Người cao tuổi'}
+                  {resolvedPatientName}
                 </Text>
               </View>
               <View style={styles.infoRow}>
@@ -181,23 +198,45 @@ export const NotificationDetailView: React.FC<NotificationDetailViewProps> = ({
             </View>
 
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
-              <View style={[styles.vitalCard, { backgroundColor: '#FEE2E2', borderColor: '#FECACA' }]}>
+              <View
+                style={[
+                  styles.vitalCard,
+                  {
+                    backgroundColor: isDarkMode ? '#450A0A88' : '#FEE2E2',
+                    borderColor: isDarkMode ? '#991B1B' : '#FECACA',
+                  },
+                ]}
+              >
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#DC2626' }}>Nhịp tim</Text>
-                  <Ionicons name="pulse" size={14} color="#DC2626" />
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#FCA5A5' : '#DC2626' }}>
+                    Nhịp tim
+                  </Text>
+                  <Ionicons name="pulse" size={14} color={isDarkMode ? '#FCA5A5' : '#DC2626'} />
                 </View>
-                <Text style={{ fontSize: 20, fontWeight: '800', color: '#DC2626', marginTop: 4 }}>
-                  {linkedPatient?.heart_rate ?? '--'} <Text style={{ fontSize: 11, fontWeight: '600' }}>bpm</Text>
+                <Text style={{ fontSize: 20, fontWeight: '800', color: isDarkMode ? '#FECACA' : '#DC2626', marginTop: 4 }}>
+                  {detectedHr && detectedHr > 0 ? detectedHr : '--'}{' '}
+                  <Text style={{ fontSize: 11, fontWeight: '600' }}>bpm</Text>
                 </Text>
               </View>
 
-              <View style={[styles.vitalCard, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
+              <View
+                style={[
+                  styles.vitalCard,
+                  {
+                    backgroundColor: isDarkMode ? '#064E3B66' : '#ECFDF5',
+                    borderColor: isDarkMode ? '#065F46' : '#A7F3D0',
+                  },
+                ]}
+              >
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>SpO2</Text>
-                  <Ionicons name="water" size={14} color="#059669" />
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: isDarkMode ? '#6EE7B7' : '#059669' }}>
+                    SpO2
+                  </Text>
+                  <Ionicons name="water" size={14} color={isDarkMode ? '#6EE7B7' : '#059669'} />
                 </View>
-                <Text style={{ fontSize: 20, fontWeight: '800', color: '#059669', marginTop: 4 }}>
-                  {linkedPatient?.spo2 ?? '--'} <Text style={{ fontSize: 11, fontWeight: '600' }}>%</Text>
+                <Text style={{ fontSize: 20, fontWeight: '800', color: isDarkMode ? '#A7F3D0' : '#059669', marginTop: 4 }}>
+                  {detectedSpo2 && detectedSpo2 > 0 ? detectedSpo2 : '--'}{' '}
+                  <Text style={{ fontSize: 11, fontWeight: '600' }}>%</Text>
                 </Text>
               </View>
             </View>

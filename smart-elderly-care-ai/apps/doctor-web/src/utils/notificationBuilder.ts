@@ -160,8 +160,12 @@ export function getDateGroup(str?: string) {
   return { key: dKey, label: `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`, timestamp: time };
 }
 
-export function isNotificationReadInSet(n: Pick<UnifiedNotification, 'id' | 'rawIncidentId'>, readSet: Set<string>): boolean {
+export function isNotificationReadInSet(
+  n: Pick<UnifiedNotification, 'id' | 'rawIncidentId' | 'rawIncident'>,
+  readSet: Set<string>
+): boolean {
   return Boolean(
+    n.rawIncident?.is_acknowledged ||
     readSet.has(n.id) ||
     (n.rawIncidentId && (readSet.has(n.rawIncidentId) || readSet.has(`inc_${n.rawIncidentId}`)))
   );
@@ -226,8 +230,8 @@ export function buildNotificationItems(
       return;
     }
 
-    // Tuyệt đối ẩn dao động nhẹ; Bác sĩ chỉ nhận Cảnh báo Nguy cấp, Lịch khám / Lời mời, hoặc Cập nhật ngưỡng
-    if (!isCrit && !isHouseInvite && !isAppointment && !isAssignment && !isConfigUpdate) {
+    // Tuyệt đối ẩn dao động nhẹ; Bác sĩ chỉ nhận Cảnh báo Nguy cấp, Lịch khám / Lời mời, Hồ sơ y tế hoặc Cập nhật ngưỡng
+    if (!isCrit && !isHouseInvite && !isAppointment && !isAssignment && !isConfigUpdate && !isMedicalRecord) {
       return;
     }
 
@@ -269,15 +273,33 @@ export function buildNotificationItems(
       color = 'text-blue-700 bg-blue-50 border-blue-200';
     }
 
-    const patIdx = pats?.findIndex((p) => p.id === (inc as any).elderly_id || (inc.notes && inc.notes.includes(p.id)));
+    const msgLower = lower;
+    const patIdx = pats?.findIndex((p) => {
+      if (p.id === inc.elderly_id || (inc.notes && inc.notes.includes(p.id))) return true;
+      if (inc.device_id && p.device_id && p.device_id === inc.device_id) return true;
+      const pNameLow = (p.name || '').trim().toLowerCase();
+      return pNameLow.length >= 3 && msgLower.includes(pNameLow);
+    });
     const pat = patIdx !== undefined && patIdx >= 0 ? pats[patIdx] : undefined;
     const mrCode = patIdx !== undefined && patIdx >= 0 ? `MR-${String(patIdx + 1).padStart(3, '0')}` : undefined;
-    const pName = pat?.name || (type === 'INVITE' ? 'Hộ gia đình mới' : undefined);
+    const fallbackFallName = msg.match(/Phát hiện\s+(?:Cụ\s+|Bác\s+|Ông\s+|Bà\s+)?([^()!\n]+?)\s+té ngã/i)?.[1]?.trim();
+    const pName = pat?.name || inc.patient_name || fallbackFallName || (type === 'INVITE' ? 'Hộ gia đình mới' : undefined);
     const parsed = parseTitleAndBody(msg, type, inc.alert_type, inc.alert_level, pName);
     const dg = getDateGroup(inc.created_at);
     const timeOnly = formatNotificationTime(inc.created_at);
     const repeatCount = inc.repeat_count || 1;
     const repeatBadge = inc.repeat_badge || (repeatCount > 1 ? `Lặp lại ${repeatCount} lần trong 15 phút qua` : undefined);
+    const hrFromText = msg.match(/(\d{2,3})\s*(?:bpm|nhịp\/phút)/i);
+    const spo2FromText = msg.match(/(?:spo2|oxy)[:\s]*(\d{2,3})\s*%|(\d{2,3})\s*%\s*(?:spo2|oxy)/i);
+    const parsedSpo2 = spo2FromText ? Number(spo2FromText[1] || spo2FromText[2]) : undefined;
+    const resolvedHr =
+      (inc.heart_rate && inc.heart_rate > 0 ? Math.round(inc.heart_rate) : undefined) ??
+      (hrFromText ? Number(hrFromText[1]) : undefined) ??
+      (pat?.is_online && pat.heart_rate && pat.heart_rate > 0 ? pat.heart_rate : undefined);
+    const resolvedSpo2 =
+      (inc.spo2 && inc.spo2 > 0 ? Math.round(inc.spo2) : undefined) ??
+      (parsedSpo2 && parsedSpo2 > 0 ? parsedSpo2 : undefined) ??
+      (pat?.is_online && pat.spo2 && pat.spo2 > 0 ? pat.spo2 : undefined);
 
     list.push({
       id: `inc_${inc.id}`,
@@ -298,22 +320,22 @@ export function buildNotificationItems(
       isRead: finalRead,
       targetUrl: target,
       rawIncident: inc,
-      patientId: pat?.id,
+      patientId: pat?.id || inc.elderly_id || undefined,
       patientName: pName,
       patientMrCode: mrCode,
       repeatCount,
       repeatBadge,
       patientAddress: pat?.house_address || pat?.house_name,
-      heartRate: pat?.heart_rate && pat.heart_rate > 0 ? pat.heart_rate : undefined,
-      spo2: pat?.spo2 && pat.spo2 > 0 ? pat.spo2 : undefined,
+      heartRate: resolvedHr,
+      spo2: resolvedSpo2,
       alertLevel: inc.alert_level,
       alertType: inc.alert_type,
     });
   });
 
-  // B. Sinh hiệu cảnh báo từ Bệnh nhân (CHỈ NGUY CẤP DANGER)
+  // B. Sinh hiệu cảnh báo từ Bệnh nhân (chỉ khi trực tuyến và có dữ liệu sinh hiệu nguy cấp)
   pats?.forEach((p, idx) => {
-    if (p.health_status === 'DANGER' && !list.some((i) => i.id === `pat_${p.id}`)) {
+    if (Boolean(p.is_online) && p.health_status === 'DANGER' && !list.some((i) => i.id === `pat_${p.id}`)) {
       const dg = getDateGroup(new Date().toISOString());
       const title = `BÁO ĐỘNG ĐỎ: ${p.name} - Sinh hiệu nguy cấp`;
       const desc = `Nhịp tim: ${p.heart_rate || '--'} bpm • SpO2: ${p.spo2 || '--'}% • Địa chỉ: ${p.house_address || p.house_name || 'Nhà riêng'}`;

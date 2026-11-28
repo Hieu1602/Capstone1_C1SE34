@@ -153,10 +153,13 @@ export default function DoctorHomeScreen() {
   useEffect(() => {
     loadReadState(userId)
       .then(({ ids: readSet }) => {
-        const warnPats = patients.filter((p) => p.health_status === 'WARNING' || p.health_status === 'DANGER');
+        const warnPats = patients.filter(
+          (p) => Boolean(p.is_online) && (p.health_status === 'WARNING' || p.health_status === 'DANGER')
+        );
         const list = buildUnifiedNotifications({
           incidents,
           warningPatients: warnPats,
+          patients,
           appointments,
           upcomingAppointments,
           readIds: readSet,
@@ -192,7 +195,9 @@ export default function DoctorHomeScreen() {
             nextSelId = curr;
             return curr;
           }
-          const warn = normalized.find((p) => p.health_status === 'DANGER' || p.health_status === 'WARNING');
+          const warn = normalized.find(
+            (p) => Boolean(p.is_online) && (p.health_status === 'DANGER' || p.health_status === 'WARNING')
+          );
           nextSelId = warn ? warn.id : normalized[0]?.id || null;
           return nextSelId;
         });
@@ -221,7 +226,7 @@ export default function DoctorHomeScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [fetchIncidents, fetchSharedAppointments, fetchSharedPatients]);
+  }, [fetchIncidents, fetchSharedAppointments, fetchSharedPatients, userId]);
 
   const handleRespondHouseInvite = async (incident: any, action: 'accept' | 'reject') => {
     try {
@@ -296,6 +301,7 @@ export default function DoctorHomeScreen() {
       if (
         evtType === 'ALERT_NEW' ||
         evtType === 'INCIDENT_RESOLVED' ||
+        evtType === 'INCIDENTS_ACKNOWLEDGED' ||
         evtType === 'INCIDENT_ESCALATED' ||
         evtType === 'TELEMETRY_UPDATE' ||
         evtType === 'DEVICE_STATUS' ||
@@ -321,7 +327,9 @@ export default function DoctorHomeScreen() {
     }, [fetchData])
   );
 
-  const warningPatients = patients.filter((p) => p.health_status === 'WARNING' || p.health_status === 'DANGER');
+  const warningPatients = patients.filter(
+    (p) => Boolean(p.is_online) && (p.health_status === 'WARNING' || p.health_status === 'DANGER')
+  );
   const activePatient = patients.find((p) => p.id === selectedPatientId) || patients[0] || null;
   const doctorInitial = getDoctorInitial(userName);
 

@@ -28,6 +28,9 @@ class IncidentOut(BaseModel):
     notes: Optional[str] = None
     repeat_count: Optional[int] = 1
     repeat_badge: Optional[str] = None
+    patient_name: Optional[str] = None
+    heart_rate: Optional[int] = None
+    spo2: Optional[int] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

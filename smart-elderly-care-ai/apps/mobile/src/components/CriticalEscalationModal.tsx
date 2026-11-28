@@ -18,7 +18,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useVitalStore } from '../store/useVitalStore';
 import { incidentsApi } from '../services/api';
 import { resolveIncidentMediaUrl } from '../services/camera';
-import { dialEmergencyNumber, EMERGENCY_TEST_PHONE, requestEmergencyCallPermission } from '../services/emergency';
+import { dialEmergencyNumber, EMERGENCY_TEST_PHONE, isDoctorSession, requestEmergencyCallPermission } from '../services/emergency';
 import { notificationService } from '../services/notificationService';
 
 export const CriticalEscalationModal: React.FC = () => {

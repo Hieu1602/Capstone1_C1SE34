@@ -31,6 +31,9 @@ export interface UnifiedNotification {
   iconColor: string;
   isRead: boolean;
   patientId?: string;
+  patientName?: string;
+  heartRate?: number;
+  spo2?: number;
   rawAppointment?: AppointmentItem;
   targetScreen: 'DoctorAppointments' | 'DoctorPatients' | 'DoctorPatientDetail' | 'DoctorHome';
   targetParams?: any;
@@ -85,9 +88,63 @@ export function getMedicalRecommendation(type: UnifiedNotification['type']): str
   }
 }
 
+export function normalizeMatchText(str?: string | null): string {
+  if (!str) return '';
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .trim();
+}
+
+export function extractIncidentVitals(inc: Incident): { heartRate?: number; spo2?: number } {
+  const hrFromField = typeof inc.heart_rate === 'number' && inc.heart_rate > 0 ? Math.round(inc.heart_rate) : undefined;
+  const spo2FromField = typeof inc.spo2 === 'number' && inc.spo2 > 0 ? Math.round(inc.spo2) : undefined;
+  const rawText = `${inc.message || ''} ${inc.notes || ''}`;
+  const hrMatch = rawText.match(/(\d{2,3})\s*(?:bpm|nhịp\/phút)/i);
+  const spo2Match = rawText.match(/(?:spo2|oxy)[:\s]*(\d{2,3})\s*%|(\d{2,3})\s*%\s*(?:spo2|oxy)/i);
+  const heartRate = hrFromField ?? (hrMatch ? parseInt(hrMatch[1], 10) : undefined);
+  const spo2Raw = spo2Match ? spo2Match[1] || spo2Match[2] : undefined;
+  const spo2 = spo2FromField ?? (spo2Raw ? parseInt(spo2Raw, 10) : undefined);
+  return { heartRate, spo2 };
+}
+
+export function matchPatientForIncident(
+  inc: Partial<Incident> | undefined,
+  candidates: PatientCardData[] = [],
+  fallbackTitle?: string
+): PatientCardData | undefined {
+  if (!candidates || candidates.length === 0) return undefined;
+  const explicitId = inc?.elderly_id || (inc?.notes?.includes('PATIENT:') ? inc.notes.split('PATIENT:')[1].split('|')[0].trim() : undefined);
+  if (explicitId) {
+    const byId = candidates.find((p) => String(p.id) === String(explicitId));
+    if (byId) return byId;
+  }
+  if (inc?.device_id) {
+    const byDev = candidates.find((p) => p.device_id && String(p.device_id) === String(inc.device_id));
+    if (byDev) return byDev;
+  }
+  const haystack = normalizeMatchText(`${inc?.patient_name || ''} ${inc?.message || ''} ${fallbackTitle || ''}`);
+  if (!haystack) return undefined;
+  const sorted = [...candidates].sort((a, b) => (b.name?.length || 0) - (a.name?.length || 0));
+  return sorted.find((p) => {
+    const pName = normalizeMatchText(p.name);
+    return pName.length >= 3 && haystack.includes(pName);
+  });
+}
+
+function extractNameFromAlertMessage(rawMsg?: string): string | undefined {
+  if (!rawMsg) return undefined;
+  const match = rawMsg.match(/Phát hiện\s+(?:Cụ\s+|Bác\s+|Ông\s+|Bà\s+)?([^()!\n]+?)\s+té ngã/i);
+  return match?.[1]?.trim() || undefined;
+}
+
 export function buildUnifiedNotifications(params: {
   incidents: Incident[];
   warningPatients: PatientCardData[];
+  patients?: PatientCardData[];
   appointments: AppointmentItem[];
   upcomingAppointments: AppointmentItem[];
   readIds: Set<string>;
@@ -97,12 +154,14 @@ export function buildUnifiedNotifications(params: {
   const {
     incidents,
     warningPatients,
+    patients = [],
     appointments,
     upcomingAppointments,
     readIds,
     adminBroadcasts = [],
     doctorUserId,
   } = params;
+  const allPatients = patients.length > 0 ? patients : warningPatients;
   const unifiedList: UnifiedNotification[] = [];
   const toTs = (s?: string | null) => {
     if (!s) return 0;
@@ -145,7 +204,7 @@ export function buildUnifiedNotifications(params: {
     const isRead = Boolean(inc.is_acknowledged || readIds.has(inc.id) || readIds.has(`inc_${inc.id}`));
 
     const isAppointmentMsg =
-      ['APPOINTMENT_CONFIRMED', 'APPOINTMENT_SCHEDULED', 'APPOINTMENT_CANCELLED'].includes(inc.alert_type || '') ||
+      Boolean(inc.alert_type?.startsWith('APPOINTMENT_')) ||
       ['lịch khám', 'lịch hẹn', 'đã hủy', '[đã hủy]', 'tái khám', 'xác nhận lịch'].some((k) => msgLower.includes(k));
 
     const isAssignmentMsg = ['chủ hộ', 'phụ trách', 'chỉ định', 'bệnh nhân mới'].some((k) => msgLower.includes(k));
@@ -168,7 +227,7 @@ export function buildUnifiedNotifications(params: {
       return;
     }
 
-    if (!isCritical && !isHouseInvite && !isAppointmentMsg && !isAssignmentMsg && !isConfigUpdate) {
+    if (!isCritical && !isHouseInvite && !isAppointmentMsg && !isAssignmentMsg && !isConfigUpdate && !isMedicalRecordMsg) {
       return;
     }
 
@@ -235,10 +294,33 @@ export function buildUnifiedNotifications(params: {
         targetScreen: 'DoctorPatients',
         rawIncident: inc,
       });
+    } else if (isMedicalRecordMsg) {
+      unifiedList.push({
+        id: `inc_${inc.id}`,
+        rawIncidentId: inc.id,
+        type: 'INCIDENT',
+        title: rawMsg || 'Cập nhật hồ sơ bệnh án',
+        subtitle: inc.created_at ? formatDate(inc.created_at) : 'Vừa xong',
+        timeStr: inc.created_at || '',
+        sortTimestamp: sortTs,
+        badgeLabel: 'Hồ sơ y tế',
+        badgeColor: '#4F46E5',
+        badgeBg: '#EEF2FF',
+        iconName: 'document-text',
+        iconColor: '#4F46E5',
+        isRead,
+        targetScreen: 'DoctorPatients',
+        rawIncident: inc,
+      });
     } else {
+      const matchedPatient = matchPatientForIncident(inc, allPatients, rawMsg);
       const targetPatientId =
-        (inc as any).elderly_id ||
+        matchedPatient?.id ||
+        inc.elderly_id ||
         (inc.notes?.includes('PATIENT:') ? inc.notes.split('PATIENT:')[1].split('|')[0].trim() : undefined);
+      const snap = extractIncidentVitals(inc);
+      const liveHr = matchedPatient?.is_online && matchedPatient.heart_rate ? matchedPatient.heart_rate : undefined;
+      const liveSpo2 = matchedPatient?.is_online && matchedPatient.spo2 ? matchedPatient.spo2 : undefined;
       unifiedList.push({
         id: `inc_${inc.id}`,
         rawIncidentId: inc.id,
@@ -254,6 +336,9 @@ export function buildUnifiedNotifications(params: {
         iconColor: isConfigUpdate ? '#2563EB' : isCritical ? '#DC2626' : '#D97706',
         isRead,
         patientId: targetPatientId,
+        patientName: matchedPatient?.name || inc.patient_name || extractNameFromAlertMessage(rawMsg),
+        heartRate: snap.heartRate ?? liveHr,
+        spo2: snap.spo2 ?? liveSpo2,
         targetScreen: targetPatientId ? 'DoctorPatientDetail' : 'DoctorPatients',
         targetParams: targetPatientId ? { patientId: targetPatientId } : undefined,
         rawIncident: inc,
@@ -261,9 +346,9 @@ export function buildUnifiedNotifications(params: {
     }
   });
 
-  // 2. Bệnh nhân có trạng thái sinh hiệu NGUY CẤP (DANGER - đồng bộ với Web)
+  // 2. Bệnh nhân có trạng thái sinh hiệu NGUY CẤP (chỉ khi đang trực tuyến và có dữ liệu sinh hiệu)
   warningPatients
-    .filter((pat) => pat.health_status === 'DANGER')
+    .filter((pat) => Boolean(pat.is_online) && pat.health_status === 'DANGER')
     .forEach((pat) => {
       unifiedList.push({
         id: `pat_${pat.id}`,
