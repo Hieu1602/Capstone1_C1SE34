@@ -50,6 +50,9 @@ class DoctorPatientDetail(DoctorPatientCard):
     bmi: Optional[float] = None
     next_appointment: Optional[str] = None
     prescriptions_count: int = 0
+    # Dữ liệu vận động realtime từ vòng đeo (cache Redis) – đồng bộ với App Người nhà
+    steps: Optional[int] = None
+    activity_state: Optional[str] = None
     hr_threshold_low: Optional[int] = 50
     hr_threshold_high: Optional[int] = 120
     spo2_threshold_low: Optional[int] = 90
@@ -156,7 +159,7 @@ class DoctorVitalsAnalytics(BaseModel):
 
 
 class ThresholdsUpdate(BaseModel):
-    """Cập nhật cấu hình ngưỡng y tế khuyến nghị."""
+    """Cập nhật cấu hình ngưỡng y tế khuyến nghị (chỉ các trường được gửi mới bị thay đổi)."""
     hr_threshold_high: Optional[int] = Field(None, ge=70, le=220)
     hr_threshold_low: Optional[int] = Field(None, ge=30, le=100)
     spo2_threshold_low: Optional[int] = Field(None, ge=70, le=99)

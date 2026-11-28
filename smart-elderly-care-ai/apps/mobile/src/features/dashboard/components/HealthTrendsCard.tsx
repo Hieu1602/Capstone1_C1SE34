@@ -9,7 +9,8 @@
 //     sẽ hiển thị trạng thái rỗng ("Chưa có dữ liệu" / "--"), không dùng dữ liệu giả.
 // ==============================================================================
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useHealthStore } from '../../../store/useHealthStore';
 import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../../theme/colors';
@@ -43,6 +44,12 @@ export function HealthTrendsCard({
   patientDevice,
 }: HealthTrendsCardProps) {
   const isLiveFresh = checkIsLiveFresh(currentVitals);
+  const algoSettings = useHealthStore((s) => s.algoSettings);
+  const fetchThresholds = useHealthStore((s) => s.fetchThresholds);
+  const thresholdDevId = patientDevice ? patientDevice.id || patientDevice.deviceId : null;
+  useEffect(() => {
+    if (thresholdDevId) fetchThresholds(thresholdDevId);
+  }, [thresholdDevId, fetchThresholds]);
 
   // Kiểm tra sự tồn tại của dữ liệu nhịp tim và SpO2 thực tế từ vòng đeo tay BLE
   // BẮT BUỘC: 1 đồng hồ chỉ kết nối với 1 cụ. Nếu cụ chưa gán đồng hồ -> không có dữ liệu nhịp tim & SpO2
@@ -74,8 +81,8 @@ export function HealthTrendsCard({
   const spo2Value = hasSpO2 ? currentVitals.spo2 : null;
   const spo2PinPercent = spo2Value !== null ? Math.min(96, Math.max(4, (spo2Value - 90) * 10)) : 0;
 
-  const geometry = buildMiniLineChartGeometry(displayBars, chartWidth, avgHR);
-  const statusBadge = getTrendStatusBadge(hasAnyData, geometry.lastPt.val, spo2Value, isDarkMode);
+  const geometry = buildMiniLineChartGeometry(displayBars, chartWidth, avgHR, algoSettings);
+  const statusBadge = getTrendStatusBadge(hasAnyData, geometry.lastPt.val, spo2Value, isDarkMode, algoSettings);
 
   return (
     <View style={styles.trendSectionContainer}>
@@ -124,6 +131,7 @@ export function HealthTrendsCard({
         hasSpO2={hasSpO2}
         spo2Value={spo2Value}
         spo2PinPercent={spo2PinPercent}
+        minSpO2={algoSettings.minSpO2}
         onPress={() => navigation.navigate('HealthDetail', { metric: 'spo2' })}
       />
     </View>

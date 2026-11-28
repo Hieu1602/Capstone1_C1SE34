@@ -2,7 +2,8 @@
 // Màn hình Căn Chỉnh Tham Số Thuật Toán ("Chơi Algo" - Screenshot 2)
 // Cho phép thiết lập các ngưỡng kích hoạt cảnh báo theo yêu cầu Proposal
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { View, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,14 +14,13 @@ import { useAuthStore } from '../../../store/useAuthStore';
 import { useDeviceStore } from '../../../store/useDeviceStore';
 import { usePatientStore } from '../../../store/usePatientStore';
 import { devicesApi } from '../../../services/deviceService';
-import { alertsWS } from '../../../services/websocket';
 import { LocalizedAlert, LocalizedText, LocalizedTextInput } from '../../../i18n/LocalizedComponents';
 import { handleHeaderBack } from '../../../navigation/navigationHelpers';
 
 
 export default function AlgoConfigScreen({ navigation, route }: any) {
   const { isDarkMode } = useTheme();
-  const { algoSettings, updateAlgoSettings } = useVitalStore();
+  const { algoSettings, updateAlgoSettings, fetchThresholds, applyServerThresholds } = useVitalStore();
   const { userRole, role, permissions, fetchMyPermissions } = useAuthStore();
   const [checkingPerms, setCheckingPerms] = useState(true);
 
@@ -79,44 +79,23 @@ export default function AlgoConfigScreen({ navigation, route }: any) {
   const [fallAngle, setFallAngle] = useState(algoSettings.fallAngle.toString());
   const [immobilitySec, setImmobilitySec] = useState(algoSettings.immobilitySec.toString());
 
-  // Nạp ngưỡng riêng của đồng hồ đang chọn khi chuyển người cao tuổi / vòng đeo tay
-  useEffect(() => {
-    if (!selectedWatch) return;
-    const cfg = selectedWatch.config || {};
-    setMaxHR(String(cfg.hr_threshold_high ?? algoSettings.maxHeartRate ?? 120));
-    setMinHR(String(cfg.hr_threshold_low ?? algoSettings.minHeartRate ?? 50));
-    setMinSpO2(String(cfg.spo2_threshold_low ?? algoSettings.minSpO2 ?? 90));
-  }, [selectedWatch?.id, selectedWatch?.config]);
+  // Lấy ngưỡng mới nhất từ server cho đồng hồ đang chọn – khi mở / quay lại màn hình hoặc đổi người cao tuổi.
+  // Thông báo DEVICE_CONFIG_UPDATED được xử lý tập trung ở websocket.ts / fcm.ts (refetch vào store).
+  const thresholdDevId = selectedWatch ? String(selectedWatch.id || selectedWatch.deviceId) : null;
+  useFocusEffect(
+    useCallback(() => {
+      if (thresholdDevId) fetchThresholds(thresholdDevId);
+    }, [thresholdDevId, fetchThresholds])
+  );
 
+  // Đồng bộ ô nhập với ngưỡng trong store khi không đang chỉnh sửa
   useEffect(() => {
-    alertsWS.connect();
-    const handleWs = (event: any) => {
-      if (
-        event?.type === 'ALERT_NEW' &&
-        (event?.alert_type === 'DEVICE_CONFIG_UPDATED' || event?.data?.alert_type === 'DEVICE_CONFIG_UPDATED')
-      ) {
-        const evDevId = event?.data?.device_id;
-        if (evDevId && selectedWatch && String(evDevId) !== String(selectedWatch.id) && String(evDevId) !== String(selectedWatch.deviceId)) {
-          return;
-        }
-        const t = event?.data?.thresholds;
-        if (t) {
-          if (t.hr_threshold_high) setMaxHR(String(t.hr_threshold_high));
-          if (t.hr_threshold_low) setMinHR(String(t.hr_threshold_low));
-          if (t.spo2_threshold_low) setMinSpO2(String(t.spo2_threshold_low));
-          updateAlgoSettings({
-            maxHeartRate: Number(t.hr_threshold_high) || 120,
-            minHeartRate: Number(t.hr_threshold_low) || 50,
-            minSpO2: Number(t.spo2_threshold_low) || 90,
-          });
-        }
-      }
-    };
-    const unsub = alertsWS.subscribe(handleWs);
-    return () => {
-      unsub();
-    };
-  }, [updateAlgoSettings]);
+    if (isEditing) return;
+    setMaxHR(algoSettings.maxHeartRate.toString());
+    setMinHR(algoSettings.minHeartRate.toString());
+    setMinSpO2(algoSettings.minSpO2.toString());
+    setImmobilitySec(algoSettings.immobilitySec.toString());
+  }, [algoSettings, isEditing]);
 
   const handleSave = async () => {
     if (!canManageDevices) {
@@ -146,15 +125,22 @@ export default function AlgoConfigScreen({ navigation, route }: any) {
       const targetDev = selectedWatch || watchDevices[0] || iotDevices[0];
       const devId = targetDev?.deviceId || targetDev?.id || activeDevice?.id;
       if (devId) {
-        await devicesApi.updateDeviceConfig(devId, {
+        const res = await devicesApi.updateDeviceConfig(devId, {
           hr_threshold_high: newMaxHR,
           hr_threshold_low: newMinHR,
           spo2_threshold_low: newMinSpO2,
           immobility_seconds: newImmobilitySec,
         });
+        // Dùng giá trị server đã lưu làm nguồn chuẩn
+        applyServerThresholds(res.data);
         await fetchDevicesFromBackend();
       }
-    } catch (e) {
+    } catch (e: any) {
+      if (e?.response?.status === 422) {
+        const detail = e.response.data?.detail;
+        LocalizedAlert.alert('Ngưỡng không hợp lệ', typeof detail === 'string' ? detail : 'Giá trị thấp phải nhỏ hơn giá trị cao.');
+        return;
+      }
       console.warn('Sync device config fallback:', e);
     }
 

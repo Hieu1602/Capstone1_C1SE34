@@ -8,7 +8,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.deps import get_current_user_optional
+from app.api.deps import get_current_user, get_current_user_optional
 from app.core.database import get_db
 from app.crud.crud_incident import crud_incident
 from app.models.user import User
@@ -17,6 +17,9 @@ from app.schemas.incident import IncidentAck, IncidentOut
 logger = logging.getLogger("incidents")
 
 router = APIRouter()
+
+# Cảnh báo khẩn cấp: chỉ được tắt bằng thao tác "Đã xử lý" rõ ràng, không bằng "đánh dấu tất cả đã đọc"
+URGENT_ALERT_LEVELS = ("HIGH", "CRITICAL")
 
 
 @router.get("", response_model=List[IncidentOut])
@@ -113,30 +116,26 @@ async def list_incidents(
 @router.post("/acknowledge-all")
 @router.patch("/acknowledge-all")
 async def acknowledge_all_incidents(
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
 ):
-    """Xác nhận đã đọc toàn bộ thông báo/cảnh báo và lưu vào CSDL."""
-    from sqlalchemy import select
-    from app.models.incident import Incident
+    """Xác nhận đã đọc toàn bộ thông báo/cảnh báo và lưu vào CSDL.
+
+    Bắt buộc đăng nhập: token sai/hết hạn -> 401 (trước đây rơi về nhánh không lọc user,
+    xác nhận nhầm cảnh báo của mọi gia đình). Bác sĩ "đánh dấu tất cả" chỉ áp dụng cho
+    thông báo thường, không tắt cảnh báo khẩn cấp (HIGH/CRITICAL) mà người nhà chưa xử lý.
+    """
     from app.services.notification.appointment_notify import (
         extract_appointment_id,
         notify_doctor_appointment_confirmed,
     )
 
-    curr_uid = current_user.id if current_user else None
+    curr_uid = current_user.id
+    is_doctor = current_user.role == "doctor"
 
     apt_ids_to_confirm: list[str] = []
-    if curr_uid:
-        scoped_incidents = await crud_incident.list(db, limit=100, current_user_id=curr_uid)
-    else:
-        res = await db.execute(
-            select(Incident).where(
-                Incident.is_acknowledged.is_(False),
-                Incident.alert_type.in_(["APPOINTMENT_SCHEDULED", "APPOINTMENT_RESCHEDULED"]),
-            )
-        )
-        scoped_incidents = list(res.scalars().all())
+    scoped_incidents = await crud_incident.list(db, limit=100, current_user_id=curr_uid)
 
     for inc in scoped_incidents:
         if (
@@ -149,7 +148,11 @@ async def acknowledge_all_incidents(
             if apt_id and apt_id not in apt_ids_to_confirm:
                 apt_ids_to_confirm.append(apt_id)
 
-    count = await crud_incident.acknowledge_all(db, current_user_id=curr_uid)
+    count = await crud_incident.acknowledge_all(
+        db,
+        current_user_id=curr_uid,
+        exclude_levels=URGENT_ALERT_LEVELS if is_doctor else None,
+    )
     await db.commit()
 
     for apt_id in apt_ids_to_confirm:
@@ -162,11 +165,12 @@ async def acknowledge_all_incidents(
         except Exception as notify_err:
             logger.warning("[acknowledge_all_incidents] Lỗi đồng bộ xác nhận lịch %s: %s", apt_id, notify_err)
 
-    try:
-        from app.services.redis import redis_service
-        await redis_service.invalidate_incidents_cache()
-    except Exception:
-        pass
+    import json
+    # Báo cho các client khác (web <-> app) tải lại danh sách ngay; cũng xóa cache trong task này
+    background_tasks.add_task(
+        _bg_post_acknowledge,
+        json.dumps({"type": "INCIDENTS_ACKNOWLEDGED", "data": {"user_id": str(curr_uid), "count": count}}),
+    )
     return {"status": "success", "acknowledged_count": count}
 
 
@@ -233,7 +237,7 @@ async def acknowledge_incident(
     ack: IncidentAck | None = Body(default=None),
     note: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
 ):
     """Xác nhận đã xử lý sự kiện (caregiver/bác sĩ mark as handled) - phản hồi <200ms."""
     resolved_note = ack.notes if (ack and ack.notes) else note
@@ -310,7 +314,7 @@ async def reopen_incident(
     background_tasks: BackgroundTasks,
     note: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
 ):
     """Mở lại cảnh báo sự cố nếu người cao tuổi chưa an toàn - phản hồi <200ms."""
     incident = await crud_incident.reopen(

@@ -5,6 +5,7 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { useVitalStore, Incident } from '../store/useVitalStore';
+import { useHealthStore } from '../store/useHealthStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useEscalationStore } from '../store/useEscalationStore';
 import { notificationService } from './notificationService';
@@ -155,6 +156,12 @@ class AlertsWebSocket {
     }
 
     const store = useVitalStore.getState();
+
+    // Một client khác (web/app) vừa "đánh dấu tất cả" -> tải lại danh sách từ server
+    if (event.type === 'INCIDENTS_ACKNOWLEDGED') {
+      store.fetchNotifications?.().catch(() => {});
+      return;
+    }
 
     // 0. Lịch khám mới từ Bác sĩ hoặc Yêu cầu lịch khám từ Gia đình
     if (
@@ -512,6 +519,9 @@ class AlertsWebSocket {
       };
       store.addIncident(newIncident);
 
+      // Refetch theo thiết bị đang xem (không áp payload: WS broadcast cho mọi nhà, có thể là của cụ khác)
+      useHealthStore.getState().fetchThresholds().catch(() => {});
+
       notificationService.triggerEmergencyNotification({
         title: '⚙️ CẬP NHẬT NGƯỠNG SINH HIỆU',
         body: newIncident.message,
@@ -728,7 +738,8 @@ class AlertsWebSocket {
         store.acknowledgeIncident(
           incId,
           event.data?.note || 'Đã kiểm tra an toàn',
-          handlerName
+          handlerName,
+          true
         );
       }
       // Kiểm tra lại nếu không còn sự cố Critical chưa xử lý nào thì tắt còi & tắt cờ té ngã

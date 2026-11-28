@@ -51,6 +51,8 @@ export interface PatientDetail {
   spo2?: number;
   blood_pressure?: string;
   skin_temp_max?: number;
+  steps?: number | null;
+  activity_state?: string | null;
   doctor_notes?: string;
   next_appointment?: string;
   drug_allergies?: string;

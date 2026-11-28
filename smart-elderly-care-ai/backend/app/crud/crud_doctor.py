@@ -515,6 +515,8 @@ class CRUDDoctor:
         health_status = "NORMAL"
         last_updated_str = None
 
+        live_steps = None
+        live_activity = None
         is_smartband_online = False
         now_utc = datetime.now(timezone.utc)
         if band_device:
@@ -548,6 +550,10 @@ class CRUDDoctor:
                 # frontend phân biệt qua is_online=False
                 if latest_dt:
                     last_updated_str = latest_dt.isoformat()
+
+        if is_smartband_online and band_device and cached_vs:
+            live_steps = cached_vs.get("steps")
+            live_activity = cached_vs.get("activity_state") or cached_vs.get("activity")
 
         if is_smartband_online:
             if (spo2 is not None and spo2 < 90) or (hr is not None and (hr > 120 or hr < 50)):
@@ -633,6 +639,8 @@ class CRUDDoctor:
             blood_pressure=bp_str,
             health_status=health_status,
             last_updated=last_updated_str or "Chưa có dữ liệu",
+            steps=live_steps,
+            activity_state=live_activity,
             conditions=resolved_conditions,
             drug_allergies=resolved_drug_allergies,
             food_allergies=resolved_food_allergies,
@@ -1419,129 +1427,139 @@ class CRUDDoctor:
     async def update_thresholds(
         self, db: AsyncSession, elderly_id: str, thresholds_in: ThresholdsUpdate, doctor_name: Optional[str] = "Bác sĩ phụ trách"
     ) -> Dict[str, Any]:
-        """Cập nhật cấu hình ngưỡng y tế khuyến nghị cho thiết bị của bệnh nhân."""
-        if elderly_id not in _CLINICAL_STORE:
-            _CLINICAL_STORE[elderly_id] = _init_clinical_data(elderly_id)
-        clinical = _CLINICAL_STORE[elderly_id]
+        """Cập nhật cấu hình ngưỡng y tế khuyến nghị cho thiết bị của bệnh nhân.
 
-        if thresholds_in.hr_threshold_low is not None:
-            clinical["hr_threshold_low"] = thresholds_in.hr_threshold_low
-        if thresholds_in.hr_threshold_high is not None:
-            clinical["hr_threshold_high"] = thresholds_in.hr_threshold_high
-        if thresholds_in.spo2_threshold_low is not None:
-            clinical["spo2_threshold_low"] = thresholds_in.spo2_threshold_low
+        Thứ tự bắt buộc: ghi DeviceConfig -> commit() -> refresh() -> đọc lại ngưỡng từ DB
+        -> dựng nội dung thông báo / payload WebSocket. Không dùng giá trị cũ trong bộ nhớ.
+        """
+        from fastapi import HTTPException, status as http_status
+        from app.services.vital_thresholds import (
+            apply_thresholds,
+            format_thresholds_summary,
+            serialize_thresholds,
+            validate_threshold_pairs,
+        )
 
+        updates = thresholds_in.model_dump(exclude_unset=True, exclude_none=True)
+        if not updates:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail="Không có ngưỡng sinh hiệu nào được gửi lên để cập nhật.",
+            )
+
+        # Không "lấy đại" bệnh nhân / thiết bị khác: sai ID -> 404, tránh ghi đè nhầm ngưỡng sang người khác
         elderly = None
         try:
-            val_uuid = UUID(elderly_id)
             res = await db.execute(
                 select(ElderlyProfile)
                 .options(selectinload(ElderlyProfile.devices), selectinload(ElderlyProfile.house))
-                .where(ElderlyProfile.id == val_uuid)
+                .where(ElderlyProfile.id == UUID(elderly_id))
             )
             elderly = res.scalar_one_or_none()
         except (ValueError, TypeError):
             pass
-
         if not elderly:
-            res = await db.execute(
-                select(ElderlyProfile)
-                .options(selectinload(ElderlyProfile.devices), selectinload(ElderlyProfile.house))
-                .limit(1)
+            raise HTTPException(
+                status_code=http_status.HTTP_404_NOT_FOUND,
+                detail=f"Không tìm thấy bệnh nhân với ID '{elderly_id}'.",
             )
-            elderly = res.scalar_one_or_none()
 
+        # Cùng thứ tự với get_patient_detail: vòng đeo của cụ -> thiết bị của cụ -> thiết bị trong nhà của cụ
         device_id = None
-        if elderly and elderly.devices:
-            for d in elderly.devices:
-                if d.device_type == "SMARTBAND":
-                    device_id = d.id
-                    break
-            if not device_id and elderly.devices:
-                device_id = elderly.devices[0].id
-
-        if not device_id and elderly and elderly.house_id:
-            dev_stmt = select(Device.id).where(Device.house_id == elderly.house_id).limit(1)
-            dev_res = await db.execute(dev_stmt)
+        if elderly.devices:
+            band = next((d for d in elderly.devices if d.device_type == "SMARTBAND"), None)
+            device_id = (band or elderly.devices[0]).id
+        if not device_id and elderly.house_id:
+            dev_res = await db.execute(select(Device.id).where(Device.house_id == elderly.house_id).limit(1))
             device_id = dev_res.scalar_one_or_none()
-
         if not device_id:
-            any_dev = await db.execute(select(Device.id).limit(1))
-            device_id = any_dev.scalar_one_or_none()
-
-        if device_id:
-            cfg_res = await db.execute(select(DeviceConfig).where(DeviceConfig.device_id == device_id))
-            d_cfg = cfg_res.scalar_one_or_none()
-            if not d_cfg:
-                d_cfg = DeviceConfig(device_id=device_id)
-                db.add(d_cfg)
-            if thresholds_in.hr_threshold_low is not None:
-                d_cfg.hr_threshold_low = thresholds_in.hr_threshold_low
-            if thresholds_in.hr_threshold_high is not None:
-                d_cfg.hr_threshold_high = thresholds_in.hr_threshold_high
-            if thresholds_in.spo2_threshold_low is not None:
-                d_cfg.spo2_threshold_low = thresholds_in.spo2_threshold_low
-            d_cfg.is_custom_thresholds = True
-            d_cfg.configured_by_role = "DOCTOR"
-            await db.commit()
-
-        patient_name = elderly.full_name if elderly else "bệnh nhân"
-        hr_l = thresholds_in.hr_threshold_low or clinical.get("hr_threshold_low", 50)
-        hr_h = thresholds_in.hr_threshold_high or clinical.get("hr_threshold_high", 120)
-        spo2_l = thresholds_in.spo2_threshold_low or clinical.get("spo2_threshold_low", 90)
-
-        notif_msg = f"🩺 {doctor_name} đã điều chỉnh ngưỡng cảnh báo sinh hiệu cho cụ {patient_name} (Nhịp tim: {hr_l} - {hr_h} bpm, SpO2 Min: {spo2_l}%)."
-
-        if device_id:
-            from app.models.incident import Incident
-            new_incident = Incident(
-                device_id=device_id,
-                alert_type="DEVICE_CONFIG_UPDATED",
-                alert_level="LOW",
-                message=notif_msg,
-                is_acknowledged=False,
-                notes=f"PATIENT:{elderly.id if elderly else elderly_id}|DOCTOR_THRESHOLD_UPDATE",
+            raise HTTPException(
+                status_code=http_status.HTTP_404_NOT_FOUND,
+                detail=f"Bệnh nhân {elderly.full_name} chưa được gán thiết bị nào để áp dụng ngưỡng.",
             )
-            db.add(new_incident)
-            await db.commit()
-            await db.refresh(new_incident)
 
-            try:
-                from app.services.redis import redis_service
-                await redis_service.invalidate_incidents_cache()
-                await redis_service.invalidate_doctor_patients()
-            except Exception:
-                pass
+        cfg_res = await db.execute(select(DeviceConfig).where(DeviceConfig.device_id == device_id))
+        d_cfg = cfg_res.scalar_one_or_none()
+        if not d_cfg:
+            d_cfg = DeviceConfig(device_id=device_id)
+            db.add(d_cfg)
+        apply_thresholds(d_cfg, updates)
 
-            try:
-                import json
-                from app.api.websockets.vitals_ws import alert_clients
-                ws_payload = json.dumps({
-                    "type": "ALERT_NEW",
+        # Kiểm tra cặp min/max trên giá trị SAU khi gộp (cập nhật một phần vẫn phải hợp lệ)
+        err = validate_threshold_pairs(serialize_thresholds(d_cfg))
+        if err:
+            await db.rollback()
+            raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=err)
+
+        d_cfg.is_custom_thresholds = True
+        d_cfg.configured_by_role = "DOCTOR"
+        await db.commit()
+        await db.refresh(d_cfg)
+        # Nguồn dữ liệu duy nhất: giá trị vừa được lưu trong PostgreSQL
+        current_thresholds = serialize_thresholds(d_cfg)
+
+        # Đồng bộ bộ nhớ lâm sàng theo đúng giá trị đã lưu
+        for key in {elderly_id, str(elderly.id)}:
+            if key not in _CLINICAL_STORE:
+                _CLINICAL_STORE[key] = _init_clinical_data(key)
+            _CLINICAL_STORE[key].update(current_thresholds)
+
+        notif_msg = (
+            f"🩺 {doctor_name} đã điều chỉnh ngưỡng cảnh báo sinh hiệu cho cụ {elderly.full_name} "
+            f"({format_thresholds_summary(current_thresholds)})."
+        )
+
+        from app.models.incident import Incident
+        new_incident = Incident(
+            device_id=device_id,
+            alert_type="DEVICE_CONFIG_UPDATED",
+            alert_level="LOW",
+            message=notif_msg,
+            is_acknowledged=False,
+            notes=f"PATIENT:{elderly.id}|DOCTOR_THRESHOLD_UPDATE",
+        )
+        db.add(new_incident)
+        await db.commit()
+        await db.refresh(new_incident)
+
+        try:
+            from app.services.redis import redis_service
+            await redis_service.invalidate_incidents_cache()
+            await redis_service.invalidate_doctor_patients()
+        except Exception:
+            pass
+
+        try:
+            from app.api.websockets.vitals_ws import alert_clients
+            ws_payload = json.dumps({
+                "type": "ALERT_NEW",
+                "alert_type": "DEVICE_CONFIG_UPDATED",
+                "data": {
+                    "id": str(new_incident.id),
                     "alert_type": "DEVICE_CONFIG_UPDATED",
-                    "data": {
-                        "id": str(new_incident.id),
-                        "alert_type": "DEVICE_CONFIG_UPDATED",
-                        "alert_level": "LOW",
-                        "message": new_incident.message,
-                        "patient_id": str(elderly.id if elderly else elderly_id),
-                        "created_at": new_incident.created_at.isoformat() if new_incident.created_at else None,
-                        "thresholds": thresholds_in.model_dump(exclude_unset=True),
-                    }
-                }, ensure_ascii=False)
-                for client_ws in list(alert_clients):
-                    try:
-                        await client_ws.send_text(ws_payload)
-                    except Exception:
-                        if client_ws in alert_clients:
-                            alert_clients.remove(client_ws)
-            except Exception:
-                pass
+                    "alert_level": "LOW",
+                    "message": new_incident.message,
+                    "patient_id": str(elderly.id),
+                    "created_at": new_incident.created_at.isoformat() if new_incident.created_at else None,
+                    "device_id": str(device_id),
+                    "thresholds": current_thresholds,
+                    "updated_fields": sorted(updates.keys()),
+                }
+            }, ensure_ascii=False)
+            for client_ws in list(alert_clients):
+                try:
+                    await client_ws.send_text(ws_payload)
+                except Exception:
+                    if client_ws in alert_clients:
+                        alert_clients.remove(client_ws)
+        except Exception:
+            pass
 
         return {
             "success": True,
             "message": "Đã cập nhật ngưỡng an toàn y tế thành công và đồng bộ xuống Hub.",
-            "thresholds": thresholds_in.model_dump(exclude_unset=True),
+            "device_id": str(device_id),
+            "thresholds": current_thresholds,
         }
 
 

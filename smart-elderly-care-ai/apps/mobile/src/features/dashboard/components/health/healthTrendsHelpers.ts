@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 import { vitalsApi } from '../../../../services/api';
+import type { AlgoSettings } from '../../../../store/useHealthStore';
+
+/** Ngưỡng cảnh báo của từng bệnh nhân (lấy từ API qua useHealthStore.fetchThresholds) */
+export type VitalThresholds = Pick<AlgoSettings, 'maxHeartRate' | 'minHeartRate' | 'minSpO2'>;
 
 export interface HrPoint {
   time: string;
@@ -290,7 +294,8 @@ export function useTodayActivityStats(
 export function buildMiniLineChartGeometry(
   displayBars: HrPoint[],
   chartWidth: number,
-  avgHR: number | null
+  avgHR: number | null,
+  thresholds: VitalThresholds
 ): MiniLineChartGeometry {
   const chartHeight = 54;
   const padLeft = 6;
@@ -324,7 +329,7 @@ export function buildMiniLineChartGeometry(
   const hasChartData = coords.length > 0;
   const lastPt = hasChartData ? coords[coords.length - 1] : { x: 0, y: 0, val: 0, time: '' };
   const firstPt = hasChartData ? coords[0] : { x: 0, y: 0, val: 0, time: '' };
-  const isHighHR = lastPt.val >= 100;
+  const isHighHR = lastPt.val >= thresholds.maxHeartRate;
   const lineColor = isHighHR ? '#F59E0B' : '#10B981';
 
   const refY = Math.max(
@@ -363,18 +368,21 @@ export function getTrendStatusBadge(
   hasAnyData: boolean,
   lastHrVal: number,
   spo2Value: number | null,
-  isDarkMode: boolean
+  isDarkMode: boolean,
+  thresholds: VitalThresholds
 ): TrendStatusBadge {
-  const isHighHR = lastHrVal >= 100;
-  const isLowHR = lastHrVal > 0 && lastHrVal < 50;
-  const isLowSpO2 = spo2Value !== null && spo2Value < 95;
+  const isHighHR = lastHrVal >= thresholds.maxHeartRate;
+  const isLowHR = lastHrVal > 0 && lastHrVal < thresholds.minHeartRate;
+  const isLowSpO2 = spo2Value !== null && spo2Value < thresholds.minSpO2;
   const isWarning = isHighHR || isLowHR || isLowSpO2;
 
   return {
     text: !hasAnyData
       ? 'Chưa có dữ liệu'
-      : isHighHR && lastHrVal >= 120
+      : isHighHR
         ? 'Nhịp tim cao'
+        : isLowHR
+          ? 'Nhịp tim thấp'
         : isWarning
           ? 'Cần theo dõi'
           : 'Đạt chuẩn',
@@ -387,7 +395,8 @@ export function getTrendStatusBadge(
 export function getSpo2BadgeConfig(
   hasSpO2: boolean,
   spo2Value: number | null,
-  isDarkMode: boolean
+  isDarkMode: boolean,
+  minSpO2: number
 ): Spo2BadgeConfig {
   if (!hasSpO2 || spo2Value === null) {
     return {
@@ -398,7 +407,7 @@ export function getSpo2BadgeConfig(
       label: 'Chưa có dữ liệu',
     };
   }
-  const isSafe = spo2Value >= 95;
+  const isSafe = spo2Value >= minSpO2;
   return {
     bg: isSafe ? (isDarkMode ? '#064E3B' : '#DCFCE7') : isDarkMode ? '#451A03' : '#FEF3C7',
     textColor: isSafe ? (isDarkMode ? '#86EFAC' : '#15803D') : isDarkMode ? '#FBBF24' : '#D97706',

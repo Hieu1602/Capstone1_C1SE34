@@ -6,7 +6,7 @@ import { View, Text, Modal, StyleSheet, TouchableOpacity, FlatList, SafeAreaView
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../store/useThemeStore';
-import { useAlertStore } from '../../../store/useAlertStore';
+import { useAlertStore, isUrgentIncident } from '../../../store/useAlertStore';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
 import { adminBroadcastsApi, householdApi, SystemAnnouncement } from '../../../services/api';
@@ -39,6 +39,8 @@ interface Props {
 }
 
 const STORAGE_KEY = '@doctor_read_notification_ids';
+/** Khóa lưu "đã đọc" theo từng tài khoản – tránh 2 bác sĩ dùng chung máy dùng chung trạng thái */
+export const readIdsStorageKey = (userId?: string | null) => `${STORAGE_KEY}:${userId || 'anonymous'}`;
 
 export default function NotificationsBottomSheet({
   visible,
@@ -69,8 +71,11 @@ export default function NotificationsBottomSheet({
       setSelectedNotification(null);
       return;
     }
-    AsyncStorage.getItem(STORAGE_KEY).then((data) => {
-      if (!data) return;
+    AsyncStorage.getItem(readIdsStorageKey(userId)).then((data) => {
+      if (!data) {
+        setReadIds(new Set());
+        return;
+      }
       try {
         const parsed = JSON.parse(data);
         if (Array.isArray(parsed)) setReadIds(new Set(parsed));
@@ -82,14 +87,14 @@ export default function NotificationsBottomSheet({
         if (Array.isArray(res.data)) setAdminBroadcasts(res.data);
       })
       .catch(() => {});
-  }, [visible]);
+  }, [visible, userId]);
 
   const persistReadIds = useCallback(async (newSet: Set<string>) => {
     setReadIds(new Set(newSet));
     try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(newSet)));
+      await AsyncStorage.setItem(readIdsStorageKey(userId), JSON.stringify(Array.from(newSet)));
     } catch {}
-  }, []);
+  }, [userId]);
 
   const bg = isDarkMode ? '#1E293B' : '#FFFFFF';
   const border = isDarkMode ? '#334155' : '#E2E8F0';
@@ -165,7 +170,14 @@ export default function NotificationsBottomSheet({
     if (item.type !== 'HOUSE_INVITE') {
       const updated = new Set(readIds);
       addReadId(updated, item);
-      if (item.rawIncidentId && !item.isRead && !item.rawIncident?.is_acknowledged) {
+      // Mở xem = "đã đọc". Chỉ thông báo thường mới xác nhận lên server (đồng bộ web <-> app);
+      // cảnh báo khẩn cấp phải bấm "Đã xử lý" rõ ràng, tránh tắt chuông & hủy gọi cấp cứu của gia đình
+      if (
+        item.rawIncidentId &&
+        !item.isRead &&
+        !item.rawIncident?.is_acknowledged &&
+        !isUrgentIncident(item.rawIncident)
+      ) {
         useAlertStore.getState().acknowledgeIncident(item.rawIncidentId);
       }
       await persistReadIds(updated);

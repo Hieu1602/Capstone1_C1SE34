@@ -49,6 +49,8 @@ function getVitalState() {
     setConnected:        health.setConnected,
     setSelectedDate:     health.setSelectedDate,
     updateAlgoSettings:  health.updateAlgoSettings,
+    fetchThresholds:     health.fetchThresholds,
+    applyServerThresholds: health.applyServerThresholds,
 
     // --- từ useAlertStore ---
     incidents:           alerts.incidents,
@@ -140,6 +142,8 @@ export function useVitalStore() {
     setConnected:        health.setConnected,
     setSelectedDate:     health.setSelectedDate,
     updateAlgoSettings:  health.updateAlgoSettings,
+    fetchThresholds:     health.fetchThresholds,
+    applyServerThresholds: health.applyServerThresholds,
 
     // --- từ useAlertStore ---
     incidents:           alerts.incidents,

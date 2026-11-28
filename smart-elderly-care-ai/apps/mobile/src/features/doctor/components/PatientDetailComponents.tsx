@@ -122,16 +122,16 @@ export const PatientHeroCard: React.FC<PatientHeroCardProps> = ({
         <View style={heroStyles.metricDivider} />
         <View style={heroStyles.metricItem}>
           <Text style={[heroStyles.metricVal, { color: '#10B981' }]}>
-            {detail?.blood_pressure || '--'}
+            {typeof detail?.steps === 'number' ? detail.steps.toLocaleString('vi-VN') : '--'}
           </Text>
-          <Text style={heroStyles.metricLabel}>Huyết áp</Text>
+          <Text style={heroStyles.metricLabel}>Bước chân</Text>
         </View>
         <View style={heroStyles.metricDivider} />
         <View style={heroStyles.metricItem}>
-          <Text style={[heroStyles.metricVal, { color: '#F59E0B' }]}>
-            {detail?.skin_temp_max ? `${detail.skin_temp_max}°C` : '--'}
+          <Text style={[heroStyles.metricVal, { color: '#F59E0B', fontSize: 13 }]} numberOfLines={1}>
+            {detail?.activity_state || '--'}
           </Text>
-          <Text style={heroStyles.metricLabel}>Nhiệt độ</Text>
+          <Text style={heroStyles.metricLabel}>Tư thế</Text>
         </View>
       </View>
 

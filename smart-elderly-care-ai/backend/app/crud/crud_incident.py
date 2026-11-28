@@ -349,9 +349,13 @@ class CRUDIncident:
         self,
         db: AsyncSession,
         current_user_id: Optional[UUID] = None,
+        exclude_levels: Optional[tuple] = None,
     ) -> int:
         from datetime import datetime, timezone
         from sqlalchemy import update
+        # Không biết người gọi là ai thì tuyệt đối không xác nhận hàng loạt (tránh tắt cảnh báo của mọi gia đình)
+        if not current_user_id:
+            return 0
         stmt = (
             update(Incident)
             .where(
@@ -364,6 +368,8 @@ class CRUDIncident:
                 acknowledged_by=current_user_id,
             )
         )
+        if exclude_levels:
+            stmt = stmt.where(Incident.alert_level.notin_(exclude_levels))
         if current_user_id:
             from app.models.user import User
             from app.models.house import House, HouseMember

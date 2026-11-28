@@ -110,8 +110,6 @@ const METRIC_OPTIONS: { key: VitalMetricKey; label: string }[] = [
   { key: 'ALL', label: 'Tất cả' },
   { key: 'HR', label: 'Nhịp tim (bpm)' },
   { key: 'SPO2', label: 'SpO₂ (%)' },
-  { key: 'BP', label: 'Huyết áp (mmHg)' },
-  { key: 'TEMP', label: 'Nhiệt độ (°C)' },
 ];
 
 export const PatientDrawerVitalsTab: React.FC<PatientDrawerVitalsTabProps> = ({

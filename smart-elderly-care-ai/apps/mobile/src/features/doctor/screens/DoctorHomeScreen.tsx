@@ -35,7 +35,7 @@ import {
   normalizePatientsList,
 } from '../components/types';
 import { AppointmentDetailModal } from '../components';
-import NotificationsBottomSheet from '../components/NotificationsBottomSheet';
+import NotificationsBottomSheet, { readIdsStorageKey } from '../components/NotificationsBottomSheet';
 import { buildUnifiedNotifications } from '../components/notifications/notificationHelpers';
 import {
   withTimeout,
@@ -139,7 +139,7 @@ export default function DoctorHomeScreen() {
   }, []);
 
   useEffect(() => {
-    AsyncStorage.getItem('@doctor_read_notification_ids')
+    AsyncStorage.getItem(readIdsStorageKey(userId))
       .then((raw) => {
         let readSet = new Set<string>();
         if (raw) {

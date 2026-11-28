@@ -68,12 +68,6 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
   const activeAvatar =
     patientDetail.avatar_url || selectedPatientCard?.avatar_url || null;
   const activeBmi = patientDetail.bmi ? patientDetail.bmi.toFixed(1) : '—';
-  const activeBp = patientDetail.blood_pressure || selectedPatientCard?.blood_pressure || '—';
-  const activeSkinTemp = patientDetail.skin_temp_max
-    ? `${patientDetail.skin_temp_max}°C`
-    : selectedPatientCard?.skin_temp_max
-      ? `${selectedPatientCard.skin_temp_max}°C`
-      : '—';
   const activeEmergencyPhone = selectedPatientCard?.emergency_contact_phone || '';
 
   const backendHealthStatus = patientDetail.health_status || selectedPatientCard?.health_status;
@@ -139,8 +133,6 @@ export const PatientDetailDrawer: React.FC<PatientDetailDrawerProps> = ({
               patientDetail={patientDetail}
               activeBloodType={activeBloodType}
               activeBmi={activeBmi}
-              activeBp={activeBp}
-              activeSkinTemp={activeSkinTemp}
               onOpenRecordModal={onOpenRecordModal}
             />
           )}

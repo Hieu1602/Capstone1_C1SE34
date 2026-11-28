@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import { vitalsApi, systemApi } from '../services/api';
+import { devicesApi, DeviceConfigBackend } from '../services/deviceService';
 
 // Cấu trúc dữ liệu sinh hiệu thời gian thực nhận từ Vòng tay BLE & Camera AI
 export interface VitalData {
@@ -60,7 +61,33 @@ interface HealthState {
   setConnected: (connected: boolean) => void;
   setSelectedDate: (date: string) => void;
   updateAlgoSettings: (settings: Partial<AlgoSettings>) => void;
+  /** Thiết bị (vòng đeo) mà ngưỡng hiện tại được lấy về – dùng để refetch khi có thông báo cập nhật */
+  thresholdsDeviceId: string | null;
+  /** Lấy ngưỡng sinh hiệu mới nhất từ Backend (GET /devices/{id}/config) */
+  fetchThresholds: (deviceId?: string | null) => Promise<void>;
+  /** Áp ngưỡng nhận được từ server (response API / payload WebSocket) vào algoSettings */
+  applyServerThresholds: (t: Partial<DeviceConfigBackend> | null | undefined) => void;
   resetHealthStore: () => void;
+}
+
+// Chỉ map các field server thực sự trả về – không dùng giá trị mặc định đè lên dữ liệu server
+const SERVER_TO_ALGO: [keyof DeviceConfigBackend, keyof AlgoSettings][] = [
+  ['hr_threshold_high', 'maxHeartRate'],
+  ['hr_threshold_low', 'minHeartRate'],
+  ['spo2_threshold_low', 'minSpO2'],
+  ['immobility_seconds', 'immobilitySec'],
+];
+
+export function mapServerThresholds(t: Partial<DeviceConfigBackend> | null | undefined): Partial<AlgoSettings> {
+  const out: Partial<AlgoSettings> = {};
+  if (!t) return out;
+  for (const [src, dst] of SERVER_TO_ALGO) {
+    const n = Number((t as any)[src]);
+    if ((t as any)[src] !== null && (t as any)[src] !== undefined && Number.isFinite(n)) {
+      (out as any)[dst] = n;
+    }
+  }
+  return out;
 }
 
 export const useHealthStore = create<HealthState>()((set, get) => ({
@@ -92,6 +119,7 @@ export const useHealthStore = create<HealthState>()((set, get) => ({
     fallAngle: 60,
     immobilitySec: 30,
   },
+  thresholdsDeviceId: null,
   isLoadingVitals: false,
   isLoadingMode: false,
 
@@ -177,6 +205,26 @@ export const useHealthStore = create<HealthState>()((set, get) => ({
 
   updateAlgoSettings: (settings: Partial<AlgoSettings>) =>
     set((state) => ({ algoSettings: { ...state.algoSettings, ...settings } })),
+
+  applyServerThresholds: (t) => {
+    const mapped = mapServerThresholds(t);
+    if (Object.keys(mapped).length > 0) {
+      set((state) => ({ algoSettings: { ...state.algoSettings, ...mapped } }));
+    }
+  },
+
+  fetchThresholds: async (deviceId) => {
+    const devId = deviceId || get().thresholdsDeviceId;
+    if (!devId) return;
+    if (devId !== get().thresholdsDeviceId) set({ thresholdsDeviceId: devId });
+    try {
+      const res = await devicesApi.getDeviceConfig(devId);
+      // Bỏ qua response trễ nếu người dùng đã chuyển sang thiết bị khác trong lúc chờ
+      if (get().thresholdsDeviceId === devId) get().applyServerThresholds(res.data);
+    } catch (e) {
+      console.warn('fetchThresholds API fallback:', e);
+    }
+  },
 
   resetHealthStore: () =>
     set({

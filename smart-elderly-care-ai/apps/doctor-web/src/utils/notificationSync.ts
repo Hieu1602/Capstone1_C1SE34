@@ -1,8 +1,28 @@
 // src/utils/notificationSync.ts
 // Quản lý đồng bộ trạng thái đọc/chưa đọc thông báo theo thời gian thực (0ms)
 
+import { useDoctorAuthStore } from '../store/useDoctorAuthStore';
+import { incidentsApi } from '../services/api';
+
 const READ_STORAGE_KEY = '@doctor_web_read_notifs';
 export const NOTIFS_SYNC_EVENT = 'seca_notifications_sync';
+
+/** Khóa lưu "đã đọc" theo từng tài khoản – tránh 2 bác sĩ dùng chung trình duyệt dùng chung trạng thái */
+const readStorageKey = () => `${READ_STORAGE_KEY}:${useDoctorAuthStore.getState().user?.id || 'anonymous'}`;
+
+/** Cảnh báo khẩn cấp: chỉ tắt bằng nút "Đã xử lý" rõ ràng, không bằng "đã đọc" */
+export const isUrgentIncident = (inc?: { alert_level?: string | null } | null) =>
+  inc?.alert_level === 'HIGH' || inc?.alert_level === 'CRITICAL';
+
+/**
+ * Khi mở xem một thông báo thường (không khẩn cấp) -> xác nhận lên server để App bác sĩ cũng thấy "đã đọc".
+ * Giống hành vi của App, cảnh báo khẩn cấp không bị xác nhận tự động.
+ */
+export function syncReadToServer(rawIncidentId?: string, rawIncident?: { alert_level?: string | null; is_acknowledged?: boolean; alert_type?: string } | null): void {
+  if (!rawIncidentId || !rawIncident || rawIncident.is_acknowledged) return;
+  if (isUrgentIncident(rawIncident) || rawIncident.alert_type === 'HOUSE_INVITE_PENDING') return;
+  incidentsApi.acknowledge(rawIncidentId).catch(console.warn);
+}
 
 export interface SyncPayload {
   readIds: string[];
@@ -13,7 +33,7 @@ export interface SyncPayload {
  */
 export function getStoredReadIds(): Set<string> {
   try {
-    const raw = localStorage.getItem(READ_STORAGE_KEY);
+    const raw = localStorage.getItem(readStorageKey());
     return raw ? new Set<string>(JSON.parse(raw)) : new Set<string>();
   } catch {
     return new Set<string>();
@@ -25,7 +45,7 @@ export function getStoredReadIds(): Set<string> {
  */
 export function broadcastReadIds(nextIds: Set<string>): void {
   try {
-    localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(Array.from(nextIds)));
+    localStorage.setItem(readStorageKey(), JSON.stringify(Array.from(nextIds)));
   } catch (e) {
     console.warn('[notificationSync] Error writing to storage:', e);
   }

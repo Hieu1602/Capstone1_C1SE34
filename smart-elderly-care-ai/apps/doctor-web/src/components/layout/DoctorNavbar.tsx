@@ -14,6 +14,7 @@ import {
   markAllAsRead,
   markAsRead,
   toggleReadStatus,
+  syncReadToServer,
   NOTIFS_SYNC_EVENT,
   SyncPayload,
 } from '../../utils/notificationSync';
@@ -134,6 +135,7 @@ export const DoctorNavbar: React.FC = () => {
         data?.type === 'INITIAL_ALERTS' ||
         data?.type === 'INCIDENT_RESOLVED' ||
         data?.type === 'INCIDENT_ESCALATED' ||
+        data?.type === 'INCIDENTS_ACKNOWLEDGED' ||
         data?.alert_type
       ) {
         fetchNotifData();
@@ -200,6 +202,7 @@ export const DoctorNavbar: React.FC = () => {
   // Click vào một thông báo: Đánh dấu đã đọc & mở ngay Modal chi tiết
   const handleNotificationClick = (item: UnifiedNotification) => {
     markAsRead(item.id, item.rawIncidentId);
+    syncReadToServer(item.rawIncidentId, item.rawIncident);
     setNotifications((prev) => prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n)));
     setShowNotifMenu(false);
     setSelectedNotif(item);
