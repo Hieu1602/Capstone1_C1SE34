@@ -1,14 +1,16 @@
-import { LocalizedText as Text } from '../../../../i18n/LocalizedComponents';
+import {
+    LocalizedAlert as Alert,
+    LocalizedText as Text,
+    LocalizedTextInput as TextInput,
+} from '../../../../i18n/LocalizedComponents';
 import React, { useState, useEffect } from "react";
 import {
     View,
-    TextInput,
     TouchableOpacity,
     StyleSheet,
     Modal,
     Pressable,
     ActivityIndicator,
-    Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../../../theme/colors";

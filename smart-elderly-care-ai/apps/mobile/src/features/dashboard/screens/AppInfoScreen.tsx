@@ -288,14 +288,23 @@ export default function AppInfoScreen({ navigation, route }: any) {
                     <Text style={[styles.docGuideTitle, isDarkMode && { color: '#F8FAFC' }]}>
                       {guideInfo.title}
                     </Text>
-                    <View style={styles.docGuideBadge}>
-                      <Text style={styles.docGuideBadgeText}>{guideInfo.badge}</Text>
+                    <View style={[styles.docGuideBadge, isDarkMode && { backgroundColor: 'rgba(56, 189, 248, 0.14)' }]}>
+                      <Text style={[styles.docGuideBadgeText, isDarkMode && { color: '#38BDF8' }]}>{guideInfo.badge}</Text>
                     </View>
                   </View>
                   <Text style={[styles.docGuideDesc, isDarkMode && { color: '#94A3B8' }]}>
                     {guideInfo.description}
                   </Text>
-                  <View style={styles.docGuideStepsWrap}>
+                  <View
+                    style={[
+                      styles.docGuideStepsWrap,
+                      isDarkMode && {
+                        backgroundColor: '#0F172A',
+                        borderColor: '#334155',
+                        borderWidth: 1,
+                      },
+                    ]}
+                  >
                     {guideInfo.steps?.map((step: string, sIdx: number) => (
                       <Text key={sIdx} style={[styles.docGuideStep, isDarkMode && { color: '#CBD5E1' }]}>
                         {step}

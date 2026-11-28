@@ -4,13 +4,15 @@
 import React, { useState, useEffect } from "react";
 import {
     Platform,
-    TextInput,
     TouchableOpacity,
     View,
-    Text,
     StyleProp,
     ViewStyle,
 } from "react-native";
+import {
+    LocalizedText as Text,
+    LocalizedTextInput as TextInput,
+} from "../../../i18n/LocalizedComponents";
 import { WebView } from "react-native-webview";
 import { Ionicons } from "@expo/vector-icons";
 import { useCameraConnection } from "../hooks/useCameraConnection";

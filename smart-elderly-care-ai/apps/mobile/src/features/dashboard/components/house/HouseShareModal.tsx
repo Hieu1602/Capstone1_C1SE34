@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   Modal,
   TouchableOpacity,
@@ -9,6 +8,7 @@ import {
   Platform,
   NativeModules,
 } from 'react-native';
+import { LocalizedText as Text } from '../../../../i18n/LocalizedComponents';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
