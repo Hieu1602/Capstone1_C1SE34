@@ -130,7 +130,7 @@ export default function DoctorPatientsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterTab, setFilterTab] = useState<'ALL' | 'DANGER' | 'WARNING' | 'NORMAL'>('ALL');
+  const [filterTab, setFilterTab] = useState<'ALL' | 'DANGER' | 'WARNING' | 'NORMAL' | 'OFFLINE'>('ALL');
 
   // Modal Đặt lịch hẹn nhanh cho bệnh nhân từ Card
   const [appointmentModalVisible, setAppointmentModalVisible] = useState(false);
@@ -203,14 +203,16 @@ export default function DoctorPatientsScreen() {
 
     if (filterTab === 'DANGER') return p.health_status === 'DANGER';
     if (filterTab === 'WARNING') return p.health_status === 'WARNING';
-    if (filterTab === 'NORMAL') return p.health_status === 'NORMAL';
+    if (filterTab === 'NORMAL') return p.health_status === 'NORMAL' && Boolean(p.is_online);
+    if (filterTab === 'OFFLINE') return p.health_status === 'NORMAL' && !p.is_online;
     return true;
   });
 
   const totalPatients = patients.length;
   const dangerCount = patients.filter((p) => p.health_status === 'DANGER').length;
   const warningCount = patients.filter((p) => p.health_status === 'WARNING').length;
-  const normalCount = patients.filter((p) => p.health_status === 'NORMAL').length;
+  const normalCount = patients.filter((p) => p.health_status === 'NORMAL' && Boolean(p.is_online)).length;
+  const offlineCount = patients.filter((p) => p.health_status === 'NORMAL' && !p.is_online).length;
 
   const handleViewDetail = (patientId: string) => {
     navigation.navigate('DoctorPatientDetail', { patientId });
@@ -307,6 +309,7 @@ export default function DoctorPatientsScreen() {
         warningCount={warningCount}
         dangerCount={dangerCount}
         normalCount={normalCount}
+        offlineCount={offlineCount}
         searchQuery={searchQuery}
         filterTab={filterTab}
         onChangeSearch={setSearchQuery}

@@ -5,7 +5,7 @@
 // 3. AppointmentCard: Thẻ hiển thị lịch hẹn theo dòng thời gian (Vertical Timeline - Ảnh 4)
 
 import React, { useMemo, useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, Image, Modal } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Image, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LocalizedText } from '../../../i18n/LocalizedComponents';
 import { AppointmentItem, getPatientAvatarUrl } from './types';
@@ -45,12 +45,12 @@ export const AppointmentStatsSummary: React.FC<AppointmentStatsSummaryProps> = (
   const stats = [
     { key: 'total', icon: 'calendar', color: '#2563EB', bg: '#EFF6FF', border: '#3B82F633', label: 'Tổng lịch', count: totalCount },
     { key: 'upcoming', icon: 'time', color: '#D97706', bg: '#FFFBEB', border: '#F59E0B33', label: 'Sắp tới', count: upcomingCount },
-    { key: 'completed', icon: 'checkmark-done', color: '#059669', bg: '#ECFDF5', border: '#10B98133', label: 'Đã khám', count: completedCount },
+    { key: 'completed', icon: 'checkmark-circle', color: '#059669', bg: '#ECFDF5', border: '#10B98133', label: 'Đã khám', count: completedCount },
     { key: 'cancelled', icon: 'close-circle', color: '#DC2626', bg: '#FEF2F2', border: '#EF444433', label: 'Đã hủy', count: cancelledCount },
   ];
 
   return (
-    <View>
+    <View style={styles.statsSummaryWrap}>
       <View style={styles.summaryGrid}>
         {stats.map((s) => (
           <TouchableOpacity
@@ -79,19 +79,20 @@ export const AppointmentStatsSummary: React.FC<AppointmentStatsSummaryProps> = (
             <View style={[styles.statIconBox, { backgroundColor: s.bg }]}>
               <Ionicons name={s.icon as any} size={15} color={s.color} />
             </View>
-            <LocalizedText style={[styles.statNumber, { color: s.color }]}>{s.count}</LocalizedText>
-            <LocalizedText style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}>
+            <LocalizedText style={[styles.statNumber, { color: s.color }]} numberOfLines={1}>
+              {s.count}
+            </LocalizedText>
+            <LocalizedText
+              style={[styles.statLabel, { color: isDarkMode ? '#94A3B8' : '#64748B' }]}
+              numberOfLines={1}
+            >
               {s.label}
             </LocalizedText>
           </TouchableOpacity>
         ))}
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterRow}
-      >
+      <View style={styles.filterRow}>
         {[
           { key: 'ALL' as const, label: `Tất cả (${totalCount})` },
           { key: 'UPCOMING' as const, label: `Sắp tới (${upcomingCount})` },
@@ -104,14 +105,16 @@ export const AppointmentStatsSummary: React.FC<AppointmentStatsSummaryProps> = (
             <TouchableOpacity
               key={tab.key}
               onPress={() => onFilterChange(tab.key)}
+              activeOpacity={0.8}
               style={[
                 styles.filterChip,
                 active
-                  ? { backgroundColor: activeBg, shadowColor: activeBg, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 3 }
+                  ? { backgroundColor: activeBg }
                   : { backgroundColor: isDarkMode ? '#334155' : '#EEF2F6' },
               ]}
             >
               <LocalizedText
+                numberOfLines={1}
                 style={[
                   styles.filterChipText,
                   active
@@ -124,7 +127,7 @@ export const AppointmentStatsSummary: React.FC<AppointmentStatsSummaryProps> = (
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </View>
     </View>
   );
 };
@@ -244,7 +247,7 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
   return (
     <View style={styles.weekStripWrapper}>
       <View style={[styles.weekStripHeader, { flexWrap: 'wrap', gap: 6 }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1, minWidth: 0 }}>
           <TouchableOpacity
             onPress={() => {
               setCalendarViewDate(selectedDate ? new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1) : new Date());
@@ -262,24 +265,25 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
           >
             <Ionicons name="calendar-outline" size={16} color="#2563EB" />
           </TouchableOpacity>
-          <View>
-            <LocalizedText style={[styles.weekStripTitle, { color: colors.textPrimary }]}>
+          <View style={{ flexShrink: 1, minWidth: 0 }}>
+            <LocalizedText style={[styles.weekStripTitle, { color: colors.textPrimary }]} numberOfLines={1}>
               {weekOffset === 0 ? 'Lịch tuần này' : weekOffset < 0 ? `Tuần trước (${Math.abs(weekOffset)})` : `Tuần sau (+${weekOffset})`}
             </LocalizedText>
-            <LocalizedText style={{ fontSize: 10.5, color: isDarkMode ? '#94A3B8' : '#64748B', fontWeight: '600' }}>
+            <LocalizedText style={{ fontSize: 11, color: isDarkMode ? '#94A3B8' : '#64748B', fontWeight: '600' }} numberOfLines={1}>
               {weekRangeLabel}
             </LocalizedText>
           </View>
         </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           <TouchableOpacity
             onPress={() => setWeekOffset((w) => w - 1)}
             style={{
               flexDirection: 'row',
               alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 34,
               paddingHorizontal: 7,
-              paddingVertical: 5,
               borderRadius: 8,
               borderWidth: 1,
               borderColor: isDarkMode ? '#334155' : '#E2E8F0',
@@ -296,8 +300,9 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
               onSelectDate(null);
             }}
             style={{
+              justifyContent: 'center',
+              minHeight: 34,
               paddingHorizontal: 8,
-              paddingVertical: 5,
               borderRadius: 8,
               backgroundColor: weekOffset === 0 && !selectedDate ? '#2563EB' : (isDarkMode ? '#1E293B' : '#EFF6FF'),
               borderWidth: 1,
@@ -314,8 +319,9 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
             style={{
               flexDirection: 'row',
               alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 34,
               paddingHorizontal: 7,
-              paddingVertical: 5,
               borderRadius: 8,
               borderWidth: 1,
               borderColor: isDarkMode ? '#334155' : '#E2E8F0',
@@ -329,10 +335,26 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
       </View>
 
       {selectedDate && (
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 6 }}>
-          <TouchableOpacity onPress={() => onSelectDate(null)} hitSlop={8}>
-            <LocalizedText style={{ fontSize: 11.5, fontWeight: '700', color: '#2563EB' }}>
-              Đang lọc ngày {String(selectedDate.getDate()).padStart(2, '0')}/{String(selectedDate.getMonth() + 1).padStart(2, '0')} • Xem tất cả
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 8,
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: isDarkMode ? '#1E3A8A' : '#DBEAFE',
+            backgroundColor: isDarkMode ? '#0F172A' : '#EFF6FF',
+          }}
+        >
+          <LocalizedText style={{ fontSize: 11.5, fontWeight: '600', color: isDarkMode ? '#93C5FD' : '#1E40AF' }}>
+            Đang lọc ngày {String(selectedDate.getDate()).padStart(2, '0')}/{String(selectedDate.getMonth() + 1).padStart(2, '0')}
+          </LocalizedText>
+          <TouchableOpacity onPress={() => onSelectDate(null)} hitSlop={{ top: 8, bottom: 8, left: 10, right: 10 }}>
+            <LocalizedText style={{ fontSize: 11.5, fontWeight: '700', color: isDarkMode ? '#60A5FA' : '#2563EB' }}>
+              Xem tất cả
             </LocalizedText>
           </TouchableOpacity>
         </View>
@@ -425,11 +447,7 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
         </TouchableOpacity>
       </Modal>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.weekDaysRow}
-      >
+      <View style={styles.weekDaysRow}>
         {weekDays.map((item) => {
           const isSelected = selectedDate ? isSameLocalDay(item.date, selectedDate) : false;
           const dots = getDotsForDate(item.date);
@@ -493,7 +511,7 @@ export const WeekCalendarStrip: React.FC<WeekCalendarStripProps> = ({
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </View>
     </View>
   );
 };
@@ -599,7 +617,7 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
       </View>
 
       {/* THẺ CA KHÁM BÊN PHẢI TRỤC (Ảnh 4) */}
-      <View style={{ flex: 1, paddingBottom: 16 }}>
+      <View style={{ flex: 1, minWidth: 0, paddingBottom: 16 }}>
         {isCurrentOrNext && (
           <View style={styles.nowIndicatorRow}>
             <View style={styles.nowBadge}>
@@ -632,7 +650,7 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
               </LocalizedText>
             </View>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
               {recurrenceLabel && (
                 <View style={styles.recurrencePill}>
                   <Ionicons name="repeat" size={10} color="#7C3AED" style={{ marginRight: 2 }} />
@@ -722,7 +740,7 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
                 <LocalizedText style={styles.patientAvatarText}>{initial}</LocalizedText>
               )}
             </View>
-            <View style={{ flex: 1, marginLeft: 10 }}>
+            <View style={{ flex: 1, minWidth: 0, marginLeft: 10 }}>
               <LocalizedText style={[styles.patientName, { color: colors.textPrimary }]}>
                 {apt.patient_name}
               </LocalizedText>
@@ -801,6 +819,21 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
           )}
 
           <View style={[styles.actionGroup, { borderTopColor: isDarkMode ? '#334155' : '#E2E8F0' }]}>
+            {isUpcoming && isFamilyRequested && apt.status === 'UPCOMING' && onConfirm && (
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={[styles.btnComplete, { backgroundColor: '#0284C7', shadowColor: '#0284C7' }]}
+                  onPress={() => onConfirm(apt.id)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="checkmark-done" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+                  <LocalizedText style={styles.btnCompleteText} numberOfLines={1}>
+                    Xác nhận
+                  </LocalizedText>
+                </TouchableOpacity>
+              </View>
+            )}
+
             <View style={styles.actionRow}>
               <TouchableOpacity
                 style={[
@@ -815,19 +848,6 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
                   Hồ sơ
                 </LocalizedText>
               </TouchableOpacity>
-
-              {isUpcoming && isFamilyRequested && apt.status === 'UPCOMING' && onConfirm && (
-                <TouchableOpacity
-                  style={[styles.btnComplete, { backgroundColor: '#0284C7', shadowColor: '#0284C7' }]}
-                  onPress={() => onConfirm(apt.id)}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name="checkmark-done" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
-                  <LocalizedText style={styles.btnCompleteText} numberOfLines={1}>
-                    Xác nhận
-                  </LocalizedText>
-                </TouchableOpacity>
-              )}
 
               {isUpcoming && (
                 <TouchableOpacity
@@ -896,49 +916,62 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
 };
 
 const styles = StyleSheet.create({
+  statsSummaryWrap: {
+    width: '100%',
+    minWidth: 0,
+  },
   summaryGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    gap: 8,
+    width: '100%',
+    minWidth: 0,
+    marginBottom: 10,
+    gap: 6,
   },
   summaryCard: {
     flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
     alignItems: 'center',
     paddingVertical: 10,
-    borderRadius: 16,
+    paddingHorizontal: 4,
+    borderRadius: 14,
     borderWidth: 1.5,
   },
   statIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 4,
   },
-  statNumber: { fontSize: 18, fontWeight: '800' },
-  statLabel: { fontSize: 11, fontWeight: '600', marginTop: 2 },
+  statNumber: { fontSize: 17, fontWeight: '800' },
+  statLabel: { fontSize: 10.5, fontWeight: '600', marginTop: 2 },
   filterRow: {
     flexDirection: 'row',
-    gap: 8,
-    paddingRight: 16,
-    paddingVertical: 2,
-    marginBottom: 8,
+    flexWrap: 'wrap',
+    width: '100%',
+    minWidth: 0,
+    gap: 6,
+    marginBottom: 10,
   },
   filterChip: {
-    paddingHorizontal: 15,
-    height: 36,
-    borderRadius: 18,
+    flexGrow: 1,
+    paddingHorizontal: 8,
+    minHeight: 38,
+    paddingVertical: 6,
+    borderRadius: 19,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  filterChipText: { fontSize: 12.5 },
+  filterChipText: { fontSize: 12 },
 
   // Week Calendar Strip Styles
   weekStripWrapper: {
+    width: '100%',
+    minWidth: 0,
     marginTop: 4,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   weekStripHeader: {
     flexDirection: 'row',
@@ -952,13 +985,18 @@ const styles = StyleSheet.create({
   },
   weekDaysRow: {
     flexDirection: 'row',
-    gap: 8,
-    paddingRight: 16,
+    width: '100%',
+    minWidth: 0,
+    gap: 5,
   },
   dayCard: {
-    width: 46,
-    paddingVertical: 9,
-    borderRadius: 18,
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
+    minHeight: 60,
+    paddingVertical: 8,
+    paddingHorizontal: 2,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -966,11 +1004,6 @@ const styles = StyleSheet.create({
   dayCardSelected: {
     backgroundColor: '#2563EB',
     borderColor: '#2563EB',
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 4,
   },
   dayLabelText: {
     fontSize: 10.5,
@@ -996,9 +1029,12 @@ const styles = StyleSheet.create({
   // Timeline Layout Styles
   timelineRow: {
     flexDirection: 'row',
+    width: '100%',
+    minWidth: 0,
   },
   timelineAxisCol: {
-    width: 58,
+    width: 54,
+    flexShrink: 0,
     alignItems: 'center',
     paddingTop: 4,
   },
@@ -1149,10 +1185,11 @@ const styles = StyleSheet.create({
   btnViewPatient: {
     flex: 1,
     flexBasis: 0,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 42,
+    minHeight: 44,
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 10,
@@ -1162,25 +1199,22 @@ const styles = StyleSheet.create({
   btnComplete: {
     flex: 1,
     flexBasis: 0,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 42,
+    minHeight: 44,
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 10,
     backgroundColor: '#059669',
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.18,
-    shadowRadius: 3,
-    elevation: 2,
   },
   btnCompleteText: { color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' },
   btnSecondaryAction: {
     flex: 1,
     flexBasis: 0,
-    minHeight: 42,
+    minWidth: 0,
+    minHeight: 44,
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 10,

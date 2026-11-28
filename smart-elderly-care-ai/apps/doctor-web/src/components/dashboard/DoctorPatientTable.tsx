@@ -7,8 +7,8 @@ export interface DoctorPatientTableProps {
   patients: DoctorPatientCard[];
   tableSearch: string;
   onSearchChange: (val: string) => void;
-  tableFilter: 'ALL' | 'ALERT' | 'STABLE';
-  onFilterChange: (val: 'ALL' | 'ALERT' | 'STABLE') => void;
+  tableFilter: 'ALL' | 'ALERT' | 'STABLE' | 'OFFLINE';
+  onFilterChange: (val: 'ALL' | 'ALERT' | 'STABLE' | 'OFFLINE') => void;
   onOpenCreateAppointment?: () => void;
   onSelectPatient: (patientId: string) => void;
   loading?: boolean;
@@ -61,6 +61,7 @@ export const DoctorPatientTable: React.FC<DoctorPatientTableProps> = ({
               { key: 'ALL' as const, label: 'Tất cả' },
               { key: 'ALERT' as const, label: 'Cần chú ý' },
               { key: 'STABLE' as const, label: 'Ổn định' },
+              { key: 'OFFLINE' as const, label: 'Ngoại tuyến' },
             ].map((f) => (
               <button
                 key={f.key}
@@ -190,7 +191,7 @@ export const DoctorPatientTable: React.FC<DoctorPatientTableProps> = ({
                     </td>
                     <td className="py-3.5 px-3">
                       <div className="flex items-center gap-3">
-                        {patient.heart_rate != null ? (
+                        {patient.is_online && patient.heart_rate != null ? (
                           <span className="inline-flex items-center gap-1 font-bold text-slate-800 dark:text-slate-200">
                             <Heart className="h-3.5 w-3.5 text-rose-500" />
                             {patient.heart_rate} bpm
@@ -201,7 +202,7 @@ export const DoctorPatientTable: React.FC<DoctorPatientTableProps> = ({
                             —
                           </span>
                         )}
-                        {patient.spo2 != null ? (
+                        {patient.is_online && patient.spo2 != null ? (
                           <span className="inline-flex items-center gap-1 font-bold text-slate-800 dark:text-slate-200">
                             <Activity className="h-3.5 w-3.5 text-blue-500" />
                             {patient.spo2}%
@@ -212,8 +213,8 @@ export const DoctorPatientTable: React.FC<DoctorPatientTableProps> = ({
                             —
                           </span>
                         )}
-                        {!patient.is_online && (patient.heart_rate != null || patient.spo2 != null) && (
-                          <span title="Dữ liệu lần cuối (thiết bị offline)">
+                        {!patient.is_online && (
+                          <span title="Thiết bị ngoại tuyến">
                             <WifiOff className="h-3 w-3 text-slate-400 dark:text-slate-500" />
                           </span>
                         )}
@@ -230,10 +231,15 @@ export const DoctorPatientTable: React.FC<DoctorPatientTableProps> = ({
                           <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                           Cần chú ý
                         </span>
-                      ) : (
+                      ) : patient.is_online ? (
                         <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-300">
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                           Ổn định
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                          <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                          Ngoại tuyến
                         </span>
                       )}
                     </td>

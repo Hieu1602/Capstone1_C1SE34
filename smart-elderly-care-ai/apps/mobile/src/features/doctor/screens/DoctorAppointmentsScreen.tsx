@@ -443,7 +443,7 @@ export default function DoctorAppointmentsScreen() {
         ]}
       >
         <View style={styles.headerRow}>
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, minWidth: 0, marginRight: 10 }}>
             <LocalizedText style={[styles.headerTitle, { color: colors.textPrimary }]}>
               Lịch Khám
             </LocalizedText>
@@ -584,9 +584,11 @@ export default function DoctorAppointmentsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, width: '100%', minWidth: 0 },
   header: {
-    paddingHorizontal: 16,
+    width: '100%',
+    minWidth: 0,
+    paddingHorizontal: 14,
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
@@ -602,18 +604,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
     backgroundColor: '#2563EB',
-    paddingHorizontal: 16,
-    height: 42,
-    borderRadius: 21,
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
+    paddingHorizontal: 14,
+    minHeight: 44,
+    borderRadius: 22,
   },
   btnAddText: { color: '#FFFFFF', fontSize: 13.5, fontWeight: '700' },
-  scrollContent: { padding: 16, paddingBottom: 120 },
+  scrollContent: { width: '100%', minWidth: 0, padding: 14, paddingBottom: 120 },
   emptyBox: { alignItems: 'center', paddingVertical: 50 },
   emptyText: { fontSize: 13.5, marginTop: 8 },
 });
