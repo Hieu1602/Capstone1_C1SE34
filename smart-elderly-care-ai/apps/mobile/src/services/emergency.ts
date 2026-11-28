@@ -1,5 +1,18 @@
 import { Linking, NativeModules, PermissionsAndroid, Platform } from 'react-native';
 import { emergencyApi } from './api';
+import { useAuthStore } from '../store/useAuthStore';
+
+/**
+ * Bác sĩ quản lý rất nhiều bệnh nhân -> KHÔNG được gọi SOS / tự động gọi cấp cứu.
+ * Việc gọi cấp cứu do người nhà / người chăm sóc tại chỗ thực hiện.
+ */
+export function isDoctorSession(): boolean {
+  const { viewRole, role } = useAuthStore.getState();
+  return viewRole === 'DOCTOR' || String(role || '').toLowerCase() === 'doctor';
+}
+
+export const DOCTOR_SOS_BLOCKED_MESSAGE =
+  'Tài khoản bác sĩ không dùng chức năng gọi SOS. Việc gọi cấp cứu do người nhà hoặc người chăm sóc tại chỗ thực hiện.';
 
 // Số điện thoại dùng cho Test Mode khi gọi khẩn cấp SOS (UI vẫn hiển thị 115)
 export const EMERGENCY_TEST_PHONE = '0898230852';
@@ -27,6 +40,10 @@ export async function requestEmergencyCallPermission(): Promise<boolean> {
  * fallback sang Linking.openURL('tel:...') trên Web / iOS / Expo Go.
  */
 export async function dialEmergencyNumber(phone = EMERGENCY_TEST_PHONE): Promise<void> {
+  if (isDoctorSession()) {
+    console.warn('[EmergencySOS] Bỏ qua gọi khẩn cấp trên tài khoản bác sĩ.');
+    return;
+  }
   if (Platform.OS === 'android' && NativeModules.NativeNotificationModule?.placeEmergencyCall) {
     try {
       await requestEmergencyCallPermission();
@@ -42,6 +59,7 @@ export async function dialEmergencyNumber(phone = EMERGENCY_TEST_PHONE): Promise
 }
 
 export async function launchEmergencyCall() {
+  if (isDoctorSession()) return;
   const notificationRequest = emergencyApi.triggerSOS().then(
     ({ data }) => {
       if (data?.notification_sent === 0 || data?.notification_failed > 0) {

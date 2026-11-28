@@ -18,7 +18,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useVitalStore } from '../store/useVitalStore';
 import { incidentsApi } from '../services/api';
 import { resolveIncidentMediaUrl } from '../services/camera';
-import { dialEmergencyNumber, EMERGENCY_TEST_PHONE, requestEmergencyCallPermission } from '../services/emergency';
+import { dialEmergencyNumber, EMERGENCY_TEST_PHONE, isDoctorSession, requestEmergencyCallPermission } from '../services/emergency';
 
 export const CriticalEscalationModal: React.FC = () => {
   const { activeEscalation, autoCallEnabled, markEscalated, clearEscalation } = useEscalationStore();
@@ -77,7 +77,7 @@ export const CriticalEscalationModal: React.FC = () => {
 
   // Tự động kích hoạt gọi số khẩn cấp khi đếm ngược về 0 HOẶC khi nhận tín hiệu ESCALATED từ server
   useEffect(() => {
-    if (!activeEscalation || !autoCallEnabled) return;
+    if (!activeEscalation || !autoCallEnabled || isDoctorSession()) return;
     const isTimeToCall = secondsLeft === 0 || activeEscalation.status === 'ESCALATED';
     if (isTimeToCall && !hasAutoCalled) {
       setHasAutoCalled(true);
@@ -104,7 +104,7 @@ export const CriticalEscalationModal: React.FC = () => {
     return () => { active = false; };
   }, [activeEscalation?.incidentId, activeEscalation?.thumbnailUrl]);
 
-  if (!activeEscalation) {
+  if (!activeEscalation || isDoctorSession()) {
     return null;
   }
 

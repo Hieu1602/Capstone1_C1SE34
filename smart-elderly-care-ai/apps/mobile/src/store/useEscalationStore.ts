@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isDoctorSession } from '../services/emergency';
 
 const AUTO_ESCALATION_KEY = '@seca_auto_escalation_enabled';
 const AUTO_ESCALATION_DELAY_KEY = '@seca_auto_escalation_delay';
@@ -67,6 +68,8 @@ export const useEscalationStore = create<EscalationStoreState>((set, get) => ({
   },
 
   triggerEscalation: (payload) => {
+    // Máy bác sĩ không hiện đếm ngược tự gọi 115 (bác sĩ không gọi SOS thay gia đình)
+    if (isDoctorSession()) return;
     const { autoCallDelaySec, activeEscalation } = get();
     // Tránh mở đè nếu đang hiển thị đúng incidentId này
     if (activeEscalation && activeEscalation.incidentId === payload.incidentId) {
